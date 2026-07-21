@@ -1,0 +1,18 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-md-background text-md-on-surface font-sans antialiased overflow-x-hidden;
+  }
+}
+
+@layer components {
+  /* Material You Utilities */
+  .md-blur-shape {
+    @apply absolute rounded-full blur-3xl mix-blend-multiply opacity-20 pointer-events-none;
+  }
+}
