@@ -2,19 +2,22 @@ import React from 'react';
 import classNames from 'classnames';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'filled' | 'tonal' | 'outlined' | 'text' | 'fab';
+  variant?: 'filled' | 'animated-primary' | 'tonal' | 'secondary' | 'combined' | 'outlined' | 'text' | 'fab';
   size?: 'sm' | 'md' | 'lg';
+  isLoading?: boolean;
   children: React.ReactNode;
 }
 
 export const Button: React.FC<ButtonProps> = ({
   variant = 'filled',
   size = 'md',
+  isLoading = false,
   className,
   children,
+  disabled,
   ...props
 }) => {
-  const baseClasses = 'inline-flex items-center justify-center font-medium transition-all duration-300 ease-md-emphasized focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-primary focus-visible:ring-offset-2 active:scale-95';
+  const baseClasses = 'inline-flex relative items-center justify-center font-medium transition-all duration-300 ease-md-bouncy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-primary focus-visible:ring-offset-2 active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed disabled:active:scale-100';
   
   const sizeClasses = {
     sm: 'h-9 px-4 text-sm',
@@ -24,7 +27,10 @@ export const Button: React.FC<ButtonProps> = ({
 
   const variantClasses = {
     filled: 'bg-md-primary text-md-on-primary shadow-none hover:shadow-md hover:bg-md-primary/90 active:bg-md-primary/80 rounded-full',
+    'animated-primary': 'bg-md-primary text-md-on-primary shadow-sm hover:shadow-md hover:bg-md-primary/90 active:bg-md-primary/80 rounded-full relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full hover:before:animate-[shimmer_1.5s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent',
     tonal: 'bg-md-secondary-container text-md-on-secondary-container hover:bg-md-secondary-container/90 active:bg-md-secondary-container/80 rounded-full',
+    secondary: 'bg-md-secondary-container text-md-on-secondary-container hover:bg-md-secondary-container/90 active:bg-md-secondary-container/80 rounded-full',
+    combined: 'bg-gradient-to-r from-md-primary/90 to-md-secondary-container text-md-on-primary shadow-sm hover:shadow-md hover:from-md-primary hover:to-md-secondary-container/90 active:scale-95 rounded-full transition-all duration-300',
     outlined: 'bg-transparent text-md-primary border border-md-outline hover:bg-md-primary/5 active:bg-md-primary/10 rounded-full',
     text: 'bg-transparent text-md-primary hover:bg-md-primary/10 active:bg-md-primary/20 rounded-full',
     fab: 'bg-md-tertiary text-md-background shadow-md hover:shadow-xl hover:bg-md-tertiary/90 active:bg-md-tertiary/80 rounded-2xl h-14 w-14 p-0',
@@ -38,8 +44,18 @@ export const Button: React.FC<ButtonProps> = ({
   );
 
   return (
-    <button className={classes} {...props}>
-      {children}
+    <button className={classes} disabled={isLoading || disabled} {...props}>
+      <span className={classNames("flex items-center justify-center transition-opacity duration-300", isLoading ? "opacity-0" : "opacity-100")}>
+        {children}
+      </span>
+      {isLoading && (
+        <span className="absolute inset-0 flex items-center justify-center">
+          <svg className="animate-spin h-5 w-5 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        </span>
+      )}
     </button>
   );
 };

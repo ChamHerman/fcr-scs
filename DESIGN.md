@@ -17,14 +17,25 @@ c:\repository\fcr-scs\frontend\
 ├── tailwind.config.js       # Contains MD3 tokens, colors, radii, and custom easing.
 ├── postcss.config.js        # PostCSS configuration.
 └── src/
-    ├── index.css            # Global CSS, base styles, and utility classes (e.g. .md-blur-shape).
-    ├── App.tsx              # Main home page implementing the design system.
-    └── components/
-        └── ui/
-            ├── Button.tsx   # Pill-shaped button variants (filled, tonal, outlined, text, fab).
-            ├── Card.tsx     # Tonal surface containers with interactive elevation.
-            └── Input.tsx    # Material 3 filled text field (rounded top, border bottom).
+    ├── index.css            # Global CSS, base styles, and utility classes.
+    ├── App.tsx              # Router configuration (react-router-dom).
+    ├── main.tsx             # Entry point with NotificationProvider.
+    ├── components/
+    │   ├── layout/          # Global layout components.
+    │   │   ├── Layout.tsx   # Wrapper combining Navbar, Outlet, and Footer.
+    │   │   ├── Navbar.tsx   # Auto-hiding sticky navigation bar.
+    │   │   └── Footer.tsx   # Global footer.
+    │   └── ui/              # Reusable MD3 components (Button, Card, Form elements, Notifications).
+    └── pages/
+        ├── Home.tsx         # Main landing page.
+        └── ContactUs.tsx    # Contact form page.
 ```
+
+## Global Layout Architecture
+The application uses standard `react-router-dom` routing. All pages are rendered within a global `<Layout />` wrapper which provides:
+1. **Auto-hiding Navbar**: A sticky `<Navbar />` that listens to scroll direction. It hides when scrolling down to maximize reading space and reappears when scrolling up.
+2. **Global Footer**: A `<Footer />` consistently applied at the bottom of every page.
+3. **Notification Provider**: Root-level state for triggering MD3-compliant toast notifications from any page or component.
 
 ## Design Tokens
 
@@ -57,7 +68,12 @@ Defined in `tailwind.config.js`. Used to create organic, generous rounding.
 - `full` (9999px): Pill-shaped buttons and chips.
 
 ### Motion and Easing
-- **`md-emphasized`**: `cubic-bezier(0.2, 0, 0, 1)` provides smooth, confident movement that feels neither robotic nor bouncy. Standard duration is `300ms`.
+- **`md-bouncy`** (Standard Interactive Easing): `cubic-bezier(0.34, 1.56, 0.64, 1)` provides a soft, organic bouncy effect typical of Material 3's expressive state layers. This is the global standard applied to all hover, click (`active`), and loading transitions across UI components.
+- **`md-emphasized`**: `cubic-bezier(0.2, 0, 0, 1)` provides smooth, confident movement for major layout shifts. Standard duration is `300ms`.
+
+### Interactive States
+- **Hover/Active**: All interactive components (Buttons, Cards, Checkboxes, Switches) use `ease-md-bouncy` for scaling (`active:scale-95`) and opacity shifts to feel tactile and playful.
+- **Loading**: Submit buttons implement a loading state (`isLoading` prop) with an SVG spinner. Forms use this to simulate network requests (e.g. 1.5s delay) to provide a premium processing feel before showing notifications.
 
 ## Key Components
 
@@ -72,14 +88,24 @@ Defined in `tailwind.config.js`. Used to create organic, generous rounding.
 - Background uses `md-surface-container` instead of pure white.
 - Supports an `interactive` prop that enables hover elevation (`shadow-sm` to `shadow-md`), background highlighting, and slight scaling (`hover:scale-[1.02]`).
 
-### 3. Input (`Input.tsx`)
+### 3. Input (`Input.tsx` and Form Elements)
 - Represents the Material 3 Filled Text Field.
 - Rounded top corners (`12px`) and square bottom corners.
 - Uses `md-surface-container-low` for background fill.
 - Bottom border transitions to `md-primary` on focus.
+- **Form System Expansion**: Includes `Textarea`, `Checkbox`, `RadioGroup`, `Select`, and `Switch`. All follow the same Material 3 principles with generous touch targets, subtle background fills, and smooth `md-emphasized` transitions. 
+
+### 4. Notification System (`NotificationSystem.tsx`)
+- Provides stacked toast notifications globally.
+- Slides in from the right with a bounce effect and fades out after 3 seconds.
+- Adheres to minimalist principles by avoiding harsh high-contrast colors, using soft pastel variations:
+  - **Success**: Soft green (`md-success`) background with dark green text.
+  - **Error**: Soft red (`md-error`) background with dark red text.
+  - **General/Warning**: Soft yellow (`md-warning`) background with dark brown text.
 
 ## Usage Guidelines
 1. **Never use pure white backgrounds**: Always utilize the `md-background` or `md-surface-container` colors to maintain the tonal relationship.
 2. **Layering Strategy**: Combine cards with `md-blur-shape` utilities behind them to create atmospheric depth.
 3. **Interactive Grouping**: Use Tailwind's `group` and `group-hover:` utility classes to coordinate animations on interactive elements.
 4. **Consistency**: Do not mix border radii paradigms; stick to the generous, organic shaping characteristic of Material You.
+5. **Button Variants**: Use `combined` for primary CTAs requiring a gradient, and `animated-primary` for subtle attention-grabbing without aggressive movement.

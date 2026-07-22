@@ -14,7 +14,7 @@ export const Card: React.FC<CardProps> = ({
   children,
   ...props
 }) => {
-  const baseClasses = 'bg-md-surface-container rounded-lg p-6 md:p-8 transition-all duration-300 ease-md-emphasized';
+  const baseClasses = 'bg-md-surface-container rounded-lg p-6 md:p-8 transition-all duration-300 ease-md-bouncy';
   
   const elevationClasses = {
     none: 'shadow-none',

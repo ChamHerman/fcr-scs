@@ -18,6 +18,13 @@ export default {
         'md-surface-container-low': '#E7E0EC',
         'md-outline': '#79747E',
         'md-on-surface-variant': '#49454F',
+        // Soft Notification Colors
+        'md-error': '#F9DEDC',
+        'md-on-error': '#410E0B',
+        'md-warning': '#FFEFD6',
+        'md-on-warning': '#3C2900',
+        'md-success': '#E4F4E5',
+        'md-on-success': '#0D3A11',
       },
       fontFamily: {
         sans: ['Roboto', 'sans-serif'],
@@ -33,7 +40,13 @@ export default {
       },
       transitionTimingFunction: {
         'md-emphasized': 'cubic-bezier(0.2, 0, 0, 1)',
+        'md-bouncy': 'cubic-bezier(0.34, 1.56, 0.64, 1)',
       },
+      keyframes: {
+        shimmer: {
+          '100%': { transform: 'translateX(100%)' },
+        }
+      }
     },
   },
   plugins: [],
