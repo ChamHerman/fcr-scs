@@ -2,6 +2,10 @@
   "name": "fcr-scs",
   "version": "1.0.0",
   "private": true,
+  "scripts": {
+    "dev": "npm run dev --workspace=presentation_layer",
+    "build": "npm run build --workspace=presentation_layer"
+  },
   "workspaces": [
     "presentation_layer",
     "business_logic_layer/*",

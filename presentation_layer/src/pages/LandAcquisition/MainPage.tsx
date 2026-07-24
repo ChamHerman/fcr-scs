@@ -2,6 +2,18 @@ import React, { useRef } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useGSAP } from '@gsap/react';
+import { 
+  Briefcase, 
+  Clock, 
+  CheckCircle2, 
+  AlertCircle, 
+  CircleDollarSign,
+  Search,
+  Download,
+  FileText,
+  Plus,
+  Calendar
+} from 'lucide-react';
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
@@ -10,11 +22,11 @@ export const CaseManagement: React.FC = () => {
 
   // Static data – replace with your own state later
   const stats = [
-    { label: 'Total Cases', value: '347', change: '↑ 12% from last month', icon: '📁', trend: 'up' },
-    { label: 'Active', value: '184', change: '↓ 3% from last month', icon: '⏳', trend: 'down' },
-    { label: 'Completed', value: '128', change: '↑ 8% from last month', icon: '✅', trend: 'up' },
-    { label: 'Pending Action', value: '35', change: '↑ 5% from last month', icon: '⏰', trend: 'down' },
-    { label: 'Total Compensation', value: 'RM 42.6M', change: '↑ 6% from last month', icon: '💰', trend: 'up' },
+    { label: 'Total Cases', value: '347', change: '↑ 12% from last month', icon: <Briefcase size={28} />, trend: 'up' },
+    { label: 'Active', value: '184', change: '↓ 3% from last month', icon: <Clock size={28} />, trend: 'down' },
+    { label: 'Completed', value: '128', change: '↑ 8% from last month', icon: <CheckCircle2 size={28} />, trend: 'up' },
+    { label: 'Pending Action', value: '35', change: '↑ 5% from last month', icon: <AlertCircle size={28} />, trend: 'down' },
+    { label: 'Total Compensation', value: 'RM 42.6M', change: '↑ 6% from last month', icon: <CircleDollarSign size={28} />, trend: 'up' },
   ];
 
   const cases = [
@@ -81,64 +93,8 @@ export const CaseManagement: React.FC = () => {
 
   return (
     <>
-      {/* Embedded styles – exactly as in the original HTML */}
       <style>{`
-        .sidebar {
-          width: 260px;
-          background: var(--md-surface-container);
-          padding: 24px 16px;
-          display: flex;
-          flex-direction: column;
-          border-right: 1px solid rgba(121,116,126,0.12);
-          position: sticky;
-          top: 0;
-          height: 100vh;
-          flex-shrink: 0;
-        }
-        .sidebar-brand {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 4px 12px 28px 12px;
-          font-weight: 700;
-          font-size: 20px;
-          letter-spacing: -0.3px;
-          color: var(--md-on-surface);
-        }
-        .sidebar-brand .brand-icon {
-          width: 40px;
-          height: 40px;
-          background: var(--md-primary);
-          border-radius: var(--radius-sm);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          font-size: 22px;
-          font-weight: 700;
-        }
-        .sidebar-nav { flex:1; display:flex; flex-direction:column; gap:4px; }
-        .sidebar-nav .nav-label {
-          font-size: 11px; font-weight:600; text-transform:uppercase;
-          letter-spacing:0.5px; color:var(--md-on-surface-variant);
-          padding:16px 12px 8px 12px; opacity:0.6;
-        }
-        .sidebar-nav a {
-          display:flex; align-items:center; gap:14px; padding:10px 14px;
-          border-radius:var(--radius-sm); text-decoration:none;
-          color:var(--md-on-surface-variant); font-weight:500; font-size:14px;
-          transition: background 0.2s var(--ease-emphasized), color 0.2s;
-        }
-        .sidebar-nav a:hover { background:rgba(103,80,164,0.08); color:var(--md-on-surface); }
-        .sidebar-nav a.active { background:var(--md-secondary-container); color:var(--md-primary); font-weight:600; }
-        .sidebar-nav a .nav-icon { width:22px; height:22px; flex-shrink:0; opacity:0.7; }
-        .sidebar-nav a.active .nav-icon { opacity:1; }
-        .sidebar-nav a .badge {
-          margin-left:auto; background:var(--md-primary); color:white;
-          font-size:11px; font-weight:600; padding:1px 10px; border-radius:var(--radius-full);
-          line-height:20px;
-        }
-
+        /* Removed .sidebar styles */
         .main { flex:1; padding:24px 32px 40px 32px; max-width:1440px; overflow-y:auto; }
 
         .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:28px; flex-wrap:wrap; gap:12px; }
@@ -148,7 +104,7 @@ export const CaseManagement: React.FC = () => {
         .topbar-right .date-badge {
           background:var(--md-surface-container); padding:8px 16px;
           border-radius:var(--radius-full); font-size:13px; font-weight:500;
-          color:var(--md-on-surface-variant);
+          color:var(--md-on-surface-variant); display:flex; align-items:center; gap:6px;
         }
         .topbar-right .avatar {
           width:40px; height:40px; border-radius:var(--radius-full);
@@ -174,7 +130,7 @@ export const CaseManagement: React.FC = () => {
           background:var(--md-success); color:var(--md-success-text);
         }
         .stat-card .stat-change.negative { background:var(--md-error); color:var(--md-error-text); }
-        .stat-card .stat-icon { float:right; opacity:0.2; font-size:32px; line-height:1; }
+        .stat-card .stat-icon { float:right; opacity:0.2; color: inherit; }
 
         .filter-bar {
           background:var(--md-surface-container); border-radius:var(--radius-lg);
@@ -190,7 +146,7 @@ export const CaseManagement: React.FC = () => {
         .filter-bar .search-wrap input:focus { border-color:var(--md-primary); box-shadow:0 0 0 3px rgba(103,80,164,0.15); }
         .filter-bar .search-wrap .search-icon {
           position:absolute; left:14px; top:50%; transform:translateY(-50%);
-          opacity:0.5; font-size:18px;
+          opacity:0.5; display:flex; align-items:center; justify-content:center;
         }
         .filter-bar .filter-group { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
         .filter-bar .filter-group select {
@@ -302,7 +258,7 @@ export const CaseManagement: React.FC = () => {
         .pagination .pages button.active { background:var(--md-primary); color:white; box-shadow:var(--shadow-sm); }
         .pagination .pages button:active { transform:scale(0.92); }
 
-        .blur-shape-bg { position:relative; overflow:hidden; }
+        .blur-shape-bg { position:relative; overflow:hidden; min-height: 100vh; }
         .blur-shape-bg::before {
           content:''; position:absolute; width:500px; height:500px; border-radius:50%;
           background:rgba(103,80,164,0.06); filter:blur(80px); top:-200px; right:-200px;
@@ -311,21 +267,9 @@ export const CaseManagement: React.FC = () => {
         .blur-shape-bg > * { position:relative; z-index:1; }
 
         @media (max-width:1024px) {
-          .sidebar { width:220px; padding:16px 12px; }
           .main { padding:20px 20px 32px 20px; }
         }
         @media (max-width:768px) {
-          body { flex-direction:column; }
-          .sidebar {
-            width:100%; height:auto; position:relative; padding:12px 16px;
-            border-right:none; border-bottom:1px solid rgba(121,116,126,0.12);
-            flex-direction:row; flex-wrap:wrap; align-items:center; gap:8px 16px;
-          }
-          .sidebar-brand { padding:0; font-size:18px; }
-          .sidebar-nav { flex-direction:row; flex-wrap:wrap; gap:4px 8px; flex:1; }
-          .sidebar-nav .nav-label { display:none; }
-          .sidebar-nav a { padding:6px 12px; font-size:13px; gap:8px; }
-          .sidebar-nav a .badge { display:none; }
           .main { padding:16px; }
           .topbar-left h1 { font-size:22px; }
           .stats-grid { grid-template-columns:repeat(2,1fr); }
@@ -349,182 +293,140 @@ export const CaseManagement: React.FC = () => {
         ::-webkit-scrollbar-thumb:hover { background:rgba(121,116,126,0.5); }
       `}</style>
 
-      <div ref={containerRef} className="flex min-h-screen" style={{ background: '#f8f5fa', color: '#1c1b1f' }}>
-        {/* ====== SIDEBAR ====== */}
-        <aside className="sidebar">
-          <div className="sidebar-brand">
-            <span className="brand-icon">⚖️</span>
-            <span>FCR·SCS</span>
+      <div ref={containerRef} className="main blur-shape-bg">
+        {/* Top Bar */}
+        <div className="topbar">
+          <div className="topbar-left">
+            <h1>Case Management</h1>
+            <div className="sub">Monitor and manage all land acquisition cases</div>
           </div>
-          <nav className="sidebar-nav">
-            <span className="nav-label">Main</span>
-            <a href="#" className="active">
-              <span className="nav-icon">📊</span> Dashboard
-              <span className="badge">24</span>
-            </a>
-            <a href="#">
-              <span className="nav-icon">📋</span> Cases
-            </a>
-            <a href="#">
-              <span className="nav-icon">🧑‍⚖️</span> Valuers
-            </a>
-            <a href="#">
-              <span className="nav-icon">📄</span> Forms
-            </a>
-            <span className="nav-label">Compensation</span>
-            <a href="#">
-              <span className="nav-icon">💰</span> Compensation
-              <span className="badge">12</span>
-            </a>
-            <a href="#">
-              <span className="nav-icon">📈</span> Reports
-            </a>
-            <span className="nav-label">System</span>
-            <a href="#">
-              <span className="nav-icon">⚙️</span> Settings
-            </a>
-            <a href="#">
-              <span className="nav-icon">👥</span> Users
-            </a>
-          </nav>
-        </aside>
-
-        {/* ====== MAIN CONTENT ====== */}
-        <main className="main blur-shape-bg">
-          {/* Top Bar */}
-          <div className="topbar">
-            <div className="topbar-left">
-              <h1>Case Management</h1>
-              <div className="sub">Monitor and manage all land acquisition cases</div>
-            </div>
-            <div className="topbar-right">
-              <span className="date-badge">📅 24 Jul 2026</span>
-              <div className="avatar">AO</div>
-            </div>
+          <div className="topbar-right">
+            <span className="date-badge"><Calendar size={16} /> 24 Jul 2026</span>
+            <div className="avatar">AO</div>
           </div>
+        </div>
 
-          {/* Stats */}
-          <div className="stats-grid">
-            {stats.map((stat, idx) => (
-              <div className="stat-card" key={idx}>
-                <span className="stat-icon">{stat.icon}</span>
-                <div className="stat-label">{stat.label}</div>
-                <div className="stat-number">{stat.value}</div>
-                <span className={`stat-change ${stat.trend === 'down' ? 'negative' : ''}`}>
-                  {stat.change}
-                </span>
-              </div>
-            ))}
+        {/* Stats */}
+        <div className="stats-grid">
+          {stats.map((stat, idx) => (
+            <div className="stat-card" key={idx}>
+              <span className="stat-icon">{stat.icon}</span>
+              <div className="stat-label">{stat.label}</div>
+              <div className="stat-number">{stat.value}</div>
+              <span className={`stat-change ${stat.trend === 'down' ? 'negative' : ''}`}>
+                {stat.change}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Filter Bar */}
+        <div className="filter-bar">
+          <div className="search-wrap">
+            <span className="search-icon"><Search size={18} /></span>
+            <input type="text" placeholder="Search by case ID, title, owner, project…" defaultValue="LAC-2026" />
           </div>
-
-          {/* Filter Bar */}
-          <div className="filter-bar">
-            <div className="search-wrap">
-              <span className="search-icon">🔍</span>
-              <input type="text" placeholder="Search by case ID, title, owner, project…" defaultValue="LAC-2026" />
-            </div>
-            <div className="filter-group">
-              <select>
-                <option value="">All Status</option>
-                <option>Case Registered</option>
-                <option>Valuer Assigned</option>
-                <option>Valuation In Progress</option>
-                <option>Pending Valuation Approval</option>
-                <option>Valuation Approved</option>
-                <option>Valuation Rejected</option>
-                <option>Pending Compensation Approval</option>
-                <option>Compensation Approved</option>
-                <option>Compensation Rejected</option>
-                <option>Offer Issued</option>
-                <option>Offer Rejected</option>
-                <option>Payment In Progress</option>
-                <option>Payment Completed</option>
-                <option>Case Closed</option>
-              </select>
-              <select>
-                <option value="">All Project Types</option>
-                <option>Public Amenities</option>
-                <option>Transportation Development</option>
-                <option>Urban Redevelopment</option>
-                <option>Tourism Development</option>
-                <option>Others</option>
-              </select>
-              <select>
-                <option value="">Date Range</option>
-                <option>Today</option>
-                <option>This Week</option>
-                <option>This Month</option>
-                <option>Last 3 Months</option>
-                <option>Custom</option>
-              </select>
-              <button className="btn-filter">Apply Filters</button>
-              <button className="btn-clear">Clear</button>
-            </div>
+          <div className="filter-group">
+            <select>
+              <option value="">All Status</option>
+              <option>Case Registered</option>
+              <option>Valuer Assigned</option>
+              <option>Valuation In Progress</option>
+              <option>Pending Valuation Approval</option>
+              <option>Valuation Approved</option>
+              <option>Valuation Rejected</option>
+              <option>Pending Compensation Approval</option>
+              <option>Compensation Approved</option>
+              <option>Compensation Rejected</option>
+              <option>Offer Issued</option>
+              <option>Offer Rejected</option>
+              <option>Payment In Progress</option>
+              <option>Payment Completed</option>
+              <option>Case Closed</option>
+            </select>
+            <select>
+              <option value="">All Project Types</option>
+              <option>Public Amenities</option>
+              <option>Transportation Development</option>
+              <option>Urban Redevelopment</option>
+              <option>Tourism Development</option>
+              <option>Others</option>
+            </select>
+            <select>
+              <option value="">Date Range</option>
+              <option>Today</option>
+              <option>This Week</option>
+              <option>This Month</option>
+              <option>Last 3 Months</option>
+              <option>Custom</option>
+            </select>
+            <button className="btn-filter">Apply Filters</button>
+            <button className="btn-clear">Clear</button>
           </div>
+        </div>
 
-          {/* Action Bar */}
-          <div className="action-bar">
-            <div className="left">
-              <span className="count">24</span> cases found
-              <span style={{ opacity: 0.4, margin: '0 4px' }}>·</span>
-              <span style={{ fontSize: '13px' }}>Showing 1–10 of 24</span>
-            </div>
-            <div className="right">
-              <button className="btn-outline">📥 Export CSV</button>
-              <button className="btn-outline">📄 Export PDF</button>
-              <button className="btn-primary">➕ New Case</button>
-            </div>
+        {/* Action Bar */}
+        <div className="action-bar">
+          <div className="left">
+            <span className="count">24</span> cases found
+            <span style={{ opacity: 0.4, margin: '0 4px' }}>·</span>
+            <span style={{ fontSize: '13px' }}>Showing 1–10 of 24</span>
           </div>
+          <div className="right">
+            <button className="btn-outline"><Download size={16} /> Export CSV</button>
+            <button className="btn-outline"><FileText size={16} /> Export PDF</button>
+            <button className="btn-primary"><Plus size={16} /> New Case</button>
+          </div>
+        </div>
 
-          {/* Table */}
-          <div className="table-wrap">
-            <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Case ID</th>
-                    <th>Case Title</th>
-                    <th>Status</th>
-                    <th>Registration Date</th>
-                    <th>Project Name</th>
-                    <th>Land Title No.</th>
-                    <th>Assigned Valuer</th>
+        {/* Table */}
+        <div className="table-wrap">
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Case ID</th>
+                  <th>Case Title</th>
+                  <th>Status</th>
+                  <th>Registration Date</th>
+                  <th>Project Name</th>
+                  <th>Land Title No.</th>
+                  <th>Assigned Valuer</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cases.map((c, idx) => (
+                  <tr key={idx} className="case-row">
+                    <td><span className="case-id">{c.id}</span></td>
+                    <td className="case-title">{c.title}</td>
+                    <td><span className={`status-badge ${c.statusClass}`}><span className="dot"></span> {c.status}</span></td>
+                    <td><span className="meta-text">{c.date}</span></td>
+                    <td><span className="meta-text">{c.project}</span></td>
+                    <td><span className="meta-text">{c.landTitle}</span></td>
+                    <td><span className="meta-text"><strong>{c.valuer}</strong></span></td>
                   </tr>
-                </thead>
-                <tbody>
-                  {cases.map((c, idx) => (
-                    <tr key={idx} className="case-row">
-                      <td><span className="case-id">{c.id}</span></td>
-                      <td className="case-title">{c.title}</td>
-                      <td><span className={`status-badge ${c.statusClass}`}><span className="dot"></span> {c.status}</span></td>
-                      <td><span className="meta-text">{c.date}</span></td>
-                      <td><span className="meta-text">{c.project}</span></td>
-                      <td><span className="meta-text">{c.landTitle}</span></td>
-                      <td><span className="meta-text"><strong>{c.valuer}</strong></span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination */}
-            <div className="pagination">
-              <div className="info">Showing <strong>1–10</strong> of <strong>24</strong> cases</div>
-              <div className="pages">
-                <button>‹</button>
-                <button className="active">1</button>
-                <button>2</button>
-                <button>3</button>
-                <button>›</button>
-              </div>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
 
-          {/* Footer note */}
-          <div style={{ marginTop: '24px', fontSize: '13px', color: 'var(--md-on-surface-variant)', opacity: 0.6, textAlign: 'center', borderTop: '1px solid rgba(121,116,126,0.08)', paddingTop: '18px' }}>
-            FCR-SCS · Case Management Module · All data is for demonstration purposes.
+          {/* Pagination */}
+          <div className="pagination">
+            <div className="info">Showing <strong>1–10</strong> of <strong>24</strong> cases</div>
+            <div className="pages">
+              <button>‹</button>
+              <button className="active">1</button>
+              <button>2</button>
+              <button>3</button>
+              <button>›</button>
+            </div>
           </div>
-        </main>
+        </div>
+
+        {/* Footer note */}
+        <div style={{ marginTop: '24px', fontSize: '13px', color: 'var(--md-on-surface-variant)', opacity: 0.6, textAlign: 'center', borderTop: '1px solid rgba(121,116,126,0.08)', paddingTop: '18px' }}>
+          FCR-SCS · Case Management Module · All data is for demonstration purposes.
+        </div>
       </div>
     </>
   );
