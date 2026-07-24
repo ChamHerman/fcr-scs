@@ -19,40 +19,52 @@ This project is developed as part of the **BMSE3004 Collaborative Development** 
 
 ## Current project status
 
-> **Frontend only.** The repository currently contains the frontend application. Backend, AI service, blockchain, and database modules are planned but not yet implemented.
+> **Initial Project Structure.** The repository has been structured according to the Layered Architecture model. The presentation layer currently contains the initial React application. Business logic and data layers are scaffolded but not yet implemented.
 
-### What exists
+### Project Structure (Layered Architecture)
 
-```
+```text
 fcr-scs/
-├── frontend/           # React + TypeScript + Vite application
+├── presentation_layer/           # (React.js + TypeScript + Vite application)
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── layout/     # Layout, Navbar, Footer
-│   │   │   └── ui/         # Button, Card, Input, Checkbox, RadioGroup,
-│   │   │                   # Select, Switch, Textarea, NotificationSystem
-│   │   ├── pages/          # Home, ContactUs
-│   │   ├── App.tsx         # Router configuration (react-router-dom)
-│   │   └── main.tsx        # Entry point with NotificationProvider
-│   ├── tailwind.config.js  # Material You (MD3) design tokens
+│   │   │   ├── layout/           # Layout, Navbar, Footer
+│   │   │   └── ui/               # Button, Card, Input, Checkbox, RadioGroup,
+│   │   │                         # Select, Switch, Textarea, NotificationSystem
+│   │   ├── pages/                # Home, ContactUs
+│   │   ├── App.tsx               # Router configuration (react-router-dom)
+│   │   └── main.tsx              # Entry point with NotificationProvider
+│   ├── tailwind.config.js        # Material You (MD3) design tokens
 │   ├── vite.config.ts
 │   └── package.json
-document
-├── DESIGN.md               # Material Design 3 implementation guide
-├── LICENSE                  # MIT
+├── business_logic_layer/         # (Node.js & Python Services)
+│   ├── user_management_service/
+│   ├── compensation_management_service/
+│   ├── smart_contract_service/
+│   ├── reporting_service/
+│   ├── land_acquisition_service/
+│   ├── ai_prediction_service/
+│   └── payment_service/
+├── data_layer/                   # (Data Access & Infrastructure)
+│   ├── database/
+│   ├── ai_model_repository/
+│   ├── blockchain_ledger/
+│   └── document_storage/
+├── DESIGN.md                     # Material Design 3 implementation guide
+├── LICENSE                       # MIT
 └── README.md
 ```
 
-### What is planned
+### Module Status
 
-| Module | Tech | Status |
-|---|---|---|
-| Frontend | React, TypeScript, Tailwind CSS, Vite, GSAP | ✅ In progress |
-| Backend | Node.js, Express, RESTful API | 🔲 Planned |
-| AI service | Python, Scikit-learn, TensorFlow, OpenCV | 🔲 Planned |
-| Database | PostgreSQL | 🔲 Planned |
-| Blockchain | Solidity, Ethereum Sepolia Testnet, Ethers.js | 🔲 Planned |
-| Reporting | jsPDF, PDFKit, Chart.js | 🔲 Planned |
+| Module | Layer | Tech | Status |
+|---|---|---|---|
+| Frontend | Presentation | React, TypeScript, Tailwind CSS, Vite, GSAP | In progress |
+| Services | Business Logic | Node.js, Express, RESTful API | Planned |
+| AI Service | Business Logic | Python, Scikit-learn, TensorFlow, OpenCV | Planned |
+| Database | Data | PostgreSQL | Planned |
+| Blockchain | Data | Solidity, Ethereum Sepolia Testnet, Ethers.js | Planned |
+| Reporting | Business Logic | jsPDF, PDFKit, Chart.js | Planned |
 
 ## Development environment
 
@@ -93,10 +105,10 @@ git clone https://github.com/ChamHerman/fcr-scs.git
 cd fcr-scs
 ```
 
-### 2. Install frontend dependencies
+### 2. Install presentation layer dependencies
 
 ```bash
-cd frontend
+cd presentation_layer
 npm install
 ```
 

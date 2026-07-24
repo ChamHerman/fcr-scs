@@ -1,0 +1,10 @@
+{
+  "name": "fcr-scs",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "presentation_layer",
+    "business_logic_layer/*",
+    "data_layer/*"
+  ]
+}
