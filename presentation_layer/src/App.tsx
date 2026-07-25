@@ -7,9 +7,6 @@ import { Layout } from './components/layout/Layout';
 import { Home } from './pages/Home';
 import { ContactUs } from './pages/ContactUs';
 
-// Mock components for existing pages
-import { CaseManagement } from './pages/LandAcquisition/MainPage';
-
 // Import Smart Contract & Blockchain Pages
 import { BlockchainDashboard } from './pages/SmartContract/BlockchainDashboard';
 import { PublishLedger } from './pages/SmartContract/PublishLedger';
