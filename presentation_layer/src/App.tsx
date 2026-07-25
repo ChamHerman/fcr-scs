@@ -51,12 +51,33 @@ function App() {
         </Route>
         <Route path="/login" element={<div>Login Page (Mock)</div>} />
         <Route path="/unauthorized" element={<div>Unauthorized Access. You do not have permission to view this page.</div>} />
+        {/* Case Management */}
+        <Route path="case" element={<CaseManagementDashboard />} />
+        <Route path="case/register" element={<CaseRegistration />} />
+        <Route path="case/details" element={<CaseView />} />
+        <Route path="case/assign" element={<CaseAssignment />} />
+        <Route path="case/valuation/create" element={<ValuationReportGenerator />} />
+        <Route path="case/valuation/review" element={<ValuationReportReview />} />
+        <Route path="case/valuation" element={<ValuationReportList />} />
+
+        {/* Compensation Management */}
+        <Route path="compensation/report" element={<CompensationReportList />} />
+        <Route path="compensation/report/create" element={<CompensationReportGenerator />} />
+        <Route path="compensation/report/review" element={<CompensationApproval />} />
+        <Route path="compensation/compare" element={<CompensationComparisonList />} />
+        <Route path="compensation/compare/create" element={<CompensationComparisonCreate />} />
+        <Route path="compensation/offer" element={<OfferLetterDashboard />} />
+        <Route path="compensation/offer/review" element={<OfferLetterDetail />} />
+        <Route path="compensation/objection" element={<ObjectionList />} />
+        <Route path="compensation/objection/create" element={<CreateObjection />} />
+        <Route path="compensation/objection/review" element={<ObjectionReview />} />
+
 
         {/* Admin Routes - Protected */}
         <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
           <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<CaseManagement />} />
-            <Route path="land-acquisition" element={<CaseManagement />} />
+            <Route index element={<CaseManagementDashboard />} />
+            <Route path="land-acquisition" element={<CaseManagementDashboard />} />
             
             {/* Payment Routes */}
             <Route path="payments">
@@ -83,31 +104,6 @@ function App() {
             <Route path="payment-status" element={<MemberPaymentStatus />} />
             <Route path="verify-audit" element={<VerifyAuditTrail />} />
           </Route>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Home />} />
-          <Route path="contact" element={<ContactUs />} />
-
-          {/* Case Management */}
-          <Route path="case" element={<CaseManagementDashboard />} />
-          <Route path="case/register" element={<CaseRegistration />} />
-          <Route path="case/details" element={<CaseView />} />
-          <Route path="case/assign" element={<CaseAssignment />} />
-          <Route path="case/valuation/create" element={<ValuationReportGenerator />} />
-          <Route path="case/valuation/review" element={<ValuationReportReview />} />
-          <Route path="case/valuation" element={<ValuationReportList />} />
-
-          {/* Compensation Management */}
-          <Route path="compensation/report" element={<CompensationReportList />} />
-          <Route path="compensation/report/create" element={<CompensationReportGenerator />} />
-          <Route path="compensation/report/review" element={<CompensationApproval />} />
-          <Route path="compensation/compare" element={<CompensationComparisonList />} />
-          <Route path="compensation/compare/create" element={<CompensationComparisonCreate />} />
-          <Route path="compensation/offer" element={<OfferLetterDashboard />} />
-          <Route path="compensation/offer/review" element={<OfferLetterDetail />} />
-          <Route path="compensation/objection" element={<ObjectionList />} />
-          <Route path="compensation/objection/create" element={<CreateObjection />} />
-          <Route path="compensation/objection/review" element={<ObjectionReview />} />
-          
         </Route>
       </Routes>
     </BrowserRouter>
