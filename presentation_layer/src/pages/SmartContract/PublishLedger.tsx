@@ -36,7 +36,7 @@ export const PublishLedger: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-md-background text-md-on-surface p-8 font-sans">
+    <div className="text-md-on-surface p-8 font-sans">
       <div className="max-w-7xl mx-auto space-y-8">
         
         {/* Header */}
@@ -57,15 +57,15 @@ export const PublishLedger: React.FC = () => {
 
         {/* Toolbar */}
         <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-md-surface-container-low p-4 rounded-2xl border border-md-outline/20 backdrop-blur-md shadow-sm">
-          <div className="relative w-full sm:w-96">
+          <div className="relative sm:w-96">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-md-on-surface-variant" />
             <input 
               type="text" 
               placeholder="Search by case ID or client..." 
-              className="w-full bg-md-background border border-md-outline/30 rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all text-md-on-surface placeholder-md-on-surface-variant"
+              className="border border-md-outline/30 rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all text-md-on-surface placeholder-md-on-surface-variant"
             />
           </div>
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-md-surface-container hover:bg-md-secondary-container border border-md-outline/20 rounded-full text-sm font-medium transition-all active:scale-95 ease-md-bouncy w-full sm:w-auto justify-center text-md-on-surface">
+          <button className="flex items-center gap-2 px-4 py-2.5 bg-md-surface-container hover:bg-md-secondary-container border border-md-outline/20 rounded-full text-sm font-medium transition-all active:scale-95 ease-md-bouncy sm:w-auto justify-center text-md-on-surface">
             <Filter className="w-4 h-4" />
             Filter Cases
           </button>
@@ -74,7 +74,7 @@ export const PublishLedger: React.FC = () => {
         {/* Data Table */}
         <div className="bg-md-surface-container backdrop-blur-xl border border-md-outline/20 rounded-2xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="text-left border-collapse">
               <thead>
                 <tr className="bg-md-surface-container-low border-b border-md-outline/20 text-sm font-medium text-md-on-surface-variant">
                   <th className="p-4 pl-6 whitespace-nowrap">Case ID</th>
@@ -120,9 +120,9 @@ export const PublishLedger: React.FC = () => {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-md-on-surface/50 backdrop-blur-sm" onClick={() => !isPublishing && setIsModalOpen(false)}></div>
-          <div className="relative bg-md-surface-container border border-md-outline/20 rounded-3xl w-full max-w-md shadow-md overflow-hidden transform transition-all">
+          <div className="relative bg-md-surface-container border border-md-outline/20 rounded-3xl max-w-md shadow-md overflow-hidden transform transition-all">
             
-            <div className="absolute top-0 left-0 w-full h-1 bg-md-primary"></div>
+            <div className="absolute top-0 left-0 h-1 bg-md-primary"></div>
             
             <div className="p-6">
               <div className="flex justify-between items-start mb-6">

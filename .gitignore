@@ -1,3 +1,4 @@
 /.opencode
 /.agents
 node_modules/
+/graphify-out

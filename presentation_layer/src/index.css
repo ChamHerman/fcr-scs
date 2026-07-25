@@ -5,12 +5,53 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --md-background: #FFFBFE;
+    --md-on-surface: #1C1B1F;
+    --md-primary: #6750A4;
+    --md-on-primary: #FFFFFF;
+    --md-secondary-container: #E8DEF8;
+    --md-on-secondary-container: #1D192B;
+    --md-tertiary: #7D5260;
+    --md-surface-container: #F3EDF7;
+    --md-surface-container-low: #E7E0EC;
+    --md-outline: #79747E;
+    --md-on-surface-variant: #49454F;
+    --md-error: #F9DEDC;
+    --md-on-error: #410E0B;
+    --md-warning: #FFEFD6;
+    --md-on-warning: #3C2900;
+    --md-success: #E4F4E5;
+    --md-on-success: #0D3A11;
+  }
+
+  .dark {
+    --md-background: #141218;
+    --md-on-surface: #E6E0E9;
+    --md-primary: #D0BCFF;
+    --md-on-primary: #381E72;
+    --md-secondary-container: #4A4458;
+    --md-on-secondary-container: #E8DEF8;
+    --md-tertiary: #EFB8C8;
+    --md-surface-container: #211F26;
+    --md-surface-container-low: #1D1B20;
+    --md-outline: #938F99;
+    --md-on-surface-variant: #CAC4D0;
+    --md-error: #F2B8B5;
+    --md-on-error: #8C1D18;
+    --md-warning: #EFB008;
+    --md-on-warning: #3C2900;
+    --md-success: #A3D9A5;
+    --md-on-success: #0D3A11;
+  }
+
   body {
-    @apply bg-md-background text-md-on-surface font-sans antialiased overflow-x-hidden;
+    @apply bg-md-background text-md-on-surface font-sans antialiased overflow-x-hidden transition-colors duration-300;
   }
 }
 
 @layer components {
+
   /* Material You Utilities */
   .md-blur-shape {
     @apply absolute rounded-full blur-3xl mix-blend-multiply opacity-20 pointer-events-none;

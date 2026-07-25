@@ -193,10 +193,10 @@
 }
 .offer-dashboard .status-badge.expired {
   background: #e8e0ec;
-  color: #49454f;
+  color: var(--md-on-surface-variant);
 }
 .offer-dashboard .status-badge.expired .dot {
-  background: #49454f;
+  background: var(--md-on-surface-variant);
 }
 .offer-dashboard .pagination {
   display: flex;
@@ -331,7 +331,7 @@
 }
 .offer-detail .header-card .status-badge-lg.expired {
   background: #e8e0ec;
-  color: #49454f;
+  color: var(--md-on-surface-variant);
 }
 
 .offer-detail .content-card {

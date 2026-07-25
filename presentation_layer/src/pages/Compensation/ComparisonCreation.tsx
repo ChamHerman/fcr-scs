@@ -1,9 +1,10 @@
+import * as Lucide from "lucide-react";
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Save, X, GitCompare } from 'lucide-react';
 import '../../style.css';
 import './comparison.css';
-import { Sidebar } from '../Shared';
+
 
 // Types
 type CaseSummary = {
@@ -297,8 +298,8 @@ export const CompensationComparisonCreate: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen" style={{ background: '#f8f5fa', color: '#1c1b1f' }}>
-      <Sidebar />
+    <div className="flex min-h-screen" style={{ background: 'var(--md-background)', color: 'var(--md-on-surface)' }}>
+      
 
       <main className="main blur-shape-bg">
         <div className="comparison-view">
@@ -329,7 +330,7 @@ export const CompensationComparisonCreate: React.FC = () => {
             </div>
           ) : (
             <div className="empty-state">
-              <div className="empty-icon">👈</div>
+              <div className="empty-icon"><Lucide.ArrowLeft size={16} className="inline mr-1" /></div>
               <h4>Select two cases to compare</h4>
               <p style={{ fontSize: '14px' }}>Choose Case A and Case B from the dropdowns above.</p>
             </div>

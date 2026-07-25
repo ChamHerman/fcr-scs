@@ -1,9 +1,10 @@
+﻿import * as Lucide from "lucide-react";
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { CheckCircle, XCircle, ArrowLeft, X } from "lucide-react";
 import "../../style.css";
 import "./offer_letter.css";
-import { Sidebar } from "../Shared";
+
 
 type OfferDetail = {
   id: string;
@@ -91,7 +92,7 @@ export const OfferLetterDetail: React.FC = () => {
       setActionPerformed(true);
       setSubmitting(false);
       alert(
-        "✅ Offer accepted successfully. You will be contacted for the next steps.",
+        "Offer accepted successfully. You will be contacted for the next steps.",
       );
     }, 1000);
   };
@@ -121,7 +122,7 @@ export const OfferLetterDetail: React.FC = () => {
       setActionPerformed(true);
       setSubmitting(false);
       setShowRejectModal(false);
-      alert("❌ Offer rejected. The authority will be notified.");
+      alert("Offer rejected. The authority will be notified.");
     }, 1000);
   };
 
@@ -131,7 +132,7 @@ export const OfferLetterDetail: React.FC = () => {
         className="flex min-h-screen"
         style={{
           background: "#f8f5fa",
-          color: "#1c1b1f",
+          color: "var(--md-on-surface)",
           alignItems: "center",
           justifyContent: "center",
         }}
@@ -151,7 +152,7 @@ export const OfferLetterDetail: React.FC = () => {
         className="flex min-h-screen"
         style={{
           background: "#f8f5fa",
-          color: "#1c1b1f",
+          color: "var(--md-on-surface)",
           alignItems: "center",
           justifyContent: "center",
         }}
@@ -211,9 +212,9 @@ export const OfferLetterDetail: React.FC = () => {
 
       <div
         className="flex min-h-screen"
-        style={{ background: "#f8f5fa", color: "#1c1b1f" }}
+        style={{ background: "#f8f5fa", color: "var(--md-on-surface)" }}
       >
-        <Sidebar />
+        
 
         <main className="main blur-shape-bg">
           <div className="offer-detail">
@@ -222,20 +223,20 @@ export const OfferLetterDetail: React.FC = () => {
                 <div className="offer-id">{offer.id}</div>
                 <div className="title">{offer.caseTitle}</div>
                 <div className="meta">
-                  <span>📁 {offer.caseId}</span>
-                  <span>👤 {offer.ownerName}</span>
-                  <span>📅 Issued: {offer.issueDate}</span>
-                  <span>⏰ Expires: {offer.expiryDate}</span>
+                  <span><Lucide.FolderOpen size={16} className="inline mr-1" /> {offer.caseId}</span>
+                  <span><Lucide.User size={16} className="inline mr-1" /> {offer.ownerName}</span>
+                  <span><Lucide.Calendar size={16} className="inline mr-1" /> Issued: {offer.issueDate}</span>
+                  <span><Lucide.Clock size={16} className="inline mr-1" /> Expires: {offer.expiryDate}</span>
                 </div>
               </div>
               <span className={`status-badge-lg ${offer.statusClass}`}>
-                {offer.status === "Pending" ? "⏳ " : ""}
+                {offer.status === "Pending" ? <><Lucide.Hourglass size={16} className="inline mr-1" /> </> : ""}
                 {offer.status}
               </span>
             </div>
 
             <div className="content-card">
-              <div className="section-title">📋 Offer Details</div>
+              <div className="section-title"><Lucide.ClipboardList size={16} className="inline mr-1" /> Offer Details</div>
               <div className="detail-grid">
                 <div className="detail-item">
                   <span className="label">Land Title</span>
@@ -272,7 +273,7 @@ export const OfferLetterDetail: React.FC = () => {
               </div>
 
               <div style={{ marginTop: "20px" }}>
-                <div className="section-title">💰 Compensation Breakdown</div>
+                <div className="section-title"><Lucide.DollarSign size={16} className="inline mr-1" /> Compensation Breakdown</div>
                 <div className="comp-breakdown">
                   <div className="comp-row">
                     <span className="label">Land Value</span>
@@ -326,7 +327,7 @@ export const OfferLetterDetail: React.FC = () => {
               </div>
 
               <div style={{ marginTop: "16px" }}>
-                <div className="section-title">📌 Payment Conditions</div>
+                <div className="section-title"><Lucide.Pin size={16} className="inline mr-1" /> Payment Conditions</div>
                 <p
                   style={{
                     fontSize: "14px",
@@ -341,15 +342,15 @@ export const OfferLetterDetail: React.FC = () => {
               <div className="action-bar">
                 {!isPending && !actionPerformed ? (
                   <span className="btn-disabled" style={{ marginLeft: "auto" }}>
-                    {offer.status === "Accepted" && "✅ Already Accepted"}
-                    {offer.status === "Rejected" && "❌ Already Rejected"}
-                    {offer.status === "Expired" && "⏰ Offer Expired"}
+                    {offer.status === "Accepted" && <><Lucide.CheckCircle size={16} className="inline mr-1" /> Already Accepted</>}
+                    {offer.status === "Rejected" && <><Lucide.XCircle size={16} className="inline mr-1" /> Already Rejected</>}
+                    {offer.status === "Expired" && "Offer Expired"}
                   </span>
                 ) : isPending && actionPerformed ? (
                   <span className="btn-disabled" style={{ marginLeft: "auto" }}>
                     {offer.status === "Accepted"
-                      ? "✅ Accepted"
-                      : "❌ Rejected"}
+                      ? <><Lucide.CheckCircle size={16} className="inline mr-1" /> Accepted</>
+                      : <><Lucide.XCircle size={16} className="inline mr-1" /> Rejected</>}
                   </span>
                 ) : (
                   <>

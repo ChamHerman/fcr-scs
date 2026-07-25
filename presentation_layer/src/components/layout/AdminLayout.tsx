@@ -2,12 +2,12 @@ import React, { useRef, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
-import { 
-  LayoutDashboard, 
-  Map, 
-  CreditCard, 
-  Link as LinkIcon, 
-  Scale, 
+import {
+  LayoutDashboard,
+  Map,
+  CreditCard,
+  Link as LinkIcon,
+  Scale,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -15,17 +15,59 @@ import {
   Users,
   FileText,
   PieChart,
-  Settings
+  Settings,
+  BarChart2,
+  ClipboardList,
+  Mail,
+  FolderOpen,
+  Moon,
+  Sun
 } from 'lucide-react';
 
 export const AdminLayout: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [financeExpanded, setFinanceExpanded] = useState(true);
+  const [financeExpanded, setFinanceExpanded] = useState(false);
+  const [landAcquisitionExpanded, setLandAcquisitionExpanded] = useState(true);
+  const [compensationExpanded, setCompensationExpanded] = useState(false);
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    return localStorage.getItem('admin_theme') === 'dark';
+  });
+
+  React.useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+
+    return () => {
+      document.documentElement.classList.remove('dark');
+    };
+  }, []);
+
+  const toggleTheme = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setIsDark(prev => {
+      const next = !prev;
+      if (next) {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('admin_theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('admin_theme', 'light');
+      }
+      return next;
+    });
+  };
+
 
   useGSAP(() => {
     // Smooth entry animation for the main content area
-    gsap.fromTo('.admin-content', 
+    gsap.fromTo('.admin-content',
       { autoAlpha: 0, y: 15 },
       { autoAlpha: 1, y: 0, duration: 0.6, ease: 'power3.out' }
     );
@@ -37,12 +79,12 @@ export const AdminLayout: React.FC = () => {
         .admin-layout {
           display: flex;
           min-height: 100vh;
-          background: #FFFBFE;
-          color: #1c1b1f;
+          background: var(--md-background);
+          color: var(--md-on-surface);
         }
         .admin-sidebar {
-          width: ${isCollapsed ? '80px' : '260px'};
-          background: #F3EDF7;
+          width: ${isCollapsed ? '96px' : '280px'};
+          background: var(--md-surface-container);
           padding: 24px 16px;
           display: flex;
           flex-direction: column;
@@ -55,9 +97,12 @@ export const AdminLayout: React.FC = () => {
           transition: width 0.3s cubic-bezier(0.2, 0, 0, 1);
         }
         .admin-sidebar-header {
+          position: relative;
           display: flex;
+          flex-direction: ${isCollapsed ? 'column' : 'row'};
           align-items: center;
           justify-content: ${isCollapsed ? 'center' : 'space-between'};
+          gap: ${isCollapsed ? '16px' : '0'};
           padding: 4px 4px 28px 4px;
         }
         .admin-sidebar-brand {
@@ -67,14 +112,14 @@ export const AdminLayout: React.FC = () => {
           font-weight: 700;
           font-size: 20px;
           letter-spacing: -0.3px;
-          color: #1c1b1f;
+          color: var(--md-on-surface);
           overflow: hidden;
           white-space: nowrap;
         }
         .admin-sidebar-brand .brand-icon {
           width: 40px;
           height: 40px;
-          background: #6750a4;
+          background: var(--md-primary);
           border-radius: 12px;
           display: flex;
           align-items: center;
@@ -86,13 +131,16 @@ export const AdminLayout: React.FC = () => {
           background: transparent;
           border: none;
           cursor: pointer;
-          color: #49454f;
+          color: var(--md-on-surface-variant);
           padding: 6px;
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
           transition: background 0.2s;
+          border: 1px solid rgba(121,116,126,0.12);
+          box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+          background: var(--md-background, var(--md-background));
         }
         .collapse-btn:hover {
           background: rgba(103,80,164,0.08);
@@ -106,7 +154,7 @@ export const AdminLayout: React.FC = () => {
         }
         .nav-label {
           font-size: 11px; font-weight:600; text-transform:uppercase;
-          letter-spacing:0.5px; color: #49454f;
+          letter-spacing:0.5px; color: var(--md-on-surface-variant);
           padding:16px 12px 8px 12px; opacity:0.6;
           display: flex;
           align-items: center;
@@ -120,18 +168,18 @@ export const AdminLayout: React.FC = () => {
         .nav-item {
           display:flex; align-items:center; gap:14px; padding:10px 14px;
           border-radius: 12px; text-decoration:none;
-          color: #49454f; font-weight:500; font-size:14px;
+          color: var(--md-on-surface-variant); font-weight:500; font-size:14px;
           transition: background 0.2s cubic-bezier(0.2, 0, 0, 1), color 0.2s;
           white-space: nowrap;
           justify-content: ${isCollapsed ? 'center' : 'flex-start'};
         }
         .nav-item:hover { 
           background:rgba(103,80,164,0.08); 
-          color: #1c1b1f; 
+          color: var(--md-on-surface); 
         }
         .nav-item.active { 
-          background: #e8def8;
-          color: #6750a4;
+          background: var(--md-secondary-container);
+          color: var(--md-primary);
           font-weight:600; 
         }
         .nav-item .nav-icon { flex-shrink:0; opacity:0.7; }
@@ -139,7 +187,7 @@ export const AdminLayout: React.FC = () => {
         
         .nav-item .nav-badge {
           display: ${isCollapsed ? 'none' : 'flex'};
-          background: #6750a4;
+          background: var(--md-primary);
           color: white;
           font-size: 11px;
           font-weight: 700;
@@ -155,6 +203,21 @@ export const AdminLayout: React.FC = () => {
           display: flex; 
           flex-direction: column; 
           overflow-x: hidden;
+          position: relative;
+        }
+        
+        .admin-main::before {
+          content: "";
+          position: absolute;
+          width: 600px;
+          height: 600px;
+          border-radius: 50%;
+          background: rgba(103, 80, 164, 0.06);
+          filter: blur(80px);
+          top: -200px;
+          right: -200px;
+          pointer-events: none;
+          z-index: 0;
         }
         
         .admin-content {
@@ -162,6 +225,8 @@ export const AdminLayout: React.FC = () => {
           max-width: 1440px;
           width: 100%;
           margin: 0 auto;
+          position: relative;
+          z-index: 1;
         }
 
         @media (max-width: 768px) {
@@ -191,29 +256,28 @@ export const AdminLayout: React.FC = () => {
               <span>FCR·SCS Admin</span>
             </div>
             {isCollapsed && (
-              <div className="brand-icon" style={{ 
-                width: 40, height: 40, background: '#6750a4', borderRadius: 12, 
-                display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0 
+              <div className="brand-icon" style={{
+                width: 40, height: 40, background: 'var(--md-primary)', borderRadius: 12,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0
               }}>
                 <Scale size={24} />
               </div>
             )}
-            <button className="collapse-btn" onClick={() => setIsCollapsed(!isCollapsed)} title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}>
-              {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+            <button
+              className="collapse-btn"
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+            >
+              {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={20} />}
             </button>
           </div>
-          
+
           <nav className="admin-sidebar-nav">
             <div className="nav-section">
               {!isCollapsed && <span className="nav-label">Main</span>}
               <NavLink to="/admin" end className="nav-item" title={isCollapsed ? "Dashboard" : ""}>
                 <LayoutDashboard size={22} className="nav-icon" />
                 {!isCollapsed && <span>Dashboard</span>}
-                <span className="nav-badge">24</span>
-              </NavLink>
-              <NavLink to="/admin/land-acquisition" className="nav-item" title={isCollapsed ? "Cases" : ""}>
-                <Map size={22} className="nav-icon" />
-                {!isCollapsed && <span>Cases</span>}
               </NavLink>
               <NavLink to="/admin/valuers" className="nav-item" title={isCollapsed ? "Valuers" : ""}>
                 <Users size={22} className="nav-icon" />
@@ -224,7 +288,59 @@ export const AdminLayout: React.FC = () => {
                 {!isCollapsed && <span>Forms</span>}
               </NavLink>
             </div>
-            
+
+            <div className="nav-section">
+              {!isCollapsed && (
+                <div className="nav-label" onClick={() => setLandAcquisitionExpanded(!landAcquisitionExpanded)}>
+                  <span>Land Acquisition</span>
+                  {landAcquisitionExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </div>
+              )}
+              {isCollapsed && <div style={{ height: 16 }} />}
+              {(landAcquisitionExpanded || isCollapsed) && (
+                <>
+                  <NavLink to="/admin/case" end className="nav-item" title={isCollapsed ? "Cases" : ""}>
+                    <Map size={22} className="nav-icon" />
+                    {!isCollapsed && <span>Cases Dashboard</span>}
+                  </NavLink>
+                  <NavLink to="/admin/case/valuation" className="nav-item" title={isCollapsed ? "Valuation" : ""}>
+                    <BarChart2 size={22} className="nav-icon" />
+                    {!isCollapsed && <span>Valuation</span>}
+                  </NavLink>
+                </>
+              )}
+            </div>
+
+            <div className="nav-section">
+              {!isCollapsed && (
+                <div className="nav-label" onClick={() => setCompensationExpanded(!compensationExpanded)}>
+                  <span>Compensation</span>
+                  {compensationExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </div>
+              )}
+              {isCollapsed && <div style={{ height: 16 }} />}
+              {(compensationExpanded || isCollapsed) && (
+                <>
+                  <NavLink to="/admin/compensation/report" className="nav-item" title={isCollapsed ? "Report" : ""}>
+                    <ClipboardList size={22} className="nav-icon" />
+                    {!isCollapsed && <span>Report</span>}
+                  </NavLink>
+                  <NavLink to="/admin/compensation/compare" className="nav-item" title={isCollapsed ? "Compare" : ""}>
+                    <Scale size={22} className="nav-icon" />
+                    {!isCollapsed && <span>Compare</span>}
+                  </NavLink>
+                  <NavLink to="/admin/compensation/offer" className="nav-item" title={isCollapsed ? "Offer" : ""}>
+                    <Mail size={22} className="nav-icon" />
+                    {!isCollapsed && <span>Offer</span>}
+                  </NavLink>
+                  <NavLink to="/admin/compensation/objection" className="nav-item" title={isCollapsed ? "Objection" : ""}>
+                    <FolderOpen size={22} className="nav-icon" />
+                    {!isCollapsed && <span>Objection</span>}
+                  </NavLink>
+                </>
+              )}
+            </div>
+
             <div className="nav-section">
               {!isCollapsed && (
                 <div className="nav-label" onClick={() => setFinanceExpanded(!financeExpanded)}>
@@ -248,19 +364,6 @@ export const AdminLayout: React.FC = () => {
             </div>
 
             <div className="nav-section">
-              {!isCollapsed && <span className="nav-label">Compensation</span>}
-              <NavLink to="/admin/compensation" className="nav-item" title={isCollapsed ? "Compensation" : ""}>
-                <Map size={22} className="nav-icon" />
-                {!isCollapsed && <span>Compensation</span>}
-                <span className="nav-badge">12</span>
-              </NavLink>
-              <NavLink to="/admin/reports" className="nav-item" title={isCollapsed ? "Reports" : ""}>
-                <PieChart size={22} className="nav-icon" />
-                {!isCollapsed && <span>Reports</span>}
-              </NavLink>
-            </div>
-
-            <div className="nav-section">
               {!isCollapsed && <span className="nav-label">System</span>}
               <NavLink to="/admin/settings" className="nav-item" title={isCollapsed ? "Settings" : ""}>
                 <Settings size={22} className="nav-icon" />
@@ -270,6 +373,27 @@ export const AdminLayout: React.FC = () => {
                 <Users size={22} className="nav-icon" />
                 {!isCollapsed && <span>Users</span>}
               </NavLink>
+            </div>
+
+            <div style={{ flex: 1 }} />
+
+            <div className="nav-section" style={{ marginTop: '16px' }}>
+              <button
+                type="button"
+                className="nav-item"
+                onClick={toggleTheme}
+                style={{
+                  cursor: 'pointer',
+                  justifyContent: isCollapsed ? 'center' : 'flex-start',
+                  width: '100%',
+                  background: 'transparent',
+                  border: 'none',
+                  textAlign: 'left'
+                }}
+              >
+                {isDark ? <Sun size={22} className="nav-icon" /> : <Moon size={22} className="nav-icon" />}
+                {!isCollapsed && <span>{isDark ? 'Light Mode' : 'Dark Mode'}</span>}
+              </button>
             </div>
           </nav>
         </aside>

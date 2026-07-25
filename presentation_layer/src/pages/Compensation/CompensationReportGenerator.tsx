@@ -1,9 +1,10 @@
+import * as Lucide from "lucide-react";
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Calculator, FileText } from 'lucide-react';
 import '../../style.css';
 import './compensation.css';
-import { Sidebar } from '../Shared';
+
 
 // Types
 type AcquisitionCase = {
@@ -168,7 +169,7 @@ export const CompensationReportGenerator: React.FC = () => {
     setWarningAction('cancel');
     setStatusUpdate('Pending Compensation Approval');
     // Simulate status update
-    alert('⚠️ Case status updated to "Pending Compensation Approval" (C2).');
+    alert('<Lucide.AlertTriangle size={16} className="inline mr-1" /> Case status updated to "Pending Compensation Approval" (C2).');
     // Use case ends (BF-13)
   };
 
@@ -185,12 +186,12 @@ export const CompensationReportGenerator: React.FC = () => {
       if (calculatedTotal >= 1000000) {
         status = 'Pending Compensation Approval'; // C2
         // A2.1: Send notification to Government Administrator (simulated)
-        alert('📨 Notification sent to Government Administrator for review (A2).');
+        alert('Notification sent to Government Administrator for review (A2).');
       }
 
       setStatusUpdate(status);
       // Update case status (FR-CM-011)
-      alert(`✅ Report generated!\nReport ID: ${reportId}\nTotal Compensation: RM ${calculatedTotal.toLocaleString()}\nStatus: ${status}`);
+      alert(`<Lucide.CheckCircle size={16} className="inline mr-1" /> Report generated!\nReport ID: ${reportId}\nTotal Compensation: RM ${calculatedTotal.toLocaleString()}\nStatus: ${status}`);
 
       // Store report (FR-CM-009) - simulated
       console.log('Report stored:', { reportId, caseId: selectedCaseId, total: calculatedTotal, status });
@@ -224,7 +225,7 @@ export const CompensationReportGenerator: React.FC = () => {
         <div className="compensation-generator">
           <div className="warning-modal-overlay" onClick={() => {}}>
             <div className="warning-modal" onClick={(e) => e.stopPropagation()}>
-              <div className="icon">⚠️</div>
+              <div className="icon"><Lucide.AlertTriangle size={16} className="inline mr-1" /></div>
               <h3>Difference Exceeds 20%</h3>
               <p>
                 The calculated compensation amount differs from the AI predicted value by more than 20%.
@@ -239,8 +240,8 @@ export const CompensationReportGenerator: React.FC = () => {
         </div>
       )}
 
-      <div className="flex min-h-screen" style={{ background: '#f8f5fa', color: '#1c1b1f' }}>
-        <Sidebar />
+      <div className="flex min-h-screen" style={{ background: 'var(--md-background)', color: 'var(--md-on-surface)' }}>
+        
 
         <main className="main blur-shape-bg">
           <div className="compensation-generator">
@@ -250,7 +251,7 @@ export const CompensationReportGenerator: React.FC = () => {
                 <div className="sub">Create compensation reports for acquisition cases</div>
               </div>
               <div className="topbar-right">
-                <span className="date-badge">📅 24 Jul 2026</span>
+                <span className="date-badge"><Lucide.Calendar size={16} className="inline mr-1" /> 24 Jul 2026</span>
                 <div className="avatar">AO</div>
               </div>
             </div>
@@ -271,7 +272,7 @@ export const CompensationReportGenerator: React.FC = () => {
                 {/* Left Panel: Case & Owner Info, Valuation Report Summary */}
                 <div className="left-panel">
                   <div className="info-card">
-                    <div className="card-title">📋 Case Information</div>
+                    <div className="card-title"><Lucide.ClipboardList size={16} className="inline mr-1" /> Case Information</div>
                     <div className="detail-row">
                       <div className="item"><span className="label">Case ID</span><span className="value">{caseData.id}</span></div>
                       <div className="item"><span className="label">Title</span><span className="value">{caseData.title}</span></div>
@@ -281,7 +282,7 @@ export const CompensationReportGenerator: React.FC = () => {
                   </div>
 
                   <div className="info-card">
-                    <div className="card-title">👤 Owner Information</div>
+                    <div className="card-title"><Lucide.User size={16} className="inline mr-1" /> Owner Information</div>
                     <div className="detail-row">
                       <div className="item"><span className="label">Name</span><span className="value">{owner.name}</span></div>
                       <div className="item"><span className="label">IC</span><span className="value">{owner.ic}</span></div>
@@ -291,7 +292,7 @@ export const CompensationReportGenerator: React.FC = () => {
                   </div>
 
                   <div className="info-card">
-                    <div className="card-title">📊 Valuation Report Summary</div>
+                    <div className="card-title"><Lucide.BarChart2 size={16} className="inline mr-1" /> Valuation Report Summary</div>
                     <div className="detail-row">
                       <div className="item"><span className="label">Method</span><span className="value">{valuationReport.valuationMethod}</span></div>
                       <div className="item"><span className="label">Market Value</span><span className="value">{formatCurrency(valuationReport.marketValue)}</span></div>
@@ -351,7 +352,7 @@ export const CompensationReportGenerator: React.FC = () => {
                   {/* Summary (FR-CM-005) */}
                   {showSummary && calculatedTotal !== null && (
                     <div className="summary-card">
-                      <div className="summary-title">📊 Compensation Summary</div>
+                      <div className="summary-title"><Lucide.BarChart2 size={16} className="inline mr-1" /> Compensation Summary</div>
                       <div className="summary-grid">
                         <div className="summary-item"><span className="label">Land Value</span><span className="value">{formatCurrency(components.landValue)}</span></div>
                         <div className="summary-item"><span className="label">Building/Structure</span><span className="value">{formatCurrency(components.buildingValue)}</span></div>
@@ -368,18 +369,18 @@ export const CompensationReportGenerator: React.FC = () => {
 
                       {/* AI Comparison (FR-CM-007) */}
                       <div className="ai-comparison">
-                        <span className="ai-label">🤖 AI Predicted Amount:</span>
+                        <span className="ai-label"><Lucide.Bot size={16} className="inline mr-1" /> AI Predicted Amount:</span>
                         <span className="ai-value">{formatCurrency(aiPredicted)}</span>
                         {!showWarning ? (
-                          <span className="ok">✅ Within acceptable range</span>
+                          <span className="ok"><Lucide.CheckCircle size={16} className="inline mr-1" /> Within acceptable range</span>
                         ) : (
-                          <span className="warning">⚠️ Difference exceeds 20%</span>
+                          <span className="warning"><Lucide.AlertTriangle size={16} className="inline mr-1" /> Difference exceeds 20%</span>
                         )}
                       </div>
 
                       {generatedReportId && (
                         <div style={{ marginTop: '12px', padding: '12px', background: 'var(--md-success)', borderRadius: 'var(--radius-md)', color: 'var(--md-success-text)', fontWeight: 500 }}>
-                          ✅ Report {generatedReportId} generated. Status: {statusUpdate}
+                          <Lucide.CheckCircle size={16} className="inline mr-1" /> Report {generatedReportId} generated. Status: {statusUpdate}
                         </div>
                       )}
                     </div>
@@ -390,7 +391,7 @@ export const CompensationReportGenerator: React.FC = () => {
               <div style={{ textAlign: 'center', padding: '40px', color: 'var(--md-on-surface-variant)' }}>Loading case data...</div>
             ) : (
               <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--md-on-surface-variant)', opacity: 0.6 }}>
-                <div style={{ fontSize: '48px', marginBottom: '12px' }}>👈</div>
+                <div style={{ fontSize: '48px', marginBottom: '12px' }}><Lucide.ArrowLeft size={16} className="inline mr-1" /></div>
                 <h4 style={{ fontWeight: 600, color: 'var(--md-on-surface)', opacity: 0.8 }}>Select a case to begin</h4>
                 <p style={{ fontSize: '14px' }}>Choose an acquisition case from the dropdown above.</p>
               </div>

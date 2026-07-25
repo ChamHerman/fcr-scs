@@ -20,7 +20,7 @@ export default function InitiateTransfer() {
   const Icon = sigLevel.icon || Lock;
 
   return (
-    <div className="w-full min-h-screen bg-md-background text-md-on-surface p-8 relative overflow-hidden font-sans">
+    <div className="text-md-on-surface p-8 relative overflow-hidden font-sans">
       {/* Dynamic Background Gradient Based on Amount */}
       <div className={`absolute top-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full blur-[150px] pointer-events-none transition-colors duration-700 ease-in-out
         ${numericAmount === 0 ? 'bg-md-surface-container/50' : 
@@ -46,7 +46,7 @@ export default function InitiateTransfer() {
                     <input 
                       type="text" 
                       placeholder="e.g. CAS-2026-8921" 
-                      className="w-full bg-md-surface-container-low border border-md-outline/20 rounded-2xl pl-12 pr-4 py-3.5 text-md-on-surface placeholder:text-md-on-surface-variant/50 focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all"
+                      className="bg-md-surface-container-low border border-md-outline/20 rounded-2xl pl-12 pr-4 py-3.5 text-md-on-surface placeholder:text-md-on-surface-variant/50 focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all"
                     />
                   </div>
                 </div>
@@ -58,7 +58,7 @@ export default function InitiateTransfer() {
                     <input 
                       type="text" 
                       placeholder="Enter exact account name" 
-                      className="w-full bg-md-surface-container-low border border-md-outline/20 rounded-2xl pl-12 pr-4 py-3.5 text-md-on-surface placeholder:text-md-on-surface-variant/50 focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all"
+                      className="bg-md-surface-container-low border border-md-outline/20 rounded-2xl pl-12 pr-4 py-3.5 text-md-on-surface placeholder:text-md-on-surface-variant/50 focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all"
                     />
                   </div>
                 </div>
@@ -72,7 +72,7 @@ export default function InitiateTransfer() {
                       placeholder="0.00" 
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
-                      className="w-full bg-md-surface-container-low border border-md-outline/20 rounded-2xl pl-12 pr-4 py-4 text-2xl font-semibold text-md-on-surface placeholder:text-md-on-surface-variant/40 focus:outline-none focus:border-md-primary focus:ring-2 focus:ring-md-primary/20 transition-all"
+                      className="bg-md-surface-container-low border border-md-outline/20 rounded-2xl pl-12 pr-4 py-4 text-2xl font-semibold text-md-on-surface placeholder:text-md-on-surface-variant/40 focus:outline-none focus:border-md-primary focus:ring-2 focus:ring-md-primary/20 transition-all"
                     />
                   </div>
                 </div>

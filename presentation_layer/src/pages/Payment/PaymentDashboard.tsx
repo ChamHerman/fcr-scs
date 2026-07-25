@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 import { 
-  Search, Filter, Clock, CheckCircle, XCircle, 
-  AlertCircle, MoreHorizontal, Activity, DollarSign, 
-  ArrowUpRight, BarChart, ChevronDown 
+  Search, Clock, CheckCircle, XCircle, 
+  DollarSign, User, MoreHorizontal 
 } from 'lucide-react';
+import '../LandAcquisition/case_management.css';
 
 const stats = [
-  { label: 'Total Volume', value: '$2.4M', change: '+12.5%', icon: DollarSign, color: 'text-md-on-success', bg: 'bg-md-success' },
-  { label: 'Pending Processing', value: '$845K', change: '+5.2%', icon: Clock, color: 'text-md-on-warning', bg: 'bg-md-warning' },
-  { label: 'Completed (24h)', value: '1,245', change: '+18.1%', icon: CheckCircle, color: 'text-md-on-secondary-container', bg: 'bg-md-secondary-container' },
-  { label: 'Failed Transfers', value: '12', change: '-2.4%', icon: XCircle, color: 'text-md-on-error', bg: 'bg-md-error' },
+  { label: 'Total Volume', value: '$2.4M', change: '+12.5%', icon: DollarSign },
+  { label: 'Pending Processing', value: '$845K', change: '+5.2%', icon: Clock },
+  { label: 'Completed (24h)', value: '1,245', change: '+18.1%', icon: CheckCircle },
+  { label: 'Failed Transfers', value: '12', change: '-2.4%', icon: XCircle },
 ];
 
 const transactions = [
@@ -23,144 +23,136 @@ const transactions = [
 export default function PaymentDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
 
-  const getStatusColor = (status: string) => {
+  const getStatusClass = (status: string) => {
     switch(status) {
-      case 'Completed': return 'bg-md-success text-md-on-success border-transparent';
+      case 'Completed': return 'status-badge approved';
       case 'Processing': 
-      case 'Pending': return 'bg-md-warning text-md-on-warning border-transparent';
-      case 'Failed': return 'bg-md-error text-md-on-error border-transparent';
-      default: return 'bg-md-surface-container-low text-md-on-surface-variant border-transparent';
+      case 'Pending': return 'status-badge pending';
+      case 'Failed': return 'status-badge rejected';
+      default: return 'status-badge';
     }
   };
 
   return (
-    <div className="w-full min-h-screen bg-md-background text-md-on-surface p-8 relative overflow-hidden font-sans">
-      {/* Background Orbs */}
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-md-primary/5 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-md-secondary-container/30 rounded-full blur-[120px] pointer-events-none" />
-
-      <div className="relative z-10 max-w-7xl mx-auto space-y-8">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-medium tracking-tight text-md-on-surface mb-1">Payment Dashboard</h1>
-            <p className="text-md-on-surface-variant text-sm">Monitor and manage all outgoing compensations and transfers.</p>
+    <div className="main">
+      <div className="topbar">
+        <div className="topbar-left">
+          <h1>Payment Dashboard</h1>
+          <div className="sub">Monitor and manage all outgoing compensations and transfers.</div>
+        </div>
+        <div className="topbar-right">
+          <div className="date-badge">
+            <Clock size={16} className="inline mr-1" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> 24 Jul 2026
           </div>
-          <div className="flex items-center gap-3">
-            <button className="flex items-center gap-2 px-5 py-2.5 bg-md-surface-container hover:bg-md-surface-container-low border border-md-outline/20 rounded-full text-sm font-medium text-md-on-surface transition-all duration-300 ease-md-bouncy active:scale-95 shadow-sm">
-              <Clock className="w-4 h-4" />
-              <span>Last 30 Days</span>
-              <ChevronDown className="w-4 h-4" />
-            </button>
-            <button className="flex items-center gap-2 px-5 py-2.5 bg-md-primary hover:opacity-90 shadow-sm rounded-full text-sm font-medium text-md-on-primary transition-all duration-300 ease-md-bouncy active:scale-95">
-              <ArrowUpRight className="w-4 h-4" />
-              Export Report
-            </button>
+          <div className="avatar">
+            <User size={20} />
           </div>
         </div>
+      </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {stats.map((stat, idx) => (
-            <div key={idx} className="bg-md-surface-container rounded-2xl p-6 flex flex-col justify-between hover:shadow-md transition-all duration-300 ease-md-bouncy shadow-sm">
-              <div className="flex justify-between items-start mb-4">
-                <div className={`p-3 rounded-2xl ${stat.bg}`}>
-                  <stat.icon className={`w-6 h-6 ${stat.color}`} />
-                </div>
-                <div className="flex items-center gap-1 text-md-on-success bg-md-success px-2.5 py-1 rounded-full text-xs font-medium">
-                  <ArrowUpRight className="w-3 h-3" />
-                  {stat.change}
-                </div>
-              </div>
-              <div>
-                <h3 className="text-md-on-surface-variant text-sm font-medium mb-1">{stat.label}</h3>
-                <p className="text-2xl font-semibold text-md-on-surface tracking-tight">{stat.value}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Search and Table Section */}
-        <div className="bg-md-surface-container rounded-[24px] shadow-sm overflow-hidden flex flex-col">
-          <div className="p-6 border-b border-md-outline/10 flex flex-col sm:flex-row gap-4 justify-between items-center bg-md-surface-container-low/50">
-            <h2 className="text-lg font-medium text-md-on-surface flex items-center gap-2">
-              <Activity className="w-5 h-5 text-md-primary" />
-              Recent Transactions
-            </h2>
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-              <div className="relative group w-full sm:w-64">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-md-on-surface-variant group-focus-within:text-md-primary transition-colors" />
-                <input 
-                  type="text" 
-                  placeholder="Search TRX ID or name..." 
-                  className="w-full bg-md-surface-container-low border border-md-outline/20 rounded-full pl-11 pr-4 py-2.5 text-sm text-md-on-surface placeholder:text-md-on-surface-variant focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-              <button className="p-3 bg-md-surface-container-low border border-md-outline/20 rounded-full hover:bg-md-surface-container-low/80 text-md-on-surface-variant hover:text-md-on-surface transition-all ease-md-bouncy active:scale-95 shadow-sm">
-                <Filter className="w-4 h-4" />
-              </button>
+      <div className="stats-grid">
+        {stats.map((stat, idx) => (
+          <div key={idx} className="stat-card">
+            <stat.icon className="stat-icon" size={32} />
+            <div className="stat-label">{stat.label}</div>
+            <div className="stat-number">{stat.value}</div>
+            <div className={`stat-change ${stat.change.startsWith('-') ? 'negative' : ''}`}>
+              {stat.change} from last month
             </div>
           </div>
-          
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-md-surface-container-low/30 text-md-on-surface-variant text-xs uppercase tracking-wider">
-                  <th className="p-4 font-medium pl-6">Transaction ID</th>
-                  <th className="p-4 font-medium">Beneficiary</th>
-                  <th className="p-4 font-medium">Date &amp; Time</th>
-                  <th className="p-4 font-medium">Method</th>
-                  <th className="p-4 font-medium">Amount</th>
-                  <th className="p-4 font-medium">Status</th>
-                  <th className="p-4 font-medium text-right pr-6">Actions</th>
+        ))}
+      </div>
+
+      <div className="filter-bar">
+        <div className="search-wrap">
+          <Search className="search-icon" />
+          <input 
+            type="text" 
+            placeholder="Search TRX ID or name..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <div className="filter-group">
+          <select>
+            <option>All Status</option>
+            <option>Completed</option>
+            <option>Processing</option>
+            <option>Pending</option>
+            <option>Failed</option>
+          </select>
+          <select>
+            <option>All Methods</option>
+            <option>Bank Transfer</option>
+            <option>Wire</option>
+            <option>RTP</option>
+          </select>
+          <button className="btn-filter">Apply Filters</button>
+          <button className="btn-clear">Clear</button>
+        </div>
+      </div>
+
+      <div className="action-bar">
+        <div className="left">
+          <span className="count">Showing 1 - 5</span> of 124 transactions
+        </div>
+        <div className="right">
+          <button className="btn-outline">
+            Export CSV
+          </button>
+          <button className="btn-primary">
+            Export Report
+          </button>
+        </div>
+      </div>
+
+      <div className="table-wrap">
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Transaction ID</th>
+                <th>Beneficiary</th>
+                <th>Date &amp; Time</th>
+                <th>Method</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((trx, idx) => (
+                <tr key={idx}>
+                  <td><span className="case-id">{trx.id}</span></td>
+                  <td>{trx.beneficiary}</td>
+                  <td>{trx.date}</td>
+                  <td>{trx.method}</td>
+                  <td style={{ fontWeight: 600 }}>{trx.amount}</td>
+                  <td>
+                    <span className={getStatusClass(trx.status)}>
+                      <span className="dot"></span>
+                      {trx.status}
+                    </span>
+                  </td>
+                  <td>
+                    <button style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--md-on-surface-variant)' }}>
+                      <MoreHorizontal size={18} />
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-md-outline/5">
-                {transactions.map((trx, idx) => (
-                  <tr key={idx} className="hover:bg-md-surface-container-low/50 transition-colors group">
-                    <td className="p-4 pl-6">
-                      <span className="text-sm font-medium text-md-primary font-mono">{trx.id}</span>
-                    </td>
-                    <td className="p-4">
-                      <span className="text-sm font-medium text-md-on-surface">{trx.beneficiary}</span>
-                    </td>
-                    <td className="p-4">
-                      <span className="text-sm text-md-on-surface-variant">{trx.date}</span>
-                    </td>
-                    <td className="p-4">
-                      <span className="text-sm text-md-on-surface-variant">{trx.method}</span>
-                    </td>
-                    <td className="p-4">
-                      <span className="text-sm font-semibold text-md-on-surface">{trx.amount}</span>
-                    </td>
-                    <td className="p-4">
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(trx.status)}`}>
-                        {trx.status}
-                      </span>
-                    </td>
-                    <td className="p-4 pr-6 text-right">
-                      <button className="p-2 text-md-on-surface-variant hover:text-md-on-surface hover:bg-md-surface-container-low rounded-full transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 ease-md-bouncy active:scale-95">
-                        <MoreHorizontal className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          
-          {/* Pagination */}
-          <div className="p-5 border-t border-md-outline/10 flex items-center justify-between text-sm text-md-on-surface-variant bg-md-surface-container-low/30">
-            <span>Showing 1 to 5 of 124 entries</span>
-            <div className="flex items-center gap-2">
-              <button className="px-4 py-2 bg-md-surface-container border border-md-outline/20 rounded-full hover:bg-md-surface-container-low transition-colors disabled:opacity-50 ease-md-bouncy active:scale-95 shadow-sm text-md-on-surface">Prev</button>
-              <button className="w-9 h-9 flex items-center justify-center bg-md-primary text-md-on-primary rounded-full font-medium shadow-sm ease-md-bouncy active:scale-95">1</button>
-              <button className="w-9 h-9 flex items-center justify-center bg-md-surface-container border border-md-outline/20 rounded-full hover:bg-md-surface-container-low transition-colors text-md-on-surface ease-md-bouncy active:scale-95 shadow-sm">2</button>
-              <button className="w-9 h-9 flex items-center justify-center bg-md-surface-container border border-md-outline/20 rounded-full hover:bg-md-surface-container-low transition-colors text-md-on-surface ease-md-bouncy active:scale-95 shadow-sm">3</button>
-              <button className="px-4 py-2 bg-md-surface-container border border-md-outline/20 rounded-full hover:bg-md-surface-container-low transition-colors ease-md-bouncy active:scale-95 shadow-sm text-md-on-surface">Next</button>
-            </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        
+        <div className="pagination">
+          <div className="info">Showing 1 to 5 of 124 entries</div>
+          <div className="pages">
+            <button>&lt;</button>
+            <button className="active">1</button>
+            <button>2</button>
+            <button>3</button>
+            <button>&gt;</button>
           </div>
         </div>
       </div>

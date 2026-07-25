@@ -15,7 +15,7 @@ export default function FailedTransactions() {
   const [searchQuery, setSearchQuery] = useState('');
 
   return (
-    <div className="w-full min-h-screen bg-md-background text-md-on-surface p-8 relative overflow-hidden font-sans">
+    <div className="text-md-on-surface p-8 relative overflow-hidden font-sans">
       {/* Background Error State Vibe (Subtle Red/Orange) */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-md-error/40 blur-[150px] pointer-events-none" />
       
@@ -85,12 +85,12 @@ export default function FailedTransactions() {
               </div>
               Error Logs
             </h2>
-            <div className="relative w-full sm:w-72">
+            <div className="relative sm:w-72">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-md-on-surface-variant" />
               <input 
                 type="text" 
                 placeholder="Search error code or TRX..." 
-                className="w-full bg-md-surface-container-low border border-md-outline/20 rounded-full pl-11 pr-4 py-2.5 text-sm text-md-on-surface placeholder:text-md-on-surface-variant/70 focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all"
+                className="bg-md-surface-container-low border border-md-outline/20 rounded-full pl-11 pr-4 py-2.5 text-sm text-md-on-surface placeholder:text-md-on-surface-variant/70 focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -117,7 +117,7 @@ export default function FailedTransactions() {
                   </p>
                 </div>
                 
-                <div className="flex items-center gap-6 w-full lg:w-auto justify-between lg:justify-end border-t lg:border-t-0 border-md-outline/10 pt-5 lg:pt-0 mt-5 lg:mt-0">
+                <div className="flex items-center gap-6 lg:w-auto justify-between lg:justify-end border-t lg:border-t-0 border-md-outline/10 pt-5 lg:pt-0 mt-5 lg:mt-0">
                   <div className="text-right">
                     <div className="text-sm text-md-on-surface-variant mb-1 font-medium">Amount</div>
                     <div className="font-semibold text-md-on-surface text-lg tracking-tight">{log.amount}</div>

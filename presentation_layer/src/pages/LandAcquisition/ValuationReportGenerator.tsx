@@ -1,9 +1,10 @@
+import * as Lucide from "lucide-react";
 import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, Edit, X, File } from "lucide-react";
 import "../../style.css";
 import "./valuation_report.css";
-import { Sidebar } from "../Shared";
+
 
 // --- Types ---
 type CaseData = {
@@ -186,8 +187,8 @@ export const ValuationReportGenerator: React.FC = () => {
       setIsEditMode(false);
 
       // Log for demo
-      console.log("📝 Report saved:", newReport);
-      console.log("📊 Case status updated to: Pending Valuation Approval (C4)");
+      console.log("Report saved:", newReport);
+      console.log("Case status updated to: Pending Valuation Approval (C4)");
     }, 1500);
   };
 
@@ -219,7 +220,7 @@ export const ValuationReportGenerator: React.FC = () => {
       >
         <div className="preview-modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
-            <h2>📄 Valuation Report</h2>
+            <h2><Lucide.FileText size={20} className="inline mr-1" /> Valuation Report</h2>
             <button className="close-btn" onClick={() => setShowPreview(false)}>
               <X size={24} />
             </button>
@@ -272,7 +273,7 @@ export const ValuationReportGenerator: React.FC = () => {
               <div className="label">Building Assessment</div>
               <div className="value">
                 {formData.buildingAssessment
-                  ? `📎 ${formData.buildingAssessment.name}`
+                  ? `<Lucide.Paperclip size={16} className="inline mr-1" /> ${formData.buildingAssessment.name}`
                   : "— Not uploaded"}
               </div>
             </div>
@@ -280,14 +281,14 @@ export const ValuationReportGenerator: React.FC = () => {
               <div className="label">Site Inspection</div>
               <div className="value">
                 {formData.siteInspection
-                  ? `📎 ${formData.siteInspection.name}`
+                  ? `<Lucide.Paperclip size={16} className="inline mr-1" /> ${formData.siteInspection.name}`
                   : "— Not uploaded"}
               </div>
             </div>
             <div className="preview-item full-width">
               <div className="label">Status (C4)</div>
               <div className="status-preview">
-                ⏳ Pending Valuation Approval
+                <Lucide.Hourglass size={16} className="inline mr-1" /> Pending Valuation Approval
               </div>
             </div>
           </div>
@@ -301,7 +302,7 @@ export const ValuationReportGenerator: React.FC = () => {
               onClick={handleConfirmSave}
               disabled={isSaving}
             >
-              {isSaving ? "Saving..." : "✓ Confirm & Save"}
+              {isSaving ? "Saving..." : <><Lucide.Check size={16} className="inline mr-1" /> Confirm & Save</>}
             </button>
           </div>
         </div>
@@ -344,7 +345,7 @@ export const ValuationReportGenerator: React.FC = () => {
   const renderSuccessState = () => (
     <div className="report-form-card">
       <div className="success-banner">
-        <span className="check-icon">✅</span>
+        <span className="check-icon"><Lucide.CheckCircle size={16} className="inline mr-1" /></span>
         <div>
           <strong>Report saved successfully!</strong>
           <span style={{ marginLeft: "12px", fontWeight: 400 }}>
@@ -383,10 +384,10 @@ export const ValuationReportGenerator: React.FC = () => {
 
       <div
         className="flex min-h-screen"
-        style={{ background: "#f8f5fa", color: "#1c1b1f" }}
+        style={{ background: "var(--md-background)", color: "var(--md-on-surface)" }}
       >
         {/* Sidebar */}
-        <Sidebar />
+
 
         {/* Main Content */}
         <main className="main blur-shape-bg">
@@ -400,7 +401,7 @@ export const ValuationReportGenerator: React.FC = () => {
                 </div>
               </div>
               <div className="topbar-right">
-                <span className="date-badge">📅 24 Jul 2026</span>
+                <span className="date-badge"><Lucide.Calendar size={16} className="inline mr-1" /> 24 Jul 2026</span>
                 <div className="avatar">AF</div>
               </div>
             </div>
@@ -411,13 +412,13 @@ export const ValuationReportGenerator: React.FC = () => {
                 <span className="case-id">{caseData.id}</span>
                 <span className="case-title">{caseData.title}</span>
                 <div className="case-meta">
-                  <span>📁 {caseData.project}</span>
-                  <span>🏷️ {caseData.landTitleNumber}</span>
-                  <span>👤 {caseData.owner}</span>
-                  <span>📅 {caseData.registrationDate}</span>
+                  <span><Lucide.Folder size={16} className="inline mr-1" /> {caseData.project}</span>
+                  <span><Lucide.Tag size={16} className="inline mr-1" /> {caseData.landTitleNumber}</span>
+                  <span><Lucide.User size={16} className="inline mr-1" /> {caseData.owner}</span>
+                  <span><Lucide.Calendar size={16} className="inline mr-1" /> {caseData.registrationDate}</span>
                 </div>
               </div>
-              <span className="status-badge-lg">⏳ {caseData.status}</span>
+              <span className="status-badge-lg"><Lucide.Hourglass size={16} className="inline mr-1" /> {caseData.status}</span>
             </div>
 
             {/* Report Form or Success State */}

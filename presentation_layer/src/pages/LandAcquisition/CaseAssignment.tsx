@@ -1,8 +1,9 @@
+import * as Lucide from "lucide-react";
 import React, { useState } from "react";
 import { CheckCircle, Send } from "lucide-react";
 import "../../style.css";
 import "./case_management.css";
-import { Sidebar } from "../Shared";
+
 
 // --- Types ---
 type UnassignedCase = {
@@ -171,12 +172,12 @@ export const CaseAssignment: React.FC = () => {
 
       // Simulate notification (FR-LAM-023)
       alert(
-        `✅ Assignment successful!\n\n` +
+        `<Lucide.CheckCircle size={16} className="inline mr-1" /> Assignment successful!\n\n` +
           `Assignment ID: ${newAssignment.assignmentId}\n` +
           `Case: ${newAssignment.caseId}\n` +
           `Assigned to: ${newAssignment.valuerName}\n` +
           `Notification sent to ${valuer?.email || "valuer email"}.\n\n` +
-          `📨 The valuer has been notified (FR-LAM-023).`,
+          `The valuer has been notified (FR-LAM-023).`,
       );
 
       // Simulate dashboard update (FR-LAM-021) - the unassigned count would decrease
@@ -209,7 +210,7 @@ export const CaseAssignment: React.FC = () => {
 
       {/* Search */}
       <div className="search-wrap" style={{ marginBottom: "12px" }}>
-        <span className="search-icon">🔍</span>
+        <span className="search-icon"></span>
         <input
           type="text"
           placeholder="Search cases..."
@@ -221,7 +222,7 @@ export const CaseAssignment: React.FC = () => {
 
       {filteredCases.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-icon">📭</div>
+          <div className="empty-icon"></div>
           <h4>No unassigned cases</h4>
           <p style={{ fontSize: "13px" }}>
             All cases have been assigned to valuers.
@@ -238,8 +239,8 @@ export const CaseAssignment: React.FC = () => {
               <span className="case-id">{c.id}</span>
               <span className="case-title">{c.title}</span>
               <div className="case-meta">
-                <span>📁 {c.project}</span>
-                <span>📅 {c.registrationDate}</span>
+                <span>{c.project}</span>
+                <span><Lucide.Calendar size={16} className="inline mr-1" /> {c.registrationDate}</span>
               </div>
             </div>
             <button
@@ -279,7 +280,7 @@ export const CaseAssignment: React.FC = () => {
                 marginTop: "4px",
               }}
             >
-              📁 {selectedCase.project} · 📅 {selectedCase.registrationDate}
+              {selectedCase.project} · <Lucide.Calendar size={16} className="inline mr-1" /> {selectedCase.registrationDate}
             </div>
           </div>
 
@@ -303,7 +304,7 @@ export const CaseAssignment: React.FC = () => {
                 className="helper-text"
                 style={{ color: "var(--md-error-text)" }}
               >
-                ⚠️ No available staff (A1: No Available Staff)
+                <Lucide.AlertTriangle size={16} className="inline mr-1" /> No available staff (A1: No Available Staff)
               </div>
             )}
           </div>
@@ -341,7 +342,7 @@ export const CaseAssignment: React.FC = () => {
         </>
       ) : (
         <div className="empty-state" style={{ padding: "40px 0" }}>
-          <div className="empty-icon">👈</div>
+          <div className="empty-icon"><Lucide.ArrowLeft size={16} className="inline mr-1" /></div>
           <h4>Select a case</h4>
           <p style={{ fontSize: "13px" }}>
             Choose an unassigned case from the list to begin.
@@ -399,9 +400,9 @@ export const CaseAssignment: React.FC = () => {
   return (
     <div
       className="flex min-h-screen"
-      style={{ background: "#f8f5fa", color: "#1c1b1f" }}
+      style={{ background: "var(--md-background)", color: "var(--md-on-surface)" }}
     >
-      <Sidebar />
+      
 
       {/* Main Content */}
       <main className="main blur-shape-bg">
@@ -414,7 +415,7 @@ export const CaseAssignment: React.FC = () => {
             </div>
           </div>
           <div className="topbar-right">
-            <span className="date-badge">📅 24 Jul 2026</span>
+            <span className="date-badge"><Lucide.Calendar size={16} className="inline mr-1" /> 24 Jul 2026</span>
             <div className="avatar">AO</div>
           </div>
         </div>

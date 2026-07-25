@@ -1,9 +1,10 @@
+import * as Lucide from "lucide-react";
 import React, { useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Trash2, Upload } from "lucide-react";
 import "../../style.css";
 import "./case_management.css";
 import { useNavigate } from "react-router-dom";
-import { Sidebar } from "../Shared";
+
 
 // Types
 type Owner = {
@@ -664,10 +665,10 @@ export const CaseRegistration: React.FC = () => {
     <>
       <div
         className="flex min-h-screen"
-        style={{ background: "#f8f5fa", color: "#1c1b1f" }}
+        style={{ background: "var(--md-background)", color: "var(--md-on-surface)" }}
       >
         {/* ====== SIDEBAR ====== */}
-        <Sidebar />
+        
 
         {/* Main content */}
         <main className="main blur-shape-bg">
@@ -682,7 +683,7 @@ export const CaseRegistration: React.FC = () => {
             </div>
             <div className="topbar-right flex items-center gap-4">
               <span className="date-badge bg-md-surface-container px-4 py-2 rounded-full text-sm font-medium text-md-on-surface-variant">
-                📅 24 Jul 2026
+                <Lucide.Calendar size={16} className="inline mr-1" /> 24 Jul 2026
               </span>
               <div className="avatar w-10 h-10 rounded-full bg-md-primary text-white flex items-center justify-center font-semibold">
                 AO
@@ -701,7 +702,7 @@ export const CaseRegistration: React.FC = () => {
                   <div
                     className={`step-circle ${status === "active" ? "active" : status === "completed" ? "completed" : ""}`}
                   >
-                    {status === "completed" ? "✓" : index + 1}
+                    {status === "completed" ? <Lucide.Check size={16} /> : index + 1}
                   </div>
                   <div
                     className={`step-label ${status === "active" ? "active" : ""}`}
