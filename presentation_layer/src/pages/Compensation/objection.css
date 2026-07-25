@@ -1,0 +1,772 @@
+.objection-dashboard {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.objection-dashboard .stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.objection-dashboard .stat-card {
+  background: var(--md-surface-container);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  box-shadow: var(--shadow-sm);
+  transition:
+    box-shadow 0.3s var(--ease-emphasized),
+    transform 0.2s var(--ease-bouncy);
+}
+.objection-dashboard .stat-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: scale(1.01);
+}
+.objection-dashboard .stat-card .stat-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--md-on-surface-variant);
+  letter-spacing: 0.2px;
+}
+.objection-dashboard .stat-card .stat-number {
+  font-size: 28px;
+  font-weight: 700;
+  margin-top: 2px;
+  letter-spacing: -0.5px;
+}
+.objection-dashboard .stat-card .stat-icon {
+  float: right;
+  opacity: 0.2;
+  font-size: 28px;
+  line-height: 1;
+}
+.objection-dashboard .filter-bar {
+  background: var(--md-surface-container);
+  border-radius: var(--radius-lg);
+  padding: 14px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
+}
+.objection-dashboard .filter-bar .search-wrap {
+  flex: 1;
+  min-width: 200px;
+  position: relative;
+}
+.objection-dashboard .filter-bar .search-wrap input {
+  width: 100%;
+  padding: 9px 16px 9px 40px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid rgba(121, 116, 126, 0.25);
+  background: var(--md-surface-container-low);
+  font-size: 14px;
+  font-family: inherit;
+  transition:
+    border 0.2s,
+    box-shadow 0.2s;
+  outline: none;
+}
+.objection-dashboard .filter-bar .search-wrap input:focus {
+  border-color: var(--md-primary);
+  box-shadow: 0 0 0 3px rgba(103, 80, 164, 0.15);
+}
+.objection-dashboard .filter-bar .search-wrap .search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.5;
+  font-size: 18px;
+}
+.objection-dashboard .filter-bar .filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.objection-dashboard .filter-bar .filter-group select {
+  padding: 9px 32px 9px 16px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid rgba(121, 116, 126, 0.25);
+  background: var(--md-surface-container-low)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2349454f' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")
+    no-repeat right 14px center;
+  background-size: 12px 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--md-on-surface);
+  appearance: none;
+  cursor: pointer;
+  transition: border 0.2s;
+  outline: none;
+  min-width: 130px;
+}
+.objection-dashboard .filter-bar .filter-group select:focus {
+  border-color: var(--md-primary);
+  box-shadow: 0 0 0 3px rgba(103, 80, 164, 0.12);
+}
+.objection-dashboard .table-wrap {
+  background: var(--md-surface-container);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.3s var(--ease-emphasized);
+}
+.objection-dashboard .table-wrap:hover {
+  box-shadow: var(--shadow-md);
+}
+.objection-dashboard .table-scroll {
+  overflow-x: auto;
+}
+.objection-dashboard table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.objection-dashboard table thead {
+  background: rgba(103, 80, 164, 0.04);
+  border-bottom: 1px solid rgba(121, 116, 126, 0.12);
+}
+.objection-dashboard table th {
+  text-align: left;
+  padding: 14px 18px;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--md-on-surface-variant);
+  white-space: nowrap;
+}
+.objection-dashboard table td {
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(121, 116, 126, 0.06);
+  vertical-align: middle;
+}
+.objection-dashboard table tbody tr {
+  transition: background 0.15s;
+}
+.objection-dashboard table tbody tr:hover {
+  background: rgba(103, 80, 164, 0.04);
+}
+.objection-dashboard table tbody tr:last-child td {
+  border-bottom: none;
+}
+.objection-dashboard .status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 14px 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.objection-dashboard .status-badge .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.objection-dashboard .status-badge.submitted {
+  background: #e3f2fd;
+  color: #0b5b8c;
+}
+.objection-dashboard .status-badge.submitted .dot {
+  background: #0b5b8c;
+}
+.objection-dashboard .status-badge.review {
+  background: #fef7e0;
+  color: #8d6e00;
+}
+.objection-dashboard .status-badge.review .dot {
+  background: #8d6e00;
+}
+.objection-dashboard .status-badge.approved {
+  background: #e6f4ea;
+  color: #1e7b4a;
+}
+.objection-dashboard .status-badge.approved .dot {
+  background: #1e7b4a;
+}
+.objection-dashboard .status-badge.rejected {
+  background: #fce8e6;
+  color: #b3261e;
+}
+.objection-dashboard .status-badge.rejected .dot {
+  background: #b3261e;
+}
+.objection-dashboard .pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px 18px 20px;
+  border-top: 1px solid rgba(121, 116, 126, 0.1);
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.objection-dashboard .pagination .info {
+  font-size: 13px;
+  color: var(--md-on-surface-variant);
+}
+.objection-dashboard .pagination .pages {
+  display: flex;
+  gap: 4px;
+}
+.objection-dashboard .pagination .pages button {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  border: none;
+  background: transparent;
+  font-weight: 500;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--md-on-surface-variant);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    transform 0.15s var(--ease-bouncy);
+}
+.objection-dashboard .pagination .pages button:hover {
+  background: rgba(0, 0, 0, 0.05);
+  transform: scale(1.05);
+}
+.objection-dashboard .pagination .pages button.active {
+  background: var(--md-primary);
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+.objection-dashboard .pagination .pages button:active {
+  transform: scale(0.92);
+}
+.objection-dashboard .btn-view {
+  padding: 4px 16px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid var(--md-primary);
+  background: transparent;
+  color: var(--md-primary);
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    transform 0.15s var(--ease-bouncy);
+}
+.objection-dashboard .btn-view:hover {
+  background: rgba(103, 80, 164, 0.08);
+  transform: scale(1.04);
+}
+
+.objection-create {
+  max-width: 800px;
+  margin: 0 auto;
+}
+.objection-create .form-card {
+  background: var(--md-surface-container);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  box-shadow: var(--shadow-sm);
+}
+.objection-create .form-card .form-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--md-on-surface);
+  margin-bottom: 4px;
+}
+.objection-create .form-card .form-subtitle {
+  font-size: 14px;
+  color: var(--md-on-surface-variant);
+  margin-bottom: 20px;
+}
+.objection-create .form-card .case-selector {
+  margin-bottom: 20px;
+}
+.objection-create .form-card .case-selector label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--md-on-surface-variant);
+  margin-bottom: 4px;
+}
+.objection-create .form-card .case-selector select {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid rgba(121, 116, 126, 0.25);
+  background: var(--md-surface-container-low);
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--md-on-surface);
+  transition:
+    border 0.2s,
+    box-shadow 0.2s;
+  outline: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2349454f' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 12px 8px;
+  padding-right: 36px;
+}
+.objection-create .form-card .case-selector select:focus {
+  border-color: var(--md-primary);
+  box-shadow: 0 0 0 3px rgba(103, 80, 164, 0.15);
+}
+.objection-create .form-card .form-group {
+  margin-bottom: 18px;
+}
+.objection-create .form-card .form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--md-on-surface-variant);
+  margin-bottom: 4px;
+}
+.objection-create .form-card .form-group label .required {
+  color: var(--md-error-text);
+  margin-left: 2px;
+}
+.objection-create .form-card .form-group input,
+.objection-create .form-card .form-group textarea,
+.objection-create .form-card .form-group select {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid rgba(121, 116, 126, 0.25);
+  background: var(--md-surface-container-low);
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--md-on-surface);
+  transition:
+    border 0.2s,
+    box-shadow 0.2s;
+  outline: none;
+}
+.objection-create .form-card .form-group input:focus,
+.objection-create .form-card .form-group textarea:focus,
+.objection-create .form-card .form-group select:focus {
+  border-color: var(--md-primary);
+  box-shadow: 0 0 0 3px rgba(103, 80, 164, 0.15);
+}
+.objection-create .form-card .form-group textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+.objection-create .form-card .form-group .error-text {
+  font-size: 12px;
+  color: var(--md-error-text);
+  margin-top: 4px;
+}
+.objection-create .form-card .form-group .helper-text {
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+  opacity: 0.6;
+  margin-top: 4px;
+}
+.objection-create .form-card .file-upload-section {
+  background: var(--md-surface-container-low);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  border: 1px dashed rgba(121, 116, 126, 0.25);
+  margin-bottom: 18px;
+}
+.objection-create .form-card .file-upload-section .file-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--md-on-surface);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.objection-create .form-card .file-upload-section .file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--md-surface-container);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+}
+.objection-create .form-card .file-upload-section .file-item .file-name {
+  flex: 1;
+  font-size: 13px;
+  color: var(--md-on-surface);
+}
+.objection-create .form-card .file-upload-section .file-item .file-size {
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+  opacity: 0.6;
+}
+.objection-create .form-card .file-upload-section .file-item .btn-remove {
+  background: none;
+  border: none;
+  color: var(--md-error-text);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-full);
+  transition: background 0.2s;
+}
+.objection-create .form-card .file-upload-section .file-item .btn-remove:hover {
+  background: rgba(179, 38, 30, 0.08);
+}
+.objection-create .form-card .file-upload-section .upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid rgba(121, 116, 126, 0.25);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--md-on-surface-variant);
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    transform 0.15s var(--ease-bouncy);
+}
+.objection-create .form-card .file-upload-section .upload-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+  transform: scale(1.02);
+}
+.objection-create .form-card .actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(121, 116, 126, 0.1);
+}
+.objection-create .form-card .actions .btn-cancel {
+  padding: 10px 28px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid rgba(121, 116, 126, 0.25);
+  background: transparent;
+  font-weight: 500;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--md-on-surface-variant);
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    transform 0.15s var(--ease-bouncy);
+}
+.objection-create .form-card .actions .btn-cancel:hover {
+  background: rgba(0, 0, 0, 0.04);
+  transform: scale(1.02);
+}
+.objection-create .form-card .actions .btn-submit {
+  padding: 10px 32px;
+  border-radius: var(--radius-full);
+  border: none;
+  background: var(--md-primary);
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    transform 0.15s var(--ease-bouncy),
+    box-shadow 0.2s;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.objection-create .form-card .actions .btn-submit:hover {
+  transform: scale(1.03);
+  box-shadow: var(--shadow-md);
+}
+.objection-create .form-card .actions .btn-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+.objection-create .success-banner {
+  background: var(--md-success);
+  color: var(--md-success-text);
+  padding: 16px 24px;
+  border-radius: var(--radius-lg);
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 500;
+}
+.objection-create .success-banner .check-icon {
+  font-size: 24px;
+}
+
+.objection-review {
+  max-width: 900px;
+  margin: 0 auto;
+}
+.objection-review .back-link {
+  background: none;
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--md-on-surface-variant);
+  cursor: pointer;
+  padding: 4px 0;
+  margin-bottom: 12px;
+}
+.objection-review .back-link:hover {
+  color: var(--md-on-surface);
+}
+.objection-review .header-card {
+  background: var(--md-surface-container);
+  border-radius: var(--radius-lg);
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
+  border-left: 4px solid var(--md-primary);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.objection-review .header-card .left .objection-id {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--md-primary);
+}
+.objection-review .header-card .left .title {
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--md-on-surface);
+  margin: 4px 0;
+}
+.objection-review .header-card .left .meta {
+  font-size: 13px;
+  color: var(--md-on-surface-variant);
+}
+.objection-review .header-card .left .meta span {
+  margin-right: 16px;
+}
+.objection-review .header-card .status-badge-lg {
+  font-size: 13px;
+  padding: 6px 18px;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+}
+.objection-review .header-card .status-badge-lg.submitted {
+  background: #e3f2fd;
+  color: #0b5b8c;
+}
+.objection-review .header-card .status-badge-lg.review {
+  background: #fef7e0;
+  color: #8d6e00;
+}
+.objection-review .header-card .status-badge-lg.approved {
+  background: #e6f4ea;
+  color: #1e7b4a;
+}
+.objection-review .header-card .status-badge-lg.rejected {
+  background: #fce8e6;
+  color: #b3261e;
+}
+.objection-review .content-card {
+  background: var(--md-surface-container);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+}
+.objection-review .content-card .section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--md-on-surface);
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid rgba(103, 80, 164, 0.1);
+}
+.objection-review .content-card .detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 32px;
+}
+.objection-review .content-card .detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.objection-review .content-card .detail-item .label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--md-on-surface-variant);
+  opacity: 0.6;
+}
+.objection-review .content-card .detail-item .value {
+  font-weight: 500;
+  color: var(--md-on-surface);
+  word-break: break-word;
+}
+.objection-review .content-card .detail-item.full-width {
+  grid-column: 1 / -1;
+}
+.objection-review .content-card .objection-text {
+  background: var(--md-surface-container-low);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin: 16px 0;
+}
+.objection-review .content-card .objection-text .label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--md-on-surface-variant);
+  opacity: 0.6;
+}
+.objection-review .content-card .objection-text .text {
+  font-size: 15px;
+  color: var(--md-on-surface);
+  margin-top: 4px;
+  line-height: 1.6;
+}
+.objection-review .content-card .file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 12px 0 16px;
+}
+.objection-review .content-card .file-list .file-item {
+  background: var(--md-surface-container-low);
+  padding: 8px 16px 8px 12px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.objection-review .content-card .file-list .file-item .file-icon {
+  font-size: 16px;
+}
+.objection-review .content-card .response-section {
+  margin-top: 20px;
+}
+.objection-review .content-card .response-section .response-text {
+  background: var(--md-surface-container-low);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  border-left: 4px solid var(--md-primary);
+}
+.objection-review .content-card .response-section .response-text .label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--md-on-surface-variant);
+  opacity: 0.6;
+}
+.objection-review .content-card .response-section .response-text .text {
+  font-size: 15px;
+  color: var(--md-on-surface);
+  margin-top: 4px;
+}
+.objection-review .action-bar {
+  display: flex;
+  gap: 16px;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(121, 116, 126, 0.1);
+}
+.objection-review .action-bar .btn-approve {
+  padding: 10px 32px;
+  border-radius: var(--radius-full);
+  border: none;
+  background: var(--md-success);
+  color: var(--md-success-text);
+  font-weight: 600;
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    transform 0.15s var(--ease-bouncy),
+    box-shadow 0.2s;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.objection-review .action-bar .btn-approve:hover {
+  transform: scale(1.03);
+  box-shadow: var(--shadow-md);
+}
+.objection-review .action-bar .btn-reject {
+  padding: 10px 32px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid rgba(179, 38, 30, 0.3);
+  background: transparent;
+  color: var(--md-error-text);
+  font-weight: 600;
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    transform 0.15s var(--ease-bouncy);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.objection-review .action-bar .btn-reject:hover {
+  background: rgba(179, 38, 30, 0.08);
+  transform: scale(1.02);
+}
+.objection-review .action-bar .btn-disabled {
+  padding: 10px 32px;
+  border-radius: var(--radius-full);
+  border: none;
+  background: var(--md-outline);
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  font-family: inherit;
+  cursor: not-allowed;
+  opacity: 0.5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 768px) {
+  .objection-dashboard .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .objection-dashboard .filter-bar .filter-group {
+    flex-wrap: wrap;
+  }
+  .objection-review .header-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .objection-review .content-card .detail-grid {
+    grid-template-columns: 1fr;
+  }
+  .objection-review .action-bar {
+    flex-direction: column;
+  }
+  .objection-review .action-bar .btn-approve,
+  .objection-review .action-bar .btn-reject {
+    justify-content: center;
+  }
+  .objection-create .form-card {
+    padding: 20px;
+  }
+  .objection-create .form-card .actions {
+    flex-direction: column;
+  }
+  .objection-create .form-card .actions .btn-cancel,
+  .objection-create .form-card .actions .btn-submit {
+    justify-content: center;
+  }
+}
