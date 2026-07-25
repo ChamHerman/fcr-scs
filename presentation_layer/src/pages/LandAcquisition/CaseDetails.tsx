@@ -1,3 +1,4 @@
+import * as Lucide from "lucide-react";
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -12,7 +13,6 @@ import {
 } from "lucide-react";
 import "../../style.css";
 import "./case_management.css";
-import { Sidebar } from "../Shared";
 
 // --- Types ---
 type Owner = {
@@ -154,7 +154,7 @@ export const CaseView: React.FC = () => {
       )
     ) {
       alert("Case deleted successfully!");
-      navigate("/case");
+      navigate('/admin/case');
     }
   };
 
@@ -327,14 +327,10 @@ export const CaseView: React.FC = () => {
   ];
 
   return (
-    <div
-      className="flex min-h-screen"
-      style={{ background: "#f8f5fa", color: "#1c1b1f" }}
-    >
-      <Sidebar />
-
+    <div>
+      
       {/* Main Content */}
-      <main className="main blur-shape-bg">
+      <div className="main blur-shape-bg">
         <div className="case-view-container">
           {/* Top Bar / Case Header */}
           <div className="topbar" style={{ marginBottom: "16px" }}>
@@ -345,8 +341,8 @@ export const CaseView: React.FC = () => {
               </div>
             </div>
             <div className="topbar-right">
-              <span className="date-badge">📅 24 Jul 2026</span>
-              <div className="avatar">AO</div>
+              <span className="date-badge"><Lucide.Calendar size={16} className="inline" /> 24 Jul 2026</span>
+              <div className="avatar"><Lucide.User size={16} /></div>
             </div>
           </div>
 
@@ -427,7 +423,7 @@ export const CaseView: React.FC = () => {
             purposes.
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 };

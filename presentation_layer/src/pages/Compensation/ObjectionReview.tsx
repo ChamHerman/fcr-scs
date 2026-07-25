@@ -1,9 +1,10 @@
+﻿import * as Lucide from "lucide-react";
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { CheckCircle, XCircle, ArrowLeft } from "lucide-react";
 import "../../style.css";
 import "./objection.css";
-import { Sidebar } from "../Shared";
+
 
 type ObjectionDetail = {
   id: string;
@@ -80,7 +81,7 @@ export const ObjectionReview: React.FC = () => {
       );
       setActionPerformed(true);
       setSubmitting(false);
-      alert("✅ Objection approved. The community member will be notified.");
+      alert("Objection approved. The community member will be notified.");
     }, 1200);
   };
 
@@ -106,7 +107,7 @@ export const ObjectionReview: React.FC = () => {
       );
       setActionPerformed(true);
       setSubmitting(false);
-      alert("❌ Objection rejected. The community member will be notified.");
+      alert("Objection rejected. The community member will be notified.");
     }, 1200);
   };
 
@@ -115,8 +116,8 @@ export const ObjectionReview: React.FC = () => {
       <div
         className="flex min-h-screen"
         style={{
-          background: "#f8f5fa",
-          color: "#1c1b1f",
+          background: "var(--md-background)",
+          color: "var(--md-on-surface)",
           alignItems: "center",
           justifyContent: "center",
         }}
@@ -135,8 +136,8 @@ export const ObjectionReview: React.FC = () => {
       <div
         className="flex min-h-screen"
         style={{
-          background: "#f8f5fa",
-          color: "#1c1b1f",
+          background: "var(--md-background)",
+          color: "var(--md-on-surface)",
           alignItems: "center",
           justifyContent: "center",
         }}
@@ -158,9 +159,9 @@ export const ObjectionReview: React.FC = () => {
   return (
     <div
       className="flex min-h-screen"
-      style={{ background: "#f8f5fa", color: "#1c1b1f" }}
+      style={{ background: "var(--md-background)", color: "var(--md-on-surface)" }}
     >
-      <Sidebar />
+      
 
       <main className="main blur-shape-bg">
         <div className="objection-review">
@@ -169,20 +170,20 @@ export const ObjectionReview: React.FC = () => {
               <div className="objection-id">{objection.id}</div>
               <div className="title">{objection.caseTitle}</div>
               <div className="meta">
-                <span>📁 {objection.caseId}</span>
-                <span>👤 {objection.submittedBy}</span>
-                <span>📅 {objection.submittedDate}</span>
-                <span>📄 {objection.type}</span>
+                <span><Lucide.FolderOpen size={16} className="inline mr-1" /> {objection.caseId}</span>
+                <span><Lucide.User size={16} className="inline mr-1" /> {objection.submittedBy}</span>
+                <span><Lucide.Calendar size={16} className="inline mr-1" /> {objection.submittedDate}</span>
+                <span><Lucide.FileText size={16} className="inline mr-1" /> {objection.type}</span>
               </div>
             </div>
             <span className={`status-badge-lg ${objection.statusClass}`}>
-              {objection.status === "Under Review" ? "⏳ " : ""}
+              {objection.status === "Under Review" ? <Lucide.Hourglass size={16} className="inline mr-1" /> : ""}
               {objection.status}
             </span>
           </div>
 
           <div className="content-card">
-            <div className="section-title">📋 Objection Details</div>
+            <div className="section-title"><Lucide.ClipboardList size={16} className="inline mr-1" /> Objection Details</div>
             <div className="detail-grid">
               <div className="detail-item">
                 <span className="label">Submitted By</span>
@@ -213,12 +214,12 @@ export const ObjectionReview: React.FC = () => {
                   className="section-title"
                   style={{ marginTop: "16px", marginBottom: "8px" }}
                 >
-                  📎 Attachments
+                  <Lucide.Paperclip size={16} className="inline mr-1" /> Attachments
                 </div>
                 <div className="file-list">
                   {objection.attachments.map((a, i) => (
                     <div key={i} className="file-item">
-                      <span className="file-icon">📄</span>
+                      <span className="file-icon"><Lucide.FileText size={14} /></span>
                       {a.name}{" "}
                       <span
                         style={{
@@ -238,7 +239,7 @@ export const ObjectionReview: React.FC = () => {
 
             {isResolved && objection.response && (
               <div className="response-section">
-                <div className="section-title">📌 Response</div>
+                <div className="section-title"><Lucide.Pin size={16} className="inline mr-1" /> Response</div>
                 <div className="response-text">
                   <div className="label">
                     Response from {objection.respondedBy || "Administrator"}
@@ -262,7 +263,7 @@ export const ObjectionReview: React.FC = () => {
 
             {isActionable && (
               <div style={{ marginTop: "20px" }}>
-                <div className="section-title">💬 Response</div>
+                <div className="section-title"><Lucide.MessageSquare size={16} className="inline mr-1" /> Response</div>
                 <div className="form-group" style={{ marginBottom: "16px" }}>
                   <label
                     htmlFor="responseText"
@@ -336,8 +337,8 @@ export const ObjectionReview: React.FC = () => {
               <div className="action-bar">
                 <span className="btn-disabled" style={{ marginLeft: "auto" }}>
                   {objection.status === "Approved"
-                    ? "✅ Approved"
-                    : "❌ Rejected"}
+                    ? <><Lucide.CheckCircle size={16} className="inline mr-1" /> Approved</>
+                    : <><Lucide.XCircle size={16} className="inline mr-1" /> Rejected</>}
                 </span>
               </div>
             )}

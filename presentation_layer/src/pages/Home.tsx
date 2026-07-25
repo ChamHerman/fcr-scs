@@ -226,7 +226,7 @@ export const Home: React.FC = () => {
           </Card>
 
           <Card interactive elevation="sm" className="module-card flex flex-col h-full">
-            <div className="w-14 h-14 rounded-2xl bg-[#6750A4]/10 flex items-center justify-center text-[#6750A4] mb-6 group-hover:scale-110 transition-transform duration-300">
+            <div className="w-14 h-14 rounded-2xl bg-[var(--md-primary)]/10 flex items-center justify-center text-[var(--md-primary)] mb-6 group-hover:scale-110 transition-transform duration-300">
               <BrainCircuit size={28} />
             </div>
             <h3 className="text-xl font-bold mb-3">AI Valuation</h3>

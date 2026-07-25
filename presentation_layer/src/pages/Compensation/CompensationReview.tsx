@@ -1,9 +1,10 @@
+import * as Lucide from "lucide-react";
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { CheckCircle, XCircle, X } from "lucide-react";
 import "../../style.css";
 import "./compensation.css";
-import { Sidebar } from "../Shared";
+
 
 type CompensationDetail = {
   id: string;
@@ -91,7 +92,7 @@ export const CompensationApproval: React.FC = () => {
       )
     ) {
       alert(
-        `✅ Report ${report?.id} approved.\nCase status updated to "Compensation Approved".\n\n📨 Notification sent to assigned officer.`,
+        `Report ${report?.id} approved.\nCase status updated to "Compensation Approved".\n\nNotification sent to assigned officer.`,
       );
       navigate("/compensation/report");
     }
@@ -115,7 +116,7 @@ export const CompensationApproval: React.FC = () => {
     setSubmitting(true);
     setTimeout(() => {
       alert(
-        `❌ Report ${report?.id} rejected.\nReason: ${rejectReason}\n\nCase status updated to "Compensation Rejected".`,
+        `<Lucide.XCircle size={16} className="inline mr-1" /> Report ${report?.id} rejected.\nReason: ${rejectReason}\n\nCase status updated to "Compensation Rejected".`,
       );
       setSubmitting(false);
       setShowRejectModal(false);
@@ -128,8 +129,8 @@ export const CompensationApproval: React.FC = () => {
       <div
         className="flex min-h-screen"
         style={{
-          background: "#f8f5fa",
-          color: "#1c1b1f",
+          background: "var(--md-background)",
+          color: "var(--md-on-surface)",
           alignItems: "center",
           justifyContent: "center",
         }}
@@ -148,8 +149,8 @@ export const CompensationApproval: React.FC = () => {
       <div
         className="flex min-h-screen"
         style={{
-          background: "#f8f5fa",
-          color: "#1c1b1f",
+          background: "var(--md-background)",
+          color: "var(--md-on-surface)",
           alignItems: "center",
           justifyContent: "center",
         }}
@@ -211,9 +212,9 @@ export const CompensationApproval: React.FC = () => {
 
       <div
         className="flex min-h-screen"
-        style={{ background: "#f8f5fa", color: "#1c1b1f" }}
+        style={{ background: "var(--md-background)", color: "var(--md-on-surface)" }}
       >
-        <Sidebar />
+        
 
         <main className="main blur-shape-bg">
           <div className="compensation-approval">
@@ -225,7 +226,7 @@ export const CompensationApproval: React.FC = () => {
                 </div>
               </div>
               <div className="topbar-right">
-                <span className="date-badge">📅 24 Jul 2026</span>
+                <span className="date-badge"><Lucide.Calendar size={16} className="inline mr-1" /> 24 Jul 2026</span>
                 <div className="avatar">AO</div>
               </div>
             </div>
@@ -235,17 +236,17 @@ export const CompensationApproval: React.FC = () => {
                 <div className="case-id">{report.caseId}</div>
                 <div className="case-title">{report.caseTitle}</div>
                 <div className="meta">
-                  <span>📄 Report: {report.id}</span>
-                  <span>👤 {report.owner}</span>
-                  <span>🏷️ {report.landTitle}</span>
-                  <span>📅 {report.generatedDate}</span>
+                  <span><Lucide.FileText size={16} className="inline mr-1" /> Report: {report.id}</span>
+                  <span><Lucide.User size={16} className="inline mr-1" /> {report.owner}</span>
+                  <span><Lucide.Tag size={16} className="inline mr-1" /> {report.landTitle}</span>
+                  <span><Lucide.Calendar size={16} className="inline mr-1" /> {report.generatedDate}</span>
                 </div>
               </div>
-              <span className="status-badge-lg">⏳ {report.status}</span>
+              <span className="status-badge-lg"><Lucide.Hourglass size={16} className="inline mr-1" /> {report.status}</span>
             </div>
 
             <div className="report-card">
-              <div className="section-title">📋 Case & Owner Information</div>
+              <div className="section-title"><Lucide.ClipboardList size={16} className="inline mr-1" /> Case & Owner Information</div>
               <div className="detail-grid">
                 <div className="detail-item">
                   <span className="label">Project</span>
@@ -283,7 +284,7 @@ export const CompensationApproval: React.FC = () => {
             </div>
 
             <div className="report-card">
-              <div className="section-title">💰 Compensation Breakdown</div>
+              <div className="section-title"><Lucide.DollarSign size={16} className="inline mr-1" /> Compensation Breakdown</div>
               <div className="comp-breakdown">
                 <div className="row">
                   <span className="lbl">Land Value</span>
@@ -341,7 +342,7 @@ export const CompensationApproval: React.FC = () => {
             </div>
 
             <div className="report-card">
-              <div className="section-title">📝 Remarks</div>
+              <div className="section-title"><Lucide.FileEdit size={16} className="inline mr-1" /> Remarks</div>
               <p
                 style={{
                   margin: 0,

@@ -1,3 +1,4 @@
+import * as Lucide from "lucide-react";
 import React, { useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import gsap from "gsap";
@@ -5,7 +6,6 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
 import "../../style.css";
 import "./case_management.css";
-import { Sidebar } from "../Shared";
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
@@ -19,35 +19,35 @@ export const CaseManagementDashboard: React.FC = () => {
       label: "Total Cases",
       value: "347",
       change: "↑ 12% from last month",
-      icon: "📁",
+      icon: <><Lucide.Folder size={16} className="inline" /></>,
       trend: "up",
     },
     {
       label: "Active",
       value: "184",
       change: "↓ 3% from last month",
-      icon: "⏳",
+      icon: <><Lucide.Hourglass size={16} className="inline" /></>,
       trend: "down",
     },
     {
       label: "Completed",
       value: "128",
       change: "↑ 8% from last month",
-      icon: "✅",
+      icon: <><Lucide.CheckCircle size={16} className="inline" /></>,
       trend: "up",
     },
     {
       label: "Pending Action",
       value: "35",
       change: "↑ 5% from last month",
-      icon: "⏰",
+      icon: <><Lucide.Clock size={16} className="inline" /></>,
       trend: "down",
     },
     {
       label: "Total Compensation",
       value: "RM 42.6M",
       change: "↑ 6% from last month",
-      icon: "💰",
+      icon: <><Lucide.CircleDollarSign size={16} className="inline" /></>,
       trend: "up",
     },
   ];
@@ -211,16 +211,11 @@ export const CaseManagementDashboard: React.FC = () => {
 
   return (
     <>
-      <div
-        ref={containerRef}
-        className="flex min-h-screen"
-        style={{ background: "#f8f5fa", color: "#1c1b1f" }}
-      >
+      <div ref={containerRef}>
         {/* ====== SIDEBAR ====== */}
-        <Sidebar />
-
+        
         {/* ====== MAIN CONTENT ====== */}
-        <main className="main blur-shape-bg">
+        <div className="main blur-shape-bg">
           {/* Top Bar */}
           <div className="topbar">
             <div className="topbar-left">
@@ -230,8 +225,8 @@ export const CaseManagementDashboard: React.FC = () => {
               </div>
             </div>
             <div className="topbar-right">
-              <span className="date-badge">📅 24 Jul 2026</span>
-              <div className="avatar">AO</div>
+              <span className="date-badge"><Lucide.Calendar size={16} className="inline" /> 24 Jul 2026</span>
+              <div className="avatar"><Lucide.User size={16} /></div>
             </div>
           </div>
 
@@ -254,7 +249,7 @@ export const CaseManagementDashboard: React.FC = () => {
           {/* Filter Bar */}
           <div className="filter-bar">
             <div className="search-wrap">
-              <span className="search-icon">🔍</span>
+              <span className="search-icon"><Lucide.Search size={16} className="inline" /></span>
               <input
                 type="text"
                 placeholder="Search by case ID, title, owner, project…"
@@ -308,9 +303,9 @@ export const CaseManagementDashboard: React.FC = () => {
               <span style={{ fontSize: "13px" }}>Showing 1–10 of 24</span>
             </div>
             <div className="right">
-              <button className="btn-outline">📥 Export CSV</button>
-              <button className="btn-outline">📄 Export PDF</button>
-              <button className="btn-primary" onClick={() => navigate('/case/register')}>➕ New Case</button>
+              <button className="btn-outline"><Lucide.Download size={16} className="inline" /> Export CSV</button>
+              <button className="btn-outline"><Lucide.FileText size={16} className="inline" /> Export PDF</button>
+              <button className="btn-primary" onClick={() => navigate('/admin/case/register')}><Lucide.Plus size={16} className="inline" /> New Case</button>
             </div>
           </div>
 
@@ -335,7 +330,7 @@ export const CaseManagementDashboard: React.FC = () => {
                       key={idx}
                       className="case-row"
                       style={{ cursor: 'pointer' }}
-                      onClick={() => navigate('/case/details', { state: { caseId: c.id } })}
+                      onClick={() => navigate('/admin/case/details', { state: { caseId: c.id } })}
                     >
                       <td>
                         <span className="case-id">{c.id}</span>
@@ -396,7 +391,7 @@ export const CaseManagementDashboard: React.FC = () => {
             FCR-SCS · Case Management Module · All data is for demonstration
             purposes.
           </div>
-        </main>
+        </div>
       </div>
     </>
   );

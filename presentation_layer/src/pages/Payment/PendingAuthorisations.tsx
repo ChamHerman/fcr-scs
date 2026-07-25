@@ -15,7 +15,7 @@ export default function PendingAuthorisations() {
   const [selectedTrx, setSelectedTrx] = useState(pendingList[0]);
 
   return (
-    <div className="w-full min-h-screen bg-md-background text-md-on-surface p-8 relative overflow-hidden font-sans">
+    <div className="text-md-on-surface p-8 relative overflow-hidden font-sans">
       {/* Security Theme Background */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-md-primary/5 via-md-background to-md-background pointer-events-none" />
       <div className="absolute top-20 right-20 w-[500px] h-[500px] bg-md-warning/20 rounded-full blur-[120px] pointer-events-none" />
@@ -48,7 +48,7 @@ export default function PendingAuthorisations() {
                 <input 
                   type="text" 
                   placeholder="Filter by ID or Case..." 
-                  className="w-full bg-md-surface-container-low border border-md-outline/20 rounded-full pl-11 pr-4 py-3 text-sm text-md-on-surface placeholder:text-md-on-surface-variant/70 focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all"
+                  className="bg-md-surface-container-low border border-md-outline/20 rounded-full pl-11 pr-4 py-3 text-sm text-md-on-surface placeholder:text-md-on-surface-variant/70 focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all"
                 />
               </div>
             </div>
@@ -58,7 +58,7 @@ export default function PendingAuthorisations() {
                 <button
                   key={trx.id}
                   onClick={() => setSelectedTrx(trx)}
-                  className={`w-full text-left p-4 rounded-[24px] transition-all duration-300 ease-md-bouncy active:scale-95 ${
+                  className={`text-left p-4 rounded-[24px] transition-all duration-300 ease-md-bouncy active:scale-95 ${
                     selectedTrx.id === trx.id 
                       ? 'bg-md-surface-container-low border-md-primary/30 shadow-sm' 
                       : 'bg-transparent border-transparent hover:bg-md-surface-container-low/50'

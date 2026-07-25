@@ -109,3 +109,5 @@ Defined in `tailwind.config.js`. Used to create organic, generous rounding.
 3. **Interactive Grouping**: Use Tailwind's `group` and `group-hover:` utility classes to coordinate animations on interactive elements.
 4. **Consistency**: Do not mix border radii paradigms; stick to the generous, organic shaping characteristic of Material You.
 5. **Button Variants**: Use `combined` for primary CTAs requiring a gradient, and `animated-primary` for subtle attention-grabbing without aggressive movement.
+6. **Iconography**: Strictly use `lucide-react` SVG icons. Do not use emojis in the UI as they break visual consistency and tone across different operating systems.
+7. **Admin Layout Wrapping**: Do not wrap individual module pages (e.g., Land Acquisition, Compensation, Payment) in manual `min-h-screen` or `w-full` fixed-height flex containers. The global `<AdminLayout />` component intrinsically handles the main content wrapper layout (via `.admin-content`). Allow pages to naturally expand to fill this content area seamlessly.

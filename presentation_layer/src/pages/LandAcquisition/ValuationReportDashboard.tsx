@@ -1,9 +1,10 @@
+import * as Lucide from "lucide-react";
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, ChevronLeft, ChevronRight } from "lucide-react";
 import "../../style.css";
 import "./valuation_report.css";
-import { Sidebar } from "../Shared";
+
 
 type Report = {
   id: string;
@@ -112,38 +113,31 @@ export const ValuationReportList: React.FC = () => {
   };
 
   const stats = [
-    { label: "Total Reports", value: mockReports.length, icon: "📄" },
+    { label: "Total Reports", value: mockReports.length, icon: <Lucide.FileText size={16} className="inline mr-1" /> },
     {
       label: "Pending Review",
       value: mockReports.filter((r) => r.status === "Pending Review").length,
-      icon: "⏳",
+      icon: <Lucide.Hourglass size={16} className="inline mr-1" />,
     },
     {
       label: "Approved",
       value: mockReports.filter((r) => r.status === "Approved").length,
-      icon: "✅",
+      icon: <Lucide.CheckCircle size={16} className="inline mr-1" />,
     },
     {
       label: "Rejected",
       value: mockReports.filter((r) => r.status === "Rejected").length,
-      icon: "❌",
+      icon: <Lucide.XCircle size={16} className="inline mr-1" />,
     },
     {
       label: "Under Revision",
       value: mockReports.filter((r) => r.status === "Under Revision").length,
-      icon: "🔄",
+      icon: <Lucide.RefreshCw size={16} className="inline mr-1" />,
     },
   ];
 
   return (
-    <div
-      className="flex min-h-screen"
-      style={{ background: "#f8f5fa", color: "#1c1b1f" }}
-    >
-      <Sidebar />
-
-      <main className="main blur-shape-bg">
-        <div className="valuation-report-dashboard">
+    <div className="valuation-report-dashboard">
           <div className="topbar" style={{ marginBottom: "20px" }}>
             <div className="topbar-left">
               <h1 style={{ marginBottom: 0 }}>Valuation Reports</h1>
@@ -152,8 +146,8 @@ export const ValuationReportList: React.FC = () => {
               </div>
             </div>
             <div className="topbar-right" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span className="date-badge">📅 24 Jul 2026</span>
-              <button className="btn-primary" onClick={handleCreate}>➕ Create Report</button>
+              <span className="date-badge"><Lucide.Calendar size={16} className="inline mr-1" /> 24 Jul 2026</span>
+              <button className="btn-primary" onClick={handleCreate}><Lucide.Plus size={16} className="inline mr-1" /> Create Report</button>
               <div className="avatar">AO</div>
             </div>
           </div>
@@ -170,7 +164,7 @@ export const ValuationReportList: React.FC = () => {
 
           <div className="filter-bar">
             <div className="search-wrap">
-              <span className="search-icon">🔍</span>
+              <span className="search-icon"><Lucide.Search size={16} /></span>
               <input
                 type="text"
                 placeholder="Search by case ID, title, or valuer..."
@@ -305,7 +299,5 @@ export const ValuationReportList: React.FC = () => {
             FCR-SCS · Valuation Report Dashboard · For Administrators
           </div>
         </div>
-      </main>
-    </div>
   );
 };

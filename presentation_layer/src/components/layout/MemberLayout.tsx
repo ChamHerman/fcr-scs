@@ -9,13 +9,13 @@ export const MemberLayout: React.FC = () => {
         .member-layout {
           display: flex;
           min-height: 100vh;
-          background: #FFFBFE;
-          color: #1c1b1f;
+          background: var(--md-background);
+          color: var(--md-on-surface);
         }
         
         .member-sidebar {
           width: 240px;
-          background: #F3EDF7;
+          background: var(--md-surface-container);
           border-right: 1px solid rgba(121,116,126,0.12);
           display: flex;
           flex-direction: column;
@@ -32,7 +32,7 @@ export const MemberLayout: React.FC = () => {
           display: flex;
           align-items: center;
           gap: 12px;
-          color: #6750a4;
+          color: var(--md-primary);
         }
 
         .member-nav {
@@ -48,15 +48,15 @@ export const MemberLayout: React.FC = () => {
           padding: 12px 16px;
           border-radius: 12px;
           text-decoration: none;
-          color: #49454f;
+          color: var(--md-on-surface-variant);
           font-weight: 500;
           transition: all 0.2s;
         }
 
         .member-nav a:hover { background: rgba(103,80,164,0.08); }
         .member-nav a.active {
-          background: #e8def8;
-          color: #6750a4;
+          background: var(--md-secondary-container);
+          color: var(--md-primary);
           font-weight: 600;
         }
 
@@ -87,7 +87,7 @@ export const MemberLayout: React.FC = () => {
             bottom: 0;
             left: 0;
             right: 0;
-            background: #F3EDF7;
+            background: var(--md-surface-container);
             border-top: 1px solid rgba(121,116,126,0.12);
             justify-content: space-around;
             padding: 12px 8px 24px 8px; /* Extra padding for modern phones */
@@ -100,12 +100,12 @@ export const MemberLayout: React.FC = () => {
             align-items: center;
             gap: 4px;
             font-size: 11px;
-            color: #49454f;
+            color: var(--md-on-surface-variant);
             text-decoration: none;
             font-weight: 500;
           }
           .bottom-nav a.active {
-            color: #6750a4;
+            color: var(--md-primary);
             font-weight: 600;
           }
           .bottom-nav-icon {
@@ -117,7 +117,7 @@ export const MemberLayout: React.FC = () => {
             justify-content: center;
           }
           .bottom-nav a.active .bottom-nav-icon {
-            background: #e8def8;
+            background: var(--md-secondary-container);
           }
         }
       `}</style>

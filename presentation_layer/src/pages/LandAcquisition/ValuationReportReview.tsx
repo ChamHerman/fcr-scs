@@ -1,9 +1,10 @@
+import * as Lucide from "lucide-react";
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { CheckCircle, XCircle, X } from "lucide-react";
 import "../../style.css";
 import "./valuation_report.css";
-import { Sidebar } from "../Shared";
+
 
 type ReportDetail = {
   id: string;
@@ -63,7 +64,7 @@ export const ValuationReportReview: React.FC = () => {
   const handleAccept = () => {
     // Simulate accept
     alert(
-      '✅ Report accepted. Case status updated to "Compensation Approved".',
+      '<Lucide.CheckCircle size={16} className="inline mr-1" /> Report accepted. Case status updated to "Compensation Approved".',
     );
     navigate("/case/valuation");
   };
@@ -100,9 +101,9 @@ export const ValuationReportReview: React.FC = () => {
     // Simulate submission
     setTimeout(() => {
       alert(
-        `❌ Report rejected.\n\nReason: ${reason}\nAcceptance Period: ${acceptanceDays} days\n\n` +
-          `• Case status updated to "Valuation Rejected" (C3)\n` +
-          `• Valuer notified (M1) to refine the report within ${acceptanceDays} days.`,
+        `<Lucide.XCircle size={16} className="inline mr-1" /> Report rejected.\n\nReason: ${reason}\nAcceptance Period: ${acceptanceDays} days\n\n` +
+        `• Case status updated to "Valuation Rejected" (C3)\n` +
+        `• Valuer notified (M1) to refine the report within ${acceptanceDays} days.`,
       );
       setSubmitting(false);
       setShowRejectModal(false);
@@ -115,8 +116,8 @@ export const ValuationReportReview: React.FC = () => {
       <div
         className="flex min-h-screen"
         style={{
-          background: "#f8f5fa",
-          color: "#1c1b1f",
+          background: "var(--md-background)",
+          color: "var(--md-on-surface)",
           alignItems: "center",
           justifyContent: "center",
         }}
@@ -135,8 +136,8 @@ export const ValuationReportReview: React.FC = () => {
       <div
         className="flex min-h-screen"
         style={{
-          background: "#f8f5fa",
-          color: "#1c1b1f",
+          background: "var(--md-background)",
+          color: "var(--md-on-surface)",
           alignItems: "center",
           justifyContent: "center",
         }}
@@ -218,9 +219,9 @@ export const ValuationReportReview: React.FC = () => {
 
       <div
         className="flex min-h-screen"
-        style={{ background: "#f8f5fa", color: "#1c1b1f" }}
+        style={{ background: "var(--md-background)", color: "var(--md-on-surface)" }}
       >
-        <Sidebar />
+
 
         <main className="main blur-shape-bg">
           <div className="review-container">
@@ -232,7 +233,7 @@ export const ValuationReportReview: React.FC = () => {
                 </div>
               </div>
               <div className="topbar-right">
-                <span className="date-badge">📅 24 Jul 2026</span>
+                <span className="date-badge"><Lucide.Calendar size={16} className="inline mr-1" /> 24 Jul 2026</span>
                 <div className="avatar">AO</div>
               </div>
             </div>
@@ -242,18 +243,18 @@ export const ValuationReportReview: React.FC = () => {
                 <div className="case-id">{report.caseId}</div>
                 <div className="case-title">{report.caseTitle}</div>
                 <div className="meta">
-                  <span>📄 Report: {report.id}</span>
-                  <span>🧑‍⚖️ Valuer: {report.valuer}</span>
-                  <span>📅 {report.valuationDate}</span>
+                  <span><Lucide.FileText size={16} className="inline mr-1" /> Report: {report.id}</span>
+                  <span><Lucide.Scale size={16} className="inline mr-1" /> Valuer: {report.valuer}</span>
+                  <span><Lucide.Calendar size={16} className="inline mr-1" /> {report.valuationDate}</span>
                 </div>
               </div>
               <span className={`status-badge-lg ${report.statusClass}`}>
-                ⏳ {report.status}
+                <Lucide.Hourglass size={16} className="inline mr-1" /> {report.status}
               </span>
             </div>
 
             <div className="report-card">
-              <div className="section-title">📋 Report Details</div>
+              <div className="section-title"><Lucide.ClipboardList size={16} className="inline mr-1" /> Report Details</div>
               <div className="detail-grid">
                 <div className="detail-item">
                   <span className="label">Valuation Method</span>
@@ -275,7 +276,7 @@ export const ValuationReportReview: React.FC = () => {
                     className="value"
                     style={{ fontWeight: 600, color: "var(--md-warning-text)" }}
                   >
-                    ⏳ {report.status}
+                    <Lucide.Hourglass size={16} className="inline mr-1" /> {report.status}
                   </span>
                 </div>
                 <div className="detail-item full-width">
@@ -286,15 +287,15 @@ export const ValuationReportReview: React.FC = () => {
 
               <div style={{ marginTop: "20px" }}>
                 <div className="section-title" style={{ marginBottom: "8px" }}>
-                  📎 Attachments (C2)
+                  <Lucide.Paperclip size={16} className="inline mr-1" /> Attachments (C2)
                 </div>
                 <div className="file-list">
                   <div className="file-item">
-                    <span className="file-icon">📄</span>{" "}
+                    <Lucide.FileText size={16} className="file-icon inline mr-1" />{" "}
                     {report.buildingAssessment}
                   </div>
                   <div className="file-item">
-                    <span className="file-icon">📄</span>{" "}
+                    <Lucide.FileText size={16} className="file-icon inline mr-1" />{" "}
                     {report.siteInspection}
                   </div>
                 </div>

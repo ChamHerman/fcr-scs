@@ -21,12 +21,12 @@ export default function SubmitBankDetails() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FFFBFE] flex items-center justify-center p-4 sm:p-6 font-sans text-slate-900">
+    <div className="min-h-screen bg-[var(--md-background)] flex items-center justify-center p-4 sm:p-6 font-sans text-slate-900">
       <div className="max-w-md w-full relative">
-        <div className="relative bg-[#F3EDF7] rounded-[2rem] p-6 sm:p-8 shadow-sm">
+        <div className="relative bg-[var(--md-surface-container)] rounded-[2rem] p-6 sm:p-8 shadow-sm">
           <div className="flex flex-col items-center mb-8">
-            <div className="h-16 w-16 bg-[#6750A4]/10 rounded-full flex items-center justify-center mb-4">
-              <ShieldCheck className="h-8 w-8 text-[#6750A4]" />
+            <div className="h-16 w-16 bg-[var(--md-primary)]/10 rounded-full flex items-center justify-center mb-4">
+              <ShieldCheck className="h-8 w-8 text-[var(--md-primary)]" />
             </div>
             <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900 tracking-tight text-center">Secure Bank Details</h1>
             <p className="text-slate-600 text-sm mt-2 text-center">
@@ -45,7 +45,7 @@ export default function SubmitBankDetails() {
                   type="text"
                   id="myKad"
                   disabled={isVerified || isVerifying}
-                  className="block w-full pl-10 pr-3 py-3 bg-[#FFFBFE] border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#6750A4]/50 focus:border-[#6750A4]/50 transition-all disabled:opacity-50"
+                  className="block w-full pl-10 pr-3 py-3 bg-[var(--md-background)] border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)]/50 focus:border-[var(--md-primary)]/50 transition-all disabled:opacity-50"
                   placeholder="e.g. 900101-14-5555"
                   value={formData.myKad}
                   onChange={(e) => setFormData({...formData, myKad: e.target.value})}
@@ -63,7 +63,7 @@ export default function SubmitBankDetails() {
                 <select
                   id="bankName"
                   disabled={isVerified || isVerifying}
-                  className="block w-full pl-10 pr-10 py-3 bg-[#FFFBFE] border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#6750A4]/50 focus:border-[#6750A4]/50 appearance-none transition-all disabled:opacity-50"
+                  className="block w-full pl-10 pr-10 py-3 bg-[var(--md-background)] border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)]/50 focus:border-[var(--md-primary)]/50 appearance-none transition-all disabled:opacity-50"
                   value={formData.bankName}
                   onChange={(e) => setFormData({...formData, bankName: e.target.value})}
                   required
@@ -87,7 +87,7 @@ export default function SubmitBankDetails() {
                   type="text"
                   id="accountNumber"
                   disabled={isVerified || isVerifying}
-                  className="block w-full pl-10 pr-3 py-3 bg-[#FFFBFE] border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#6750A4]/50 focus:border-[#6750A4]/50 transition-all disabled:opacity-50"
+                  className="block w-full pl-10 pr-3 py-3 bg-[var(--md-background)] border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)]/50 focus:border-[var(--md-primary)]/50 transition-all disabled:opacity-50"
                   placeholder="Enter your account number"
                   value={formData.accountNumber}
                   onChange={(e) => setFormData({...formData, accountNumber: e.target.value})}
@@ -97,10 +97,10 @@ export default function SubmitBankDetails() {
             </div>
 
             {isVerified && (
-              <div className="bg-[#6750A4]/10 border border-[#6750A4]/20 rounded-2xl p-4 flex items-start space-x-3 mt-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <CheckCircle className="h-6 w-6 text-[#6750A4] shrink-0 mt-0.5" />
+              <div className="bg-[var(--md-primary)]/10 border border-[var(--md-primary)]/20 rounded-2xl p-4 flex items-start space-x-3 mt-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                <CheckCircle className="h-6 w-6 text-[var(--md-primary)] shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="text-sm font-semibold text-[#6750A4]">Identity Cross-Check Successful</h4>
+                  <h4 className="text-sm font-semibold text-[var(--md-primary)]">Identity Cross-Check Successful</h4>
                   <p className="text-xs text-slate-600 mt-1">
                     MyKAD matches the registered bank account holder. Your details are securely locked and verified.
                   </p>
@@ -112,7 +112,7 @@ export default function SubmitBankDetails() {
               <button
                 type="submit"
                 disabled={isVerifying}
-                className="w-full mt-6 bg-[#6750A4] hover:bg-[#6750A4]/90 text-white font-medium py-3.5 px-4 rounded-full shadow-sm transition-all transform active:scale-[0.98] flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                className="w-full mt-6 bg-[var(--md-primary)] hover:bg-[var(--md-primary)]/90 text-white font-medium py-3.5 px-4 rounded-full shadow-sm transition-all transform active:scale-[0.98] flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {isVerifying ? (
                   <>

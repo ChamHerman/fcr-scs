@@ -39,6 +39,7 @@ import { CreateObjection } from './pages/Compensation/ObjectionCreation';
 import { ObjectionReview } from './pages/Compensation/ObjectionReview';
 import { CompensationComparisonCreate } from './pages/Compensation/ComparisonCreation';
 import { CompensationComparisonList } from './pages/Compensation/ComparisonDashboard';
+import { Placeholder } from './pages/Placeholder';
 
 function App() {
   return (
@@ -51,34 +52,41 @@ function App() {
         </Route>
         <Route path="/login" element={<div>Login Page (Mock)</div>} />
         <Route path="/unauthorized" element={<div>Unauthorized Access. You do not have permission to view this page.</div>} />
-        {/* Case Management */}
-        <Route path="case" element={<CaseManagementDashboard />} />
-        <Route path="case/register" element={<CaseRegistration />} />
-        <Route path="case/details" element={<CaseView />} />
-        <Route path="case/assign" element={<CaseAssignment />} />
-        <Route path="case/valuation/create" element={<ValuationReportGenerator />} />
-        <Route path="case/valuation/review" element={<ValuationReportReview />} />
-        <Route path="case/valuation" element={<ValuationReportList />} />
-
-        {/* Compensation Management */}
-        <Route path="compensation/report" element={<CompensationReportList />} />
-        <Route path="compensation/report/create" element={<CompensationReportGenerator />} />
-        <Route path="compensation/report/review" element={<CompensationApproval />} />
-        <Route path="compensation/compare" element={<CompensationComparisonList />} />
-        <Route path="compensation/compare/create" element={<CompensationComparisonCreate />} />
-        <Route path="compensation/offer" element={<OfferLetterDashboard />} />
-        <Route path="compensation/offer/review" element={<OfferLetterDetail />} />
-        <Route path="compensation/objection" element={<ObjectionList />} />
-        <Route path="compensation/objection/create" element={<CreateObjection />} />
-        <Route path="compensation/objection/review" element={<ObjectionReview />} />
-
-
         {/* Admin Routes - Protected */}
         <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<CaseManagementDashboard />} />
             <Route path="land-acquisition" element={<CaseManagementDashboard />} />
             
+            {/* Case Management */}
+            <Route path="case" element={<CaseManagementDashboard />} />
+            <Route path="case/register" element={<CaseRegistration />} />
+            <Route path="case/details" element={<CaseView />} />
+            <Route path="case/assign" element={<CaseAssignment />} />
+            <Route path="case/valuation" element={<ValuationReportList />} />
+            <Route path="case/valuation/create" element={<ValuationReportGenerator />} />
+            <Route path="case/valuation/review" element={<ValuationReportReview />} />
+
+            {/* Compensation Management */}
+            <Route path="compensation" element={<CompensationReportList />} />
+            <Route path="compensation/report" element={<CompensationReportList />} />
+            <Route path="compensation/report/create" element={<CompensationReportGenerator />} />
+            <Route path="compensation/report/review" element={<CompensationApproval />} />
+            <Route path="compensation/compare" element={<CompensationComparisonList />} />
+            <Route path="compensation/compare/create" element={<CompensationComparisonCreate />} />
+            <Route path="compensation/offer" element={<OfferLetterDashboard />} />
+            <Route path="compensation/offer/review" element={<OfferLetterDetail />} />
+            <Route path="compensation/objection" element={<ObjectionList />} />
+            <Route path="compensation/objection/create" element={<CreateObjection />} />
+            <Route path="compensation/objection/review" element={<ObjectionReview />} />
+
+            {/* Placeholder Admin Routes */}
+            <Route path="valuers" element={<Placeholder title="Valuers Management" />} />
+            <Route path="forms" element={<Placeholder title="Forms & Templates" />} />
+            <Route path="reports" element={<Placeholder title="Analytics & Reports" />} />
+            <Route path="settings" element={<Placeholder title="System Settings" />} />
+            <Route path="users" element={<Placeholder title="User Management" />} />
+
             {/* Payment Routes */}
             <Route path="payments">
               <Route index element={<PaymentDashboard />} />

@@ -1,9 +1,9 @@
+import * as Lucide from "lucide-react";
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Send, X, File, Upload } from "lucide-react";
 import "../../style.css";
 import "./objection.css";
-import { Sidebar } from "../Shared";
 
 type CaseOption = {
   id: string;
@@ -98,12 +98,8 @@ export const CreateObjection: React.FC = () => {
 
   if (submitted) {
     return (
-      <div
-        className="flex min-h-screen"
-        style={{ background: "#f8f5fa", color: "#1c1b1f" }}
-      >
-        <Sidebar />
-        <main className="main blur-shape-bg">
+      <div>
+                <div className="main blur-shape-bg">
           <div className="objection-create">
             <div className="topbar" style={{ marginBottom: "20px" }}>
               <div className="topbar-left">
@@ -111,13 +107,13 @@ export const CreateObjection: React.FC = () => {
                 <div className="sub">Form N – Formal Objection</div>
               </div>
               <div className="topbar-right">
-                <span className="date-badge">📅 24 Jul 2026</span>
+                <span className="date-badge"><Lucide.Calendar size={16} className="inline" /> 24 Jul 2026</span>
                 <div className="avatar">AB</div>
               </div>
             </div>
             <div className="form-card">
               <div className="success-banner">
-                <span className="check-icon">✅</span>
+                <span className="check-icon"><Lucide.CheckCircle size={16} className="inline" /></span>
                 <div>
                   <strong>Objection submitted successfully!</strong>
                   <span style={{ marginLeft: "12px", fontWeight: 400 }}>
@@ -163,7 +159,7 @@ export const CreateObjection: React.FC = () => {
                   </button>
                   <button
                     className="btn-submit"
-                    onClick={() => navigate("/compensation/objection")}
+                    onClick={() => navigate('/admin/compensation/objection')}
                     style={{
                       padding: "10px 32px",
                       borderRadius: "var(--radius-full)",
@@ -183,19 +179,15 @@ export const CreateObjection: React.FC = () => {
               </div>
             </div>
           </div>
-        </main>
+        </div>
       </div>
     );
   }
 
   return (
-    <div
-      className="flex min-h-screen"
-      style={{ background: "#f8f5fa", color: "#1c1b1f" }}
-    >
-      <Sidebar />
-
-      <main className="main blur-shape-bg">
+    <div>
+      
+      <div className="main blur-shape-bg">
         <div className="objection-create">
           <div className="topbar" style={{ marginBottom: "20px" }}>
             <div className="topbar-left">
@@ -205,7 +197,7 @@ export const CreateObjection: React.FC = () => {
               </div>
             </div>
             <div className="topbar-right">
-              <span className="date-badge">📅 24 Jul 2026</span>
+              <span className="date-badge"><Lucide.Calendar size={16} className="inline" /> 24 Jul 2026</span>
               <div className="avatar">AB</div>
             </div>
           </div>
@@ -318,7 +310,7 @@ export const CreateObjection: React.FC = () => {
             <div className="actions">
               <button
                 className="btn-cancel"
-                onClick={() => navigate("/compensation/objection")}
+                onClick={() => navigate('/admin/compensation/objection')}
               >
                 Cancel
               </button>
@@ -347,7 +339,7 @@ export const CreateObjection: React.FC = () => {
             FCR-SCS · Objection Form · For Displaced Community Members
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 };

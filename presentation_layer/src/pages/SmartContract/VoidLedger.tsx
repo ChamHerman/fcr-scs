@@ -35,7 +35,7 @@ export const VoidLedger: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-md-background text-md-on-surface p-8 font-sans">
+    <div className="text-md-on-surface p-8 font-sans">
       <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-8">
         
         {/* Left Column: List */}
@@ -58,7 +58,7 @@ export const VoidLedger: React.FC = () => {
             <input 
               type="text" 
               placeholder="Search published TxHash or Case ID..." 
-              className="w-full bg-md-surface-container-low backdrop-blur-md border border-md-outline/30 rounded-2xl py-4 pl-12 pr-4 focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all text-md-on-surface placeholder-md-on-surface-variant shadow-sm"
+              className="bg-md-surface-container-low backdrop-blur-md border border-md-outline/30 rounded-2xl py-4 pl-12 pr-4 focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all text-md-on-surface placeholder-md-on-surface-variant shadow-sm"
             />
           </div>
 
@@ -77,7 +77,7 @@ export const VoidLedger: React.FC = () => {
                   <div>
                     <h3 className={`font-bold text-lg mb-1 ${selectedCase === c.id ? 'text-md-on-error' : 'text-md-on-surface'}`}>{c.id}</h3>
                     <div className={`flex items-center gap-3 text-sm ${selectedCase === c.id ? 'text-md-on-error' : 'text-md-on-surface-variant'}`}>
-                      <span className={`flex items-center gap-1 font-mono px-2 py-0.5 rounded ${selectedCase === c.id ? 'bg-md-on-error/10 text-md-on-error' : 'bg-md-background text-md-on-surface-variant'}`}>
+                      <span className={`flex items-center gap-1 font-mono px-2 py-0.5 rounded ${selectedCase === c.id ? 'bg-md-on-error/10 text-md-on-error' : 'text-md-on-surface-variant'}`}>
                         <Lock className="w-3 h-3" />
                         {c.txHash}
                       </span>
@@ -121,7 +121,7 @@ export const VoidLedger: React.FC = () => {
                     value={justification}
                     onChange={(e) => setJustification(e.target.value)}
                     placeholder="Enter mandatory legal or technical reason for voiding this record..."
-                    className="w-full h-32 bg-md-background border border-md-outline/30 rounded-xl p-4 focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all text-md-on-surface placeholder-md-on-surface-variant resize-none shadow-sm"
+                    className="h-32 border border-md-outline/30 rounded-xl p-4 focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all text-md-on-surface placeholder-md-on-surface-variant resize-none shadow-sm"
                   ></textarea>
                 </div>
 
@@ -143,7 +143,7 @@ export const VoidLedger: React.FC = () => {
                 <button 
                   onClick={confirmVoid}
                   disabled={isVoiding || !justification.trim()}
-                  className="w-full py-4 bg-md-primary hover:opacity-90 disabled:bg-md-surface-container-low disabled:text-md-on-surface-variant disabled:opacity-50 text-md-on-primary rounded-full font-bold shadow-sm transition-all flex justify-center items-center gap-2 active:scale-95 ease-md-bouncy"
+                  className="py-4 bg-md-primary hover:opacity-90 disabled:bg-md-surface-container-low disabled:text-md-on-surface-variant disabled:opacity-50 text-md-on-primary rounded-full font-bold shadow-sm transition-all flex justify-center items-center gap-2 active:scale-95 ease-md-bouncy"
                 >
                   {isVoiding ? (
                     <>

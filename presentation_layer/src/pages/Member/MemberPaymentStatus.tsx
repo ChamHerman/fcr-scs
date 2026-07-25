@@ -12,7 +12,7 @@ export default function MemberPaymentStatus() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#FFFBFE] p-4 sm:p-6 font-sans text-slate-900 flex items-center justify-center">
+    <div className="bg-[var(--md-background)] p-4 sm:p-6 font-sans text-slate-900 flex items-center justify-center">
       <div className="max-w-2xl w-full">
         <header className="mb-8 mt-4 sm:mt-8 text-center sm:text-left">
           <h1 className="text-3xl sm:text-4xl font-bold text-slate-900">
@@ -21,14 +21,14 @@ export default function MemberPaymentStatus() {
           <p className="text-slate-600 mt-2">Track the real-time progress of your compensation.</p>
         </header>
 
-        <div className="bg-[#F3EDF7] rounded-[2rem] p-6 sm:p-8 shadow-sm relative overflow-hidden">
+        <div className="bg-[var(--md-surface-container)] rounded-[2rem] p-6 sm:p-8 shadow-sm relative overflow-hidden">
           <div className="relative z-10">
             <div className="flex items-center justify-between mb-8">
               <h2 className="text-xl font-semibold text-slate-900 flex items-center gap-2">
-                <Clock className="h-5 w-5 text-[#6750A4]" />
+                <Clock className="h-5 w-5 text-[var(--md-primary)]" />
                 Live Tracker
               </h2>
-              <span className="px-3 py-1 bg-[#6750A4]/10 text-[#6750A4] rounded-full text-xs font-medium animate-pulse">
+              <span className="px-3 py-1 bg-[var(--md-primary)]/10 text-[var(--md-primary)] rounded-full text-xs font-medium animate-pulse">
                 Processing
               </span>
             </div>
@@ -40,7 +40,7 @@ export default function MemberPaymentStatus() {
                 const isCurrent = index === currentStep;
                 const isPending = index > currentStep;
 
-                let iconColor = isCompleted ? 'bg-[#6750A4] text-white' : isCurrent ? 'bg-[#6750A4] text-white shadow-sm' : 'bg-slate-200 text-slate-500';
+                let iconColor = isCompleted ? 'bg-[var(--md-primary)] text-white' : isCurrent ? 'bg-[var(--md-primary)] text-white shadow-sm' : 'bg-slate-200 text-slate-500';
                 
                 return (
                   <div key={index} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group">
@@ -48,9 +48,9 @@ export default function MemberPaymentStatus() {
                       {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : <Icon className="w-4 h-4" />}
                     </div>
                     
-                    <div className={`w-[calc(100%-3rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-2xl transition-all duration-300 ${isCurrent ? 'bg-[#FFFBFE] shadow-sm border border-slate-200' : 'bg-[#FFFBFE]/50'} ${isPending ? 'opacity-60' : 'opacity-100'}`}>
+                    <div className={`w-[calc(100%-3rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-2xl transition-all duration-300 ${isCurrent ? 'bg-[var(--md-background)] shadow-sm border border-slate-200' : 'bg-[var(--md-background)]/50'} ${isPending ? 'opacity-60' : 'opacity-100'}`}>
                       <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-1 gap-2">
-                        <h3 className={`font-semibold ${isCurrent ? 'text-[#6750A4]' : 'text-slate-700'}`}>{step.title}</h3>
+                        <h3 className={`font-semibold ${isCurrent ? 'text-[var(--md-primary)]' : 'text-slate-700'}`}>{step.title}</h3>
                         <span className="text-xs text-slate-500 whitespace-nowrap">{step.date}</span>
                       </div>
                       <p className="text-sm text-slate-600" dangerouslySetInnerHTML={{ __html: step.description.replace('**5555**', '<span class="text-slate-900 font-medium">5555</span>') }}></p>
@@ -63,9 +63,9 @@ export default function MemberPaymentStatus() {
         </div>
 
         <div className="mt-6 flex flex-col sm:flex-row gap-4">
-          <button className="flex-1 bg-[#F3EDF7] hover:bg-[#E8DEF8] text-slate-900 py-4 px-6 rounded-3xl flex items-center justify-center gap-3 transition-all group shadow-sm hover:-translate-y-0.5">
-            <div className="p-2 bg-[#FFFBFE] rounded-full group-hover:bg-[#F3EDF7] transition-colors">
-              <Download className="w-5 h-5 text-[#6750A4]" />
+          <button className="flex-1 bg-[var(--md-surface-container)] hover:bg-[var(--md-secondary-container)] text-slate-900 py-4 px-6 rounded-3xl flex items-center justify-center gap-3 transition-all group shadow-sm hover:-translate-y-0.5">
+            <div className="p-2 bg-[var(--md-background)] rounded-full group-hover:bg-[var(--md-surface-container)] transition-colors">
+              <Download className="w-5 h-5 text-[var(--md-primary)]" />
             </div>
             <div className="text-left">
               <div className="font-semibold text-sm">Download Receipt</div>
@@ -74,7 +74,7 @@ export default function MemberPaymentStatus() {
           </button>
           
           <button className="flex-1 bg-[#FFD8E4] hover:bg-[#FFB4AB] text-[#31111D] py-4 px-6 rounded-3xl flex items-center justify-center gap-3 transition-all group shadow-sm hover:-translate-y-0.5">
-            <div className="p-2 bg-[#FFFBFE]/50 rounded-full group-hover:bg-[#FFFBFE]/80 transition-colors">
+            <div className="p-2 bg-[var(--md-background)]/50 rounded-full group-hover:bg-[var(--md-background)]/80 transition-colors">
               <ShieldAlert className="w-5 h-5 text-[#B3261E]" />
             </div>
             <div className="text-left">

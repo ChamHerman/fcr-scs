@@ -1,9 +1,9 @@
+import * as Lucide from "lucide-react";
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, GitCompare } from "lucide-react";
 import "../../style.css";
 import "./comparison.css";
-import { Sidebar } from "../Shared";
 
 type SavedComparison = {
   id: string;
@@ -41,23 +41,19 @@ export const CompensationComparisonList: React.FC = () => {
   const [savedComparisons] = useState<SavedComparison[]>(mockSavedComparisons);
 
   const handleNewComparison = () => {
-    navigate('/compensation/compare/create');
+    navigate('/admin/compensation/compare/create');
   };
 
   const handleLoadComparison = (comparison: SavedComparison) => {
-    navigate('/compensation/compare/create', {
+    navigate('/admin/compensation/compare/create', {
       state: { case1Id: comparison.case1Id, case2Id: comparison.case2Id, viewMode: true, comparisonId: comparison.id },
     });
   };
 
   return (
-    <div
-      className="flex min-h-screen"
-      style={{ background: "#f8f5fa", color: "#1c1b1f" }}
-    >
-      <Sidebar />
-
-      <main className="main blur-shape-bg">
+    <div>
+      
+      <div className="main blur-shape-bg">
         <div className="comparison-dashboard">
           <div className="topbar" style={{ marginBottom: "20px" }}>
             <div className="topbar-left">
@@ -67,8 +63,8 @@ export const CompensationComparisonList: React.FC = () => {
               </div>
             </div>
             <div className="topbar-right">
-              <span className="date-badge">📅 24 Jul 2026</span>
-              <div className="avatar">AO</div>
+              <span className="date-badge"><Lucide.Calendar size={16} className="inline" /> 24 Jul 2026</span>
+              <div className="avatar"><Lucide.User size={16} /></div>
             </div>
           </div>
 
@@ -143,7 +139,7 @@ export const CompensationComparisonList: React.FC = () => {
             FCR-SCS · Compensation Comparison · For Government Officers
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 };
