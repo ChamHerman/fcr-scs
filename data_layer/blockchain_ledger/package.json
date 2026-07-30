@@ -1,0 +1,28 @@
+{
+  "name": "blockchain_ledger",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:local": "hardhat run scripts/deployLocal.ts --network localhost",
+    "deploy:sepolia": "hardhat run scripts/deploySepolia.ts --network sepolia",
+    "node": "hardhat node"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@types/chai": "^4.3.20",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^26.1.2",
+    "dotenv": "^17.4.2",
+    "ethers": "^6.17.0",
+    "hardhat": "^2.29.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3"
+  }
+}
