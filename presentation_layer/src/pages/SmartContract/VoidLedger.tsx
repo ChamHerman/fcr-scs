@@ -1,38 +1,103 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Ban, 
   Search,
   AlertTriangle,
   History,
   Info,
-  Lock
+  Lock,
+  Wallet
 } from 'lucide-react';
+import { blockchainApi } from '../../services/blockchainApi';
 
 export const VoidLedger: React.FC = () => {
   const [selectedCase, setSelectedCase] = useState<string | null>(null);
   const [justification, setJustification] = useState('');
   const [isVoiding, setIsVoiding] = useState(false);
+  const [walletAddress, setWalletAddress] = useState('');
+  const [records, setRecords] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [successTx, setSuccessTx] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const publishedCases = [
-    { id: 'CASE-2026-802', txHash: '0x1a2b...3c4d', date: 'Oct 15, 2026' },
-    { id: 'CASE-2026-790', txHash: '0x9f8e...7d6c', date: 'Oct 12, 2026' },
-    { id: 'CASE-2026-754', txHash: '0x4b5a...6f7e', date: 'Oct 05, 2026' },
-  ];
+  const loadPublishedRecords = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await blockchainApi.getRecords('Published');
+      setRecords(res.records || []);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load published records');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPublishedRecords();
+  }, []);
+
+  const connectWallet = async () => {
+    if ((window as any).ethereum) {
+      try {
+        const accounts = await (window as any).ethereum.request({ method: 'eth_requestAccounts' });
+        if (accounts && accounts.length > 0) {
+          setWalletAddress(accounts[0]);
+          setError('');
+        }
+      } catch (err: any) {
+        setError(err.message || 'Failed to connect wallet');
+      }
+    } else {
+      setError('MetaMask extension is required to void records');
+    }
+  };
 
   const handleVoidClick = (id: string) => {
     setSelectedCase(id);
     setJustification('');
+    setError('');
+    setSuccessTx('');
   };
 
-  const confirmVoid = () => {
-    if (!justification.trim()) return;
+  const confirmVoid = async () => {
+    if (!selectedCase) return;
+    if (!justification.trim()) {
+      setError('Void reason is required');
+      return;
+    }
+    if (!walletAddress) {
+      setError('Please connect MetaMask wallet first');
+      return;
+    }
+
     setIsVoiding(true);
-    setTimeout(() => {
+    setError('');
+    try {
+      const res = await blockchainApi.voidRecord({
+        caseId: selectedCase,
+        voidReason: justification.trim(),
+        walletAddress
+      });
+      setSuccessTx(res.transactionHash);
+      setTimeout(() => {
+        setIsVoiding(false);
+        setSelectedCase(null);
+        setJustification('');
+        loadPublishedRecords();
+      }, 2000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to void record');
       setIsVoiding(false);
-      setSelectedCase(null);
-      setJustification('');
-    }, 2000);
+    }
   };
+
+  const filteredRecords = records.filter(c => 
+    !searchQuery || c.caseId.toLowerCase().includes(searchQuery.toLowerCase()) || (c.transactionHash && c.transactionHash.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
+  const selectedRecordObj = records.find(r => r.caseId === selectedCase);
 
   return (
     <div className="text-md-on-surface p-8 font-sans">
@@ -42,54 +107,73 @@ export const VoidLedger: React.FC = () => {
         <div className="lg:w-1/2 space-y-6">
           <div className="bg-md-surface-container backdrop-blur-md border border-md-outline/20 p-6 rounded-3xl relative overflow-hidden shadow-sm">
             <div className="absolute top-0 right-0 w-64 h-64 bg-md-error rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
-            <div className="relative z-10">
-              <h1 className="text-2xl font-bold text-md-on-surface flex items-center gap-3 mb-2">
-                <Ban className="w-7 h-7 text-md-on-error" />
-                Void Published Record
-              </h1>
-              <p className="text-md-on-surface-variant text-sm">
-                Select a previously published record to initiate a voiding transaction on the ledger.
-              </p>
+            <div className="relative z-10 flex justify-between items-start">
+              <div>
+                <h1 className="text-2xl font-bold text-md-on-surface flex items-center gap-3 mb-2">
+                  <Ban className="w-7 h-7 text-md-on-error" />
+                  Void Published Record
+                </h1>
+                <p className="text-md-on-surface-variant text-sm">
+                  Select a previously published record to initiate a voiding transaction on the ledger.
+                </p>
+              </div>
+              <button 
+                onClick={connectWallet}
+                className="flex items-center gap-1.5 px-4 py-2 bg-md-primary text-md-on-primary rounded-full text-xs font-medium shrink-0"
+              >
+                <Wallet className="w-3.5 h-3.5" />
+                {walletAddress ? `${walletAddress.substring(0, 6)}...` : 'Connect'}
+              </button>
             </div>
           </div>
+
+          {loading && <p className="text-gray-500 my-2">Loading...</p>}
+          {error && <p className="text-red-500 font-medium my-2">{error}</p>}
+          {successTx && <p className="text-green-600 font-medium my-2">Voided. Tx: {successTx}</p>}
 
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-md-on-surface-variant" />
             <input 
               type="text" 
               placeholder="Search published TxHash or Case ID..." 
-              className="bg-md-surface-container-low backdrop-blur-md border border-md-outline/30 rounded-2xl py-4 pl-12 pr-4 focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all text-md-on-surface placeholder-md-on-surface-variant shadow-sm"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-md-surface-container-low backdrop-blur-md border border-md-outline/30 rounded-2xl py-4 pl-12 pr-4 focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all text-md-on-surface placeholder-md-on-surface-variant shadow-sm w-full"
             />
           </div>
 
           <div className="space-y-3">
-            {publishedCases.map((c) => (
-              <div 
-                key={c.id}
-                onClick={() => handleVoidClick(c.id)}
-                className={`p-5 rounded-2xl border transition-all cursor-pointer active:scale-[0.98] ease-md-bouncy shadow-sm ${
-                  selectedCase === c.id 
-                    ? 'bg-md-error border-md-error' 
-                    : 'bg-md-surface-container-low border-md-outline/20 hover:bg-md-surface-container'
-                }`}
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className={`font-bold text-lg mb-1 ${selectedCase === c.id ? 'text-md-on-error' : 'text-md-on-surface'}`}>{c.id}</h3>
-                    <div className={`flex items-center gap-3 text-sm ${selectedCase === c.id ? 'text-md-on-error' : 'text-md-on-surface-variant'}`}>
-                      <span className={`flex items-center gap-1 font-mono px-2 py-0.5 rounded ${selectedCase === c.id ? 'bg-md-on-error/10 text-md-on-error' : 'text-md-on-surface-variant'}`}>
-                        <Lock className="w-3 h-3" />
-                        {c.txHash}
-                      </span>
+            {filteredRecords.length === 0 ? (
+              <p className="text-gray-500 p-4 border border-dashed rounded-2xl text-center">No published records available to void.</p>
+            ) : (
+              filteredRecords.map((c) => (
+                <div 
+                  key={c.caseId}
+                  onClick={() => handleVoidClick(c.caseId)}
+                  className={`p-5 rounded-2xl border transition-all cursor-pointer active:scale-[0.98] ease-md-bouncy shadow-sm ${
+                    selectedCase === c.caseId 
+                      ? 'bg-md-error border-md-error' 
+                      : 'bg-md-surface-container-low border-md-outline/20 hover:bg-md-surface-container'
+                  }`}
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className={`font-bold text-lg mb-1 ${selectedCase === c.caseId ? 'text-md-on-error' : 'text-md-on-surface'}`}>{c.caseId}</h3>
+                      <div className={`flex items-center gap-3 text-sm ${selectedCase === c.caseId ? 'text-md-on-error' : 'text-md-on-surface-variant'}`}>
+                        <span className={`flex items-center gap-1 font-mono px-2 py-0.5 rounded ${selectedCase === c.caseId ? 'bg-md-on-error/10 text-md-on-error' : 'text-md-on-surface-variant'}`}>
+                          <Lock className="w-3 h-3" />
+                          {c.transactionHash ? `${c.transactionHash.substring(0, 12)}...` : 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className={`flex items-center text-sm ${selectedCase === c.caseId ? 'text-md-on-error' : 'text-md-on-surface-variant'}`}>
+                      <History className="w-4 h-4 mr-1.5" />
+                      {new Date(c.createdAt).toLocaleDateString()}
                     </div>
                   </div>
-                  <div className={`flex items-center text-sm ${selectedCase === c.id ? 'text-md-on-error' : 'text-md-on-surface-variant'}`}>
-                    <History className="w-4 h-4 mr-1.5" />
-                    {c.date}
-                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -121,7 +205,7 @@ export const VoidLedger: React.FC = () => {
                     value={justification}
                     onChange={(e) => setJustification(e.target.value)}
                     placeholder="Enter mandatory legal or technical reason for voiding this record..."
-                    className="h-32 border border-md-outline/30 rounded-xl p-4 focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all text-md-on-surface placeholder-md-on-surface-variant resize-none shadow-sm"
+                    className="h-32 border border-md-outline/30 rounded-xl p-4 focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all text-md-on-surface placeholder-md-on-surface-variant resize-none shadow-sm w-full"
                   ></textarea>
                 </div>
 
@@ -132,18 +216,14 @@ export const VoidLedger: React.FC = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-md-on-surface-variant">Target TxHash</span>
-                    <span className="text-md-on-surface font-mono">0x1a2b...3c4d</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-md-on-surface-variant">Est. Gas Fee</span>
-                    <span className="text-md-on-surface">0.0012 ETH</span>
+                    <span className="text-md-on-surface font-mono">{selectedRecordObj?.transactionHash ? `${selectedRecordObj.transactionHash.substring(0, 14)}...` : 'N/A'}</span>
                   </div>
                 </div>
 
                 <button 
                   onClick={confirmVoid}
                   disabled={isVoiding || !justification.trim()}
-                  className="py-4 bg-md-primary hover:opacity-90 disabled:bg-md-surface-container-low disabled:text-md-on-surface-variant disabled:opacity-50 text-md-on-primary rounded-full font-bold shadow-sm transition-all flex justify-center items-center gap-2 active:scale-95 ease-md-bouncy"
+                  className="w-full py-4 bg-md-primary hover:opacity-90 disabled:bg-md-surface-container-low disabled:text-md-on-surface-variant disabled:opacity-50 text-md-on-primary rounded-full font-bold shadow-sm transition-all flex justify-center items-center gap-2 active:scale-95 ease-md-bouncy"
                 >
                   {isVoiding ? (
                     <>
@@ -179,3 +259,4 @@ export const VoidLedger: React.FC = () => {
     </div>
   );
 };
+

@@ -1,12 +1,13 @@
 import React, { useState, useRef } from 'react';
-import { UploadCloud, CheckCircle, Shield, FileText, Search, Fingerprint, Lock, RefreshCw, Check } from 'lucide-react';
+import { UploadCloud, CheckCircle, Shield, FileText, Search, Fingerprint, Lock, RefreshCw, XCircle } from 'lucide-react';
+import { blockchainApi } from '../../services/blockchainApi';
 
 export default function VerifyAuditTrail() {
   const [dragActive, setDragActive] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [verifying, setVerifying] = useState(false);
-  const [verificationResult, setVerificationResult] = useState<'idle' | 'success' | 'failed'>('idle');
-  const [verificationSteps, setVerificationSteps] = useState([false, false, false]);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState<any>(null);
   
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -20,19 +21,25 @@ export default function VerifyAuditTrail() {
     }
   };
 
-  const simulateVerification = () => {
-    setVerifying(true);
-    setVerificationResult('idle');
-    setVerificationSteps([false, false, false]);
+  const processVerification = async (selectedFile: File) => {
+    if (!selectedFile.name.toLowerCase().endsWith('.pdf')) {
+      setError('Only PDF files are accepted for verification.');
+      setResult(null);
+      return;
+    }
 
-    setTimeout(() => setVerificationSteps(prev => [true, prev[1], prev[2]]), 1000);
-    setTimeout(() => setVerificationSteps(prev => [prev[0], true, prev[2]]), 2500);
-    setTimeout(() => setVerificationSteps(prev => [prev[0], prev[1], true]), 4000);
-    
-    setTimeout(() => {
+    setVerifying(true);
+    setError('');
+    setResult(null);
+
+    try {
+      const res = await blockchainApi.verify(selectedFile);
+      setResult(res);
+    } catch (err: any) {
+      setError(err.message || 'Verification failed');
+    } finally {
       setVerifying(false);
-      setVerificationResult('success');
-    }, 4500);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -40,16 +47,18 @@ export default function VerifyAuditTrail() {
     e.stopPropagation();
     setDragActive(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setFile(e.dataTransfer.files[0]);
-      simulateVerification();
+      const droppedFile = e.dataTransfer.files[0];
+      setFile(droppedFile);
+      processVerification(droppedFile);
     }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     e.preventDefault();
     if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
-      simulateVerification();
+      const chosenFile = e.target.files[0];
+      setFile(chosenFile);
+      processVerification(chosenFile);
     }
   };
 
@@ -109,7 +118,7 @@ export default function VerifyAuditTrail() {
                   
                   {!verifying && (
                     <button 
-                      onClick={(e) => { e.stopPropagation(); setFile(null); setVerificationResult('idle'); }}
+                      onClick={(e) => { e.stopPropagation(); setFile(null); setResult(null); setError(''); }}
                       className="text-xs px-4 py-2 bg-[var(--md-background)] hover:bg-slate-50 rounded-full text-[var(--md-primary)] font-medium transition-colors shadow-sm"
                     >
                       Verify another file
@@ -122,74 +131,62 @@ export default function VerifyAuditTrail() {
 
           {/* Verification Status */}
           <div className="bg-[var(--md-surface-container)] rounded-[2rem] p-6 sm:p-8 h-full min-h-[350px] flex flex-col justify-center shadow-sm">
-            {verificationResult === 'idle' && !verifying && (
+            {!result && !verifying && !error && (
               <div className="text-center opacity-70">
                 <Search className="w-12 h-12 text-[var(--md-primary)] mx-auto mb-4" />
-                <p className="text-slate-600 text-sm max-w-[200px] mx-auto">Upload a document to begin the secure verification process.</p>
+                <p className="text-slate-600 text-sm max-w-[200px] mx-auto">Upload a PDF document to begin the live blockchain verification process.</p>
               </div>
             )}
 
             {verifying && (
-              <div className="space-y-6">
-                <h3 className="text-lg font-semibold text-slate-900 mb-6 flex items-center gap-2">
-                  <RefreshCw className="w-5 h-5 text-[var(--md-primary)] animate-spin" />
-                  Processing Document
-                </h3>
-                
-                <div className="space-y-5">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${verificationSteps[0] ? 'bg-[var(--md-primary)] text-white' : 'bg-slate-200 text-slate-500'}`}>
-                      {verificationSteps[0] ? <Check className="w-4 h-4" /> : '1'}
-                    </div>
-                    <div className="flex-1">
-                      <p className={`text-sm font-medium ${verificationSteps[0] ? 'text-slate-900' : 'text-slate-500'}`}>Extracting Document Hash</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-4">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${verificationSteps[1] ? 'bg-[var(--md-primary)] text-white' : 'bg-slate-200 text-slate-500'}`}>
-                      {verificationSteps[1] ? <Check className="w-4 h-4" /> : '2'}
-                    </div>
-                    <div className="flex-1">
-                      <p className={`text-sm font-medium ${verificationSteps[1] ? 'text-slate-900' : 'text-slate-500'}`}>Querying Blockchain Ledger</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-4">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${verificationSteps[2] ? 'bg-[var(--md-primary)] text-white' : 'bg-slate-200 text-slate-500'}`}>
-                      {verificationSteps[2] ? <Check className="w-4 h-4" /> : '3'}
-                    </div>
-                    <div className="flex-1">
-                      <p className={`text-sm font-medium ${verificationSteps[2] ? 'text-slate-900' : 'text-slate-500'}`}>Verifying Signatures</p>
-                    </div>
-                  </div>
-                </div>
+              <div className="text-center space-y-4">
+                <RefreshCw className="w-10 h-10 text-[var(--md-primary)] animate-spin mx-auto" />
+                <p className="text-slate-800 font-medium">Hashing PDF & Querying Blockchain...</p>
               </div>
             )}
 
-            {verificationResult === 'success' && (
-              <div className="animate-in fade-in zoom-in duration-500 text-center">
-                <div className="w-20 h-20 bg-[var(--md-background)] rounded-full flex items-center justify-center mx-auto mb-6 relative shadow-sm">
-                  <CheckCircle className="w-10 h-10 text-[var(--md-primary)] relative z-10" />
+            {error && (
+              <div className="text-center space-y-3">
+                <XCircle className="w-12 h-12 text-red-500 mx-auto" />
+                <p className="text-red-500 font-bold">{error}</p>
+              </div>
+            )}
+
+            {result && (
+              <div className="animate-in fade-in zoom-in duration-500 text-center space-y-4">
+                <div className="w-16 h-16 bg-[var(--md-background)] rounded-full flex items-center justify-center mx-auto shadow-sm">
+                  {result.verified ? (
+                    <CheckCircle className="w-10 h-10 text-green-600" />
+                  ) : (
+                    <XCircle className="w-10 h-10 text-red-500" />
+                  )}
                 </div>
-                <h3 className="text-2xl font-bold text-[var(--md-primary)] mb-2">Authentic Document</h3>
-                <p className="text-slate-600 text-sm mb-6">
-                  This certificate has been cryptographically verified against the official audit trail.
+                
+                <h3 className={`text-2xl font-bold ${result.verified ? 'text-green-600' : 'text-red-500'}`}>
+                  {result.verified ? 'Verified Document' : 'Verification Unsuccessful'}
+                </h3>
+                
+                <p className={`text-sm font-medium ${result.verified ? 'text-green-600' : 'text-red-500'}`}>
+                  {result.message}
                 </p>
                 
-                <div className="bg-[var(--md-background)] rounded-2xl p-4 text-left shadow-sm space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-500 flex items-center gap-2">
-                      <Fingerprint className="w-3 h-3" /> Hash ID
-                    </span>
-                    <span className="text-xs font-mono text-slate-700">0x8f...4a2b</span>
+                <div className="bg-[var(--md-background)] rounded-2xl p-4 text-left shadow-sm space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Status</span>
+                    <span className="font-semibold text-slate-800">{result.status}</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-500 flex items-center gap-2">
-                      <Lock className="w-3 h-3" /> Issued By
-                    </span>
-                    <span className="text-xs text-slate-700">Gov Trust Authority</span>
-                  </div>
+                  {result.timestamp && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Published Timestamp</span>
+                      <span className="font-mono text-slate-800">{new Date(result.timestamp * 1000).toLocaleString()}</span>
+                    </div>
+                  )}
+                  {result.voidReason && (
+                    <div className="flex justify-between">
+                      <span className="text-red-500 font-medium">Void Reason</span>
+                      <span className="text-red-600">{result.voidReason}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -200,3 +197,4 @@ export default function VerifyAuditTrail() {
     </div>
   );
 }
+

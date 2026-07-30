@@ -1,23 +1,41 @@
 import React, { useState } from 'react';
-import { CheckCircle, ShieldCheck, CreditCard, User, AlertCircle, Building, Loader2 } from 'lucide-react';
+import { CheckCircle, ShieldCheck, CreditCard, User, AlertCircle, Building, Loader2, Phone, Hash } from 'lucide-react';
+import { paymentApi } from '../../services/paymentApi';
 
 export default function SubmitBankDetails() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
+  const [error, setError] = useState('');
   
   const [formData, setFormData] = useState({
-    myKad: '',
-    bankName: '',
-    accountNumber: '',
+    caseId: 'CASE-001',
+    myKad: '900101-14-5555',
+    bankName: 'Maybank',
+    accountNumber: '112233445566',
+    accountHolderName: 'Ahmad bin Abdullah',
+    phoneNumber: '+60123456789',
   });
 
-  const handleVerify = (e: React.FormEvent) => {
+  const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsVerifying(true);
-    setTimeout(() => {
-      setIsVerifying(false);
+    setError('');
+
+    try {
+      await paymentApi.submitBankDetails({
+        caseId: formData.caseId.trim(),
+        bankName: formData.bankName,
+        accountNumber: formData.accountNumber.trim(),
+        accountHolderName: formData.accountHolderName.trim(),
+        phoneNumber: formData.phoneNumber.trim(),
+        myKadNumber: formData.myKad.trim(),
+      });
       setIsVerified(true);
-    }, 2000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to submit bank details');
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   return (
@@ -34,8 +52,46 @@ export default function SubmitBankDetails() {
             </p>
           </div>
 
-          <form onSubmit={handleVerify} className="space-y-5">
-            <div className="space-y-1.5">
+          {error && <p className="text-red-500 text-sm font-medium mb-4 text-center">{error}</p>}
+
+          <form onSubmit={handleVerify} className="space-y-4">
+            <div className="space-y-1">
+              <label htmlFor="caseId" className="block text-sm font-medium text-slate-700">Case ID</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Hash className="h-5 w-5 text-slate-400" />
+                </div>
+                <input
+                  type="text"
+                  id="caseId"
+                  disabled={isVerified || isVerifying}
+                  className="block w-full pl-10 pr-3 py-2.5 bg-[var(--md-background)] border border-slate-200 rounded-2xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)]/50 transition-all disabled:opacity-50"
+                  value={formData.caseId}
+                  onChange={(e) => setFormData({...formData, caseId: e.target.value})}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label htmlFor="accountHolderName" className="block text-sm font-medium text-slate-700">Full Name (as in Bank)</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <User className="h-5 w-5 text-slate-400" />
+                </div>
+                <input
+                  type="text"
+                  id="accountHolderName"
+                  disabled={isVerified || isVerifying}
+                  className="block w-full pl-10 pr-3 py-2.5 bg-[var(--md-background)] border border-slate-200 rounded-2xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)]/50 transition-all disabled:opacity-50"
+                  value={formData.accountHolderName}
+                  onChange={(e) => setFormData({...formData, accountHolderName: e.target.value})}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
               <label htmlFor="myKad" className="block text-sm font-medium text-slate-700">MyKAD Number</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -45,8 +101,7 @@ export default function SubmitBankDetails() {
                   type="text"
                   id="myKad"
                   disabled={isVerified || isVerifying}
-                  className="block w-full pl-10 pr-3 py-3 bg-[var(--md-background)] border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)]/50 focus:border-[var(--md-primary)]/50 transition-all disabled:opacity-50"
-                  placeholder="e.g. 900101-14-5555"
+                  className="block w-full pl-10 pr-3 py-2.5 bg-[var(--md-background)] border border-slate-200 rounded-2xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)]/50 transition-all disabled:opacity-50"
                   value={formData.myKad}
                   onChange={(e) => setFormData({...formData, myKad: e.target.value})}
                   required
@@ -54,7 +109,7 @@ export default function SubmitBankDetails() {
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <label htmlFor="bankName" className="block text-sm font-medium text-slate-700">Bank Name</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -63,21 +118,20 @@ export default function SubmitBankDetails() {
                 <select
                   id="bankName"
                   disabled={isVerified || isVerifying}
-                  className="block w-full pl-10 pr-10 py-3 bg-[var(--md-background)] border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)]/50 focus:border-[var(--md-primary)]/50 appearance-none transition-all disabled:opacity-50"
+                  className="block w-full pl-10 pr-10 py-2.5 bg-[var(--md-background)] border border-slate-200 rounded-2xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)]/50 transition-all disabled:opacity-50"
                   value={formData.bankName}
                   onChange={(e) => setFormData({...formData, bankName: e.target.value})}
                   required
                 >
-                  <option value="" disabled>Select a bank</option>
-                  <option value="maybank">Maybank</option>
-                  <option value="cimb">CIMB Bank</option>
-                  <option value="publicbank">Public Bank</option>
-                  <option value="rhb">RHB Bank</option>
+                  <option value="Maybank">Maybank</option>
+                  <option value="CIMB Bank">CIMB Bank</option>
+                  <option value="Public Bank">Public Bank</option>
+                  <option value="RHB Bank">RHB Bank</option>
                 </select>
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <label htmlFor="accountNumber" className="block text-sm font-medium text-slate-700">Account Number</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -87,8 +141,7 @@ export default function SubmitBankDetails() {
                   type="text"
                   id="accountNumber"
                   disabled={isVerified || isVerifying}
-                  className="block w-full pl-10 pr-3 py-3 bg-[var(--md-background)] border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)]/50 focus:border-[var(--md-primary)]/50 transition-all disabled:opacity-50"
-                  placeholder="Enter your account number"
+                  className="block w-full pl-10 pr-3 py-2.5 bg-[var(--md-background)] border border-slate-200 rounded-2xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)]/50 transition-all disabled:opacity-50"
                   value={formData.accountNumber}
                   onChange={(e) => setFormData({...formData, accountNumber: e.target.value})}
                   required
@@ -96,13 +149,31 @@ export default function SubmitBankDetails() {
               </div>
             </div>
 
+            <div className="space-y-1">
+              <label htmlFor="phoneNumber" className="block text-sm font-medium text-slate-700">Phone Number</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Phone className="h-5 w-5 text-slate-400" />
+                </div>
+                <input
+                  type="text"
+                  id="phoneNumber"
+                  disabled={isVerified || isVerifying}
+                  className="block w-full pl-10 pr-3 py-2.5 bg-[var(--md-background)] border border-slate-200 rounded-2xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--md-primary)]/50 transition-all disabled:opacity-50"
+                  value={formData.phoneNumber}
+                  onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})}
+                  required
+                />
+              </div>
+            </div>
+
             {isVerified && (
-              <div className="bg-[var(--md-primary)]/10 border border-[var(--md-primary)]/20 rounded-2xl p-4 flex items-start space-x-3 mt-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <CheckCircle className="h-6 w-6 text-[var(--md-primary)] shrink-0 mt-0.5" />
+              <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex items-start space-x-3 mt-6">
+                <CheckCircle className="h-6 w-6 text-green-600 shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="text-sm font-semibold text-[var(--md-primary)]">Identity Cross-Check Successful</h4>
-                  <p className="text-xs text-slate-600 mt-1">
-                    MyKAD matches the registered bank account holder. Your details are securely locked and verified.
+                  <h4 className="text-sm font-semibold text-green-800">Bank Details Submitted Successfully</h4>
+                  <p className="text-xs text-green-700 mt-1">
+                    Your account details have been recorded and sent for transfer verification.
                   </p>
                 </div>
               </div>
@@ -127,14 +198,10 @@ export default function SubmitBankDetails() {
                 )}
               </button>
             )}
-
-            <div className="mt-6 flex items-center justify-center space-x-2 text-xs text-slate-500">
-              <AlertCircle className="h-4 w-4" />
-              <span>Bank-grade 256-bit encryption</span>
-            </div>
           </form>
         </div>
       </div>
     </div>
   );
 }
+
