@@ -1,18 +1,41 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { 
   Send, Shield, ShieldAlert, FileText, 
   DollarSign, Users, Info, ChevronRight, Lock, 
   CheckCircle, ArrowRight, Wallet, UserCheck
 } from 'lucide-react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useGSAP } from '@gsap/react';
+import gsap from 'gsap';
 import { paymentApi } from '../../services/paymentApi';
+import { Input } from '../../components/ui/Input';
+import { Button } from '../../components/ui/Button';
 
 export default function InitiateTransfer() {
-  const [caseId, setCaseId] = useState('');
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [caseId, setCaseId] = useState(searchParams.get('caseId') || '');
   const [adminId, setAdminId] = useState('admin-01');
   const [amount, setAmount] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<any>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
+
+  useGSAP(() => {
+    gsap.fromTo('.initiate-header',
+      { opacity: 0, y: -18 },
+      { opacity: 1, y: 0, duration: 0.45, ease: 'power2.out' }
+    );
+    gsap.fromTo('.initiate-main-form',
+      { opacity: 0, y: 24 },
+      { opacity: 1, y: 0, duration: 0.45, ease: 'back.out(1.2)', delay: 0.2 }
+    );
+    gsap.fromTo('.initiate-side-panel',
+      { opacity: 0, x: 24 },
+      { opacity: 1, x: 0, duration: 0.4, ease: 'power2.out', delay: 0.3 }
+    );
+  }, { scope: pageRef });
   
   const numericAmount = parseFloat(amount.replace(/,/g, '')) || 0;
   
@@ -47,6 +70,7 @@ export default function InitiateTransfer() {
         adminId: adminId.trim()
       });
       setResult(res);
+      setTimeout(() => navigate('/admin/payment/pending'), 1500);
     } catch (err: any) {
       setError(err.message || 'Failed to initiate transfer');
     } finally {
@@ -55,9 +79,9 @@ export default function InitiateTransfer() {
   };
 
   return (
-    <div className="text-md-on-surface p-8 relative overflow-hidden font-sans">
+    <div className="text-md-on-surface p-8 relative overflow-hidden font-sans" ref={pageRef}>
       <div className="relative z-10 max-w-4xl mx-auto space-y-8">
-        <div className="mb-10">
+        <div className="mb-10 initiate-header">
           <h1 className="text-3xl font-medium tracking-tight text-md-on-surface mb-2">Initiate Transfer</h1>
           <p className="text-md-on-surface-variant">Process payouts for approved compensation cases.</p>
         </div>
@@ -71,67 +95,45 @@ export default function InitiateTransfer() {
 
         <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Form */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-6 initiate-main-form">
             <div className="bg-md-surface-container border border-md-outline/10 rounded-3xl p-8 shadow-sm">
               <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-md-on-surface-variant mb-2">Case Reference</label>
-                  <div className="relative">
-                    <FileText className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-md-on-surface-variant/70" />
-                    <input 
-                      type="text" 
-                      placeholder="e.g. CASE-001" 
-                      value={caseId}
-                      onChange={(e) => setCaseId(e.target.value)}
-                      className="bg-md-surface-container-low border border-md-outline/20 rounded-2xl pl-12 pr-4 py-3.5 text-md-on-surface placeholder:text-md-on-surface-variant/50 focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all w-full"
-                    />
-                  </div>
-                </div>
+                <Input 
+                  label="Case Reference (e.g. CASE-001)" 
+                  value={caseId}
+                  onChange={(e) => setCaseId(e.target.value)}
+                />
+                
+                <Input 
+                  label="Initiator Admin ID" 
+                  value={adminId}
+                  onChange={(e) => setAdminId(e.target.value)}
+                />
 
-                <div>
-                  <label className="block text-sm font-medium text-md-on-surface-variant mb-2">Initiator Admin ID</label>
-                  <div className="relative">
-                    <UserCheck className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-md-on-surface-variant/70" />
-                    <input 
-                      type="text" 
-                      placeholder="e.g. admin-01" 
-                      value={adminId}
-                      onChange={(e) => setAdminId(e.target.value)}
-                      className="bg-md-surface-container-low border border-md-outline/20 rounded-2xl pl-12 pr-4 py-3.5 text-md-on-surface placeholder:text-md-on-surface-variant/50 focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all w-full"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-md-on-surface-variant mb-2">Transfer Amount Reference (MYR)</label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-md-primary" />
-                    <input 
-                      type="number" 
-                      placeholder="0.00" 
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      className="bg-md-surface-container-low border border-md-outline/20 rounded-2xl pl-12 pr-4 py-4 text-2xl font-semibold text-md-on-surface placeholder:text-md-on-surface-variant/40 focus:outline-none focus:border-md-primary focus:ring-2 focus:ring-md-primary/20 transition-all w-full"
-                    />
-                  </div>
-                </div>
+                <Input 
+                  label="Transfer Amount Reference (MYR)"
+                  type="number" 
+                  placeholder="0.00" 
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
               </div>
 
               <div className="mt-10 flex justify-end">
-                <button 
+                <Button 
                   type="submit"
+                  variant="animated-primary"
                   disabled={loading}
-                  className="flex items-center gap-2 px-8 py-4 bg-md-primary hover:opacity-90 active:scale-95 ease-md-bouncy shadow-sm rounded-full text-md-on-primary font-medium transition-all duration-300 disabled:opacity-50"
+                  className="px-8 !bg-md-primary brightness-110 saturate-150 shadow-md hover:shadow-lg"
                 >
-                  <span>{loading ? 'Initiating...' : 'Initiate Transfer'}</span>
-                  <ArrowRight className="w-5 h-5" />
-                </button>
+                  {loading ? 'Initiating...' : <><span className="mr-2 font-bold tracking-wide">Initiate Transfer</span><ArrowRight className="w-5 h-5" /></>}
+                </Button>
               </div>
             </div>
           </div>
 
           {/* Side Panel: Multi-sig Info */}
-          <div className="lg:col-span-1 space-y-6">
+          <div className="lg:col-span-1 space-y-6 initiate-side-panel">
             <div className={`bg-md-surface-container border ${sigLevel.border} rounded-3xl p-6 transition-all duration-500 relative overflow-hidden shadow-sm`}>
               <div className="relative z-10">
                 <div className="flex items-center gap-3 mb-4">

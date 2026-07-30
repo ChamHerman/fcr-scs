@@ -13,9 +13,10 @@ router.post("/retry", ctrl.retry);
 router.post("/request-details-update", ctrl.requestDetailsUpdate);
 router.post("/schedule-tomorrow", ctrl.scheduleTomorrow);
 router.get("/status/:caseId", ctrl.getStatus);
+router.get("/cases", ctrl.getAllCases);
 router.get("/pending-authorisations", ctrl.getPendingAuthorisations);
 router.get("/failed", ctrl.getFailedTransactions);
-router.get("/receipt/:caseId", ctrl.downloadReceipt);
+router.get("/cases/:caseId/receipt", ctrl.downloadReceipt);
 router.post("/dispute", upload.single("file"), ctrl.dispute);
 
 export default router;

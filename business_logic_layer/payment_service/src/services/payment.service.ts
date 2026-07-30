@@ -236,10 +236,18 @@ export async function getPendingAuthorisations() {
   });
 }
 
+export async function getAllCases() {
+  return prisma.paymentCase.findMany({
+    include: { authorisations: true, receipt: true, failedTransactions: true },
+    orderBy: { updatedAt: "desc" },
+  });
+}
+
 export async function getFailedTransactions() {
   return prisma.paymentCase.findMany({
-    where: { status: "Transfer Failed" },
+    where: { failedTransactions: { some: {} } },
     include: { failedTransactions: true, authorisations: true },
+    orderBy: { updatedAt: "desc" },
   });
 }
 

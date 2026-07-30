@@ -45,5 +45,5 @@ export async function verifyDocument(fileBuffer: Buffer) {
     voidReason: chain.voidReason, timestamp: chain.publishedAt,
   };
   if (localHash.toLowerCase() !== chain.documentHash.toLowerCase()) return { verified: false, status: "Altered", message: "Verification Failed: Document has been altered" };
-  return { verified: true, status: "Verified", message: "Verification Successful", timestamp: chain.publishedAt };
+  return { verified: true, status: "Authentic", message: "Verification Successful", timestamp: chain.publishedAt };
 }

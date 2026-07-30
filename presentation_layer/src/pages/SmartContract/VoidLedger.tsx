@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Ban, 
   Search,
@@ -8,18 +9,41 @@ import {
   Lock,
   Wallet
 } from 'lucide-react';
+import { useGSAP } from '@gsap/react';
+import gsap from 'gsap';
 import { blockchainApi } from '../../services/blockchainApi';
+import { useWallet } from '../../hooks/useWallet';
+import { Button } from '../../components/ui/Button';
+import { SearchInput } from '../../components/ui/SearchInput';
+import { Textarea } from '../../components/ui/Textarea';
 
 export const VoidLedger: React.FC = () => {
-  const [selectedCase, setSelectedCase] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  const [selectedCase, setSelectedCase] = useState<string | null>(searchParams.get('caseId') || null);
   const [justification, setJustification] = useState('');
   const [isVoiding, setIsVoiding] = useState(false);
-  const [walletAddress, setWalletAddress] = useState('');
+  const { walletAddress, walletConnected, error: walletError, setError: setWalletError, connectWallet } = useWallet();
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successTx, setSuccessTx] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const pageRef = useRef<HTMLDivElement>(null);
+
+  useGSAP(() => {
+    gsap.fromTo(pageRef.current,
+      { opacity: 0 },
+      { opacity: 1, duration: 0.35, ease: 'power2.out' }
+    );
+    gsap.fromTo('.void-left-col > *',
+      { opacity: 0, y: 24 },
+      { opacity: 1, y: 0, duration: 0.45, stagger: 0.1, ease: 'back.out(1.2)', delay: 0.15 }
+    );
+    gsap.fromTo('.void-right-col',
+      { opacity: 0, x: 30 },
+      { opacity: 1, x: 0, duration: 0.45, ease: 'power2.out', delay: 0.25 }
+    );
+  }, { scope: pageRef });
 
   const loadPublishedRecords = async () => {
     setLoading(true);
@@ -37,22 +61,6 @@ export const VoidLedger: React.FC = () => {
   useEffect(() => {
     loadPublishedRecords();
   }, []);
-
-  const connectWallet = async () => {
-    if ((window as any).ethereum) {
-      try {
-        const accounts = await (window as any).ethereum.request({ method: 'eth_requestAccounts' });
-        if (accounts && accounts.length > 0) {
-          setWalletAddress(accounts[0]);
-          setError('');
-        }
-      } catch (err: any) {
-        setError(err.message || 'Failed to connect wallet');
-      }
-    } else {
-      setError('MetaMask extension is required to void records');
-    }
-  };
 
   const handleVoidClick = (id: string) => {
     setSelectedCase(id);
@@ -100,11 +108,11 @@ export const VoidLedger: React.FC = () => {
   const selectedRecordObj = records.find(r => r.caseId === selectedCase);
 
   return (
-    <div className="text-md-on-surface p-8 font-sans">
+    <div className="text-md-on-surface p-8 font-sans" ref={pageRef}>
       <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-8">
         
         {/* Left Column: List */}
-        <div className="lg:w-1/2 space-y-6">
+        <div className="lg:w-1/2 space-y-6 void-left-col">
           <div className="bg-md-surface-container backdrop-blur-md border border-md-outline/20 p-6 rounded-3xl relative overflow-hidden shadow-sm">
             <div className="absolute top-0 right-0 w-64 h-64 bg-md-error rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
             <div className="relative z-10 flex justify-between items-start">
@@ -117,28 +125,27 @@ export const VoidLedger: React.FC = () => {
                   Select a previously published record to initiate a voiding transaction on the ledger.
                 </p>
               </div>
-              <button 
+              <Button 
                 onClick={connectWallet}
-                className="flex items-center gap-1.5 px-4 py-2 bg-md-primary text-md-on-primary rounded-full text-xs font-medium shrink-0"
+                variant={walletConnected ? "tonal" : "animated-primary"}
+                size="sm"
               >
-                <Wallet className="w-3.5 h-3.5" />
+                <Wallet className="w-3.5 h-3.5 mr-1" />
                 {walletAddress ? `${walletAddress.substring(0, 6)}...` : 'Connect'}
-              </button>
+              </Button>
             </div>
           </div>
 
           {loading && <p className="text-gray-500 my-2">Loading...</p>}
           {error && <p className="text-red-500 font-medium my-2">{error}</p>}
+          {walletError && <p className="text-red-500 font-medium my-2">{walletError}</p>}
           {successTx && <p className="text-green-600 font-medium my-2">Voided. Tx: {successTx}</p>}
 
           <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-md-on-surface-variant" />
-            <input 
-              type="text" 
+            <SearchInput 
               placeholder="Search published TxHash or Case ID..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-md-surface-container-low backdrop-blur-md border border-md-outline/30 rounded-2xl py-4 pl-12 pr-4 focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all text-md-on-surface placeholder-md-on-surface-variant shadow-sm w-full"
             />
           </div>
 
@@ -178,7 +185,7 @@ export const VoidLedger: React.FC = () => {
         </div>
 
         {/* Right Column: Action Panel */}
-        <div className="lg:w-1/2">
+        <div className="lg:w-1/2 void-right-col">
           {selectedCase ? (
             <div className="bg-md-surface-container backdrop-blur-xl border border-md-outline/20 rounded-3xl p-8 sticky top-8 shadow-md">
               
@@ -197,16 +204,12 @@ export const VoidLedger: React.FC = () => {
 
               <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-md-on-surface mb-2 flex items-center gap-2">
-                    Justification / Reason Code
-                    <Info className="w-4 h-4 text-md-on-surface-variant" />
-                  </label>
-                  <textarea
+                  <Textarea
+                    label="Justification / Reason Code"
                     value={justification}
                     onChange={(e) => setJustification(e.target.value)}
                     placeholder="Enter mandatory legal or technical reason for voiding this record..."
-                    className="h-32 border border-md-outline/30 rounded-xl p-4 focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all text-md-on-surface placeholder-md-on-surface-variant resize-none shadow-sm w-full"
-                  ></textarea>
+                  />
                 </div>
 
                 <div className="bg-md-surface-container-low rounded-xl p-4 border border-md-outline/20 space-y-3 text-sm shadow-sm">
@@ -220,26 +223,16 @@ export const VoidLedger: React.FC = () => {
                   </div>
                 </div>
 
-                <button 
+                <Button 
                   onClick={confirmVoid}
                   disabled={isVoiding || !justification.trim()}
-                  className="w-full py-4 bg-md-primary hover:opacity-90 disabled:bg-md-surface-container-low disabled:text-md-on-surface-variant disabled:opacity-50 text-md-on-primary rounded-full font-bold shadow-sm transition-all flex justify-center items-center gap-2 active:scale-95 ease-md-bouncy"
+                  variant="animated-primary"
+                  className="w-full font-bold shadow-sm"
+                  isLoading={isVoiding}
                 >
-                  {isVoiding ? (
-                    <>
-                      <svg className="animate-spin h-5 w-5 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Broadcasting Transaction...
-                    </>
-                  ) : (
-                    <>
-                      <Ban className="w-5 h-5" />
-                      Confirm Void
-                    </>
-                  )}
-                </button>
+                  <Ban className="w-5 h-5 mr-2" />
+                  Confirm Void
+                </Button>
               </div>
 
             </div>

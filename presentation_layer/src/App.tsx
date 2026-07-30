@@ -6,11 +6,14 @@ import { MemberLayout } from './components/layout/MemberLayout';
 import { Layout } from './components/layout/Layout';
 import { Home } from './pages/Home';
 import { ContactUs } from './pages/ContactUs';
+import PaymentSubmitBankDetails from './pages/Payment/SubmitBankDetails';
+import TrackPaymentStatus from './pages/Payment/TrackPaymentStatus';
 
 // Import Smart Contract & Blockchain Pages
 import { BlockchainDashboard } from './pages/SmartContract/BlockchainDashboard';
 import { PublishLedger } from './pages/SmartContract/PublishLedger';
 import { VoidLedger } from './pages/SmartContract/VoidLedger';
+import SmartContractVerifyAuditTrail from './pages/SmartContract/VerifyAuditTrail';
 
 // Import Admin Payment Pages
 import PaymentDashboard from './pages/Payment/PaymentDashboard';
@@ -49,6 +52,9 @@ function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<Home />} />
           <Route path="/contact" element={<ContactUs />} />
+          <Route path="/submit-bank-details" element={<PaymentSubmitBankDetails />} />
+          <Route path="/verify-audit-trail" element={<SmartContractVerifyAuditTrail />} />
+          <Route path="/track-payment" element={<TrackPaymentStatus />} />
         </Route>
         <Route path="/login" element={<div>Login Page (Mock)</div>} />
         <Route path="/unauthorized" element={<div>Unauthorized Access. You do not have permission to view this page.</div>} />
@@ -88,10 +94,10 @@ function App() {
             <Route path="users" element={<Placeholder title="User Management" />} />
 
             {/* Payment Routes */}
-            <Route path="payments">
+            <Route path="payment">
               <Route index element={<PaymentDashboard />} />
               <Route path="initiate" element={<InitiateTransfer />} />
-              <Route path="authorisations" element={<PendingAuthorisations />} />
+              <Route path="pending" element={<PendingAuthorisations />} />
               <Route path="failed" element={<FailedTransactions />} />
             </Route>
 

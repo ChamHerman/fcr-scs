@@ -173,6 +173,15 @@ export async function getPendingAuthorisations(_req: Request, res: Response): Pr
   }
 }
 
+export async function getAllCases(_req: Request, res: Response): Promise<void> {
+  try {
+    const cases = await paymentService.getAllCases();
+    res.json({ cases });
+  } catch (e: unknown) {
+    res.status(500).json({ error: (e as Error).message });
+  }
+}
+
 export async function getFailedTransactions(_req: Request, res: Response): Promise<void> {
   try {
     const cases = await paymentService.getFailedTransactions();

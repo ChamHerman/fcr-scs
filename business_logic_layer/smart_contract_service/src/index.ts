@@ -7,7 +7,7 @@ dotenv.config();
 export const app = express();
 app.use(cors());
 app.use(express.json());
-app.use("/api/blockchain", blockchainRoutes);
+app.use("/api/smart-contract", blockchainRoutes);
 
 if (process.env.NODE_ENV !== "test") {
   const port = process.env.PORT || 3001;

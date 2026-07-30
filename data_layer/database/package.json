@@ -11,11 +11,17 @@
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
+    "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "@types/node": "^26.1.2",
+    "@types/pg": "^8.20.0",
     "dotenv": "^17.4.2",
+    "pg": "^8.22.0",
     "prisma": "^7.9.1",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   }
 }

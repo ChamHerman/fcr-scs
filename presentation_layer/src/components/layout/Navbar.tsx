@@ -35,9 +35,11 @@ export const Navbar: React.FC = () => {
           <Link to="/" className="font-bold text-xl text-md-on-surface">FCR-SCS</Link>
         </div>
         <div className="hidden md:flex items-center gap-6">
-          <a href="/#features" className="text-md-on-surface hover:text-md-primary transition-colors">Features</a>
-          <a href="/#how-it-works" className="text-md-on-surface hover:text-md-primary transition-colors">How it Works</a>
-          <Link to="/contact" className="text-md-on-surface hover:text-md-primary transition-colors font-medium">Contact Us</Link>
+          <Link to="/submit-bank-details" className="text-md-on-surface hover:text-md-primary transition-colors text-sm">Submit Bank Details</Link>
+          <Link to="/track-payment" className="text-md-on-surface hover:text-md-primary transition-colors text-sm">Track Payment</Link>
+          <Link to="/verify-audit-trail" className="text-md-on-surface hover:text-md-primary transition-colors text-sm">Verify Certificate</Link>
+          <Link to="/admin" className="text-md-on-surface hover:text-md-primary transition-colors font-medium text-sm">Admin Portal</Link>
+          <Link to="/member" className="text-md-on-surface hover:text-md-primary transition-colors font-medium text-sm">Member Portal</Link>
           <Button variant="outlined" size="sm">Login</Button>
           <Button variant="filled" size="sm">Register</Button>
         </div>

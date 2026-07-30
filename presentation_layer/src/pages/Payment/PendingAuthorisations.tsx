@@ -1,10 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Shield, Key, CheckCircle, XCircle, Clock, 
   AlertTriangle, ArrowRight, Fingerprint, Lock, 
   ExternalLink, Search
 } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { useGSAP } from '@gsap/react';
+import gsap from 'gsap';
 import { paymentApi } from '../../services/paymentApi';
+import { SearchInput } from '../../components/ui/SearchInput';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
 
 export default function PendingAuthorisations() {
   const [cases, setCases] = useState<any[]>([]);
@@ -13,7 +19,24 @@ export default function PendingAuthorisations() {
   const [error, setError] = useState('');
   const [adminId, setAdminId] = useState('admin-02');
   const [actionMessage, setActionMessage] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchParams] = useSearchParams();
+  const [searchQuery, setSearchQuery] = useState(searchParams.get('caseId') || '');
+  const pageRef = useRef<HTMLDivElement>(null);
+
+  useGSAP(() => {
+    gsap.fromTo('.pending-header',
+      { opacity: 0, y: -20 },
+      { opacity: 1, y: 0, duration: 0.45, ease: 'power2.out' }
+    );
+    gsap.fromTo('.pending-list-panel',
+      { opacity: 0, x: -30 },
+      { opacity: 1, x: 0, duration: 0.45, ease: 'back.out(1.2)', delay: 0.2 }
+    );
+    gsap.fromTo('.pending-detail-panel',
+      { opacity: 0, x: 30 },
+      { opacity: 1, x: 0, duration: 0.45, ease: 'back.out(1.2)', delay: 0.2 }
+    );
+  }, { scope: pageRef });
 
   const loadPendingCases = async () => {
     setLoading(true);
@@ -22,7 +45,13 @@ export default function PendingAuthorisations() {
       const res = await paymentApi.getPendingAuthorisations();
       const caseList = res.cases || [];
       setCases(caseList);
-      if (caseList.length > 0) {
+      
+      const prefillCaseId = searchParams.get('caseId');
+      if (prefillCaseId) {
+        const found = caseList.find((c: any) => c.caseId === prefillCaseId);
+        if (found) setSelectedTrx(found);
+        else if (caseList.length > 0) setSelectedTrx(caseList[0]);
+      } else if (caseList.length > 0) {
         setSelectedTrx(caseList[0]);
       } else {
         setSelectedTrx(null);
@@ -91,10 +120,10 @@ export default function PendingAuthorisations() {
   );
 
   return (
-    <div className="text-md-on-surface p-8 relative overflow-hidden font-sans">
+    <div className="text-md-on-surface p-8 relative overflow-hidden font-sans" ref={pageRef}>
       <div className="relative z-10 max-w-7xl mx-auto flex flex-col min-h-[500px]">
         
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-8 pending-header">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-md-warning rounded-2xl">
               <Shield className="w-6 h-6 text-md-on-warning" />
@@ -105,12 +134,10 @@ export default function PendingAuthorisations() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <label className="text-sm font-medium">Admin ID:</label>
-            <input 
-              type="text" 
+            <Input 
+              label="Admin ID"
               value={adminId} 
               onChange={(e) => setAdminId(e.target.value)}
-              className="border border-md-outline/30 rounded-xl px-3 py-1.5 text-sm"
             />
           </div>
         </div>
@@ -122,16 +149,13 @@ export default function PendingAuthorisations() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
           
           {/* Left Panel: List */}
-          <div className="lg:col-span-4 bg-md-surface-container border border-md-outline/10 rounded-[32px] overflow-hidden flex flex-col shadow-sm">
+          <div className="lg:col-span-4 bg-md-surface-container border border-md-outline/10 rounded-[32px] overflow-hidden flex flex-col shadow-sm pending-list-panel">
             <div className="p-5 border-b border-md-outline/10 bg-md-surface-container-low/30">
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-md-on-surface-variant" />
-                <input 
-                  type="text" 
+              <div className="flex">
+                <SearchInput 
                   placeholder="Filter by ID or Case..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-md-surface-container-low border border-md-outline/20 rounded-full pl-11 pr-4 py-3 text-sm text-md-on-surface placeholder:text-md-on-surface-variant/70 focus:outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-all w-full"
                 />
               </div>
             </div>
@@ -172,7 +196,7 @@ export default function PendingAuthorisations() {
           </div>
 
           {/* Right Panel: Details & Actions */}
-          <div className="lg:col-span-8 bg-md-surface-container border border-md-outline/10 rounded-[32px] p-8 flex flex-col shadow-sm">
+          <div className="lg:col-span-8 bg-md-surface-container border border-md-outline/10 rounded-[32px] p-8 flex flex-col shadow-sm pending-detail-panel">
             {selectedTrx ? (
               <div className="flex flex-col h-full">
                 <div className="flex justify-between items-start mb-8 pb-6 border-b border-md-outline/10">
@@ -227,19 +251,21 @@ export default function PendingAuthorisations() {
                       Sign as: {adminId}
                     </div>
                     <div className="flex gap-4">
-                      <button 
+                      <Button 
                         onClick={handleReject}
-                        className="px-8 py-3.5 bg-md-surface-container-low border border-md-outline/20 hover:bg-md-error hover:text-md-on-error hover:border-transparent rounded-full font-medium text-md-on-surface transition-all duration-300 ease-md-bouncy active:scale-95 shadow-sm"
+                        variant="outlined"
+                        className="hover:bg-md-error hover:text-md-on-error hover:border-transparent"
                       >
                         Reject
-                      </button>
-                      <button 
+                      </Button>
+                      <Button 
                         onClick={handleAuthorise}
-                        className="flex items-center gap-2 px-8 py-3.5 bg-md-primary hover:opacity-90 shadow-sm rounded-full font-medium text-md-on-primary transition-all duration-300 ease-md-bouncy active:scale-95"
+                        variant="animated-primary"
+                        className="pl-6"
                       >
-                        <Key className="w-5 h-5" />
+                        <Key className="w-5 h-5 mr-2" />
                         Sign & Authorize
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </div>

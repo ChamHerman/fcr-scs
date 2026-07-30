@@ -81,7 +81,10 @@ Defined in `tailwind.config.js`. Used to create organic, generous rounding.
 - Pill-shaped (`rounded-full`) across all standard variants.
 - Floating Action Button (FAB) variant uses `rounded-2xl` (28px).
 - Uses state layers (opacity modifications) for hover and active states instead of hard color changes.
-- Implements `active:scale-95` for tactile click feedback.
+- **GSAP Animation Integration**:
+  - Implements a bouncy GSAP hover scale (`scale: 1.02`, `back.out(1.5)`).
+  - Implements a tactile press scale (`scale: 0.95`, `power1.inOut`) to replace native CSS `active:scale-95`.
+  - The default `animated-primary` variant includes a continuous subtle shimmer effect.
 
 ### 2. Card (`Card.tsx`)
 - Large `24px` border radius.
@@ -95,7 +98,25 @@ Defined in `tailwind.config.js`. Used to create organic, generous rounding.
 - Bottom border transitions to `md-primary` on focus.
 - **Form System Expansion**: Includes `Textarea`, `Checkbox`, `RadioGroup`, `Select`, and `Switch`. All follow the same Material 3 principles with generous touch targets, subtle background fills, and smooth `md-emphasized` transitions. 
 
-### 4. Notification System (`NotificationSystem.tsx`)
+### 4. Search Input (`SearchInput.tsx`)
+- Represents the standard search bar design used across dashboards (e.g. Payment Dashboard).
+- Generously rounded pill shape (`rounded-full`) for a friendly, approachable feel.
+- Integrates `lucide-react` Search icon on the left with 50% opacity.
+- Uses `md-surface-container-low` for background.
+- **GSAP Animation Integration**: 
+  - On focus, the container uses a bouncy GSAP expansion (`scale: 1.02`, `back.out(1.5)`).
+  - The search icon animates simultaneously, expanding and turning `md-primary` (`scale: 1.15`, `back.out(2)`).
+- Naturally supports both light and dark modes through CSS variables.
+
+### 5. Wallet Button (`WalletButton.tsx`)
+- Specialized interactive component for the Blockchain Dashboard.
+- **GSAP 3D Flip Integration**:
+  - On hover, uses `rotationX: 180` to smoothly flip the container to reveal the back face.
+  - Front face displays the user's role (e.g., "Admin").
+  - Back face displays the truncated wallet address and a copy icon.
+  - On click, triggers a quick `scale: 0.95` to `1` bounce animation and copies the address to the clipboard, utilizing the `NotificationSystem`.
+
+### 6. Notification System (`NotificationSystem.tsx`)
 - Provides stacked toast notifications globally.
 - Slides in from the right with a bounce effect and fades out after 3 seconds.
 - Adheres to minimalist principles by avoiding harsh high-contrast colors, using soft pastel variations:

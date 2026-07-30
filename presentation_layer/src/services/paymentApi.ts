@@ -3,8 +3,8 @@ import { paymentFetch, PAYMENT_BASE } from "./api";
 type BankDetails = { caseId: string; bankName: string; accountNumber: string; accountHolderName: string; phoneNumber: string; myKadNumber: string };
 
 export const paymentApi = {
-  submitBankDetails: (d: BankDetails) =>
-    paymentFetch("/api/payments/bank-details", { method: "POST", body: JSON.stringify(d) }),
+  submitBankDetails: (d: any) =>
+    paymentFetch("/api/bank-details", { method: "POST", body: JSON.stringify(d) }),
   initiate: (d: { caseId: string; adminId: string }) =>
     paymentFetch("/api/payments/initiate", { method: "POST", body: JSON.stringify(d) }),
   authorise: (d: { caseId: string; adminId: string }) =>
@@ -19,10 +19,13 @@ export const paymentApi = {
     paymentFetch("/api/payments/schedule-tomorrow", { method: "POST", body: JSON.stringify({ caseId }) }),
   getStatus: (caseId: string) =>
     paymentFetch("/api/payments/status/" + encodeURIComponent(caseId)),
+  getCaseStatus: (id: string) =>
+    paymentFetch("/api/payments/case-status/" + encodeURIComponent(id)),
+  getAllCases: () => paymentFetch("/api/payments/cases"),
   getPendingAuthorisations: () => paymentFetch("/api/payments/pending-authorisations"),
   getFailedTransactions: () => paymentFetch("/api/payments/failed"),
   downloadReceipt: async (caseId: string) => {
-    const res = await fetch(PAYMENT_BASE + "/api/payments/receipt/" + encodeURIComponent(caseId));
+    const res = await fetch(PAYMENT_BASE + "/api/payments/cases/" + encodeURIComponent(caseId) + "/receipt");
     if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? "Receipt unavailable"); }
     return res.blob();
   },

@@ -1,26 +1,76 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search, Clock, CheckCircle, XCircle, 
-  DollarSign, User, MoreHorizontal 
+  DollarSign, User
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useGSAP } from '@gsap/react';
+import gsap from 'gsap';
 import { paymentApi } from '../../services/paymentApi';
+import { ActionMenuPortal } from '../../components/ui/ActionMenuPortal';
+import { SearchInput } from '../../components/ui/SearchInput';
 import '../LandAcquisition/case_management.css';
 
 export default function PaymentDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [allCases, setAllCases] = useState<any[]>([]);
   const [pendingCases, setPendingCases] = useState<any[]>([]);
   const [failedCases, setFailedCases] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useGSAP(() => {
+    gsap.fromTo('.stat-card',
+      { opacity: 0, y: 28, scale: 0.96 },
+      { opacity: 1, y: 0, scale: 1, duration: 0.45, stagger: 0.1, ease: 'back.out(1.3)', delay: 0.1 }
+    );
+    gsap.fromTo('.filter-bar, .action-bar, .table-wrap',
+      { opacity: 0, y: 20 },
+      { opacity: 1, y: 0, duration: 0.4, stagger: 0.07, ease: 'power2.out', delay: 0.45 }
+    );
+  }, { scope: containerRef });
+
+  const handlePaymentAction = async (action: string, caseId: string) => {
+    try {
+      if (action === 'Simulate Initiate') {
+        await paymentApi.initiate({ caseId, adminId: 'mock-admin' });
+      } else if (action === 'Simulate Authorise') {
+        await paymentApi.authorise({ caseId, adminId: 'mock-admin' });
+      } else if (action === 'Simulate Fail') {
+        await paymentApi.reject({ caseId, adminId: 'mock-admin', reason: 'Simulated Fail' });
+      } else if (action === 'Download Receipt') {
+        alert('Downloading receipt for ' + caseId);
+      } else if (action === 'View Details') {
+        alert('Viewing details for ' + caseId);
+      }
+      await loadData();
+    } catch (e) {
+      console.error(e);
+      // Fallback for mock if backend fails:
+      setAllCases(prev => prev.map(c => {
+        if (c.caseId === caseId) {
+          if (action === 'Simulate Initiate') return { ...c, status: 'Transfer Initiated' };
+          if (action === 'Simulate Authorise') return { ...c, status: 'Paid' };
+          if (action === 'Simulate Fail') return { ...c, status: 'Failed' };
+        }
+        return c;
+      }));
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
     setError('');
     try {
-      const [pendingRes, failedRes] = await Promise.all([
-        paymentApi.getPendingAuthorisations(),
-        paymentApi.getFailedTransactions()
+      const [allRes, pendingRes, failedRes] = await Promise.all([
+        paymentApi.getAllCases().catch(() => ({ cases: [] })),
+        paymentApi.getPendingAuthorisations().catch(() => ({ cases: [] })),
+        paymentApi.getFailedTransactions().catch(() => ({ cases: [] }))
       ]);
+      setAllCases(allRes.cases || []);
       setPendingCases(pendingRes.cases || []);
       setFailedCases(failedRes.cases || []);
     } catch (err: any) {
@@ -37,27 +87,17 @@ export default function PaymentDashboard() {
   const stats = [
     { label: 'Pending Authorisations', value: pendingCases.length.toString(), change: 'Requires Action', icon: Clock },
     { label: 'Failed Transfers', value: failedCases.length.toString(), change: 'Requires Attention', icon: XCircle },
-    { label: 'Active Pipeline', value: (pendingCases.length + failedCases.length).toString(), change: 'Live System', icon: DollarSign },
+    { label: 'Total Payment Cases', value: allCases.length.toString(), change: 'Live System', icon: DollarSign },
   ];
 
-  const allTx = [
-    ...pendingCases.map(c => ({
-      id: c.caseId,
-      beneficiary: c.accountHolderName || 'N/A',
-      amount: `RM ${(c.amount || 0).toLocaleString()}`,
-      status: 'Pending',
-      date: new Date(c.updatedAt || c.createdAt).toLocaleString(),
-      method: c.bankName || 'Bank Transfer'
-    })),
-    ...failedCases.map(c => ({
-      id: c.caseId,
-      beneficiary: c.accountHolderName || 'N/A',
-      amount: `RM ${(c.amount || 0).toLocaleString()}`,
-      status: 'Failed',
-      date: new Date(c.updatedAt || c.createdAt).toLocaleString(),
-      method: c.bankName || 'Bank Transfer'
-    }))
-  ];
+  const allTx = allCases.map(c => ({
+    id: c.caseId,
+    beneficiary: c.accountHolderName || 'N/A',
+    amount: `RM ${(c.amount || 0).toLocaleString()}`,
+    status: c.status || 'Pending',
+    date: new Date(c.updatedAt || c.createdAt).toLocaleString(),
+    method: c.bankName || 'Bank Transfer'
+  }));
 
   const filteredTx = allTx.filter(t => 
     !searchQuery || t.id.toLowerCase().includes(searchQuery.toLowerCase()) || t.beneficiary.toLowerCase().includes(searchQuery.toLowerCase())
@@ -76,7 +116,7 @@ export default function PaymentDashboard() {
   };
 
   return (
-    <div className="main">
+    <div className="main" ref={containerRef}>
       <div className="topbar">
         <div className="topbar-left">
           <h1>Payment Dashboard</h1>
@@ -109,15 +149,11 @@ export default function PaymentDashboard() {
       </div>
 
       <div className="filter-bar">
-        <div className="search-wrap">
-          <Search className="search-icon" />
-          <input 
-            type="text" 
-            placeholder="Search TRX ID or name..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
+        <SearchInput 
+          placeholder="Search TRX ID or name..." 
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
         <div className="filter-group">
           <button className="btn-filter" onClick={loadData}>Refresh</button>
           <button className="btn-clear" onClick={() => setSearchQuery('')}>Clear</button>
@@ -141,6 +177,7 @@ export default function PaymentDashboard() {
                 <th>Method</th>
                 <th>Amount</th>
                 <th>Status</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -161,6 +198,20 @@ export default function PaymentDashboard() {
                         <span className="dot"></span>
                         {trx.status}
                       </span>
+                    </td>
+                    <td style={{ position: 'relative' }}>
+                      <ActionMenuPortal
+                        isOpen={activeMenu === trx.id}
+                        onToggle={() => setActiveMenu(activeMenu === trx.id ? null : trx.id)}
+                        onClose={() => setActiveMenu(null)}
+                        actions={[
+                          { label: 'View Details', onClick: () => navigate(`/admin/payment/initiate?caseId=${trx.id}`) },
+                          { label: 'Initiate Transfer', onClick: () => navigate(`/admin/payment/initiate?caseId=${trx.id}`) },
+                          { label: 'Authorise Transfer', onClick: () => navigate(`/admin/payment/pending?caseId=${trx.id}`) },
+                          { label: 'Failed Log / Manage', onClick: () => navigate(`/admin/payment/failed?caseId=${trx.id}`) },
+                          { label: 'Download Receipt', onClick: () => handlePaymentAction('Download Receipt', trx.id) }
+                        ]}
+                      />
                     </td>
                   </tr>
                 ))
