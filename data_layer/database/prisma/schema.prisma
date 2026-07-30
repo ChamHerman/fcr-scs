@@ -39,6 +39,7 @@ model PaymentCase {
   authorisations        PaymentAuthorisation[]
   receipt               PaymentReceipt?
   failedTransactions    FailedTransaction[]
+  receiverBankDetails   ReceiverBankDetails?
 }
 
 model PaymentAuthorisation {
@@ -67,4 +68,16 @@ model FailedTransaction {
   resolution    String?     // retry | request_details | schedule_tomorrow
   resolvedAt    DateTime?
   createdAt     DateTime    @default(now())
+}
+
+model ReceiverBankDetails {
+  id                   String      @id @default(uuid())
+  bankName             String
+  accountNumber        String
+  accountHolderName    String
+  phoneNumber          String
+  myKadNumber          String
+  encryptedBankDetails String
+  paymentCaseId        String      @unique
+  paymentCase          PaymentCase @relation(fields: [paymentCaseId], references: [id])
 }

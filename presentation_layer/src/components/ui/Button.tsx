@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import classNames from 'classnames';
+import gsap from 'gsap';
+import { useGSAP } from '@gsap/react';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'filled' | 'animated-primary' | 'tonal' | 'secondary' | 'combined' | 'outlined' | 'text' | 'fab';
@@ -9,15 +11,22 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 }
 
 export const Button: React.FC<ButtonProps> = ({
-  variant = 'filled',
+  variant = 'animated-primary', // Changed default to animated-primary as requested
   size = 'md',
   isLoading = false,
   className,
   children,
   disabled,
+  onMouseEnter,
+  onMouseLeave,
+  onMouseDown,
+  onMouseUp,
   ...props
 }) => {
-  const baseClasses = 'inline-flex relative items-center justify-center font-medium transition-all duration-300 ease-md-bouncy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-primary focus-visible:ring-offset-2 active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed disabled:active:scale-100';
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // Removed active:scale-95 to let GSAP handle the press interaction
+  const baseClasses = 'inline-flex relative items-center justify-center font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-primary focus-visible:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed';
   
   const sizeClasses = {
     sm: 'h-9 px-4 text-sm',
@@ -26,14 +35,15 @@ export const Button: React.FC<ButtonProps> = ({
   };
 
   const variantClasses = {
-    filled: 'bg-md-primary text-md-on-primary shadow-none hover:shadow-md hover:bg-md-primary/90 active:bg-md-primary/80 rounded-full',
-    'animated-primary': 'bg-md-primary text-md-on-primary shadow-sm hover:shadow-md hover:bg-md-primary/90 active:bg-md-primary/80 rounded-full relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full hover:before:animate-[shimmer_1.5s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent',
-    tonal: 'bg-md-secondary-container text-md-on-secondary-container hover:bg-md-secondary-container/90 active:bg-md-secondary-container/80 rounded-full',
-    secondary: 'bg-md-secondary-container text-md-on-secondary-container hover:bg-md-secondary-container/90 active:bg-md-secondary-container/80 rounded-full',
-    combined: 'bg-gradient-to-r from-md-primary/90 to-md-secondary-container text-md-on-primary shadow-sm hover:shadow-md hover:from-md-primary hover:to-md-secondary-container/90 active:scale-95 rounded-full transition-all duration-300',
-    outlined: 'bg-transparent text-md-primary border border-md-outline hover:bg-md-primary/5 active:bg-md-primary/10 rounded-full',
-    text: 'bg-transparent text-md-primary hover:bg-md-primary/10 active:bg-md-primary/20 rounded-full',
-    fab: 'bg-md-tertiary text-md-background shadow-md hover:shadow-xl hover:bg-md-tertiary/90 active:bg-md-tertiary/80 rounded-2xl h-14 w-14 p-0',
+    // Make filled essentially the same as animated-primary just in case some buttons use it
+    filled: 'bg-md-primary text-md-on-primary shadow-sm hover:shadow-md rounded-full relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full hover:before:animate-[shimmer_1.5s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent',
+    'animated-primary': 'bg-md-primary text-md-on-primary shadow-sm hover:shadow-md rounded-full relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full hover:before:animate-[shimmer_1.5s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent',
+    tonal: 'bg-md-secondary-container text-md-on-secondary-container hover:bg-md-secondary-container/90 rounded-full',
+    secondary: 'bg-md-secondary-container text-md-on-secondary-container hover:bg-md-secondary-container/90 rounded-full',
+    combined: 'bg-gradient-to-r from-md-primary/90 to-md-secondary-container text-md-on-primary shadow-sm hover:shadow-md hover:from-md-primary hover:to-md-secondary-container/90 rounded-full',
+    outlined: 'bg-transparent text-md-primary border border-md-outline hover:bg-md-primary/5 rounded-full',
+    text: 'bg-transparent text-md-primary hover:bg-md-primary/10 rounded-full',
+    fab: 'bg-md-tertiary text-md-background shadow-md hover:shadow-xl hover:bg-md-tertiary/90 rounded-2xl h-14 w-14 p-0',
   };
 
   const classes = classNames(
@@ -43,8 +53,67 @@ export const Button: React.FC<ButtonProps> = ({
     className
   );
 
+  const { contextSafe } = useGSAP({ scope: buttonRef });
+
+  const handleMouseEnter = contextSafe((e: React.MouseEvent<HTMLButtonElement>) => {
+    if (!disabled && !isLoading) {
+      gsap.to(buttonRef.current, {
+        scale: 1.02,
+        duration: 0.4,
+        ease: 'back.out(1.5)',
+        overwrite: 'auto'
+      });
+    }
+    onMouseEnter?.(e);
+  });
+
+  const handleMouseLeave = contextSafe((e: React.MouseEvent<HTMLButtonElement>) => {
+    if (!disabled && !isLoading) {
+      gsap.to(buttonRef.current, {
+        scale: 1,
+        duration: 0.3,
+        ease: 'power2.out',
+        overwrite: 'auto'
+      });
+    }
+    onMouseLeave?.(e);
+  });
+
+  const handleMouseDown = contextSafe((e: React.MouseEvent<HTMLButtonElement>) => {
+    if (!disabled && !isLoading) {
+      gsap.to(buttonRef.current, {
+        scale: 0.95,
+        duration: 0.15,
+        ease: 'power1.inOut',
+        overwrite: 'auto'
+      });
+    }
+    onMouseDown?.(e);
+  });
+
+  const handleMouseUp = contextSafe((e: React.MouseEvent<HTMLButtonElement>) => {
+    if (!disabled && !isLoading) {
+      gsap.to(buttonRef.current, {
+        scale: 1.02, // Return to hover scale since we are still hovering
+        duration: 0.3,
+        ease: 'back.out(1.5)',
+        overwrite: 'auto'
+      });
+    }
+    onMouseUp?.(e);
+  });
+
   return (
-    <button className={classes} disabled={isLoading || disabled} {...props}>
+    <button 
+      ref={buttonRef}
+      className={classes} 
+      disabled={isLoading || disabled} 
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
+      {...props}
+    >
       <span className={classNames("flex items-center justify-center transition-opacity duration-300", isLoading ? "opacity-0" : "opacity-100")}>
         {children}
       </span>

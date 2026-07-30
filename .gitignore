@@ -3,6 +3,15 @@
 node_modules/
 /graphify-out
 /_self
-data_layer/database/.env
-.env
-**/.env
+# Ignore all files starting with .env anywhere in the repository
+.env*
+**/.env*
+
+# Prevent ignoring common local environment directories named "env"
+!**/env/
+
+# Whitelist environment templates so team members can see required keys
+!*.env.example
+!*.env.template
+!**/*.env.example
+!**/*.env.template

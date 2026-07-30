@@ -1,5 +1,5 @@
-import React, { useRef, useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import React, { useRef, useState, useEffect } from 'react';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import {
@@ -26,13 +26,31 @@ import {
 
 export const AdminLayout: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [financeExpanded, setFinanceExpanded] = useState(false);
-  const [landAcquisitionExpanded, setLandAcquisitionExpanded] = useState(true);
+  const [landAcquisitionExpanded, setLandAcquisitionExpanded] = useState(false);
   const [compensationExpanded, setCompensationExpanded] = useState(false);
   const [isDark, setIsDark] = useState<boolean>(() => {
     return localStorage.getItem('admin_theme') === 'dark';
   });
+
+  useEffect(() => {
+    const path = location.pathname;
+    if (path.startsWith('/admin/case') || path.startsWith('/admin/land-acquisition')) {
+      setLandAcquisitionExpanded(true);
+      setCompensationExpanded(false);
+      setFinanceExpanded(false);
+    } else if (path.startsWith('/admin/compensation')) {
+      setLandAcquisitionExpanded(false);
+      setCompensationExpanded(true);
+      setFinanceExpanded(false);
+    } else if (path.startsWith('/admin/payment') || path.startsWith('/admin/blockchain')) {
+      setLandAcquisitionExpanded(false);
+      setCompensationExpanded(false);
+      setFinanceExpanded(true);
+    }
+  }, [location.pathname]);
 
   React.useEffect(() => {
     if (isDark) {
@@ -351,13 +369,33 @@ export const AdminLayout: React.FC = () => {
               {isCollapsed && <div style={{ height: 16 }} />}
               {(financeExpanded || isCollapsed) && (
                 <>
-                  <NavLink to="/admin/payments" className="nav-item" title={isCollapsed ? "Payments" : ""}>
+                  <NavLink to="/admin/payment" end className="nav-item" title={isCollapsed ? "Payments Overview" : ""}>
                     <CreditCard size={22} className="nav-icon" />
-                    {!isCollapsed && <span>Payments</span>}
+                    {!isCollapsed && <span>Payments Overview</span>}
                   </NavLink>
-                  <NavLink to="/admin/blockchain" className="nav-item" title={isCollapsed ? "Blockchain" : ""}>
+                  <NavLink to="/admin/payment/initiate" className="nav-item" title={isCollapsed ? "Initiate" : ""}>
+                    <CreditCard size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                    {!isCollapsed && <span>Initiate</span>}
+                  </NavLink>
+                  <NavLink to="/admin/payment/pending" className="nav-item" title={isCollapsed ? "Pending Authorisations" : ""}>
+                    <CreditCard size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                    {!isCollapsed && <span>Pending Authorisations</span>}
+                  </NavLink>
+                  <NavLink to="/admin/payment/failed" className="nav-item" title={isCollapsed ? "Failed Transactions" : ""}>
+                    <CreditCard size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                    {!isCollapsed && <span>Failed Transactions</span>}
+                  </NavLink>
+                  <NavLink to="/admin/blockchain" end className="nav-item" title={isCollapsed ? "Blockchain Overview" : ""}>
                     <LinkIcon size={22} className="nav-icon" />
-                    {!isCollapsed && <span>Blockchain</span>}
+                    {!isCollapsed && <span>Blockchain Overview</span>}
+                  </NavLink>
+                  <NavLink to="/admin/blockchain/publish" className="nav-item" title={isCollapsed ? "Publish" : ""}>
+                    <LinkIcon size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                    {!isCollapsed && <span>Publish</span>}
+                  </NavLink>
+                  <NavLink to="/admin/blockchain/void" className="nav-item" title={isCollapsed ? "Void" : ""}>
+                    <LinkIcon size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                    {!isCollapsed && <span>Void</span>}
                   </NavLink>
                 </>
               )}
