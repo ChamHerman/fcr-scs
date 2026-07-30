@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model BlockchainRecord {
+  id                  String    @id @default(uuid())
+  caseId              String    @unique
+  transactionHash     String?
+  documentHash        String
+  status              String    @default("Published") // Published | Voided
+  voidReason          String?
+  voidTransactionHash String?
+  publishedAt         DateTime  @default(now())
+  voidedAt            DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+model PaymentCase {
+  id                    String                 @id @default(uuid())
+  caseId                String                 @unique
+  beneficiaryId         String
+  amount                Decimal
+  bankName              String?
+  accountNumber         String?
+  accountHolderName     String?
+  phoneNumber           String?
+  encryptedBankDetails  String?
+  myKadNumber           String?
+  status                String                 @default("Approved")
+  requiredSignatures    Int                    @default(1)
+  currentSignatures     Int                    @default(0)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  authorisations        PaymentAuthorisation[]
+  receipt               PaymentReceipt?
+  failedTransactions    FailedTransaction[]
+}
+
+model PaymentAuthorisation {
+  id            String      @id @default(uuid())
+  paymentCase   PaymentCase @relation(fields: [paymentCaseId], references: [id])
+  paymentCaseId String
+  adminId       String
+  action        String      // initiate | authorise | reject
+  reason        String?
+  createdAt     DateTime    @default(now())
+}
+
+model PaymentReceipt {
+  id                   String      @id @default(uuid())
+  paymentCase          PaymentCase @relation(fields: [paymentCaseId], references: [id])
+  paymentCaseId        String      @unique
+  bankReferenceNumber  String
+  generatedAt          DateTime    @default(now())
+}
+
+model FailedTransaction {
+  id            String      @id @default(uuid())
+  paymentCase   PaymentCase @relation(fields: [paymentCaseId], references: [id])
+  paymentCaseId String
+  errorLog      String
+  resolution    String?     // retry | request_details | schedule_tomorrow
+  resolvedAt    DateTime?
+  createdAt     DateTime    @default(now())
+}

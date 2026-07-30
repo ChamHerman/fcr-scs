@@ -2,3 +2,7 @@
 /.agents
 node_modules/
 /graphify-out
+/_self
+data_layer/database/.env
+.env
+**/.env
