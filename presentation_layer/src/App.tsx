@@ -43,6 +43,16 @@ import { ObjectionReview } from './pages/Compensation/ObjectionReview';
 import { CompensationComparisonCreate } from './pages/Compensation/ComparisonCreation';
 import { CompensationComparisonList } from './pages/Compensation/ComparisonDashboard';
 import { Placeholder } from './pages/Placeholder';
+import { ProcessAIValuation } from './pages/PredictionDashboard/ProcessAIValuation';
+import { ReviewAIValuation } from './pages/PredictionDashboard/ReviewAIValuation';
+import { RetrainAIModel } from './pages/PredictionDashboard/RetrainAIModel';
+import { ViewValuationResults } from './pages/PredictionDashboard/ViewValuationResults';
+import { PredictionDashboard } from './pages/PredictionDashboard/PredictionDashboard';
+import { ViewValuationHistory } from './pages/PredictionDashboard/ViewValuationHistory';
+import { GenerateReports } from './pages/Reports/GenerateReports';
+import { ViewReports } from './pages/Reports/ViewReports';
+import { ScheduleReportsGeneration } from './pages/Reports/ScheduleReportsGeneration';
+import { ReportsDashboard } from './pages/Reports/ReportsDashboard';
 
 function App() {
   return (
@@ -89,7 +99,17 @@ function App() {
             {/* Placeholder Admin Routes */}
             <Route path="valuers" element={<Placeholder title="Valuers Management" />} />
             <Route path="forms" element={<Placeholder title="Forms & Templates" />} />
-            <Route path="reports" element={<Placeholder title="Analytics & Reports" />} />
+            <Route path="reports" element={<ReportsDashboard />} />
+            <Route path="reports/generate" element={<GenerateReports />} />
+            <Route path="reports/view/:reportId" element={<ViewReports />} />
+            <Route path="reports/schedule" element={<ScheduleReportsGeneration />} />
+            <Route path="prediction" element={<PredictionDashboard />} />
+            <Route path="prediction/process" element={<ProcessAIValuation />} />
+            <Route path="prediction/review" element={<ReviewAIValuation />} />
+            <Route path="prediction/retrain" element={<RetrainAIModel />} />
+            <Route path="prediction/results" element={<ViewValuationResults />} />
+            <Route path="prediction/history" element={<ViewValuationHistory />} />
+            <Route path="prediction/history" element={<ViewValuationHistory />} />
             <Route path="settings" element={<Placeholder title="System Settings" />} />
             <Route path="users" element={<Placeholder title="User Management" />} />
 
