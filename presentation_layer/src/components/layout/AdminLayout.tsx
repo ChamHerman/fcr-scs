@@ -402,14 +402,26 @@ export const AdminLayout: React.FC = () => {
             </div>
 
             <div className="nav-section">
-              {!isCollapsed && <span className="nav-label">System</span>}
-              <NavLink to="/admin/settings" className="nav-item" title={isCollapsed ? "Settings" : ""}>
-                <Settings size={22} className="nav-icon" />
-                {!isCollapsed && <span>Settings</span>}
+              {!isCollapsed && <span className="nav-label">System Audit & Settings</span>}
+              <NavLink to="/admin/audit-logs" className="nav-item" title={isCollapsed ? "Audit Logs" : ""}>
+                <ClipboardList size={22} className="nav-icon" />
+                {!isCollapsed && <span>Audit Logs</span>}
+              </NavLink>
+              <NavLink to="/admin/alerts" className="nav-item" title={isCollapsed ? "Alerts" : ""}>
+                <BarChart2 size={22} className="nav-icon" />
+                {!isCollapsed && <span>Alert Monitoring</span>}
+              </NavLink>
+              <NavLink to="/admin/reports" className="nav-item" title={isCollapsed ? "Reports" : ""}>
+                <PieChart size={22} className="nav-icon" />
+                {!isCollapsed && <span>System Reports</span>}
               </NavLink>
               <NavLink to="/admin/users" className="nav-item" title={isCollapsed ? "Users" : ""}>
                 <Users size={22} className="nav-icon" />
                 {!isCollapsed && <span>Users</span>}
+              </NavLink>
+              <NavLink to="/admin/settings" className="nav-item" title={isCollapsed ? "Settings" : ""}>
+                <Settings size={22} className="nav-icon" />
+                {!isCollapsed && <span>Settings</span>}
               </NavLink>
             </div>
 

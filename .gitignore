@@ -15,3 +15,5 @@ node_modules/
 !*.env.template
 !**/*.env.example
 !**/*.env.template
+presentation_layer/package.json
+package-lock.json
