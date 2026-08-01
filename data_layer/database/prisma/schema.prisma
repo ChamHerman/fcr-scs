@@ -6,6 +6,71 @@ datasource db {
   provider = "postgresql"
 }
 
+enum CaseStatus {
+  CASE_REGISTERED
+  VALUER_ASSIGNED
+  VALUATION_IN_PROGRESS
+  PENDING_VALUATION_APPROVAL
+  VALUATION_APPROVED
+  VALUATION_REJECTED
+  PENDING_COMPENSATION_APPROVAL
+  COMPENSATION_APPROVED
+  COMPENSATION_REJECTED
+  OFFER_ISSUED
+  OFFER_REJECTED
+  PAYMENT_IN_PROGRESS
+  PAYMENT_COMPLETED
+  CASE_CLOSED
+}
+
+enum OfferStatus {
+  EXPIRED
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum ReportStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ObjectionStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum Decision {
+  ACCEPTED
+  REJECTED
+  REVISED
+}
+
+enum UserRole {
+  ADMIN
+  GOVERNMENT_OFFICER
+  LAND_VALUER
+  LAND_OWNER
+  DEVELOPER
+}
+
+enum AreaUnit {
+  SQUARE_METER
+  ACRE
+  HECTARE
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  SUCCESSFUL
+  FAILED
+  CANCELLED
+}
+
 model BlockchainRecord {
   id                  String    @id @default(uuid())
   caseId              String    @unique
@@ -80,4 +145,342 @@ model ReceiverBankDetails {
   encryptedBankDetails String
   paymentCaseId        String      @unique
   paymentCase          PaymentCase @relation(fields: [paymentCaseId], references: [id])
+}
+
+model Project {
+  projectId     String            @id @default(uuid()) @db.Uuid @map("project_id")
+  projectName   String            @unique @db.VarChar(255) @map("project_name")
+  projectType   String            @db.VarChar(100) @map("project_type")
+  purpose       String
+  budget        Decimal           @db.Decimal(20, 2)
+  fundingSource String            @db.VarChar(255) @map("funding_source")
+
+  cases         AcquisitionCase[]
+
+  // Auditing fields (placed at bottom)
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+  createdById   String            @db.Uuid @map("created_by_id")
+  createdBy     User              @relation("ProjectCreatedBy", fields: [createdById], references: [userId])
+
+  @@map("project")
+}
+
+model AcquisitionCase {
+  caseId              String               @id @default(uuid()) @db.Uuid @map("case_id")
+  projectId           String               @db.Uuid @map("project_id")
+  caseTitle           String               @db.VarChar(255) @map("case_title")
+  status              CaseStatus           @map("status")
+  registrationDate    DateTime             @map("registration_date")
+  remarks             String
+
+  project             Project              @relation(fields: [projectId], references: [projectId])
+  // one-to-one with LandParcel
+  landParcel          LandParcel?          @relation("AcquisitionCaseToLandParcel") // reverse side, foreign key on LandParcel
+  valuationReports    ValuationReport[]
+  caseAssignments     CaseAssignment[]
+  compensationReports CompensationReport[]
+  offerLetters        OfferLetter[]
+  caseDocuments       CaseDocument[]
+  objections          Objection[]
+
+  // Auditing fields
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+  createdById         String               @db.Uuid @map("created_by_id")
+  createdBy           User                 @relation("CreatedCases", fields: [createdById], references: [userId])
+
+  @@index([projectId])
+  @@index([status])
+  @@map("acquisition_case")
+}
+
+model LandParcel {
+  landId      String          @id @default(uuid()) @db.Uuid @map("land_id")
+  caseId      String          @unique @db.Uuid @map("case_id") // unique to enforce one-to-one
+  landTitleNo String          @unique @db.VarChar(255) @map("land_title_no")
+  lotNo       String          @db.VarChar(100) @map("lot_no")
+  mukim       String          @db.VarChar(255)
+  district    String          @db.VarChar(255)
+  state       String          @db.VarChar(100)
+  area        Decimal         @db.Decimal(12, 2)
+  areaUnit    AreaUnit        @map("area_unit")
+  category    String          @db.VarChar(100)
+  longitude   Decimal         @db.Decimal(10, 7)
+  latitude    Decimal         @db.Decimal(10, 7)
+
+  acquisitionCase AcquisitionCase @relation("AcquisitionCaseToLandParcel", fields: [caseId], references: [caseId])
+  ownerships  LandOwnership[]
+
+  // Auditing fields
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  createdById String          @db.Uuid @map("created_by_id")
+  createdBy   User            @relation("LandParcelCreatedBy", fields: [createdById], references: [userId])
+
+  @@index([caseId])
+  @@index([district])
+  @@index([state])
+  @@map("land_parcel")
+}
+
+model LandOwner {
+  ownerId    String          @id @default(uuid()) @db.Uuid @map("owner_id")
+  name       String          @db.VarChar(255)
+  nric       String          @db.VarChar(100)
+  address    String
+  contact    String          @db.VarChar(100)
+
+  ownerships LandOwnership[]
+
+  // Auditing fields
+  createdAt  DateTime        @default(now()) @map("created_at")
+  updatedAt  DateTime        @updatedAt @map("updated_at")
+  createdById String         @db.Uuid @map("created_by_id")
+  createdBy  User            @relation("LandOwnerCreatedBy", fields: [createdById], references: [userId])
+
+  @@map("land_owner")
+}
+
+model LandOwnership {
+  ownershipId   String        @id @default(uuid()) @db.Uuid @map("ownership_id")
+  landId        String        @db.Uuid @map("land_id")
+  ownerId       String        @db.Uuid @map("owner_id")
+  ownershipType String        @db.VarChar(100) @map("ownership_type")
+  ownershipStart DateTime?    @map("ownership_start")
+  ownershipEnd   DateTime?    @map("ownership_end")
+  isCurrent      Boolean      @default(true) @map("is_current")
+
+  landParcel    LandParcel    @relation(fields: [landId], references: [landId])
+  landOwner     LandOwner     @relation(fields: [ownerId], references: [ownerId])
+  offerLetters  OfferLetter[]
+
+  // Auditing fields
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  createdById   String        @db.Uuid @map("created_by_id")
+  createdBy     User          @relation("LandOwnershipCreatedBy", fields: [createdById], references: [userId])
+
+  @@map("land_ownership")
+  @@index([landId])
+  @@index([ownerId])
+}
+
+model CaseDocument {
+  documentId   String          @id @default(uuid()) @db.Uuid @map("document_id")
+  caseId       String          @db.Uuid @map("case_id")
+  documentType String          @db.VarChar(100) @map("document_type")
+  fileName     String          @db.VarChar(255) @map("file_name")
+  fileSize     Int             @map("file_size")
+  filePath     String          @db.VarChar(500) @map("file_path")
+  mimeType     String          @db.VarChar(100) @map("mime_type")
+  checksum     String          @db.VarChar(255) @map("checksum")
+
+  acquisitionCase AcquisitionCase @relation(fields: [caseId], references: [caseId])
+
+  // Auditing fields (uploadDate removed, uploadedById → createdById)
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+  createdById  String          @db.Uuid @map("created_by_id")
+  createdBy    User            @relation(fields: [createdById], references: [userId])
+
+  @@index([caseId])
+  @@map("case_document")
+}
+
+model ValuationReport {
+  reportId                String               @id @default(uuid()) @db.Uuid @map("report_id")
+  caseId                  String               @db.Uuid @map("case_id")
+  valuerId                String               @db.Uuid @map("valuer_id")
+  valuationDate           DateTime?            @map("valuation_date")
+  valuationMethod         String?              @db.VarChar(100) @map("valuation_method")
+  marketValue             Decimal?             @db.Decimal(20, 2) @map("market_value")
+  recommendedCompensation Decimal?             @db.Decimal(20, 2) @map("recommended_compensation")
+  remarks                 String?
+  reportStatus            ReportStatus?        @map("report_status")
+
+  acquisitionCase         AcquisitionCase      @relation(fields: [caseId], references: [caseId])
+  valuer                  User                 @relation("Valuer", fields: [valuerId], references: [userId])
+  compensationReports     CompensationReport[]
+  caseAssignment          CaseAssignment?      // reverse of one-to-one
+
+  // Auditing fields
+  createdAt               DateTime             @default(now()) @map("created_at")
+  updatedAt               DateTime             @updatedAt @map("updated_at")
+  createdById             String               @db.Uuid @map("created_by_id")
+  createdBy               User                 @relation("CreatedValuationReport", fields: [createdById], references: [userId])
+
+  @@index([caseId])
+  @@index([valuerId])
+  @@index([reportStatus])
+  @@map("valuation_report")
+}
+
+model CaseAssignment {
+  assignmentId   String          @id @default(uuid()) @db.Uuid @map("assignment_id")
+  caseId         String          @db.Uuid @map("case_id")
+  assignedToId   String          @db.Uuid @map("assigned_to_id")
+  assignmentDate DateTime        @map("assignment_date")
+  dueDate        DateTime        @map("due_date")
+  remarks        String?
+
+  acquisitionCase AcquisitionCase @relation(fields: [caseId], references: [caseId])
+  assignedTo      User            @relation("AssignedToUser", fields: [assignedToId], references: [userId])
+
+  // one-to-one with ValuationReport
+  valuationReportId String?       @unique @db.Uuid @map("valuation_report_id")
+  valuationReport   ValuationReport? @relation(fields: [valuationReportId], references: [reportId])
+
+  // Auditing fields (assignedById → createdById)
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  createdById     String          @db.Uuid @map("created_by_id")
+  createdBy       User            @relation("AssignedByUser", fields: [createdById], references: [userId])
+
+  @@map("case_assignment")
+}
+
+model CompensationReport {
+  compensationReportId String               @id @default(uuid()) @db.Uuid @map("compensation_report_id")
+  caseId               String               @db.Uuid @map("case_id")
+  valuationReportId    String               @db.Uuid @map("valuation_report_id")
+  reviewedById         String?              @db.Uuid @map("reviewed_by_id")
+  approvedById         String?              @db.Uuid @map("approved_by_id")
+  approvedAt           DateTime?            @map("approved_at")
+  totalCompensation    Decimal?             @db.Decimal(20, 2) @map("total_compensation")
+  remarks              String?
+  status               ReportStatus         @map("status")
+
+  acquisitionCase      AcquisitionCase      @relation(fields: [caseId], references: [caseId])
+  valuationReport      ValuationReport      @relation(fields: [valuationReportId], references: [reportId])
+  reviewedBy           User?                @relation("ReviewedByUser", fields: [reviewedById], references: [userId])
+  approvedBy           User?                @relation("ApprovedByUser", fields: [approvedById], references: [userId])
+
+  // one-to-many with OfferLetter
+  offerLetters OfferLetter[]
+
+  // Auditing fields (preparedById → createdById, preparedDate removed)
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
+  createdById          String               @db.Uuid @map("created_by_id")
+  createdBy            User                 @relation("PreparedByUser", fields: [createdById], references: [userId])
+
+  @@index([caseId])
+  @@index([status])
+  @@map("compensation_report")
+}
+
+model OfferLetter {
+  offerId              String             @id @default(uuid()) @db.Uuid @map("offer_id")
+  compensationReportId String             @db.Uuid @map("compensation_report_id") // unique for one-to-one
+  caseId               String             @db.Uuid @map("case_id")
+  ownershipId          String             @db.Uuid @map("ownership_id")
+  offerReferenceNo     String             @unique @db.VarChar(255) @map("offer_reference_no")
+  offerType            String             @db.VarChar(100) @map("offer_type")
+  offerAmount          Decimal            @db.Decimal(20, 2) @map("offer_amount")
+  offerDate            DateTime           @map("offer_date")
+  expiryDate           DateTime           @map("expiry_date")
+  acceptancePeriodDays Int                @map("acceptance_period_days")
+  status               OfferStatus        @map("status")
+  acceptedAt           DateTime?          @map("accepted_at")
+  rejectedAt           DateTime?          @map("rejected_at")
+  signedDocument       String?            @map("signed_document")
+  blockchainHash       String?            @db.VarChar(255) @map("blockchain_hash")
+  remarks              String?
+
+  compensationReport   CompensationReport @relation(fields: [compensationReportId], references: [compensationReportId])
+  acquisitionCase      AcquisitionCase    @relation(fields: [caseId], references: [caseId])
+  landOwnership        LandOwnership      @relation(fields: [ownershipId], references: [ownershipId])
+  objections           Objection[]
+
+  // Auditing fields
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+  createdById          String             @db.Uuid @map("created_by_id")
+  createdBy            User               @relation("OfferLetterCreatedBy", fields: [createdById], references: [userId])
+
+  @@index([caseId])
+  @@index([ownershipId])
+  @@index([status])
+  @@map("offer_letter")
+}
+
+model Objection {
+  objectionId         String              @id @default(uuid()) @db.Uuid @map("objection_id")
+  offerId             String              @db.Uuid @map("offer_id")
+  caseId              String              @db.Uuid @map("case_id")
+  objectionReason     String              @map("objection_reason")
+  requestedAmount     Decimal             @db.Decimal(20, 2) @map("requested_amount")
+  status              ObjectionStatus     @map("status")
+  reviewedById        String?             @db.Uuid @map("reviewed_by_id")
+  reviewDate          DateTime?           @map("review_date")
+  reviewRemarks       String?             @map("review_remarks")
+  decision            Decision?           @map("decision")
+  revisedCompensation Decimal?            @db.Decimal(20, 2) @map("revised_compensation")
+  resolutionDate      DateTime?           @map("resolution_date")
+
+  offerLetter         OfferLetter         @relation(fields: [offerId], references: [offerId])
+  acquisitionCase     AcquisitionCase     @relation(fields: [caseId], references: [caseId])
+  reviewedBy          User?               @relation("ReviewedByUser", fields: [reviewedById], references: [userId])
+  objectionDocuments  ObjectionDocument[]
+
+  // Auditing fields (submittedAt → createdAt, submittedById → createdById)
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+  createdById         String              @db.Uuid @map("created_by_id")
+  createdBy           User                @relation("SubmittedByUser", fields: [createdById], references: [userId])
+
+  @@index([caseId])
+  @@index([status])
+  @@map("objection")
+}
+
+model ObjectionDocument {
+  documentId   String    @id @default(uuid()) @db.Uuid @map("document_id")
+  objectionId  String    @db.Uuid @map("objection_id")
+  fileName     String    @db.VarChar(255) @map("file_name")
+  filePath     String    @db.VarChar(500) @map("file_path")
+  mimeType     String    @db.VarChar(100) @map("mime_type")
+  checksum     String    @db.VarChar(255) @map("checksum")
+
+  objection    Objection @relation(fields: [objectionId], references: [objectionId])
+
+  // Auditing fields (uploadDate → createdAt, uploadedById → createdById)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  createdById  String    @db.Uuid @map("created_by_id")
+  createdBy    User      @relation(fields: [createdById], references: [userId])
+
+  @@map("objection_document")
+}
+
+model User {
+ userId String @id @default(uuid()) @db.Uuid
+ name String
+ email String @unique
+ passwordHash String
+ role UserRole
+ isActive Boolean @default(true)
+ lastLoginAt DateTime?
+
+ createdProjects Project[] @relation("ProjectCreatedBy")
+ createdCases AcquisitionCase[] @relation("CreatedCases")
+ createdLandParcels LandParcel[] @relation("LandParcelCreatedBy")
+ createdLandOwners LandOwner[] @relation("LandOwnerCreatedBy")
+ createdOwnerships LandOwnership[] @relation("LandOwnershipCreatedBy")
+ 
+ assignedToCases CaseAssignment[] @relation("AssignedToUser")
+ assignedByCases CaseAssignment[] @relation("AssignedByUser")
+ valuerReports ValuationReport[] @relation("Valuer")
+ createdValuationReports ValuationReport[] @relation("CreatedValuationReport")
+ preparedReports CompensationReport[] @relation("PreparedByUser")
+ reviewedReports CompensationReport[] @relation("ReviewedByUser")
+ approvedReports CompensationReport[]  @relation("ApprovedByUser")
+ submittedObjections Objection[] @relation("SubmittedByUser")
+ reviewedObjections Objection[] @relation("ReviewedByUser")
+ createdOfferLetters OfferLetter[] @relation("OfferLetterCreatedBy")
+ caseDocuments CaseDocument[]
+ objectionDocuments ObjectionDocument[]
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
 }
