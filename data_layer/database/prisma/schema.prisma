@@ -161,7 +161,7 @@ model Project {
   createdAt     DateTime          @default(now()) @map("created_at")
   updatedAt     DateTime          @updatedAt @map("updated_at")
   createdById   String            @db.Uuid @map("created_by_id")
-  createdBy     User              @relation(fields: [createdById], references: [userId])
+  createdBy     User              @relation("ProjectCreatedBy", fields: [createdById], references: [userId])
 
   @@map("project")
 }
@@ -216,7 +216,7 @@ model LandParcel {
   createdAt   DateTime        @default(now()) @map("created_at")
   updatedAt   DateTime        @updatedAt @map("updated_at")
   createdById String          @db.Uuid @map("created_by_id")
-  createdBy   User            @relation(fields: [createdById], references: [userId])
+  createdBy   User            @relation("LandParcelCreatedBy", fields: [createdById], references: [userId])
 
   @@index([caseId])
   @@index([district])
@@ -237,7 +237,7 @@ model LandOwner {
   createdAt  DateTime        @default(now()) @map("created_at")
   updatedAt  DateTime        @updatedAt @map("updated_at")
   createdById String         @db.Uuid @map("created_by_id")
-  createdBy  User            @relation(fields: [createdById], references: [userId])
+  createdBy  User            @relation("LandOwnerCreatedBy", fields: [createdById], references: [userId])
 
   @@map("land_owner")
 }
@@ -259,7 +259,7 @@ model LandOwnership {
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
   createdById   String        @db.Uuid @map("created_by_id")
-  createdBy     User          @relation(fields: [createdById], references: [userId])
+  createdBy     User          @relation("LandOwnershipCreatedBy", fields: [createdById], references: [userId])
 
   @@map("land_ownership")
   @@index([landId])
@@ -271,7 +271,7 @@ model CaseDocument {
   caseId       String          @db.Uuid @map("case_id")
   documentType String          @db.VarChar(100) @map("document_type")
   fileName     String          @db.VarChar(255) @map("file_name")
-  fileSize     Int           @db.Real @map("file_size")
+  fileSize     Int             @map("file_size")
   filePath     String          @db.VarChar(500) @map("file_path")
   mimeType     String          @db.VarChar(100) @map("mime_type")
   checksum     String          @db.VarChar(255) @map("checksum")
@@ -300,7 +300,7 @@ model ValuationReport {
   reportStatus            ReportStatus?        @map("report_status")
 
   acquisitionCase         AcquisitionCase      @relation(fields: [caseId], references: [caseId])
-  valuer                  User                 @relation(fields: [valuerId], references: [userId])
+  valuer                  User                 @relation("Valuer", fields: [valuerId], references: [userId])
   compensationReports     CompensationReport[]
   caseAssignment          CaseAssignment?      // reverse of one-to-one
 
@@ -308,7 +308,7 @@ model ValuationReport {
   createdAt               DateTime             @default(now()) @map("created_at")
   updatedAt               DateTime             @updatedAt @map("updated_at")
   createdById             String               @db.Uuid @map("created_by_id")
-  createdBy               User                 @relation(fields: [createdById], references: [userId])
+  createdBy               User                 @relation("CreatedValuationReport", fields: [createdById], references: [userId])
 
   @@index([caseId])
   @@index([valuerId])
@@ -359,8 +359,6 @@ model CompensationReport {
   // one-to-many with OfferLetter
   offerLetters OfferLetter[]
 
-  paymentTransactions  PaymentTransaction[]
-
   // Auditing fields (preparedById → createdById, preparedDate removed)
   createdAt            DateTime             @default(now()) @map("created_at")
   updatedAt            DateTime             @updatedAt @map("updated_at")
@@ -399,7 +397,7 @@ model OfferLetter {
   createdAt            DateTime           @default(now()) @map("created_at")
   updatedAt            DateTime           @updatedAt @map("updated_at")
   createdById          String             @db.Uuid @map("created_by_id")
-  createdBy            User               @relation(fields: [createdById], references: [userId])
+  createdBy            User               @relation("OfferLetterCreatedBy", fields: [createdById], references: [userId])
 
   @@index([caseId])
   @@index([ownershipId])
@@ -470,15 +468,17 @@ model User {
  createdLandParcels LandParcel[] @relation("LandParcelCreatedBy")
  createdLandOwners LandOwner[] @relation("LandOwnerCreatedBy")
  createdOwnerships LandOwnership[] @relation("LandOwnershipCreatedBy")
+ 
  assignedToCases CaseAssignment[] @relation("AssignedToUser")
  assignedByCases CaseAssignment[] @relation("AssignedByUser")
  valuerReports ValuationReport[] @relation("Valuer")
- createdValuationReports ValuationReport[] @relation("ValuationReportCreatedBy")
+ createdValuationReports ValuationReport[] @relation("CreatedValuationReport")
  preparedReports CompensationReport[] @relation("PreparedByUser")
  reviewedReports CompensationReport[] @relation("ReviewedByUser")
  approvedReports CompensationReport[]  @relation("ApprovedByUser")
  submittedObjections Objection[] @relation("SubmittedByUser")
  reviewedObjections Objection[] @relation("ReviewedByUser")
+ createdOfferLetters OfferLetter[] @relation("OfferLetterCreatedBy")
  caseDocuments CaseDocument[]
  objectionDocuments ObjectionDocument[]
  createdAt DateTime @default(now())
