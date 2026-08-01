@@ -4,7 +4,11 @@ import { Pool } from "pg";
 import * as crypto from "crypto";
 import * as ethereum from "./ethereum.service";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const connectionString =
+  process.env.DATABASE_URL ||
+  "postgresql://fcr_app:postgres@127.0.0.1:5432/fcr_scs?schema=public";
+
+const pool = new Pool({ connectionString });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 

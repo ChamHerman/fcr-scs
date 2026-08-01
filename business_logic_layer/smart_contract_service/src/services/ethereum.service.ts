@@ -45,7 +45,7 @@ function getContract(): ethers.Contract {
     _contract = new ethers.Contract(contractAddress, ABI.abi, wallet);
 
     const networkType = isLocalNode() ? "Hardhat local node" : "Sepolia testnet";
-    console.log("Ethereum service: connected to", networkType, "at", getRpcUrl());
+    console.log(`[${new Date().toISOString()}] [INFO] [ethereum-service] Connected to ${networkType} at ${getRpcUrl()}`);
   }
   return _contract;
 }
