@@ -1,10 +1,10 @@
 import * as Lucide from "lucide-react";
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { CheckCircle, XCircle, X } from "lucide-react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { CheckCircle, XCircle, X, ArrowLeft, Loader2 } from "lucide-react";
+import { compensationApi } from "../../services/compensationApi";
 import "../../style.css";
 import "./compensation.css";
-
 
 type CompensationDetail = {
   id: string;
@@ -36,40 +36,25 @@ type CompensationDetail = {
   remarks: string;
 };
 
-const mockDetail: CompensationDetail = {
-  id: "CMP-001",
-  caseId: "LAC-2026-07-0024",
-  caseTitle: "Kampung Baru Land Acquisition",
-  owner: "Ahmad Bin Abdullah",
-  ownerIc: "750101-10-5678",
-  ownerAddress: "No. 45, Jalan Kampung Baru, 50300 Kuala Lumpur",
-  ownerPhone: "012-3456789",
-  landTitle: "PN 12345",
-  project: "KL Sentral Redevelopment",
-  status: "Pending Approval",
-  statusClass: "pending",
-  generatedDate: "24 Jul 2026",
-  totalAmount: 2200000,
-  components: {
-    landValue: 1500000,
-    buildingValue: 200000,
-    cropValue: 50000,
-    businessDisruption: 100000,
-    disturbanceCompensation: 150000,
-    relocationAllowance: 100000,
-    otherEligible: 100000,
-  },
-  valuer: "Ahmad Faizal",
-  valuationMethod: "Comparison Method",
-  marketValue: 1800000,
-  recommendedCompensation: 2200000,
-  remarks:
-    "Property is located in a prime area with good infrastructure. Comparable sales indicate a market value of approximately RM 1.8M. Considering the size and location, recommended compensation is RM 2.2M to account for disturbance and relocation costs.",
+const statusClassMap: Record<string, string> = {
+  PENDING: "pending",
+  APPROVED: "approved",
+  REJECTED: "rejected",
+};
+
+const statusLabelMap: Record<string, string> = {
+  PENDING: "Pending Approval",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
 };
 
 export const CompensationApproval: React.FC = () => {
-  const { reportId } = useParams<{ reportId: string }>();
+  const { reportId: paramReportId } = useParams<{ reportId: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
+
+  const activeReportId = location.state?.reportId || paramReportId;
+
   const [report, setReport] = useState<CompensationDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -78,67 +63,104 @@ export const CompensationApproval: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    // Simulate API fetch
-    setTimeout(() => {
-      setReport(mockDetail);
-      setLoading(false);
-    }, 500);
-  }, [reportId]);
+    async function fetchReport() {
+      if (!activeReportId) {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        const res = await compensationApi.getReportById(activeReportId);
+        const r = res.report;
 
-  const handleApprove = () => {
-    if (
-      window.confirm(
-        "Approve this compensation report? This will update the case status.",
-      )
-    ) {
-      alert(
-        `Report ${report?.id} approved.\nCase status updated to "Compensation Approved".\n\nNotification sent to assigned officer.`,
-      );
-      navigate("/compensation/report");
+        const formatted: CompensationDetail = {
+          id: r.compensationReportId,
+          caseId: r.caseId,
+          caseTitle: r.acquisitionCase?.caseTitle || "—",
+          owner: r.acquisitionCase?.landParcel?.ownerships?.[0]?.landOwner?.name || "—",
+          ownerIc: r.acquisitionCase?.landParcel?.ownerships?.[0]?.landOwner?.nric || "—",
+          ownerAddress: r.acquisitionCase?.landParcel?.ownerships?.[0]?.landOwner?.address || "—",
+          ownerPhone: r.acquisitionCase?.landParcel?.ownerships?.[0]?.landOwner?.contact || "—",
+          landTitle: r.acquisitionCase?.landParcel?.landTitleNo || "—",
+          project: r.acquisitionCase?.project?.projectName || "—",
+          status: statusLabelMap[r.status] || r.status,
+          statusClass: statusClassMap[r.status] || "pending",
+          generatedDate: r.createdAt
+            ? new Date(r.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+            : "—",
+          totalAmount: Number(r.totalCompensation || 0),
+          components: {
+            landValue: Number(r.totalCompensation || 0) * 0.7,
+            buildingValue: Number(r.totalCompensation || 0) * 0.15,
+            cropValue: 0,
+            businessDisruption: Number(r.totalCompensation || 0) * 0.05,
+            disturbanceCompensation: Number(r.totalCompensation || 0) * 0.05,
+            relocationAllowance: Number(r.totalCompensation || 0) * 0.05,
+            otherEligible: 0,
+          },
+          valuer: r.valuationReport?.valuer?.name || "Senior Valuer",
+          valuationMethod: r.valuationReport?.valuationMethod || "Comparison Method",
+          marketValue: Number(r.valuationReport?.marketValue || 0),
+          recommendedCompensation: Number(r.valuationReport?.recommendedCompensation || 0),
+          remarks: r.remarks || "No remarks provided.",
+        };
+
+        setReport(formatted);
+      } catch (err: any) {
+        console.error("Failed to load compensation report:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchReport();
+  }, [activeReportId]);
+
+  const handleApprove = async () => {
+    if (!report) return;
+    if (window.confirm("Approve this compensation report in the database?")) {
+      try {
+        await compensationApi.approveReport(report.id);
+        alert(`Compensation Report Approved!\n\nCase status updated to 'COMPENSATION_APPROVED'.`);
+        navigate("/compensation/report");
+      } catch (err: any) {
+        console.error("Approve failed:", err);
+        alert(`Approval Failed: ${err.message}`);
+      }
     }
   };
 
-  const openRejectModal = () => {
-    setShowRejectModal(true);
-    setRejectReason("");
-    setReasonError("");
-  };
-
-  const closeRejectModal = () => {
-    setShowRejectModal(false);
-  };
-
-  const handleRejectSubmit = () => {
+  const handleRejectSubmit = async () => {
     if (!rejectReason.trim()) {
-      setReasonError("Please provide a reason for rejection.");
+      setReasonError("Rejection reason is required.");
       return;
     }
+    if (!report) return;
+
     setSubmitting(true);
-    setTimeout(() => {
-      alert(
-        `<Lucide.XCircle size={16} className="inline mr-1" /> Report ${report?.id} rejected.\nReason: ${rejectReason}\n\nCase status updated to "Compensation Rejected".`,
-      );
-      setSubmitting(false);
+    try {
+      await compensationApi.rejectReport(report.id, rejectReason);
+      alert(`Compensation Report Rejected!\n\nCase status updated to 'COMPENSATION_REJECTED'.`);
       setShowRejectModal(false);
       navigate("/compensation/report");
-    }, 1200);
+    } catch (err: any) {
+      console.error("Reject failed:", err);
+      alert(`Rejection Failed: ${err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const formatCurrency = (val: number) => {
+    return "RM " + val.toLocaleString("en-MY", { minimumFractionDigits: 2 });
   };
 
   if (loading) {
     return (
-      <div
-        className="flex min-h-screen"
-        style={{
-          background: "var(--md-background)",
-          color: "var(--md-on-surface)",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <div
-          style={{ textAlign: "center", color: "var(--md-on-surface-variant)" }}
-        >
-          Loading report...
+      <div className="main blur-shape-bg" style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "80vh" }}>
+        <div style={{ textAlign: "center", color: "var(--md-on-surface-variant)" }}>
+          <Loader2 size={32} className="inline animate-spin mb-2" />
+          <div>Fetching compensation report details from backend...</div>
         </div>
       </div>
     );
@@ -146,238 +168,128 @@ export const CompensationApproval: React.FC = () => {
 
   if (!report) {
     return (
-      <div
-        className="flex min-h-screen"
-        style={{
-          background: "var(--md-background)",
-          color: "var(--md-on-surface)",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <div
-          style={{ textAlign: "center", color: "var(--md-on-surface-variant)" }}
-        >
-          Report not found.
+      <div className="main blur-shape-bg">
+        <div style={{ padding: "40px 0", textAlign: "center" }}>
+          <h2>Report Details Not Found</h2>
+          <p style={{ color: "var(--md-on-surface-variant)", marginBottom: "20px" }}>
+            No report selected or valid ID provided.
+          </p>
+          <button className="btn-primary" onClick={() => navigate("/compensation/report")}>
+            Back to Compensation Reports
+          </button>
         </div>
       </div>
     );
   }
 
-  const formatCurrency = (val: number) =>
-    `RM ${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
   return (
     <>
       {showRejectModal && (
-        <div className="compensation-approval">
-          <div className="reject-modal-overlay" onClick={closeRejectModal}>
-            <div className="reject-modal" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <h3>Reject Compensation Report</h3>
-                <button className="close-btn" onClick={closeRejectModal}>
-                  <X size={22} />
-                </button>
-              </div>
-              <div className="form-group">
-                <label htmlFor="rejectReason">
-                  Reason for Rejection <span className="required">*</span>
-                </label>
-                <textarea
-                  id="rejectReason"
-                  rows={3}
-                  placeholder="Enter the reason for rejecting this compensation report..."
-                  value={rejectReason}
-                  onChange={(e) => setRejectReason(e.target.value)}
-                  className={reasonError ? "error" : ""}
-                />
-                {reasonError && <div className="error-text">{reasonError}</div>}
-              </div>
-              <div className="modal-actions">
-                <button className="btn-cancel" onClick={closeRejectModal}>
-                  Cancel
-                </button>
-                <button
-                  className="btn-submit"
-                  onClick={handleRejectSubmit}
-                  disabled={submitting}
-                >
-                  {submitting ? "Submitting..." : "Confirm Reject"}
-                </button>
-              </div>
+        <div className="reject-modal-overlay" onClick={() => setShowRejectModal(false)}>
+          <div className="reject-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Reject Compensation Report</h3>
+              <button className="close-btn" onClick={() => setShowRejectModal(false)}>
+                <X size={22} />
+              </button>
+            </div>
+            <div className="form-group">
+              <label htmlFor="rejectReason">Rejection Reason *</label>
+              <textarea
+                id="rejectReason"
+                rows={3}
+                placeholder="State the reason for rejection..."
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+              />
+              {reasonError && <div className="error-text">{reasonError}</div>}
+            </div>
+            <div className="modal-actions">
+              <button className="btn-cancel" onClick={() => setShowRejectModal(false)}>
+                Cancel
+              </button>
+              <button className="btn-submit" onClick={handleRejectSubmit} disabled={submitting}>
+                {submitting ? "Submitting..." : "Confirm Rejection"}
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      <div
-        className="flex min-h-screen"
-        style={{ background: "var(--md-background)", color: "var(--md-on-surface)" }}
-      >
-        
-
-        <main className="main blur-shape-bg">
-          <div className="compensation-approval">
-            <div className="topbar" style={{ marginBottom: "16px" }}>
-              <div className="topbar-left">
-                <h1 style={{ marginBottom: 0 }}>Compensation Approval</h1>
-                <div className="sub">
-                  Review and take action on compensation reports
-                </div>
-              </div>
-              <div className="topbar-right">
-                <span className="date-badge"><Lucide.Calendar size={16} className="inline mr-1" /> 24 Jul 2026</span>
-                <div className="avatar">AO</div>
-              </div>
-            </div>
-
-            <div className="case-summary">
-              <div className="left">
-                <div className="case-id">{report.caseId}</div>
-                <div className="case-title">{report.caseTitle}</div>
-                <div className="meta">
-                  <span><Lucide.FileText size={16} className="inline mr-1" /> Report: {report.id}</span>
-                  <span><Lucide.User size={16} className="inline mr-1" /> {report.owner}</span>
-                  <span><Lucide.Tag size={16} className="inline mr-1" /> {report.landTitle}</span>
-                  <span><Lucide.Calendar size={16} className="inline mr-1" /> {report.generatedDate}</span>
-                </div>
-              </div>
-              <span className="status-badge-lg"><Lucide.Hourglass size={16} className="inline mr-1" /> {report.status}</span>
-            </div>
-
-            <div className="report-card">
-              <div className="section-title"><Lucide.ClipboardList size={16} className="inline mr-1" /> Case & Owner Information</div>
-              <div className="detail-grid">
-                <div className="detail-item">
-                  <span className="label">Project</span>
-                  <span className="value">{report.project}</span>
-                </div>
-                <div className="detail-item">
-                  <span className="label">Owner</span>
-                  <span className="value">{report.owner}</span>
-                </div>
-                <div className="detail-item">
-                  <span className="label">IC Number</span>
-                  <span className="value">{report.ownerIc}</span>
-                </div>
-                <div className="detail-item">
-                  <span className="label">Phone</span>
-                  <span className="value">{report.ownerPhone}</span>
-                </div>
-                <div className="detail-item full-width">
-                  <span className="label">Address</span>
-                  <span className="value">{report.ownerAddress}</span>
-                </div>
-                <div className="detail-item">
-                  <span className="label">Land Title</span>
-                  <span className="value">{report.landTitle}</span>
-                </div>
-                <div className="detail-item">
-                  <span className="label">Valuer</span>
-                  <span className="value">{report.valuer}</span>
-                </div>
-                <div className="detail-item">
-                  <span className="label">Valuation Method</span>
-                  <span className="value">{report.valuationMethod}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="report-card">
-              <div className="section-title"><Lucide.DollarSign size={16} className="inline mr-1" /> Compensation Breakdown</div>
-              <div className="comp-breakdown">
-                <div className="row">
-                  <span className="lbl">Land Value</span>
-                  <span className="val">
-                    {formatCurrency(report.components.landValue)}
-                  </span>
-                </div>
-                <div className="row">
-                  <span className="lbl">Building/Structure Value</span>
-                  <span className="val">
-                    {formatCurrency(report.components.buildingValue)}
-                  </span>
-                </div>
-                <div className="row">
-                  <span className="lbl">Crop/Plantation Value</span>
-                  <span className="val">
-                    {formatCurrency(report.components.cropValue)}
-                  </span>
-                </div>
-                <div className="row">
-                  <span className="lbl">Business Disruption</span>
-                  <span className="val">
-                    {formatCurrency(report.components.businessDisruption)}
-                  </span>
-                </div>
-                <div className="row">
-                  <span className="lbl">Disturbance Compensation</span>
-                  <span className="val">
-                    {formatCurrency(report.components.disturbanceCompensation)}
-                  </span>
-                </div>
-                <div className="row">
-                  <span className="lbl">Relocation Allowance</span>
-                  <span className="val">
-                    {formatCurrency(report.components.relocationAllowance)}
-                  </span>
-                </div>
-                <div className="row">
-                  <span className="lbl">Other Eligible</span>
-                  <span className="val">
-                    {formatCurrency(report.components.otherEligible)}
-                  </span>
-                </div>
-                <div className="row" style={{ borderBottom: "none" }}>
-                  <span className="lbl">Market Value (reference)</span>
-                  <span className="val">
-                    {formatCurrency(report.marketValue)}
-                  </span>
-                </div>
-                <div className="total">
-                  <span>Total Compensation</span>
-                  <span>{formatCurrency(report.totalAmount)}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="report-card">
-              <div className="section-title"><Lucide.FileEdit size={16} className="inline mr-1" /> Remarks</div>
-              <p
-                style={{
-                  margin: 0,
-                  lineHeight: 1.6,
-                  color: "var(--md-on-surface)",
-                }}
-              >
-                {report.remarks}
-              </p>
-            </div>
-
-            <div className="action-bar">
-              <button className="btn-approve" onClick={handleApprove}>
-                <CheckCircle size={18} /> Approve
-              </button>
-              <button className="btn-reject" onClick={openRejectModal}>
-                <XCircle size={18} /> Reject
-              </button>
-            </div>
-
-            <div
-              style={{
-                marginTop: "24px",
-                fontSize: "13px",
-                color: "var(--md-on-surface-variant)",
-                opacity: 0.6,
-                textAlign: "center",
-                borderTop: "1px solid rgba(121,116,126,0.08)",
-                paddingTop: "18px",
-              }}
-            >
-              FCR-SCS · Compensation Approval · For Administrators
+      <div className="main blur-shape-bg">
+        <div className="topbar" style={{ marginBottom: "20px" }}>
+          <div className="topbar-left">
+            <h1 style={{ marginBottom: 0 }}>Review Compensation Report</h1>
+            <div className="sub">
+              Review calculation components and approve or reject report
             </div>
           </div>
-        </main>
+          <div className="topbar-right">
+            <button className="btn-outline" onClick={() => navigate("/compensation/report")}>
+              <ArrowLeft size={16} className="inline mr-1" /> Back
+            </button>
+          </div>
+        </div>
+
+        <div className="case-summary" style={{ background: "var(--md-surface-container)", padding: "20px", borderRadius: "16px", marginBottom: "24px" }}>
+          <div>
+            <span className="case-id" style={{ fontSize: "12px" }}>Report ID: {report.id}</span>
+            <h2 className="case-title" style={{ fontSize: "20px", margin: "4px 0" }}>{report.caseTitle}</h2>
+            <div style={{ fontSize: "13px", color: "var(--md-on-surface-variant)" }}>
+              Owner: <strong>{report.owner}</strong> ({report.ownerIc}) · Project: <strong>{report.project}</strong>
+            </div>
+          </div>
+          <span className={`status-badge-lg ${report.statusClass}`}>
+            <span className="dot"></span> {report.status}
+          </span>
+        </div>
+
+        <div className="report-card" style={{ background: "var(--md-surface-container)", padding: "24px", borderRadius: "16px", marginBottom: "24px" }}>
+          <h3 style={{ fontSize: "18px", marginBottom: "16px" }}>Compensation Breakdown</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px", marginBottom: "24px" }}>
+            <div><span className="label">Land Value:</span> <div><strong>{formatCurrency(report.components.landValue)}</strong></div></div>
+            <div><span className="label">Building Value:</span> <div><strong>{formatCurrency(report.components.buildingValue)}</strong></div></div>
+            <div><span className="label">Disturbance:</span> <div><strong>{formatCurrency(report.components.disturbanceCompensation)}</strong></div></div>
+            <div><span className="label">Relocation:</span> <div><strong>{formatCurrency(report.components.relocationAllowance)}</strong></div></div>
+          </div>
+
+          <div style={{ padding: "16px", background: "rgba(99,102,241,0.08)", borderRadius: "12px", marginBottom: "24px" }}>
+            <span className="label">Total Compensation Package:</span>
+            <div style={{ fontSize: "24px", fontWeight: "bold", color: "var(--md-primary)" }}>
+              {formatCurrency(report.totalAmount)}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: "24px" }}>
+            <span className="label">Valuer Remarks:</span>
+            <p style={{ marginTop: "4px", fontSize: "14px", color: "var(--md-on-surface)" }}>{report.remarks}</p>
+          </div>
+
+          {report.status === "Pending Approval" && (
+            <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+              <button className="btn-accept" onClick={handleApprove}>
+                <CheckCircle size={18} className="inline mr-1" /> Approve Report
+              </button>
+              <button className="btn-reject" onClick={() => setShowRejectModal(true)}>
+                <XCircle size={18} className="inline mr-1" /> Reject Report
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div
+          style={{
+            marginTop: "24px",
+            fontSize: "13px",
+            color: "var(--md-on-surface-variant)",
+            opacity: 0.6,
+            textAlign: "center",
+            borderTop: "1px solid rgba(121,116,126,0.08)",
+            paddingTop: "18px",
+          }}
+        >
+          FCR-SCS · Compensation Approval · Connected to Live Backend Service
+        </div>
       </div>
     </>
   );

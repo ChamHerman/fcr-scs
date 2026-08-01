@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Plus, Trash2, Upload } from "lucide-react";
 import "../../style.css";
 import "./case_management.css";
 import { useNavigate } from "react-router-dom";
+import { landAcquisitionApi } from "../../services/landAcquisitionApi";
 
 
 // Types
@@ -217,10 +218,64 @@ export const CaseRegistration: React.FC = () => {
     setCurrentStep((prev) => Math.max(prev - 1, 0));
   };
 
-  const handleSubmit = () => {
-    // Final submission logic
-    console.log("Submitting case:", { ...formData, owners, documents });
-    alert("Case submitted successfully!");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        project: {
+          projectName: formData.projectName,
+          projectType: formData.projectType,
+          purpose: formData.projectPurpose,
+          budget: parseFloat(formData.projectBudget.replace(/[^0-9.]/g, "")) || 1000000,
+          fundingSource: formData.fundingSource || "Government (Ministry)",
+        },
+        land: {
+          landTitleNo: formData.landTitleNumber,
+          lotNo: formData.lotNumber,
+          mukim: formData.mukim,
+          district: formData.district,
+          state: formData.state,
+          area: parseFloat(formData.landArea) || 1.0,
+          areaUnit: "HECTARE",
+          category: formData.landCategory || "Residential",
+          latitude: parseFloat(formData.gpsLatitude) || 3.139,
+          longitude: parseFloat(formData.gpsLongitude) || 101.6869,
+        },
+        owners: owners.map((o) => ({
+          name: o.name,
+          nric: o.icNumber,
+          address: o.address,
+          contact: o.phone,
+          ownershipType: o.ownershipType || "Individual",
+        })),
+        caseTitle: `${formData.projectName} - ${formData.landTitleNumber}`,
+        remarks: "Case registered via online registration portal",
+      };
+
+      const result = await landAcquisitionApi.createCase(payload);
+      const newCaseId = result.case.caseId;
+
+      // Upload documents if attached
+      for (const doc of documents) {
+        if (doc.file && doc.type) {
+          try {
+            await landAcquisitionApi.uploadDocument(newCaseId, doc.file, doc.type);
+          } catch (docErr) {
+            console.warn("Document upload warning:", docErr);
+          }
+        }
+      }
+
+      alert(`Case Registered Successfully in Backend!\n\nCase ID: ${newCaseId}\nStatus: Case Registered`);
+      navigate('/admin/case/details', { state: { caseId: newCaseId } });
+    } catch (err: any) {
+      console.error("Case registration failed:", err);
+      alert(`Registration Failed: ${err.message || "Could not reach backend"}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Step rendering

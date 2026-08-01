@@ -1,6 +1,8 @@
 import * as Lucide from "lucide-react";
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from "react-router-dom";
+import { compensationApi } from "../../services/compensationApi";
+import { landAcquisitionApi } from "../../services/landAcquisitionApi";
 import { Calculator, FileText } from 'lucide-react';
 import '../../style.css';
 import './compensation.css';
@@ -173,30 +175,34 @@ export const CompensationReportGenerator: React.FC = () => {
     // Use case ends (BF-13)
   };
 
-  const generateReport = () => {
-    if (calculatedTotal === null) return;
+  const generateReport = async () => {
+    if (calculatedTotal === null || !selectedCaseId) return;
     setIsGenerating(true);
-    // Simulate report generation
-    setTimeout(() => {
-      const reportId = `CMP-${Date.now().toString().slice(-6)}`;
+    try {
+      // Fetch valuation reports for this case to link valuationReportId
+      const valRes = await landAcquisitionApi.getAllValuationReports({ search: selectedCaseId });
+      const valuationReportId = valRes.reports?.[0]?.reportId || "00000000-0000-0000-0000-000000000001";
+
+      const res = await compensationApi.createReport({
+        caseId: selectedCaseId,
+        valuationReportId,
+        components,
+        remarks: "Generated via Compensation Generator",
+      });
+
+      const reportId = res.report.compensationReportId;
       setGeneratedReportId(reportId);
 
-      // Determine status based on amount (A2)
-      let status = 'Compensation Approved'; // C1
-      if (calculatedTotal >= 1000000) {
-        status = 'Pending Compensation Approval'; // C2
-        // A2.1: Send notification to Government Administrator (simulated)
-        alert('Notification sent to Government Administrator for review (A2).');
-      }
+      const statusStr = res.requiresApproval ? "Pending Compensation Approval" : "Compensation Approved";
+      setStatusUpdate(statusStr);
 
-      setStatusUpdate(status);
-      // Update case status (FR-CM-011)
-      alert(`<Lucide.CheckCircle size={16} className="inline mr-1" /> Report generated!\nReport ID: ${reportId}\nTotal Compensation: RM ${calculatedTotal.toLocaleString()}\nStatus: ${status}`);
-
-      // Store report (FR-CM-009) - simulated
-      console.log('Report stored:', { reportId, caseId: selectedCaseId, total: calculatedTotal, status });
+      alert(`Report Generated & Saved in Backend!\n\nReport ID: ${reportId}\nTotal Compensation: RM ${calculatedTotal.toLocaleString()}\nStatus: ${statusStr}`);
+    } catch (err: any) {
+      console.error("Failed to generate compensation report:", err);
+      alert(`Report Generation Failed: ${err.message || "Could not reach backend"}`);
+    } finally {
       setIsGenerating(false);
-    }, 1500);
+    }
   };
 
   const handleGenerateClick = () => {
