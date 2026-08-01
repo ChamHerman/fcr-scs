@@ -2,6 +2,7 @@ import * as Lucide from "lucide-react";
 import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, Edit, X, File } from "lucide-react";
+import { landAcquisitionApi } from "../../services/landAcquisitionApi";
 import "../../style.css";
 import "./valuation_report.css";
 
@@ -154,14 +155,22 @@ export const ValuationReportGenerator: React.FC = () => {
     setShowPreview(false);
   };
 
-  const handleConfirmSave = () => {
+  const handleConfirmSave = async () => {
     setIsSaving(true);
-    // Simulate API save
-    setTimeout(() => {
-      const newReport: ReportRecord = {
-        reportId: `REP-${Date.now().toString().slice(-6)}`,
+    try {
+      const res = await landAcquisitionApi.createValuationReport({
         caseId: caseData.id,
-        valuerId: mockValuer.id,
+        valuationMethod: formData.valuationMethod,
+        marketValue: parseFloat(formData.marketValue.replace(/[^0-9.]/g, "")) || 0,
+        recommendedCompensation: parseFloat(formData.recommendedCompensation.replace(/[^0-9.]/g, "")) || 0,
+        remarks: formData.remarks,
+      });
+
+      const rep = res.report;
+      const newReport: ReportRecord = {
+        reportId: rep.reportId,
+        caseId: rep.caseId,
+        valuerId: rep.valuerId,
         valuerName: mockValuer.name,
         valuationDate: new Date().toLocaleDateString("en-GB", {
           day: "2-digit",
@@ -172,24 +181,20 @@ export const ValuationReportGenerator: React.FC = () => {
         marketValue: formData.marketValue,
         recommendedCompensation: formData.recommendedCompensation,
         remarks: formData.remarks,
-        buildingAssessment: formData.buildingAssessment
-          ? formData.buildingAssessment.name
-          : "Not uploaded",
-        siteInspection: formData.siteInspection
-          ? formData.siteInspection.name
-          : "Not uploaded",
+        buildingAssessment: formData.buildingAssessment ? formData.buildingAssessment.name : "Not uploaded",
+        siteInspection: formData.siteInspection ? formData.siteInspection.name : "Not uploaded",
         status: "Pending Valuation Approval",
       };
 
       setSavedReport(newReport);
       setShowPreview(false);
-      setIsSaving(false);
       setIsEditMode(false);
-
-      // Log for demo
-      console.log("Report saved:", newReport);
-      console.log("Case status updated to: Pending Valuation Approval (C4)");
-    }, 1500);
+    } catch (err: any) {
+      console.error("Failed to save valuation report:", err);
+      alert(`Report Save Failed: ${err.message || "Could not reach backend"}`);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {

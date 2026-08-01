@@ -1,0 +1,160 @@
+import { fetchJSON, BASE_URL } from "./api";
+
+export const COMPENSATION_BASE = BASE_URL;
+
+export interface CompensationFilterParams {
+  search?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}
+
+export const compensationApi = {
+  // ─── Compensation Reports (Phase 5) ─────────────────────────────────────────
+  getAllReports: async (params?: CompensationFilterParams) => {
+    const query = new URLSearchParams();
+    if (params?.search) query.append("search", params.search);
+    if (params?.status) query.append("status", params.status);
+    if (params?.page) query.append("page", params.page.toString());
+    if (params?.limit) query.append("limit", params.limit.toString());
+
+    const queryString = query.toString();
+    const url = `/api/compensation/reports${queryString ? `?${queryString}` : ""}`;
+    return fetchJSON(COMPENSATION_BASE + url);
+  },
+
+  getReportById: async (reportId: string) => {
+    return fetchJSON(COMPENSATION_BASE + `/api/compensation/reports/${encodeURIComponent(reportId)}`);
+  },
+
+  createReport: async (payload: {
+    caseId: string;
+    valuationReportId: string;
+    components: {
+      landValue: number;
+      buildingValue: number;
+      cropValue: number;
+      businessDisruption: number;
+      disturbanceCompensation: number;
+      relocationAllowance: number;
+      otherEligible: number;
+    };
+    remarks?: string;
+  }) => {
+    return fetchJSON(COMPENSATION_BASE + "/api/compensation/reports", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  approveReport: async (reportId: string, approvedById?: string) => {
+    return fetchJSON(COMPENSATION_BASE + `/api/compensation/reports/${encodeURIComponent(reportId)}/approve`, {
+      method: "POST",
+      body: JSON.stringify({ approvedById }),
+    });
+  },
+
+  rejectReport: async (reportId: string, reason: string, reviewedById?: string) => {
+    return fetchJSON(COMPENSATION_BASE + `/api/compensation/reports/${encodeURIComponent(reportId)}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ reason, reviewedById }),
+    });
+  },
+
+  // ─── Offer Letters (Phase 6) ────────────────────────────────────────────────
+  getAllOfferLetters: async (params?: CompensationFilterParams) => {
+    const query = new URLSearchParams();
+    if (params?.search) query.append("search", params.search);
+    if (params?.status) query.append("status", params.status);
+    if (params?.page) query.append("page", params.page.toString());
+    if (params?.limit) query.append("limit", params.limit.toString());
+
+    const queryString = query.toString();
+    const url = `/api/compensation/offer-letters${queryString ? `?${queryString}` : ""}`;
+    return fetchJSON(COMPENSATION_BASE + url);
+  },
+
+  getOfferLetterById: async (offerId: string) => {
+    return fetchJSON(COMPENSATION_BASE + `/api/compensation/offer-letters/${encodeURIComponent(offerId)}`);
+  },
+
+  createOfferLetter: async (payload: {
+    compensationReportId: string;
+    caseId: string;
+    ownershipId: string;
+    offerType: string;
+    offerAmount: number;
+    acceptancePeriodDays?: number;
+    remarks?: string;
+  }) => {
+    return fetchJSON(COMPENSATION_BASE + "/api/compensation/offer-letters", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  acceptOffer: async (offerId: string, signedDocument?: string) => {
+    return fetchJSON(COMPENSATION_BASE + `/api/compensation/offer-letters/${encodeURIComponent(offerId)}/accept`, {
+      method: "POST",
+      body: JSON.stringify({ signedDocument }),
+    });
+  },
+
+  rejectOffer: async (offerId: string, remarks?: string) => {
+    return fetchJSON(COMPENSATION_BASE + `/api/compensation/offer-letters/${encodeURIComponent(offerId)}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ remarks }),
+    });
+  },
+
+  // ─── Objections (Phase 7) ───────────────────────────────────────────────────
+  getAllObjections: async (params?: CompensationFilterParams) => {
+    const query = new URLSearchParams();
+    if (params?.search) query.append("search", params.search);
+    if (params?.status) query.append("status", params.status);
+    if (params?.page) query.append("page", params.page.toString());
+    if (params?.limit) query.append("limit", params.limit.toString());
+
+    const queryString = query.toString();
+    const url = `/api/compensation/objections${queryString ? `?${queryString}` : ""}`;
+    return fetchJSON(COMPENSATION_BASE + url);
+  },
+
+  getObjectionById: async (objectionId: string) => {
+    return fetchJSON(COMPENSATION_BASE + `/api/compensation/objections/${encodeURIComponent(objectionId)}`);
+  },
+
+  createObjection: async (payload: {
+    offerId: string;
+    caseId: string;
+    objectionReason: string;
+    requestedAmount: number;
+  }) => {
+    return fetchJSON(COMPENSATION_BASE + "/api/compensation/objections", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  approveObjection: async (objectionId: string, revisedCompensation?: number, reviewRemarks?: string) => {
+    return fetchJSON(COMPENSATION_BASE + `/api/compensation/objections/${encodeURIComponent(objectionId)}/approve`, {
+      method: "POST",
+      body: JSON.stringify({ revisedCompensation, reviewRemarks }),
+    });
+  },
+
+  rejectObjection: async (objectionId: string, reviewRemarks?: string) => {
+    return fetchJSON(COMPENSATION_BASE + `/api/compensation/objections/${encodeURIComponent(objectionId)}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ reviewRemarks }),
+    });
+  },
+
+  // ─── Comparisons (Phase 8) ──────────────────────────────────────────────────
+  compareCases: async (caseIds: string[]) => {
+    return fetchJSON(COMPENSATION_BASE + "/api/compensation/comparisons", {
+      method: "POST",
+      body: JSON.stringify({ caseIds }),
+    });
+  },
+};

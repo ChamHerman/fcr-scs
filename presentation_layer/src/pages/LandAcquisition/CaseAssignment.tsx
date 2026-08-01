@@ -1,9 +1,9 @@
 import * as Lucide from "lucide-react";
-import React, { useState } from "react";
-import { CheckCircle, Send } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import { CheckCircle, Send, Loader2 } from "lucide-react";
+import { landAcquisitionApi } from "../../services/landAcquisitionApi";
 import "../../style.css";
 import "./case_management.css";
-
 
 // --- Types ---
 type UnassignedCase = {
@@ -31,71 +31,55 @@ type AssignmentRecord = {
   status: string;
 };
 
-// --- Mock Data ---
-const mockUnassignedCases: UnassignedCase[] = [
-  {
-    id: "LAC-2026-07-0025",
-    title: "Desa Melati Acquisition",
-    project: "Transportation Development",
-    registrationDate: "25 Jul 2026",
-  },
-  {
-    id: "LAC-2026-07-0026",
-    title: "Taman Sentosa Land Parcel",
-    project: "Urban Redevelopment",
-    registrationDate: "26 Jul 2026",
-  },
-  {
-    id: "LAC-2026-07-0027",
-    title: "Kampung Baru Phase 2",
-    project: "Public Amenities",
-    registrationDate: "27 Jul 2026",
-  },
-  {
-    id: "LAC-2026-07-0028",
-    title: "Sungai Puyu Development",
-    project: "Tourism Development",
-    registrationDate: "28 Jul 2026",
-  },
-];
-
-const mockValuers: ValuerStaff[] = [
-  {
-    id: "V1",
-    name: "Ahmad Faizal",
-    email: "ahmad.faizal@fcr-scs.gov.my",
-    specialization: "Senior Valuer",
-  },
-  {
-    id: "V2",
-    name: "Nurul Huda",
-    email: "nurul.huda@fcr-scs.gov.my",
-    specialization: "Valuer",
-  },
-  {
-    id: "V3",
-    name: "Raj Kumar",
-    email: "raj.kumar@fcr-scs.gov.my",
-    specialization: "Assistant Valuer",
-  },
-  {
-    id: "V4",
-    name: "Sarah Tan",
-    email: "sarah.tan@fcr-scs.gov.my",
-    specialization: "Valuer",
-  },
-];
-
 export const CaseAssignment: React.FC = () => {
   // --- State ---
-  const [unassignedCases, setUnassignedCases] = useState(mockUnassignedCases);
+  const [unassignedCases, setUnassignedCases] = useState<UnassignedCase[]>([]);
+  const [valuers, setValuers] = useState<ValuerStaff[]>([]);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [selectedValuerId, setSelectedValuerId] = useState<string | null>(null);
   const [acceptancePeriod, setAcceptancePeriod] = useState<string>("7");
   const [isAssigning, setIsAssigning] = useState(false);
-  const [assignmentRecord, setAssignmentRecord] =
-    useState<AssignmentRecord | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [assignmentRecord, setAssignmentRecord] = useState<AssignmentRecord | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Load backend data
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [casesRes, valuersRes] = await Promise.all([
+        landAcquisitionApi.getUnassignedCases(),
+        landAcquisitionApi.getAvailableValuers(),
+      ]);
+
+      const formattedCases: UnassignedCase[] = (casesRes.cases || []).map((c: any) => ({
+        id: c.caseId,
+        title: c.caseTitle,
+        project: c.project?.projectName || "—",
+        registrationDate: c.registrationDate
+          ? new Date(c.registrationDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+          : "—",
+      }));
+
+      const formattedValuers: ValuerStaff[] = (valuersRes.valuers || []).map((v: any) => ({
+        id: v.userId,
+        name: v.name,
+        email: v.email,
+        specialization: "Land Valuer",
+      }));
+
+      setUnassignedCases(formattedCases);
+      setValuers(formattedValuers);
+    } catch (err: any) {
+      console.error("Failed to load assignment data:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // --- Computed ---
   const selectedCase = unassignedCases.find((c) => c.id === selectedCaseId);
@@ -103,13 +87,12 @@ export const CaseAssignment: React.FC = () => {
     (c) =>
       c.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.project.toLowerCase().includes(searchTerm.toLowerCase()),
+      c.project.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // --- Handlers ---
   const handleSelectCase = (id: string) => {
     setSelectedCaseId(id);
-    // Reset assignment state when a new case is selected
     setAssignmentRecord(null);
     setSelectedValuerId(null);
     setAcceptancePeriod("7");
@@ -119,14 +102,11 @@ export const CaseAssignment: React.FC = () => {
     setSelectedValuerId(e.target.value);
   };
 
-  const handleAcceptancePeriodChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handleAcceptancePeriodChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setAcceptancePeriod(e.target.value);
   };
 
-  const handleConfirmAssignment = () => {
-    // Validation
+  const handleConfirmAssignment = async () => {
     if (!selectedCaseId) {
       alert("Please select a case to assign.");
       return;
@@ -135,62 +115,47 @@ export const CaseAssignment: React.FC = () => {
       alert("Please select a land valuer.");
       return;
     }
-    if (!acceptancePeriod || parseInt(acceptancePeriod) <= 0) {
+    if (!acceptancePeriod || parseInt(acceptancePeriod, 10) <= 0) {
       alert("Please enter a valid acceptance period (greater than 0 days).");
       return;
     }
 
     setIsAssigning(true);
 
-    // Simulate API call
-    setTimeout(() => {
-      const valuer = mockValuers.find((v) => v.id === selectedValuerId);
+    try {
+      const res = await landAcquisitionApi.assignValuer({
+        caseId: selectedCaseId,
+        valuerId: selectedValuerId,
+        acceptancePeriodDays: parseInt(acceptancePeriod, 10),
+      });
+
+      const assignedValuer = valuers.find((v) => v.id === selectedValuerId);
       const newAssignment: AssignmentRecord = {
-        assignmentId: `ASG-${Date.now().toString().slice(-6)}`,
-        caseId: selectedCaseId!,
-        valuerId: selectedValuerId!,
-        valuerName: valuer?.name || "Unknown Valuer",
-        assignedBy: "Administrator (AO)",
+        assignmentId: res.assignment.assignmentId,
+        caseId: selectedCaseId,
+        valuerId: selectedValuerId,
+        valuerName: assignedValuer?.name || res.assignment.assignedTo?.name || "Valuer",
+        assignedBy: "System Administrator",
         assignedDate: new Date().toLocaleDateString("en-GB", {
           day: "2-digit",
           month: "short",
           year: "numeric",
         }),
-        acceptancePeriod: parseInt(acceptancePeriod),
-        status: "Pending Acceptance",
+        acceptancePeriod: parseInt(acceptancePeriod, 10),
+        status: "Valuer Assigned",
       };
 
-      // Update state
       setAssignmentRecord(newAssignment);
-      // Remove the assigned case from the unassigned list
       setUnassignedCases((prev) => prev.filter((c) => c.id !== selectedCaseId));
-      // Clear selection
       setSelectedCaseId(null);
       setSelectedValuerId(null);
       setAcceptancePeriod("7");
+    } catch (err: any) {
+      console.error("Assignment failed:", err);
+      alert(`Assignment Failed: ${err.message || "Could not reach backend"}`);
+    } finally {
       setIsAssigning(false);
-
-      // Simulate notification (FR-LAM-023)
-      alert(
-        `<Lucide.CheckCircle size={16} className="inline mr-1" /> Assignment successful!\n\n` +
-          `Assignment ID: ${newAssignment.assignmentId}\n` +
-          `Case: ${newAssignment.caseId}\n` +
-          `Assigned to: ${newAssignment.valuerName}\n` +
-          `Notification sent to ${valuer?.email || "valuer email"}.\n\n` +
-          `The valuer has been notified (FR-LAM-023).`,
-      );
-
-      // Simulate dashboard update (FR-LAM-021) - the unassigned count would decrease
-      // In a real app, you'd dispatch a Redux action or refetch the dashboard data.
-      console.log(
-        "FR-LAM-021: Dashboard updated. Unassigned cases remaining:",
-        unassignedCases.length - 1,
-      );
-      console.log(
-        "FR-LAM-022: Assignment record stored in database:",
-        newAssignment,
-      );
-    }, 1200);
+    }
   };
 
   const handleReset = () => {
@@ -220,12 +185,17 @@ export const CaseAssignment: React.FC = () => {
         />
       </div>
 
-      {filteredCases.length === 0 ? (
+      {loading ? (
+        <div className="empty-state" style={{ padding: "30px 0" }}>
+          <Loader2 size={24} className="inline animate-spin mb-2" />
+          <p style={{ fontSize: "13px" }}>Loading unassigned cases...</p>
+        </div>
+      ) : filteredCases.length === 0 ? (
         <div className="empty-state">
           <div className="empty-icon"></div>
           <h4>No unassigned cases</h4>
           <p style={{ fontSize: "13px" }}>
-            All cases have been assigned to valuers.
+            All cases have been assigned to valuers in the database.
           </p>
         </div>
       ) : (
@@ -236,11 +206,11 @@ export const CaseAssignment: React.FC = () => {
             onClick={() => handleSelectCase(c.id)}
           >
             <div className="case-info">
-              <span className="case-id">{c.id}</span>
+              <span className="case-id" style={{ fontSize: "11px" }}>{c.id.slice(0, 8)}...</span>
               <span className="case-title">{c.title}</span>
               <div className="case-meta">
                 <span>{c.project}</span>
-                <span><Lucide.Calendar size={16} className="inline mr-1" /> {c.registrationDate}</span>
+                <span><Lucide.Calendar size={14} className="inline mr-1" /> {c.registrationDate}</span>
               </div>
             </div>
             <button
@@ -262,16 +232,15 @@ export const CaseAssignment: React.FC = () => {
     <div className="assignment-panel">
       <div className="panel-title">Assign Case</div>
       <div className="panel-subtitle">
-        Select a valuer and set acceptance terms
+        Select an active land valuer and set acceptance terms
       </div>
 
       {selectedCase ? (
         <>
-          {/* Selected Case Summary */}
           <div className="selected-case-summary">
             <div className="label">Selected Case</div>
             <div className="value">
-              {selectedCase.id} – {selectedCase.title}
+              {selectedCase.title}
             </div>
             <div
               style={{
@@ -280,11 +249,10 @@ export const CaseAssignment: React.FC = () => {
                 marginTop: "4px",
               }}
             >
-              {selectedCase.project} · <Lucide.Calendar size={16} className="inline mr-1" /> {selectedCase.registrationDate}
+              {selectedCase.project} · <Lucide.Calendar size={14} className="inline mr-1" /> {selectedCase.registrationDate}
             </div>
           </div>
 
-          {/* Valuer Selection */}
           <div className="form-group">
             <label htmlFor="valuerSelect">Available Land Valuer Staff *</label>
             <select
@@ -293,23 +261,19 @@ export const CaseAssignment: React.FC = () => {
               onChange={handleSelectValuer}
             >
               <option value="">— Select a valuer —</option>
-              {mockValuers.map((v) => (
+              {valuers.map((v) => (
                 <option key={v.id} value={v.id}>
-                  {v.name} ({v.specialization})
+                  {v.name} ({v.email})
                 </option>
               ))}
             </select>
-            {mockValuers.length === 0 && (
-              <div
-                className="helper-text"
-                style={{ color: "var(--md-error-text)" }}
-              >
-                <Lucide.AlertTriangle size={16} className="inline mr-1" /> No available staff (A1: No Available Staff)
+            {valuers.length === 0 && !loading && (
+              <div className="helper-text" style={{ color: "var(--md-error-text)" }}>
+                <Lucide.AlertTriangle size={14} className="inline mr-1" /> No active valuer staff found in database.
               </div>
             )}
           </div>
 
-          {/* Acceptance Period */}
           <div className="form-group">
             <label htmlFor="acceptancePeriod">Acceptance Period (days) *</label>
             <input
@@ -321,18 +285,17 @@ export const CaseAssignment: React.FC = () => {
               placeholder="e.g., 7"
             />
             <div className="helper-text">
-              Number of days for the valuer to accept the assignment.
+              Number of days for the valuer to accept and complete valuation.
             </div>
           </div>
 
-          {/* Assign Button */}
           <button
             className="btn-assign"
             onClick={handleConfirmAssignment}
             disabled={isAssigning || !selectedValuerId}
           >
             {isAssigning ? (
-              "Assigning..."
+              "Assigning in Backend..."
             ) : (
               <>
                 <Send size={18} /> Confirm Assignment
@@ -345,7 +308,7 @@ export const CaseAssignment: React.FC = () => {
           <div className="empty-icon"><Lucide.ArrowLeft size={16} className="inline mr-1" /></div>
           <h4>Select a case</h4>
           <p style={{ fontSize: "13px" }}>
-            Choose an unassigned case from the list to begin.
+            Choose an unassigned case from the list to begin assignment.
           </p>
         </div>
       )}
@@ -358,9 +321,9 @@ export const CaseAssignment: React.FC = () => {
         <div className="check-icon">
           <CheckCircle size={40} />
         </div>
-        <h3>Assignment Confirmed</h3>
+        <h3>Assignment Saved in Database</h3>
         <p style={{ color: "var(--md-on-surface-variant)" }}>
-          The case has been successfully assigned.
+          Case status updated to <strong>VALUER_ASSIGNED</strong>.
         </p>
         {assignmentRecord && (
           <>
@@ -381,11 +344,7 @@ export const CaseAssignment: React.FC = () => {
                 <strong>Assigned Date:</strong> {assignmentRecord.assignedDate}
               </div>
               <div>
-                <strong>Acceptance Period:</strong>{" "}
-                {assignmentRecord.acceptancePeriod} days
-              </div>
-              <div>
-                <strong>Status:</strong> {assignmentRecord.status}
+                <strong>Acceptance Period:</strong> {assignmentRecord.acceptancePeriod} days
               </div>
             </div>
           </>
@@ -402,16 +361,12 @@ export const CaseAssignment: React.FC = () => {
       className="flex min-h-screen"
       style={{ background: "var(--md-background)", color: "var(--md-on-surface)" }}
     >
-      
-
-      {/* Main Content */}
       <main className="main blur-shape-bg">
-        {/* Top Bar */}
         <div className="topbar" style={{ marginBottom: "20px" }}>
           <div className="topbar-left">
             <h1 style={{ marginBottom: 0 }}>Case Assignment</h1>
             <div className="sub">
-              Assign unassigned acquisition cases to land valuers
+              Assign unassigned acquisition cases to land valuers (Phase 3 Backend Integration)
             </div>
           </div>
           <div className="topbar-right">
@@ -420,7 +375,6 @@ export const CaseAssignment: React.FC = () => {
           </div>
         </div>
 
-        {/* Assignment Layout */}
         {assignmentRecord ? (
           renderSuccessState()
         ) : (
@@ -430,7 +384,6 @@ export const CaseAssignment: React.FC = () => {
           </div>
         )}
 
-        {/* Footer note */}
         <div
           style={{
             marginTop: "32px",
@@ -442,7 +395,7 @@ export const CaseAssignment: React.FC = () => {
             paddingTop: "18px",
           }}
         >
-          FCR-SCS · Case Assignment Module · Only visible to administrators
+          FCR-SCS · Case Assignment Module · Connected to Business Logic Backend
         </div>
       </main>
     </div>

@@ -53,6 +53,8 @@ import cors from "cors";
 import paymentRoutes from "./payment_service/src/routes/payment.routes";
 import bankDetailsRoutes from "./payment_service/src/routes/bank-details.routes";
 import blockchainRoutes from "./smart_contract_service/src/routes/blockchain.routes";
+import landAcquisitionRoutes from "./land_acquisition_service/src/routes/land-acquisition.routes";
+import compensationRoutes from "./compensation_management_service/src/routes/compensation.routes";
 
 export const app = express();
 
@@ -72,6 +74,8 @@ app.get("/health", (req, res) => {
 app.use("/api/payments", paymentRoutes);
 app.use("/api/bank-details", bankDetailsRoutes);
 app.use("/api/smart-contract", blockchainRoutes);
+app.use("/api/land-acquisition", landAcquisitionRoutes);
+app.use("/api/compensation", compensationRoutes);
 
 if (process.env.NODE_ENV !== "test") {
   app.listen(PORT, () => {

@@ -1,139 +1,128 @@
 import * as Lucide from "lucide-react";
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, ChevronLeft, ChevronRight } from "lucide-react";
+import { Eye, ChevronLeft, ChevronRight, Loader2, Plus } from "lucide-react";
+import { compensationApi } from "../../services/compensationApi";
 import "../../style.css";
-import "./objection.css";
+import "./compensation.css";
 
-type Objection = {
+type ObjectionItem = {
   id: string;
-  caseId: string;
+  offerId: string;
   caseTitle: string;
-  submittedBy: string;
-  submittedDate: string;
-  type: "Form N" | "Additional Evidence";
-  status: "Submitted" | "Under Review" | "Approved" | "Rejected";
-  statusClass: "submitted" | "review" | "approved" | "rejected";
+  ownerName: string;
+  requestedAmount: number;
+  submissionDate: string;
+  status: string;
+  statusClass: string;
+  reason: string;
 };
 
-const mockObjections: Objection[] = [
-  {
-    id: "OBJ-2026-001",
-    caseId: "LAC-2026-07-0024",
-    caseTitle: "Kampung Baru Land Acquisition",
-    submittedBy: "Ahmad Bin Abdullah",
-    submittedDate: "22 Jul 2026",
-    type: "Form N",
-    status: "Under Review",
-    statusClass: "review",
-  },
-  {
-    id: "OBJ-2026-002",
-    caseId: "LAC-2026-07-0023",
-    caseTitle: "Taman Mewah Phase 2",
-    submittedBy: "Siti Binti Hassan",
-    submittedDate: "21 Jul 2026",
-    type: "Additional Evidence",
-    status: "Submitted",
-    statusClass: "submitted",
-  },
-  {
-    id: "OBJ-2026-003",
-    caseId: "LAC-2026-07-0021",
-    caseTitle: "Desa Harmoni Relocation",
-    submittedBy: "Raja Abdullah",
-    submittedDate: "19 Jul 2026",
-    type: "Form N",
-    status: "Approved",
-    statusClass: "approved",
-  },
-  {
-    id: "OBJ-2026-004",
-    caseId: "LAC-2026-07-0020",
-    caseTitle: "Taman Mutiara Extension",
-    submittedBy: "Lim Mei Ling",
-    submittedDate: "18 Jul 2026",
-    type: "Form N",
-    status: "Rejected",
-    statusClass: "rejected",
-  },
-  {
-    id: "OBJ-2026-005",
-    caseId: "LAC-2026-07-0019",
-    caseTitle: "Kampung Melayu Acquisition",
-    submittedBy: "Mohd Zaki",
-    submittedDate: "23 Jul 2026",
-    type: "Additional Evidence",
-    status: "Under Review",
-    statusClass: "review",
-  },
-];
+const statusClassMap: Record<string, string> = {
+  SUBMITTED: "pending",
+  UNDER_REVIEW: "pending",
+  APPROVED: "approved",
+  REJECTED: "rejected",
+};
 
-export const ObjectionList: React.FC = () => {
+const statusLabelMap: Record<string, string> = {
+  SUBMITTED: "Submitted",
+  UNDER_REVIEW: "Under Review",
+  APPROVED: "Approved / Revised",
+  REJECTED: "Rejected",
+};
+
+export const ObjectionDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const [objections, setObjections] = useState<ObjectionItem[]>([]);
+  const [totalCount, setTotalCount] = useState<number>(0);
+  const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
+  const itemsPerPage = 10;
 
-  const filtered = mockObjections.filter(
-    (o) =>
-      (o.caseId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        o.caseTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        o.submittedBy.toLowerCase().includes(searchTerm.toLowerCase())) &&
-      (statusFilter === "" || o.status === statusFilter),
-  );
+  const loadObjections = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await compensationApi.getAllObjections({
+        search: searchTerm || undefined,
+        status: statusFilter || undefined,
+        page: currentPage,
+        limit: itemsPerPage,
+      });
 
-  const totalPages = Math.ceil(filtered.length / itemsPerPage);
-  const paginated = filtered.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage,
-  );
+      const formatted: ObjectionItem[] = (res.objections || []).map((o: any) => ({
+        id: o.objectionId,
+        offerId: o.offerId,
+        caseTitle: o.acquisitionCase?.caseTitle || "—",
+        ownerName: o.offerLetter?.landOwnership?.landOwner?.name || "—",
+        requestedAmount: Number(o.requestedAmount || 0),
+        submissionDate: o.createdAt
+          ? new Date(o.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+          : "—",
+        status: statusLabelMap[o.status] || o.status,
+        statusClass: statusClassMap[o.status] || "pending",
+        reason: o.objectionReason || "—",
+      }));
 
-  const handleView = (id: string) => {
-    navigate('/compensation/objection/review', { state: { objectionId: id } });
+      setObjections(formatted);
+      setTotalCount(res.total || 0);
+    } catch (err: any) {
+      console.error("Failed to load objections:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [searchTerm, statusFilter, currentPage]);
+
+  useEffect(() => {
+    loadObjections();
+  }, [loadObjections]);
+
+  const handleView = (objectionId: string) => {
+    navigate("/compensation/objection/review", { state: { objectionId } });
   };
 
   const handleCreate = () => {
-    navigate('/compensation/objection/create');
+    navigate("/compensation/objection/create");
+  };
+
+  const formatCurrency = (val: number) => {
+    return "RM " + val.toLocaleString("en-MY", { minimumFractionDigits: 2 });
   };
 
   const stats = [
-    { label: "Total Objections", value: mockObjections.length, icon: <Lucide.FileText size={16} className="inline mr-1" /> },
-    {
-      label: "Submitted",
-      value: mockObjections.filter((o) => o.status === "Submitted").length,
-      icon: <Lucide.Mail size={16} className="inline mr-1" />,
-    },
+    { label: "Total Objections", value: totalCount, icon: <Lucide.AlertCircle size={16} className="inline mr-1" /> },
     {
       label: "Under Review",
-      value: mockObjections.filter((o) => o.status === "Under Review").length,
-      icon: <Lucide.Hourglass size={16} className="inline mr-1" />,
+      value: objections.filter((o) => o.status === "Submitted" || o.status === "Under Review").length,
+      icon: <Lucide.Clock size={16} className="inline mr-1" />,
     },
     {
-      label: "Approved",
-      value: mockObjections.filter((o) => o.status === "Approved").length,
+      label: "Approved / Revised",
+      value: objections.filter((o) => o.status === "Approved / Revised").length,
       icon: <Lucide.CheckCircle size={16} className="inline mr-1" />,
     },
     {
       label: "Rejected",
-      value: mockObjections.filter((o) => o.status === "Rejected").length,
+      value: objections.filter((o) => o.status === "Rejected").length,
       icon: <Lucide.XCircle size={16} className="inline mr-1" />,
     },
   ];
 
   return (
-    <div className="objection-dashboard">
+    <div className="compensation-dashboard">
       <div className="topbar" style={{ marginBottom: "20px" }}>
         <div className="topbar-left">
           <h1 style={{ marginBottom: 0 }}>Objection Management</h1>
           <div className="sub">
-            Review and manage Form N objections and additional evidence
+            Review land owner compensation objections (Form N) (Connected to Backend)
           </div>
         </div>
-        <div className="topbar-right" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span className="date-badge"><Lucide.Calendar size={16} className="inline mr-1" /> 24 Jul 2026</span>
-          <button className="btn-primary" onClick={handleCreate}>Submit Objection</button>
+        <div className="topbar-right" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <button className="btn-primary" onClick={handleCreate}>
+            <Plus size={16} className="inline mr-1" /> Submit Objection
+          </button>
           <div className="avatar">AO</div>
         </div>
       </div>
@@ -150,29 +139,23 @@ export const ObjectionList: React.FC = () => {
 
       <div className="filter-bar">
         <div className="search-wrap">
-          <span className="search-icon"><Lucide.Search size={16} /></span>
+          <span className="search-icon">
+            <Lucide.Search size={16} />
+          </span>
           <input
             type="text"
-            placeholder="Search by case ID, title, or submitter..."
+            placeholder="Search by case title or objection ID..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
         <div className="filter-group">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">All Status</option>
-            <option value="Submitted">Submitted</option>
-            <option value="Under Review">Under Review</option>
-            <option value="Approved">Approved</option>
-            <option value="Rejected">Rejected</option>
-          </select>
-          <select>
-            <option value="">All Types</option>
-            <option value="Form N">Form N</option>
-            <option value="Additional Evidence">Additional Evidence</option>
+            <option value="SUBMITTED">Submitted</option>
+            <option value="UNDER_REVIEW">Under Review</option>
+            <option value="APPROVED">Approved / Revised</option>
+            <option value="REJECTED">Rejected</option>
           </select>
         </div>
       </div>
@@ -183,94 +166,63 @@ export const ObjectionList: React.FC = () => {
             <thead>
               <tr>
                 <th>Objection ID</th>
-                <th>Case ID</th>
                 <th>Case Title</th>
-                <th>Submitted By</th>
+                <th>Land Owner</th>
+                <th>Requested Amount</th>
                 <th>Date</th>
-                <th>Type</th>
                 <th>Status</th>
                 <th style={{ textAlign: "center" }}>Action</th>
               </tr>
             </thead>
             <tbody>
-              {paginated.map((o) => (
-                <tr key={o.id}>
-                  <td>
-                    <span className="case-id">{o.id}</span>
-                  </td>
-                  <td>{o.caseId}</td>
-                  <td className="case-title">{o.caseTitle}</td>
-                  <td>{o.submittedBy}</td>
-                  <td>{o.submittedDate}</td>
-                  <td>{o.type}</td>
-                  <td>
-                    <span className={`status-badge ${o.statusClass}`}>
-                      <span className="dot"></span> {o.status}
-                    </span>
-                  </td>
-                  <td style={{ textAlign: "center" }}>
-                    <button
-                      className="btn-action view"
-                      onClick={() => handleView(o.id)}
-                    >
-                      <Eye
-                        size={14}
-                        style={{ display: "inline", marginRight: "4px" }}
-                      />{" "}
-                      Review
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {paginated.length === 0 && (
+              {loading ? (
                 <tr>
-                  <td
-                    colSpan={8}
-                    style={{
-                      textAlign: "center",
-                      padding: "32px",
-                      color: "var(--md-on-surface-variant)",
-                      opacity: 0.6,
-                    }}
-                  >
-                    No objections found
+                  <td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)" }}>
+                    <Loader2 size={24} className="inline animate-spin mr-2" /> Loading objections from database...
                   </td>
                 </tr>
+              ) : objections.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)", opacity: 0.6 }}>
+                    No objections found in database.
+                  </td>
+                </tr>
+              ) : (
+                objections.map((o) => (
+                  <tr key={o.id}>
+                    <td><span className="case-id" style={{ fontSize: "11px" }}>{o.id.slice(0, 8)}...</span></td>
+                    <td className="case-title">{o.caseTitle}</td>
+                    <td>{o.ownerName}</td>
+                    <td><strong>{formatCurrency(o.requestedAmount)}</strong></td>
+                    <td>{o.submissionDate}</td>
+                    <td>
+                      <span className={`status-badge ${o.statusClass}`}>
+                        <span className="dot"></span> {o.status}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: "center" }}>
+                      <button className="btn-view" onClick={() => handleView(o.id)}>
+                        <Eye size={14} style={{ display: "inline", marginRight: "4px" }} /> Review
+                      </button>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
         </div>
-        {totalPages > 1 && (
+
+        {totalCount > itemsPerPage && (
           <div className="pagination">
             <div className="info">
-              Showing {(currentPage - 1) * itemsPerPage + 1}–
-              {Math.min(currentPage * itemsPerPage, filtered.length)} of{" "}
-              {filtered.length}
+              Showing {(currentPage - 1) * itemsPerPage + 1}–{Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount}
             </div>
             <div className="pages">
-              <button
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-              >
+              <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}>
                 <ChevronLeft size={16} />
               </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                (p) => (
-                  <button
-                    key={p}
-                    className={p === currentPage ? "active" : ""}
-                    onClick={() => setCurrentPage(p)}
-                  >
-                    {p}
-                  </button>
-                ),
-              )}
-              <button
-                onClick={() =>
-                  setCurrentPage((p) => Math.min(totalPages, p + 1))
-                }
-                disabled={currentPage === totalPages}
-              >
+              <button className="active">{currentPage}</button>
+              <button onClick={() => setCurrentPage((p) => p + 1)} disabled={currentPage * itemsPerPage >= totalCount}>
                 <ChevronRight size={16} />
               </button>
             </div>
@@ -289,8 +241,10 @@ export const ObjectionList: React.FC = () => {
           paddingTop: "18px",
         }}
       >
-        FCR-SCS · Objection Management · For Government Officers
+        FCR-SCS · Objection Management Module · Connected to Business Logic Backend
       </div>
     </div>
   );
 };
+
+export const ObjectionList = ObjectionDashboard;

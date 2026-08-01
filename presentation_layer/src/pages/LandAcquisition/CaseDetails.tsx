@@ -1,6 +1,6 @@
 import * as Lucide from "lucide-react";
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   ChevronDown,
   Edit,
@@ -10,7 +10,9 @@ import {
   Users,
   FolderOpen,
   File,
+  Loader2,
 } from "lucide-react";
+import { landAcquisitionApi } from "../../services/landAcquisitionApi";
 import "../../style.css";
 import "./case_management.css";
 
@@ -59,78 +61,123 @@ type CaseData = {
   documents: Document[];
 };
 
-// --- Mock Data (replace with API call) ---
-const mockCaseData: CaseData = {
-  id: "LAC-2026-07-0024",
-  title: "Kampung Baru Land Acquisition",
-  status: "Case Registered",
-  statusClass: "registered",
-  registrationDate: "24 Jul 2026",
-  projectName: "Kampung Baru Urban Renewal",
-  projectType: "Urban Redevelopment",
-  projectPurpose: "Mixed-use commercial and residential development",
-  projectBudget: "RM 45,000,000",
-  fundingSource: "Government (Ministry of Housing)",
-  landTitleNumber: "PN 12345",
-  lotNumber: "Lot 5678",
-  mukim: "Kampung Baru",
-  district: "Kuala Lumpur",
-  state: "Wilayah Persekutuan Kuala Lumpur",
-  landArea: "12.5",
-  landCategory: "Residential / Commercial",
-  gpsLatitude: "3.1390",
-  gpsLongitude: "101.6869",
-  owners: [
-    {
-      id: "1",
-      name: "Ahmad Bin Abdullah",
-      icNumber: "750101-10-5678",
-      address: "No. 45, Jalan Kampung Baru, 50300 Kuala Lumpur",
-      phone: "012-3456789",
-      ownershipType: "Individual",
-    },
-    {
-      id: "2",
-      name: "Siti Binti Hassan",
-      icNumber: "810202-08-1234",
-      address: "No. 46, Jalan Kampung Baru, 50300 Kuala Lumpur",
-      phone: "019-8765432",
-      ownershipType: "Individual",
-    },
-  ],
-  documents: [
-    {
-      id: "1",
-      type: "Project Approval Letter",
-      fileName: "approval_letter_2026.pdf",
-      fileSize: "2.4 MB",
-    },
-    {
-      id: "2",
-      type: "Survey Plan",
-      fileName: "survey_plan_kb.jpg",
-      fileSize: "4.1 MB",
-    },
-    {
-      id: "3",
-      type: "Land Title Copy",
-      fileName: "title_copy_pn12345.pdf",
-      fileSize: "1.8 MB",
-    },
-  ],
+const statusClassMap: Record<string, string> = {
+  CASE_REGISTERED: "registered",
+  VALUER_ASSIGNED: "valuation",
+  VALUATION_IN_PROGRESS: "valuation",
+  PENDING_VALUATION_APPROVAL: "pending",
+  VALUATION_APPROVED: "approved",
+  VALUATION_REJECTED: "rejected",
+  PENDING_COMPENSATION_APPROVAL: "pending",
+  COMPENSATION_APPROVED: "approved",
+  COMPENSATION_REJECTED: "rejected",
+  OFFER_ISSUED: "offer",
+  OFFER_REJECTED: "rejected",
+  PAYMENT_IN_PROGRESS: "payment",
+  PAYMENT_COMPLETED: "approved",
+  CASE_CLOSED: "closed",
+};
+
+const statusLabelMap: Record<string, string> = {
+  CASE_REGISTERED: "Case Registered",
+  VALUER_ASSIGNED: "Valuer Assigned",
+  VALUATION_IN_PROGRESS: "Valuation In Progress",
+  PENDING_VALUATION_APPROVAL: "Pending Valuation Approval",
+  VALUATION_APPROVED: "Valuation Approved",
+  VALUATION_REJECTED: "Valuation Rejected",
+  PENDING_COMPENSATION_APPROVAL: "Pending Compensation Approval",
+  COMPENSATION_APPROVED: "Compensation Approved",
+  COMPENSATION_REJECTED: "Compensation Rejected",
+  OFFER_ISSUED: "Offer Issued",
+  OFFER_REJECTED: "Offer Rejected",
+  PAYMENT_IN_PROGRESS: "Payment In Progress",
+  PAYMENT_COMPLETED: "Payment Completed",
+  CASE_CLOSED: "Case Closed",
 };
 
 export const CaseView: React.FC = () => {
-  const [caseData] = useState<CaseData>(mockCaseData);
   const navigate = useNavigate();
+  const location = useLocation();
+  const stateCaseId = location.state?.caseId;
+
+  const [caseData, setCaseData] = useState<CaseData | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [expandedSections, setExpandedSections] = useState<{
     [key: string]: boolean;
   }>({
     project: true,
-    land: false,
-    owners: false,
-    documents: false,
+    land: true,
+    owners: true,
+    documents: true,
   });
+
+  useEffect(() => {
+    async function fetchDetails() {
+      if (!stateCaseId) {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await landAcquisitionApi.getCaseById(stateCaseId);
+        const c = res.case;
+
+        const formatted: CaseData = {
+          id: c.caseId,
+          title: c.caseTitle,
+          status: statusLabelMap[c.status] || c.status,
+          statusClass: statusClassMap[c.status] || "registered",
+          registrationDate: c.registrationDate
+            ? new Date(c.registrationDate).toLocaleDateString("en-GB", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              })
+            : "—",
+          projectName: c.project?.projectName || "—",
+          projectType: c.project?.projectType || "—",
+          projectPurpose: c.project?.purpose || "—",
+          projectBudget: c.project?.budget ? `RM ${Number(c.project.budget).toLocaleString()}` : "—",
+          fundingSource: c.project?.fundingSource || "—",
+          landTitleNumber: c.landParcel?.landTitleNo || "—",
+          lotNumber: c.landParcel?.lotNo || "—",
+          mukim: c.landParcel?.mukim || "—",
+          district: c.landParcel?.district || "—",
+          state: c.landParcel?.state || "—",
+          landArea: c.landParcel?.area ? `${c.landParcel.area} ${c.landParcel.areaUnit}` : "—",
+          landCategory: c.landParcel?.category || "—",
+          gpsLatitude: c.landParcel?.latitude?.toString() || "—",
+          gpsLongitude: c.landParcel?.longitude?.toString() || "—",
+          owners: (c.landParcel?.ownerships || []).map((o: any, idx: number) => ({
+            id: o.landOwner?.ownerId || idx.toString(),
+            name: o.landOwner?.name || "—",
+            icNumber: o.landOwner?.nric || "—",
+            address: o.landOwner?.address || "—",
+            phone: o.landOwner?.contact || "—",
+            ownershipType: o.ownershipType || "Individual",
+          })),
+          documents: (c.caseDocuments || []).map((d: any) => ({
+            id: d.documentId,
+            type: d.documentType,
+            fileName: d.fileName,
+            fileSize: `${(d.fileSize / 1024 / 1024).toFixed(2)} MB`,
+          })),
+        };
+
+        setCaseData(formatted);
+      } catch (err: any) {
+        console.error("Error fetching case details:", err);
+        setError(err.message || "Failed to load case details");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchDetails();
+  }, [stateCaseId]);
 
   const toggleSection = (section: string) => {
     setExpandedSections((prev) => ({
@@ -147,18 +194,24 @@ export const CaseView: React.FC = () => {
     }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
+    if (!caseData) return;
     if (
       window.confirm(
-        "Are you sure you want to delete this case? This action cannot be undone.",
+        "Are you sure you want to delete this case? This action will remove it from the backend database."
       )
     ) {
-      alert("Case deleted successfully!");
-      navigate('/admin/case');
+      try {
+        await landAcquisitionApi.deleteCase(caseData.id);
+        alert("Case deleted successfully from database!");
+        navigate("/admin/case");
+      } catch (err: any) {
+        console.error("Failed to delete case:", err);
+        alert(`Delete Failed: ${err.message}`);
+      }
     }
   };
 
-  // Helper to render status badge
   const renderStatusBadge = (status: string, statusClass: string) => {
     return (
       <span className={`status-badge-lg ${statusClass}`}>
@@ -167,13 +220,38 @@ export const CaseView: React.FC = () => {
     );
   };
 
-  // Section definitions for mapping
+  if (loading) {
+    return (
+      <div className="main blur-shape-bg" style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "80vh" }}>
+        <div style={{ textAlign: "center", color: "var(--md-on-surface-variant)" }}>
+          <Loader2 size={32} className="inline animate-spin mb-2" />
+          <div>Fetching live case details from backend database...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !caseData) {
+    return (
+      <div className="main blur-shape-bg">
+        <div style={{ padding: "40px 0", textAlign: "center" }}>
+          <h2>Case Details Not Found</h2>
+          <p style={{ color: "var(--md-on-surface-variant)", marginBottom: "20px" }}>
+            {error || "No case selected or case ID was not provided in navigation state."}
+          </p>
+          <button className="btn-primary" onClick={() => navigate("/admin/case")}>
+            Back to Case Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const sections = [
     {
       key: "project",
       title: "Project Details",
       icon: <FolderOpen size={20} />,
-      number: "A4",
       content: (
         <div className="detail-grid">
           <div className="detail-item">
@@ -203,7 +281,6 @@ export const CaseView: React.FC = () => {
       key: "land",
       title: "Land Information",
       icon: <MapPin size={20} />,
-      number: "A1",
       content: (
         <div className="detail-grid">
           <div className="detail-item">
@@ -227,7 +304,7 @@ export const CaseView: React.FC = () => {
             <span className="value">{caseData.state}</span>
           </div>
           <div className="detail-item">
-            <span className="label">Land Area (hectares)</span>
+            <span className="label">Land Area</span>
             <span className="value">{caseData.landArea}</span>
           </div>
           <div className="detail-item">
@@ -247,7 +324,6 @@ export const CaseView: React.FC = () => {
       key: "owners",
       title: "Land Owner Information",
       icon: <Users size={20} />,
-      number: "A2",
       content: (
         <div>
           {caseData.owners.map((owner, index) => (
@@ -271,6 +347,9 @@ export const CaseView: React.FC = () => {
               </div>
             </div>
           ))}
+          {caseData.owners.length === 0 && (
+            <p style={{ fontStyle: "italic", opacity: 0.6 }}>No owner records found.</p>
+          )}
         </div>
       ),
     },
@@ -278,7 +357,6 @@ export const CaseView: React.FC = () => {
       key: "documents",
       title: "Supporting Documents",
       icon: <FileText size={20} />,
-      number: "A3",
       content: (
         <div>
           {caseData.documents.map((doc) => (
@@ -287,38 +365,15 @@ export const CaseView: React.FC = () => {
               <span className="doc-name">{doc.fileName}</span>
               <span className="doc-type">{doc.type}</span>
               {doc.fileSize && (
-                <span
-                  style={{
-                    fontSize: "12px",
-                    color: "var(--md-on-surface-variant)",
-                    opacity: 0.6,
-                  }}
-                >
+                <span style={{ fontSize: "12px", opacity: 0.6 }}>
                   {doc.fileSize}
                 </span>
               )}
-              <a
-                href="#"
-                className="file-link"
-                style={{
-                  fontSize: "13px",
-                  fontWeight: 500,
-                  color: "var(--md-primary)",
-                }}
-              >
-                Download
-              </a>
             </div>
           ))}
           {caseData.documents.length === 0 && (
-            <p
-              style={{
-                color: "var(--md-on-surface-variant)",
-                opacity: 0.6,
-                fontStyle: "italic",
-              }}
-            >
-              No documents uploaded.
+            <p style={{ fontStyle: "italic", opacity: 0.6 }}>
+              No supporting documents uploaded for this case.
             </p>
           )}
         </div>
@@ -328,28 +383,25 @@ export const CaseView: React.FC = () => {
 
   return (
     <div>
-      
-      {/* Main Content */}
       <div className="main blur-shape-bg">
         <div className="case-view-container">
-          {/* Top Bar / Case Header */}
           <div className="topbar" style={{ marginBottom: "16px" }}>
             <div className="topbar-left">
               <h1 style={{ marginBottom: 0 }}>Case Details</h1>
               <div className="sub">
-                View and manage the selected acquisition case
+                Live case record from backend database
               </div>
             </div>
             <div className="topbar-right">
-              <span className="date-badge"><Lucide.Calendar size={16} className="inline" /> 24 Jul 2026</span>
-              <div className="avatar"><Lucide.User size={16} /></div>
+              <button className="btn-outline" onClick={() => navigate("/admin/case")}>
+                <Lucide.ArrowLeft size={16} className="inline mr-1" /> Back to List
+              </button>
             </div>
           </div>
 
-          {/* Case Header */}
           <div className="case-header">
             <div className="case-header-left">
-              <span className="case-id">{caseData.id}</span>
+              <span className="case-id" style={{ fontSize: "13px" }}>{caseData.id}</span>
               <h2 className="case-title">{caseData.title}</h2>
               <div className="case-meta">
                 <span className="meta-item">
@@ -370,7 +422,6 @@ export const CaseView: React.FC = () => {
             </div>
           </div>
 
-          {/* Accordion Sections */}
           <div className="case-sections">
             {sections.map((section) => (
               <div key={section.key} className="case-section">
@@ -407,7 +458,6 @@ export const CaseView: React.FC = () => {
             ))}
           </div>
 
-          {/* Footer note */}
           <div
             style={{
               marginTop: "32px",
@@ -419,8 +469,7 @@ export const CaseView: React.FC = () => {
               paddingTop: "18px",
             }}
           >
-            FCR-SCS · Case Management Module · All data is for demonstration
-            purposes.
+            FCR-SCS · Land Acquisition Module · Connected to Live Backend Service
           </div>
         </div>
       </div>
