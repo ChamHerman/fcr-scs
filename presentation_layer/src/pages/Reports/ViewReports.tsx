@@ -168,7 +168,7 @@ export const ViewReports: React.FC = () => {
                 <input value={`Owner: ${selectedReport.owner}`} readOnly />
               </div>
               <div className="filter-group">
-                <button className="btn-outline">Open full report</button>
+                <button className="btn-outline">Download report</button>
               </div>
             </div>
           </div>
