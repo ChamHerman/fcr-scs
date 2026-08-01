@@ -21,7 +21,9 @@ import {
   Mail,
   FolderOpen,
   Moon,
-  Sun
+  Sun,
+  BrainCircuit,
+  Sparkles
 } from 'lucide-react';
 
 export const AdminLayout: React.FC = () => {
@@ -399,6 +401,18 @@ export const AdminLayout: React.FC = () => {
                   </NavLink>
                 </>
               )}
+            </div>
+
+            <div className="nav-section">
+              {!isCollapsed && <span className="nav-label">AI & Reports</span>}
+              <NavLink to="/admin/prediction" className="nav-item" title={isCollapsed ? "AI Valuation" : ""}>
+                <BrainCircuit size={22} className="nav-icon" />
+                {!isCollapsed && <span>AI Valuation</span>}
+              </NavLink>
+              <NavLink to="/admin/reports" className="nav-item" title={isCollapsed ? "Reports" : ""}>
+                <PieChart size={22} className="nav-icon" />
+                {!isCollapsed && <span>Reports</span>}
+              </NavLink>
             </div>
 
             <div className="nav-section">
