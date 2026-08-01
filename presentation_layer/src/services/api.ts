@@ -1,5 +1,5 @@
-export const BLOCKCHAIN_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
-export const PAYMENT_BASE = import.meta.env.VITE_PAYMENT_API_URL ?? "http://localhost:3002";
+export const BLOCKCHAIN_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3030";
+export const PAYMENT_BASE = import.meta.env.VITE_PAYMENT_API_URL ?? "http://localhost:3030";
 
 async function fetchJSON(url: string, options?: RequestInit) {
   const res = await fetch(url, { headers: { "Content-Type": "application/json", ...options?.headers }, ...options });
