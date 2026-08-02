@@ -9,27 +9,34 @@ interface CaseSelectionModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectCase: (caseId: string) => void;
+  allowedStatuses?: string[];
+  title?: string;
+  subtitle?: string;
+  emptyMessage?: string;
 }
 
 export const CaseSelectionModal: React.FC<CaseSelectionModalProps> = ({
   isOpen,
   onClose,
   onSelectCase,
+  allowedStatuses = ["VALUER_ASSIGNED", "VALUATION_IN_PROGRESS", "VALUATION_REJECTED"],
+  title = "Select Case for Valuation Report",
+  subtitle = "Click directly on any case card below to select it for the report generator.",
+  emptyMessage = "No cases available matching criteria.",
 }) => {
   const [cases, setCases] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+
+  const statusKey = allowedStatuses.join(",");
 
   const fetchCases = useCallback(async () => {
     if (!isOpen) return;
     setLoading(true);
     try {
       const res = await landAcquisitionApi.getAllCases({ limit: 100 });
+      const targetStatuses = statusKey ? statusKey.split(",") : [];
       const filtered = (res.cases || []).filter((c: any) =>
-        [
-          "VALUER_ASSIGNED",
-          "VALUATION_IN_PROGRESS",
-          "VALUATION_REJECTED",
-        ].includes(c.status),
+        targetStatuses.includes(c.status)
       );
       setCases(filtered);
     } catch (err) {
@@ -37,7 +44,7 @@ export const CaseSelectionModal: React.FC<CaseSelectionModalProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [isOpen]);
+  }, [isOpen, statusKey]);
 
   useEffect(() => {
     fetchCases();
@@ -96,7 +103,7 @@ export const CaseSelectionModal: React.FC<CaseSelectionModalProps> = ({
               }}
             >
               <Lucide.FolderPlus size={22} color="var(--md-primary)" />
-              Select Case for Valuation Report
+              {title}
             </h2>
             <div
               style={{
@@ -105,8 +112,7 @@ export const CaseSelectionModal: React.FC<CaseSelectionModalProps> = ({
                 marginTop: "4px",
               }}
             >
-              Click directly on any case card below to select it for the report
-              generator.
+              {subtitle}
             </div>
           </div>
           <button className="close-btn" onClick={onClose}>
@@ -142,8 +148,7 @@ export const CaseSelectionModal: React.FC<CaseSelectionModalProps> = ({
                 opacity: 0.7,
               }}
             >
-              No cases currently in valuation phase (Valuer Assigned / Valuation
-              Rejected).
+              {emptyMessage}
             </div>
           ) : (
             <div

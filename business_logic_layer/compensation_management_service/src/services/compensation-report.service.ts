@@ -86,7 +86,9 @@ export async function getReportById(compensationReportId: string) {
           offerLetters: true,
         },
       },
-      valuationReport: true,
+      valuationReport: {
+        include: { valuer: true },
+      },
       approvedBy: true,
       reviewedBy: true,
     },
@@ -107,8 +109,13 @@ export async function createReport(input: CreateCompensationReportInput) {
   });
   if (!caseData) throw new Error("Acquisition case not found");
 
-  if (caseData.status !== CaseStatus.VALUATION_APPROVED) {
-    throw new Error(`Cannot create compensation report for case in '${caseData.status}' status. Valuation must be APPROVED.`);
+  if (
+    caseData.status !== CaseStatus.VALUATION_APPROVED &&
+    caseData.status !== CaseStatus.COMPENSATION_REJECTED
+  ) {
+    throw new Error(
+      `Cannot create compensation report for case in '${caseData.status}' status. Status must be VALUATION_APPROVED or COMPENSATION_REJECTED.`
+    );
   }
 
   const valReport = await prisma.valuationReport.findUnique({

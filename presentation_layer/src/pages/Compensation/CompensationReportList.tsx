@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FileText, Eye, ChevronLeft, ChevronRight, Loader2, Plus } from "lucide-react";
 import * as Lucide from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
+import { CaseSelectionModal } from "../LandAcquisition/CaseSelectionModal";
 import "../../style.css";
 import "./compensation.css";
 
@@ -38,6 +39,7 @@ export const CompensationReportList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [isCaseModalOpen, setIsCaseModalOpen] = useState(false);
   const itemsPerPage = 10;
 
   const loadReports = useCallback(async () => {
@@ -78,11 +80,16 @@ export const CompensationReportList: React.FC = () => {
   }, [loadReports]);
 
   const handleView = (reportId: string) => {
-    navigate("/compensation/review", { state: { reportId } });
+    navigate("/admin/compensation/report/review", { state: { reportId } });
   };
 
-  const handleGenerate = () => {
-    navigate("/compensation/generator");
+  const handleCreateReport = () => {
+    setIsCaseModalOpen(true);
+  };
+
+  const handleSelectCaseFromModal = (caseId: string) => {
+    setIsCaseModalOpen(false);
+    navigate("/admin/compensation/report/create", { state: { caseId } });
   };
 
   const formatCurrency = (val: number) => {
@@ -109,139 +116,152 @@ export const CompensationReportList: React.FC = () => {
   ];
 
   return (
-    <div className="compensation-dashboard">
-      <div className="topbar" style={{ marginBottom: "20px" }}>
-        <div className="topbar-left">
-          <h1 style={{ marginBottom: 0 }}>Compensation Reports</h1>
-          <div className="sub">
-            Review and generate compensation calculation reports
+    <>
+      {/* Case Selection Modal */}
+      <CaseSelectionModal
+        isOpen={isCaseModalOpen}
+        onClose={() => setIsCaseModalOpen(false)}
+        onSelectCase={handleSelectCaseFromModal}
+        allowedStatuses={["VALUATION_APPROVED", "COMPENSATION_REJECTED"]}
+        title="Select Case for Compensation Report"
+        subtitle="Choose a case in Valuation Approved or Compensation Rejected status to create a report."
+        emptyMessage="No cases currently in Valuation Approved or Compensation Rejected status."
+      />
+
+      <div className="compensation-dashboard">
+        <div className="topbar" style={{ marginBottom: "20px" }}>
+          <div className="topbar-left">
+            <h1 style={{ marginBottom: 0 }}>Compensation Reports</h1>
+            <div className="sub">
+              Review and generate compensation calculation reports
+            </div>
+          </div>
+          <div className="topbar-right" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <button className="btn-primary" onClick={handleCreateReport}>
+              <Plus size={16} className="inline mr-1" /> Create Compensation Report
+            </button>
+            <div className="avatar">AO</div>
           </div>
         </div>
-        <div className="topbar-right" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <button className="btn-primary" onClick={handleGenerate}>
-            <Plus size={16} className="inline mr-1" /> New Compensation Calculation
-          </button>
-          <div className="avatar">AO</div>
-        </div>
-      </div>
 
-      <div className="stats-grid">
-        {stats.map((s, i) => (
-          <div className="stat-card" key={i}>
-            <span className="stat-icon">{s.icon}</span>
-            <div className="stat-label">{s.label}</div>
-            <div className="stat-number">{s.value}</div>
+        <div className="stats-grid">
+          {stats.map((s, i) => (
+            <div className="stat-card" key={i}>
+              <span className="stat-icon">{s.icon}</span>
+              <div className="stat-label">{s.label}</div>
+              <div className="stat-number">{s.value}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="filter-bar">
+          <div className="search-wrap">
+            <span className="search-icon">
+              <Lucide.Search size={16} />
+            </span>
+            <input
+              type="text"
+              placeholder="Search by case title or report ID..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
-        ))}
-      </div>
-
-      <div className="filter-bar">
-        <div className="search-wrap">
-          <span className="search-icon">
-            <Lucide.Search size={16} />
-          </span>
-          <input
-            type="text"
-            placeholder="Search by case title or report ID..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+          <div className="filter-group">
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="">All Status</option>
+              <option value="PENDING">Pending Approval</option>
+              <option value="APPROVED">Approved</option>
+              <option value="REJECTED">Rejected</option>
+            </select>
+          </div>
         </div>
-        <div className="filter-group">
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="">All Status</option>
-            <option value="PENDING">Pending Approval</option>
-            <option value="APPROVED">Approved</option>
-            <option value="REJECTED">Rejected</option>
-          </select>
-        </div>
-      </div>
 
-      <div className="table-wrap">
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Report ID</th>
-                <th>Case Title</th>
-                <th>Land Owner</th>
-                <th>Total Amount</th>
-                <th>Status</th>
-                <th>Date</th>
-                <th style={{ textAlign: "center" }}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
+        <div className="table-wrap">
+          <div className="table-scroll">
+            <table>
+              <thead>
                 <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)" }}>
-                    <Loader2 size={24} className="inline animate-spin mr-2" /> Loading reports from backend...
-                  </td>
+                  <th>Report ID</th>
+                  <th>Case Title</th>
+                  <th>Land Owner</th>
+                  <th>Total Amount</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                  <th style={{ textAlign: "center" }}>Action</th>
                 </tr>
-              ) : reports.length === 0 ? (
-                <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)", opacity: 0.6 }}>
-                    No compensation reports found in database.
-                  </td>
-                </tr>
-              ) : (
-                reports.map((r) => (
-                  <tr key={r.id}>
-                    <td>
-                      <span className="case-id" style={{ fontSize: "11px" }}>{r.id.slice(0, 8)}...</span>
-                    </td>
-                    <td className="case-title">{r.caseTitle}</td>
-                    <td>{r.owner}</td>
-                    <td><strong>{formatCurrency(r.totalAmount)}</strong></td>
-                    <td>
-                      <span className={`status-badge ${r.statusClass}`}>
-                        <span className="dot"></span> {r.status}
-                      </span>
-                    </td>
-                    <td>{r.generatedDate}</td>
-                    <td style={{ textAlign: "center" }}>
-                      <button className="btn-view" onClick={() => handleView(r.id)}>
-                        <Eye size={14} style={{ display: "inline", marginRight: "4px" }} /> View
-                      </button>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)" }}>
+                      <Loader2 size={24} className="inline animate-spin mr-2" /> Loading reports from backend...
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : reports.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)", opacity: 0.6 }}>
+                      No compensation reports found in database.
+                    </td>
+                  </tr>
+                ) : (
+                  reports.map((r) => (
+                    <tr key={r.id}>
+                      <td>
+                        <span className="case-id" style={{ fontSize: "11px" }}>{r.id.slice(0, 8)}...</span>
+                      </td>
+                      <td className="case-title">{r.caseTitle}</td>
+                      <td>{r.owner}</td>
+                      <td><strong>{formatCurrency(r.totalAmount)}</strong></td>
+                      <td>
+                        <span className={`status-badge ${r.statusClass}`}>
+                          <span className="dot"></span> {r.status}
+                        </span>
+                      </td>
+                      <td>{r.generatedDate}</td>
+                      <td style={{ textAlign: "center" }}>
+                        <button className="btn-view" onClick={() => handleView(r.id)}>
+                          <Eye size={14} style={{ display: "inline", marginRight: "4px" }} /> View
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {totalCount > itemsPerPage && (
+            <div className="pagination">
+              <div className="info">
+                Showing {(currentPage - 1) * itemsPerPage + 1}–{Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount}
+              </div>
+              <div className="pages">
+                <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}>
+                  <ChevronLeft size={16} />
+                </button>
+                <button className="active">{currentPage}</button>
+                <button onClick={() => setCurrentPage((p) => p + 1)} disabled={currentPage * itemsPerPage >= totalCount}>
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
-        {totalCount > itemsPerPage && (
-          <div className="pagination">
-            <div className="info">
-              Showing {(currentPage - 1) * itemsPerPage + 1}–{Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount}
-            </div>
-            <div className="pages">
-              <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}>
-                <ChevronLeft size={16} />
-              </button>
-              <button className="active">{currentPage}</button>
-              <button onClick={() => setCurrentPage((p) => p + 1)} disabled={currentPage * itemsPerPage >= totalCount}>
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
-        )}
+        <div
+          style={{
+            marginTop: "24px",
+            fontSize: "13px",
+            color: "var(--md-on-surface-variant)",
+            opacity: 0.6,
+            textAlign: "center",
+            borderTop: "1px solid rgba(121,116,126,0.08)",
+            paddingTop: "18px",
+          }}
+        >
+          FCR-SCS · Compensation Report Module · Connected to Business Logic Backend
+        </div>
       </div>
-
-      <div
-        style={{
-          marginTop: "24px",
-          fontSize: "13px",
-          color: "var(--md-on-surface-variant)",
-          opacity: 0.6,
-          textAlign: "center",
-          borderTop: "1px solid rgba(121,116,126,0.08)",
-          paddingTop: "18px",
-        }}
-      >
-        FCR-SCS · Compensation Report Module · Connected to Business Logic Backend
-      </div>
-    </div>
+    </>
   );
 };

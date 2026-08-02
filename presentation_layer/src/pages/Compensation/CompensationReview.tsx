@@ -1,5 +1,6 @@
 import * as Lucide from "lucide-react";
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { CheckCircle, XCircle, X, ArrowLeft, Loader2 } from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
@@ -78,8 +79,8 @@ export const CompensationApproval: React.FC = () => {
           caseId: r.caseId,
           caseTitle: r.acquisitionCase?.caseTitle || "—",
           owner: r.acquisitionCase?.landParcel?.ownerships?.[0]?.landOwner?.name || "—",
-          ownerIc: r.acquisitionCase?.landParcel?.ownerships?.[0]?.landOwner?.nric || "—",
-          ownerAddress: r.acquisitionCase?.landParcel?.ownerships?.[0]?.landOwner?.address || "—",
+          ownerIc: r.acquisitionCase?.landParcel?.ownerships?.[0]?.landOwner?.nric || r.acquisitionCase?.landParcel?.ownerships?.[0]?.landOwner?.icNumber || "—",
+          ownerAddress: r.acquisitionCase?.landParcel?.address || r.acquisitionCase?.landParcel?.ownerships?.[0]?.landOwner?.address || "—",
           ownerPhone: r.acquisitionCase?.landParcel?.ownerships?.[0]?.landOwner?.contact || "—",
           landTitle: r.acquisitionCase?.landParcel?.landTitleNo || "—",
           project: r.acquisitionCase?.project?.projectName || "—",
@@ -122,7 +123,7 @@ export const CompensationApproval: React.FC = () => {
       try {
         await compensationApi.approveReport(report.id);
         alert(`Compensation Report Approved!\n\nCase status updated to 'COMPENSATION_APPROVED'.`);
-        navigate("/compensation/report");
+        navigate("/admin/compensation/report");
       } catch (err: any) {
         console.error("Approve failed:", err);
         alert(`Approval Failed: ${err.message}`);
@@ -142,7 +143,7 @@ export const CompensationApproval: React.FC = () => {
       await compensationApi.rejectReport(report.id, rejectReason);
       alert(`Compensation Report Rejected!\n\nCase status updated to 'COMPENSATION_REJECTED'.`);
       setShowRejectModal(false);
-      navigate("/compensation/report");
+      navigate("/admin/compensation/report");
     } catch (err: any) {
       console.error("Reject failed:", err);
       alert(`Rejection Failed: ${err.message}`);
@@ -153,6 +154,120 @@ export const CompensationApproval: React.FC = () => {
 
   const formatCurrency = (val: number) => {
     return "RM " + val.toLocaleString("en-MY", { minimumFractionDigits: 2 });
+  };
+
+  const renderRejectModal = () => {
+    if (!showRejectModal) return null;
+    return createPortal(
+      <div
+        className="preview-modal-overlay"
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          width: "100vw",
+          height: "100vh",
+          background: "rgba(0, 0, 0, 0.6)",
+          backdropFilter: "blur(4px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 99999,
+        }}
+        onClick={() => setShowRejectModal(false)}
+      >
+        <div
+          className="preview-modal"
+          style={{
+            position: "relative",
+            maxWidth: "480px",
+            width: "90%",
+            padding: "24px",
+            borderRadius: "16px",
+            background: "var(--md-surface-container, #ffffff)",
+            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.3)",
+            display: "flex",
+            flexDirection: "column",
+            animation: "none",
+            margin: "auto",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+            <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: "var(--md-on-surface)" }}>
+              Reject Compensation Report
+            </h3>
+            <button className="close-btn" style={{ background: "none", border: "none", cursor: "pointer" }} onClick={() => setShowRejectModal(false)}>
+              <X size={20} />
+            </button>
+          </div>
+          <div className="form-group" style={{ marginBottom: "20px" }}>
+            <label htmlFor="rejectReason" style={{ display: "block", fontSize: "13px", fontWeight: 500, marginBottom: "6px", color: "var(--md-on-surface-variant)" }}>
+              Rejection Reason <span style={{ color: "#dc2626" }}>*</span>
+            </label>
+            <textarea
+              id="rejectReason"
+              rows={3}
+              placeholder="State the reason for rejection..."
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "10px 14px",
+                borderRadius: "12px",
+                border: "1.5px solid rgba(121, 116, 126, 0.25)",
+                background: "var(--md-surface-container-low)",
+                fontSize: "14px",
+                fontFamily: "inherit",
+                color: "var(--md-on-surface)",
+                outline: "none",
+                resize: "vertical",
+                boxSizing: "border-box",
+              }}
+            />
+            {reasonError && <div className="error-text" style={{ fontSize: "12px", color: "#dc2626", marginTop: "4px" }}>{reasonError}</div>}
+          </div>
+          <div className="modal-actions" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "16px", borderTop: "1px solid rgba(121,116,126,0.1)" }}>
+            <button
+              className="btn-cancel"
+              style={{
+                padding: "8px 24px",
+                borderRadius: "9999px",
+                border: "1.5px solid rgba(121, 116, 126, 0.3)",
+                background: "transparent",
+                fontSize: "14px",
+                fontWeight: 500,
+                cursor: "pointer",
+              }}
+              onClick={() => setShowRejectModal(false)}
+            >
+              Cancel
+            </button>
+            <button
+              className="btn-submit"
+              style={{
+                padding: "8px 24px",
+                borderRadius: "9999px",
+                border: "none",
+                background: "#dc2626",
+                color: "#ffffff",
+                fontSize: "14px",
+                fontWeight: 600,
+                cursor: "pointer",
+                boxShadow: "0 2px 8px rgba(220, 38, 38, 0.25)",
+              }}
+              onClick={handleRejectSubmit}
+              disabled={submitting}
+            >
+              {submitting ? "Submitting..." : "Confirm Rejection"}
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
   };
 
   if (loading) {
@@ -174,7 +289,7 @@ export const CompensationApproval: React.FC = () => {
           <p style={{ color: "var(--md-on-surface-variant)", marginBottom: "20px" }}>
             No report selected or valid ID provided.
           </p>
-          <button className="btn-primary" onClick={() => navigate("/compensation/report")}>
+          <button className="btn-primary" onClick={() => navigate("/admin/compensation/report")}>
             Back to Compensation Reports
           </button>
         </div>
@@ -184,37 +299,7 @@ export const CompensationApproval: React.FC = () => {
 
   return (
     <>
-      {showRejectModal && (
-        <div className="reject-modal-overlay" onClick={() => setShowRejectModal(false)}>
-          <div className="reject-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Reject Compensation Report</h3>
-              <button className="close-btn" onClick={() => setShowRejectModal(false)}>
-                <X size={22} />
-              </button>
-            </div>
-            <div className="form-group">
-              <label htmlFor="rejectReason">Rejection Reason *</label>
-              <textarea
-                id="rejectReason"
-                rows={3}
-                placeholder="State the reason for rejection..."
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-              />
-              {reasonError && <div className="error-text">{reasonError}</div>}
-            </div>
-            <div className="modal-actions">
-              <button className="btn-cancel" onClick={() => setShowRejectModal(false)}>
-                Cancel
-              </button>
-              <button className="btn-submit" onClick={handleRejectSubmit} disabled={submitting}>
-                {submitting ? "Submitting..." : "Confirm Rejection"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {renderRejectModal()}
 
       <div className="main blur-shape-bg">
         <div className="topbar" style={{ marginBottom: "20px" }}>
@@ -225,7 +310,7 @@ export const CompensationApproval: React.FC = () => {
             </div>
           </div>
           <div className="topbar-right">
-            <button className="btn-outline" onClick={() => navigate("/compensation/report")}>
+            <button className="btn-outline" onClick={() => navigate("/admin/compensation/report")}>
               <ArrowLeft size={16} className="inline mr-1" /> Back
             </button>
           </div>
@@ -266,12 +351,48 @@ export const CompensationApproval: React.FC = () => {
           </div>
 
           {report.status === "Pending Approval" && (
-            <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
-              <button className="btn-accept" onClick={handleApprove}>
-                <CheckCircle size={18} className="inline mr-1" /> Approve Report
+            <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", alignItems: "center", marginTop: "24px", paddingTop: "16px", borderTop: "1px solid rgba(121, 116, 126, 0.1)" }}>
+              <button
+                className="btn-reject"
+                style={{
+                  padding: "10px 24px",
+                  borderRadius: "9999px",
+                  border: "1.5px solid rgba(239, 68, 68, 0.3)",
+                  background: "rgba(239, 68, 68, 0.05)",
+                  color: "#dc2626",
+                  fontWeight: 600,
+                  fontSize: "14px",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  transition: "all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                }}
+                onClick={() => setShowRejectModal(true)}
+              >
+                <XCircle size={18} /> Reject Report
               </button>
-              <button className="btn-reject" onClick={() => setShowRejectModal(true)}>
-                <XCircle size={18} className="inline mr-1" /> Reject Report
+
+              <button
+                className="btn-accept"
+                style={{
+                  padding: "10px 28px",
+                  borderRadius: "9999px",
+                  border: "none",
+                  background: "linear-gradient(135deg, #16a34a 0%, #15803d 100%)",
+                  color: "#ffffff",
+                  fontWeight: 600,
+                  fontSize: "14px",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  boxShadow: "0 4px 12px rgba(22, 163, 74, 0.25)",
+                  transition: "all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                }}
+                onClick={handleApprove}
+              >
+                <CheckCircle size={18} /> Approve Report
               </button>
             </div>
           )}

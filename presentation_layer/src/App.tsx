@@ -91,7 +91,9 @@ function App() {
             <Route path="compensation" element={<CompensationReportList />} />
             <Route path="compensation/report" element={<CompensationReportList />} />
             <Route path="compensation/report/create" element={<CompensationReportGenerator />} />
+            <Route path="compensation/generator" element={<CompensationReportGenerator />} />
             <Route path="compensation/report/review" element={<CompensationApproval />} />
+            <Route path="compensation/review" element={<CompensationApproval />} />
             <Route path="compensation/compare" element={<CompensationComparisonList />} />
             <Route path="compensation/compare/create" element={<CompensationComparisonCreate />} />
             <Route path="compensation/offer" element={<OfferLetterDashboard />} />
