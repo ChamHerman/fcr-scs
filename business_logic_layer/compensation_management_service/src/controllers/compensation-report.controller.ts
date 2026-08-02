@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import * as compensationService from "../services/compensation-report.service";
+import { validateCreateCompensationReport } from "../validators/compensation.validator";
 
 export async function getAllReports(req: Request, res: Response): Promise<void> {
   try {
@@ -36,20 +37,13 @@ export async function getReportById(req: Request, res: Response): Promise<void> 
 }
 
 export async function createReport(req: Request, res: Response): Promise<void> {
-  const { caseId, valuationReportId, components, remarks, createdById } = req.body;
+  const validationError = validateCreateCompensationReport(req.body);
+  if (validationError) {
+    res.status(400).json({ error: validationError });
+    return;
+  }
 
-  if (!caseId) {
-    res.status(400).json({ error: "caseId is required" });
-    return;
-  }
-  if (!valuationReportId) {
-    res.status(400).json({ error: "valuationReportId is required" });
-    return;
-  }
-  if (!components) {
-    res.status(400).json({ error: "compensation components are required" });
-    return;
-  }
+  const { caseId, valuationReportId, components, remarks, createdById } = req.body;
 
   const userId = createdById || "00000000-0000-0000-0000-000000000001";
 

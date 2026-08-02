@@ -51,6 +51,7 @@ export const landAcquisitionApi = {
     });
   },
 
+  // ── Whole-case update (all sections at once) ──────────────────────────────
   updateCase: async (caseId: string, updateData: any) => {
     return fetchJSON(LAND_ACQUISITION_BASE + `/api/land-acquisition/cases/${encodeURIComponent(caseId)}`, {
       method: "PUT",
@@ -58,9 +59,33 @@ export const landAcquisitionApi = {
     });
   },
 
+  // ── Section-specific update: Project ─────────────────────────────────────
+  updateProjectInfo: async (caseId: string, projectData: any) => {
+    return fetchJSON(LAND_ACQUISITION_BASE + `/api/land-acquisition/cases/${encodeURIComponent(caseId)}/project`, {
+      method: "PUT",
+      body: JSON.stringify(projectData),
+    });
+  },
+
+  // ── Section-specific update: Land ─────────────────────────────────────────
+  updateLandInfo: async (caseId: string, landData: any) => {
+    return fetchJSON(LAND_ACQUISITION_BASE + `/api/land-acquisition/cases/${encodeURIComponent(caseId)}/land`, {
+      method: "PUT",
+      body: JSON.stringify(landData),
+    });
+  },
+
+  // ── Section-specific update: Owners ───────────────────────────────────────
+  updateOwnerInfo: async (caseId: string, ownersData: any) => {
+    return fetchJSON(LAND_ACQUISITION_BASE + `/api/land-acquisition/cases/${encodeURIComponent(caseId)}/owners`, {
+      method: "PUT",
+      body: JSON.stringify(ownersData),
+    });
+  },
+
   deleteCase: async (caseId: string) => {
-    return fetchJSON(LAND_ACQUISITION_BASE + `/api/land-acquisition/cases/${encodeURIComponent(caseId)}`, {
-      method: "DELETE",
+    return fetchJSON(LAND_ACQUISITION_BASE + `/api/land-acquisition/cases/${encodeURIComponent(caseId)}/delete`, {
+      method: "POST",
     });
   },
 
@@ -69,18 +94,30 @@ export const landAcquisitionApi = {
     form.append("file", file);
     if (documentType) form.append("documentType", documentType);
 
-    const res = await fetch(LAND_ACQUISITION_BASE + `/api/land-acquisition/cases/${encodeURIComponent(caseId)}/documents`, {
-      method: "POST",
-      body: form,
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+    let res: Response;
+    try {
+      res = await fetch(LAND_ACQUISITION_BASE + `/api/land-acquisition/cases/${encodeURIComponent(caseId)}/documents`, {
+        method: "POST",
+        body: form,
+      });
+    } catch (networkErr: any) {
+      throw new Error("Network Error: Cannot connect to backend. Is the service running?");
+    }
+
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {
+      throw new Error(`Server Error (${res.status}): Unexpected non-JSON response from document upload endpoint`);
+    }
+
+    if (!res.ok) throw new Error(data.error ?? data.message ?? `Upload failed with status ${res.status}`);
     return data;
   },
 
   deleteDocument: async (documentId: string) => {
-    return fetchJSON(LAND_ACQUISITION_BASE + `/api/land-acquisition/documents/${encodeURIComponent(documentId)}`, {
-      method: "DELETE",
+    return fetchJSON(LAND_ACQUISITION_BASE + `/api/land-acquisition/documents/${encodeURIComponent(documentId)}/delete`, {
+      method: "POST",
     });
   },
 

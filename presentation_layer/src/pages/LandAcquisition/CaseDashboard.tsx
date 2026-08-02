@@ -204,7 +204,7 @@ export const CaseManagementDashboard: React.FC = () => {
           <div className="topbar-left">
             <h1>Case Management</h1>
             <div className="sub">
-              Connected to Business Logic Backend (Port 3030)
+              Monitor and manage all land acquisition cases
             </div>
           </div>
           <div className="topbar-right">
