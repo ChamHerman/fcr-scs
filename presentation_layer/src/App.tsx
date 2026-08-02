@@ -27,6 +27,7 @@ import MemberPaymentStatus from './pages/Member/MemberPaymentStatus';
 import VerifyAuditTrail from './pages/Member/VerifyAuditTrail';
 import { CaseManagementDashboard } from './pages/LandAcquisition/CaseDashboard';
 import { CaseRegistration } from './pages/LandAcquisition/CaseRegistration';
+import { CaseEdit } from './pages/LandAcquisition/CaseEdit';
 import { CaseView } from './pages/LandAcquisition/CaseDetails';
 import { CaseAssignment } from './pages/LandAcquisition/CaseAssignment';
 import { ValuationReportGenerator } from './pages/LandAcquisition/ValuationReportGenerator';
@@ -77,7 +78,10 @@ function App() {
             {/* Case Management */}
             <Route path="case" element={<CaseManagementDashboard />} />
             <Route path="case/register" element={<CaseRegistration />} />
+            <Route path="case/edit" element={<CaseEdit />} />
+            <Route path="case/:caseId/edit" element={<CaseEdit />} />
             <Route path="case/details" element={<CaseView />} />
+            <Route path="case/details/:caseId" element={<CaseView />} />
             <Route path="case/assign" element={<CaseAssignment />} />
             <Route path="case/valuation" element={<ValuationReportList />} />
             <Route path="case/valuation/create" element={<ValuationReportGenerator />} />

@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import * as caseService from "../services/case.service";
+import { validateCreateCasePayload } from "../validators/case.validator";
 import crypto from "crypto";
 
 // ─── GET Handlers (Phase 1) ──────────────────────────────────────────────────
@@ -60,55 +61,13 @@ export async function getUnassignedCases(_req: Request, res: Response): Promise<
 // ─── WRITE Handlers (Phase 2) ────────────────────────────────────────────────
 
 export async function createCase(req: Request, res: Response): Promise<void> {
+  const validationError = validateCreateCasePayload(req.body);
+  if (validationError) {
+    res.status(400).json({ error: validationError });
+    return;
+  }
+
   const { project, land, owners, caseTitle, remarks, createdById } = req.body;
-
-  if (!project) {
-    res.status(400).json({ error: "project details are required" });
-    return;
-  }
-  if (!land) {
-    res.status(400).json({ error: "land details are required" });
-    return;
-  }
-  if (!owners || !Array.isArray(owners) || owners.length === 0) {
-    res.status(400).json({ error: "At least one land owner is required" });
-    return;
-  }
-  if (!caseTitle) {
-    res.status(400).json({ error: "caseTitle is required" });
-    return;
-  }
-
-  if (!project.projectName || !project.projectType || !project.purpose || !project.fundingSource) {
-    res.status(400).json({ error: "Project name, type, purpose, and funding source are required" });
-    return;
-  }
-  if (project.budget === undefined || project.budget <= 0) {
-    res.status(400).json({ error: "Project budget must be a positive number" });
-    return;
-  }
-
-  if (!land.landTitleNo || !land.lotNo || !land.mukim || !land.district || !land.state) {
-    res.status(400).json({ error: "Land title number, lot number, mukim, district, and state are required" });
-    return;
-  }
-  if (land.area === undefined || land.area <= 0) {
-    res.status(400).json({ error: "Land area must be a positive number" });
-    return;
-  }
-  if (land.latitude === undefined || land.longitude === undefined) {
-    res.status(400).json({ error: "GPS coordinates (latitude and longitude) are required" });
-    return;
-  }
-
-  for (let i = 0; i < owners.length; i++) {
-    const owner = owners[i];
-    if (!owner.name || !owner.nric || !owner.address || !owner.contact) {
-      res.status(400).json({ error: `Owner #${i + 1}: name, nric, address, and contact are required` });
-      return;
-    }
-  }
-
   const userId = createdById || "00000000-0000-0000-0000-000000000001";
 
   try {
@@ -133,26 +92,93 @@ export async function createCase(req: Request, res: Response): Promise<void> {
 
 export async function updateCase(req: Request, res: Response): Promise<void> {
   const caseId = req.params.caseId as string;
+  console.log(`[CONTROLLER REACHED] updateCase for caseId: ${caseId}`);
   if (!caseId) {
-    res.status(400).json({ error: "caseId is required" });
+    res.status(400).json({ success: false, error: "caseId is required" });
     return;
   }
 
-  const { caseTitle, remarks, status } = req.body;
+  const { caseTitle, remarks, status, project, land, owners } = req.body;
 
   try {
     const result = await caseService.updateCase(caseId, {
       caseTitle,
       remarks,
       status,
+      project,
+      land,
+      owners,
     });
-    res.json({ case: result });
+    res.json({ success: true, message: "Case updated successfully", case: result, data: result });
   } catch (e: unknown) {
     const msg = (e as Error).message;
     if (msg.toLowerCase().includes("not found")) {
-      res.status(404).json({ error: msg });
+      res.status(404).json({ success: false, error: msg });
     } else {
-      res.status(400).json({ error: msg });
+      res.status(400).json({ success: false, error: msg });
+    }
+  }
+}
+
+export async function updateProjectInformation(req: Request, res: Response): Promise<void> {
+  const caseId = req.params.caseId as string;
+  console.log(`[CONTROLLER REACHED] updateProjectInformation for caseId: ${caseId}`);
+  if (!caseId) {
+    res.status(400).json({ success: false, error: "caseId is required" });
+    return;
+  }
+  try {
+    const projectData = req.body.project || req.body;
+    const result = await caseService.updateProjectInformation(caseId, projectData);
+    res.json({ success: true, message: "Project information updated successfully", project: result, data: result });
+  } catch (e: unknown) {
+    const msg = (e as Error).message;
+    if (msg.toLowerCase().includes("not found")) {
+      res.status(404).json({ success: false, error: msg });
+    } else {
+      res.status(400).json({ success: false, error: msg });
+    }
+  }
+}
+
+export async function updateLandInformation(req: Request, res: Response): Promise<void> {
+  const caseId = req.params.caseId as string;
+  console.log(`[CONTROLLER REACHED] updateLandInformation for caseId: ${caseId}`);
+  if (!caseId) {
+    res.status(400).json({ success: false, error: "caseId is required" });
+    return;
+  }
+  try {
+    const landData = req.body.land || req.body;
+    const result = await caseService.updateLandInformation(caseId, landData);
+    res.json({ success: true, message: "Land information updated successfully", land: result, data: result });
+  } catch (e: unknown) {
+    const msg = (e as Error).message;
+    if (msg.toLowerCase().includes("not found")) {
+      res.status(404).json({ success: false, error: msg });
+    } else {
+      res.status(400).json({ success: false, error: msg });
+    }
+  }
+}
+
+export async function updateOwnerInformation(req: Request, res: Response): Promise<void> {
+  const caseId = req.params.caseId as string;
+  console.log(`[CONTROLLER REACHED] updateOwnerInformation for caseId: ${caseId}`);
+  if (!caseId) {
+    res.status(400).json({ success: false, error: "caseId is required" });
+    return;
+  }
+  try {
+    const ownersPayload = Array.isArray(req.body) ? req.body : req.body.owners || [];
+    const result = await caseService.updateOwnerInformation(caseId, ownersPayload);
+    res.json({ success: true, message: "Owner information updated successfully", owners: result, data: result });
+  } catch (e: unknown) {
+    const msg = (e as Error).message;
+    if (msg.toLowerCase().includes("not found")) {
+      res.status(404).json({ success: false, error: msg });
+    } else {
+      res.status(400).json({ success: false, error: msg });
     }
   }
 }

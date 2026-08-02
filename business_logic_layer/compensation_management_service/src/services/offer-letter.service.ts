@@ -181,3 +181,27 @@ export async function rejectOffer(offerId: string, remarks?: string) {
 
   return result;
 }
+
+export async function checkAndMarkExpiredOffers(): Promise<number> {
+  const now = new Date();
+  const expiredOffers = await prisma.offerLetter.findMany({
+    where: {
+      status: OfferStatus.PENDING,
+      expiryDate: { lt: now },
+    },
+  });
+
+  if (expiredOffers.length === 0) return 0;
+
+  await prisma.$transaction(
+    expiredOffers.map((offer) =>
+      prisma.offerLetter.update({
+        where: { offerId: offer.offerId },
+        data: { status: OfferStatus.EXPIRED },
+      })
+    )
+  );
+
+  return expiredOffers.length;
+}
+

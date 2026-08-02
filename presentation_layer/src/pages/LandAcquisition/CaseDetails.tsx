@@ -1,6 +1,6 @@
 import * as Lucide from "lucide-react";
 import React, { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useParams, useSearchParams } from "react-router-dom";
 import {
   ChevronDown,
   Edit,
@@ -98,7 +98,9 @@ const statusLabelMap: Record<string, string> = {
 export const CaseView: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const stateCaseId = location.state?.caseId;
+  const params = useParams<{ caseId?: string }>();
+  const [searchParams] = useSearchParams();
+  const stateCaseId = params.caseId || searchParams.get("caseId") || location.state?.caseId;
 
   const [caseData, setCaseData] = useState<CaseData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -179,6 +181,29 @@ export const CaseView: React.FC = () => {
     fetchDetails();
   }, [stateCaseId]);
 
+  const [highlightedSection, setHighlightedSection] = useState<string | null>(null);
+
+  useEffect(() => {
+    const updatedSection = location.state?.updatedSection;
+    if (updatedSection) {
+      setExpandedSections((prev) => ({ ...prev, [updatedSection]: true }));
+      setHighlightedSection(updatedSection);
+
+      setTimeout(() => {
+        const el = document.getElementById(`section-${updatedSection}`);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 250);
+
+      const timer = setTimeout(() => {
+        setHighlightedSection(null);
+      }, 3500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [location.state]);
+
   const toggleSection = (section: string) => {
     setExpandedSections((prev) => ({
       ...prev,
@@ -186,12 +211,14 @@ export const CaseView: React.FC = () => {
     }));
   };
 
-  const handleEdit = (section?: string) => {
-    if (section) {
-      alert(`Edit ${section} section`);
-    } else {
-      alert("Edit entire case");
-    }
+  const handleEdit = (sectionKey?: string) => {
+    if (!caseData) return;
+    const url = sectionKey
+      ? `/admin/case/${encodeURIComponent(caseData.id)}/edit?section=${encodeURIComponent(sectionKey)}`
+      : `/admin/case/${encodeURIComponent(caseData.id)}/edit`;
+    navigate(url, {
+      state: { caseId: caseData.id, section: sectionKey },
+    });
   };
 
   const handleDelete = async () => {
@@ -423,39 +450,48 @@ export const CaseView: React.FC = () => {
           </div>
 
           <div className="case-sections">
-            {sections.map((section) => (
-              <div key={section.key} className="case-section">
+            {sections.map((section) => {
+              const isHighlighted = highlightedSection === section.key;
+              return (
                 <div
-                  className="case-section-header"
-                  onClick={() => toggleSection(section.key)}
+                  key={section.key}
+                  id={`section-${section.key}`}
+                  className={`case-section transition-all duration-500 ${
+                    isHighlighted ? "ring-2 ring-md-primary shadow-lg bg-md-primary/5" : ""
+                  }`}
                 >
-                  <div className="section-title">
-                    {section.icon}
-                    {section.title}
+                  <div
+                    className="case-section-header"
+                    onClick={() => toggleSection(section.key)}
+                  >
+                    <div className="section-title">
+                      {section.icon}
+                      {section.title}
+                    </div>
+                    <div className="section-actions">
+                      <button
+                        className="edit-btn-sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEdit(section.key);
+                        }}
+                      >
+                        <Edit size={14} /> Edit
+                      </button>
+                      <ChevronDown
+                        size={20}
+                        className={`toggle-icon ${expandedSections[section.key] ? "open" : ""}`}
+                      />
+                    </div>
                   </div>
-                  <div className="section-actions">
-                    <button
-                      className="edit-btn-sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEdit(section.title);
-                      }}
-                    >
-                      <Edit size={14} /> Edit
-                    </button>
-                    <ChevronDown
-                      size={20}
-                      className={`toggle-icon ${expandedSections[section.key] ? "open" : ""}`}
-                    />
+                  <div
+                    className={`case-section-content ${expandedSections[section.key] ? "open" : ""}`}
+                  >
+                    {section.content}
                   </div>
                 </div>
-                <div
-                  className={`case-section-content ${expandedSections[section.key] ? "open" : ""}`}
-                >
-                  {section.content}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div

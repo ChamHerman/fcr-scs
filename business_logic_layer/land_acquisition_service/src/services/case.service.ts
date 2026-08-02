@@ -1,5 +1,7 @@
 import { prisma } from "../prisma";
 import { CaseStatus, AreaUnit, Prisma } from "@prisma/client";
+import { CaseStateMachine } from "../utils/case-state.machine";
+
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -47,6 +49,31 @@ export interface UpdateCaseInput {
   caseTitle?: string;
   remarks?: string;
   status?: CaseStatus;
+  project?: {
+    projectName?: string;
+    projectType?: string;
+    purpose?: string;
+    budget?: number;
+    fundingSource?: string;
+  };
+  land?: {
+    landTitleNo?: string;
+    lotNo?: string;
+    mukim?: string;
+    district?: string;
+    state?: string;
+    area?: number;
+    category?: string;
+    latitude?: number;
+    longitude?: number;
+  };
+  owners?: Array<{
+    name: string;
+    nric: string;
+    address: string;
+    contact: string;
+    ownershipType: string;
+  }>;
 }
 
 export interface CaseDocumentInput {
@@ -182,31 +209,16 @@ export async function getCaseStats() {
 
   const totalCases = statusCounts.reduce((sum, g) => sum + g._count._all, 0);
 
-  const activeStatuses: CaseStatus[] = [
-    CaseStatus.CASE_REGISTERED,
-    CaseStatus.VALUER_ASSIGNED,
-    CaseStatus.VALUATION_IN_PROGRESS,
-    CaseStatus.PENDING_VALUATION_APPROVAL,
-    CaseStatus.VALUATION_APPROVED,
-    CaseStatus.PENDING_COMPENSATION_APPROVAL,
-    CaseStatus.COMPENSATION_APPROVED,
-    CaseStatus.OFFER_ISSUED,
-    CaseStatus.PAYMENT_IN_PROGRESS,
-  ];
-
   const active = statusCounts
-    .filter((g) => activeStatuses.includes(g.status))
+    .filter((g) => CaseStateMachine.isActive(g.status))
     .reduce((sum, g) => sum + g._count._all, 0);
 
   const completed = statusCounts
-    .filter((g) => g.status === CaseStatus.PAYMENT_COMPLETED || g.status === CaseStatus.CASE_CLOSED)
+    .filter((g) => CaseStateMachine.isCompleted(g.status))
     .reduce((sum, g) => sum + g._count._all, 0);
 
   const pendingAction = statusCounts
-    .filter((g) =>
-      g.status === CaseStatus.PENDING_VALUATION_APPROVAL ||
-      g.status === CaseStatus.PENDING_COMPENSATION_APPROVAL
-    )
+    .filter((g) => CaseStateMachine.isPendingAction(g.status))
     .reduce((sum, g) => sum + g._count._all, 0);
 
   const compensationAgg = await prisma.compensationReport.aggregate({
@@ -347,18 +359,176 @@ export async function createCase(input: CreateCaseInput) {
   return result;
 }
 
+export async function updateProjectInformation(caseId: string, projectInput: any) {
+  const existing = await prisma.acquisitionCase.findUnique({
+    where: { caseId },
+    select: { projectId: true, status: true },
+  });
+  if (!existing) throw new Error("Case not found");
+  if (!CaseStateMachine.isEditable(existing.status)) {
+    throw new Error(`Cannot update case in '${existing.status}' status`);
+  }
+  if (!existing.projectId) throw new Error("Project record not associated with this case");
+
+  const projectName = projectInput.projectName;
+  const projectType = projectInput.projectType;
+  const purpose = projectInput.purpose || projectInput.projectPurpose;
+  const budget = projectInput.budget !== undefined ? projectInput.budget : projectInput.projectBudget;
+  const fundingSource = projectInput.fundingSource;
+
+  return prisma.project.update({
+    where: { projectId: existing.projectId },
+    data: {
+      ...(projectName && { projectName }),
+      ...(projectType && { projectType }),
+      ...(purpose && { purpose }),
+      ...(budget !== undefined && budget !== null && { budget: typeof budget === "string" ? parseFloat(budget) : budget }),
+      ...(fundingSource && { fundingSource }),
+    },
+  });
+}
+
+export async function updateLandInformation(caseId: string, landInput: any) {
+  const existing = await prisma.acquisitionCase.findUnique({
+    where: { caseId },
+    include: { landParcel: true },
+  });
+  if (!existing) throw new Error("Case not found");
+  if (!CaseStateMachine.isEditable(existing.status)) {
+    throw new Error(`Cannot update case in '${existing.status}' status`);
+  }
+  if (!existing.landParcel?.landId) throw new Error("Land parcel record not associated with this case");
+
+  const landTitleNo = landInput.landTitleNo || landInput.landTitleNumber;
+  const lotNo = landInput.lotNo || landInput.lotNumber;
+  const mukim = landInput.mukim;
+  const district = landInput.district;
+  const state = landInput.state;
+  const area = landInput.area !== undefined ? landInput.area : landInput.landArea;
+  const category = landInput.category || landInput.landCategory;
+  const latitude = landInput.latitude !== undefined ? landInput.latitude : landInput.gpsLatitude;
+  const longitude = landInput.longitude !== undefined ? landInput.longitude : landInput.gpsLongitude;
+
+  return prisma.landParcel.update({
+    where: { landId: existing.landParcel.landId },
+    data: {
+      ...(landTitleNo && { landTitleNo }),
+      ...(lotNo && { lotNo }),
+      ...(mukim && { mukim }),
+      ...(district && { district }),
+      ...(state && { state }),
+      ...(area !== undefined && area !== null && { area: typeof area === "string" ? parseFloat(area) : area }),
+      ...(category && { category }),
+      ...(latitude !== undefined && latitude !== null && { latitude: typeof latitude === "string" ? parseFloat(latitude) : latitude }),
+      ...(longitude !== undefined && longitude !== null && { longitude: typeof longitude === "string" ? parseFloat(longitude) : longitude }),
+    },
+  });
+}
+
+export async function updateOwnerInformation(caseId: string, ownersInput: any[]) {
+  const existing = await prisma.acquisitionCase.findUnique({
+    where: { caseId },
+    include: { landParcel: true },
+  });
+  if (!existing) throw new Error("Case not found");
+  if (!CaseStateMachine.isEditable(existing.status)) {
+    throw new Error(`Cannot update case in '${existing.status}' status`);
+  }
+  if (!existing.landParcel?.landId) throw new Error("Land parcel record not associated with this case");
+
+  const landId = existing.landParcel.landId;
+
+  return prisma.$transaction(async (tx) => {
+    for (const ownerInput of ownersInput) {
+      const nric = ownerInput.nric || ownerInput.icNumber;
+      const contact = ownerInput.contact || ownerInput.phone;
+      const name = ownerInput.name;
+      const address = ownerInput.address;
+      const ownershipType = ownerInput.ownershipType || "Individual";
+
+      if (!nric) continue;
+
+      let dbOwner = await tx.landOwner.findFirst({
+        where: { nric },
+      });
+
+      if (dbOwner) {
+        dbOwner = await tx.landOwner.update({
+          where: { ownerId: dbOwner.ownerId },
+          data: {
+            ...(name && { name }),
+            ...(address && { address }),
+            ...(contact && { contact }),
+          },
+        });
+      } else {
+        dbOwner = await tx.landOwner.create({
+          data: {
+            name: name || "Land Owner",
+            nric,
+            address: address || "",
+            contact: contact || "",
+            createdById: existing.createdById,
+          },
+        });
+      }
+
+      const existingOwnership = await tx.landOwnership.findFirst({
+        where: { landId, ownerId: dbOwner.ownerId },
+      });
+
+      if (existingOwnership) {
+        await tx.landOwnership.update({
+          where: { ownershipId: existingOwnership.ownershipId },
+          data: {
+            ownershipType,
+            isCurrent: true,
+          },
+        });
+      } else {
+        await tx.landOwnership.create({
+          data: {
+            landId,
+            ownerId: dbOwner.ownerId,
+            ownershipType,
+            ownershipStart: new Date(),
+            isCurrent: true,
+            createdById: existing.createdById,
+          },
+        });
+      }
+    }
+
+    return tx.landParcel.findUnique({
+      where: { landId },
+      include: {
+        ownerships: { include: { landOwner: true } },
+      },
+    });
+  });
+}
+
 export async function updateCase(caseId: string, input: UpdateCaseInput) {
   const existing = await prisma.acquisitionCase.findUnique({
     where: { caseId },
+    include: { landParcel: true },
   });
   if (!existing) throw new Error("Case not found");
 
-  const editableStatuses: CaseStatus[] = [
-    CaseStatus.CASE_REGISTERED,
-    CaseStatus.VALUER_ASSIGNED,
-  ];
-  if (!editableStatuses.includes(existing.status)) {
+  if (!CaseStateMachine.isEditable(existing.status)) {
     throw new Error(`Cannot update case in '${existing.status}' status`);
+  }
+
+  if (input.project) {
+    await updateProjectInformation(caseId, input.project);
+  }
+
+  if (input.land) {
+    await updateLandInformation(caseId, input.land);
+  }
+
+  if (input.owners) {
+    await updateOwnerInformation(caseId, input.owners);
   }
 
   const updateData: Prisma.AcquisitionCaseUpdateInput = {};
@@ -366,7 +536,7 @@ export async function updateCase(caseId: string, input: UpdateCaseInput) {
   if (input.remarks !== undefined) updateData.remarks = input.remarks;
   if (input.status) updateData.status = input.status;
 
-  const updatedCase = await prisma.acquisitionCase.update({
+  return prisma.acquisitionCase.update({
     where: { caseId },
     data: updateData,
     include: {
@@ -378,8 +548,6 @@ export async function updateCase(caseId: string, input: UpdateCaseInput) {
       },
     },
   });
-
-  return updatedCase;
 }
 
 export async function deleteCase(caseId: string) {
@@ -395,7 +563,7 @@ export async function deleteCase(caseId: string) {
 
   if (!existing) throw new Error("Case not found");
 
-  if (existing.status !== CaseStatus.CASE_REGISTERED) {
+  if (!CaseStateMachine.canDelete(existing.status)) {
     throw new Error("Only cases in 'CASE_REGISTERED' status can be deleted");
   }
 
