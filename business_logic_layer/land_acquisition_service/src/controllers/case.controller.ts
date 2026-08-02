@@ -58,6 +58,15 @@ export async function getUnassignedCases(_req: Request, res: Response): Promise<
   }
 }
 
+export async function getNextCaseId(_req: Request, res: Response): Promise<void> {
+  try {
+    const nextCaseId = await caseService.generateNextCaseId();
+    res.json({ nextCaseId });
+  } catch (e: unknown) {
+    res.status(500).json({ error: (e as Error).message });
+  }
+}
+
 // ─── WRITE Handlers (Phase 2) ────────────────────────────────────────────────
 
 export async function createCase(req: Request, res: Response): Promise<void> {
@@ -67,11 +76,12 @@ export async function createCase(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const { project, land, owners, caseTitle, remarks, createdById } = req.body;
+  const { caseId, project, land, owners, caseTitle, remarks, createdById } = req.body;
   const userId = createdById || "00000000-0000-0000-0000-000000000001";
 
   try {
     const result = await caseService.createCase({
+      caseId,
       project,
       land,
       owners,

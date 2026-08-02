@@ -116,7 +116,7 @@ export const ObjectionDashboard: React.FC = () => {
         <div className="topbar-left">
           <h1 style={{ marginBottom: 0 }}>Objection Management</h1>
           <div className="sub">
-            Review land owner compensation objections (Form N) (Connected to Backend)
+            Review land owner compensation objections (Form N)
           </div>
         </div>
         <div className="topbar-right" style={{ display: "flex", alignItems: "center", gap: "12px" }}>

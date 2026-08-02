@@ -40,6 +40,10 @@ export const landAcquisitionApi = {
     return fetchJSON(LAND_ACQUISITION_BASE + "/api/land-acquisition/cases/unassigned");
   },
 
+  getNextCaseId: async () => {
+    return fetchJSON(LAND_ACQUISITION_BASE + "/api/land-acquisition/cases/next-id");
+  },
+
   getCaseById: async (caseId: string) => {
     return fetchJSON(LAND_ACQUISITION_BASE + `/api/land-acquisition/cases/${encodeURIComponent(caseId)}`);
   },

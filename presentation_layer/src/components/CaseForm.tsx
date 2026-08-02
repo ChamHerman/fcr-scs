@@ -21,6 +21,7 @@ export type Document = {
 };
 
 export type CaseFormData = {
+  customCaseId?: string;
   projectName: string;
   projectType: string;
   projectPurpose: string;
@@ -70,6 +71,7 @@ export const CaseForm: React.FC<CaseFormProps> = ({
 
   const [currentStep, setCurrentStep] = useState(initialStep);
   const [formData, setFormData] = useState<CaseFormData>({
+    customCaseId: initialValues?.formData?.customCaseId || "",
     projectName: initialValues?.formData?.projectName || "",
     projectType: initialValues?.formData?.projectType || "",
     projectPurpose: initialValues?.formData?.projectPurpose || "",

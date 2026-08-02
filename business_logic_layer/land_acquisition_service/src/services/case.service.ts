@@ -14,6 +14,7 @@ export interface CaseFilters {
 }
 
 export interface CreateCaseInput {
+  caseId?: string;
   project: {
     projectName: string;
     projectType: string;
@@ -98,16 +99,12 @@ function buildWhereClause(filters: CaseFilters): Prisma.AcquisitionCaseWhereInpu
 
   if (filters.search) {
     const term = filters.search;
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(term);
     
     const orConditions: Prisma.AcquisitionCaseWhereInput[] = [
+      { caseId: { contains: term, mode: "insensitive" } },
       { caseTitle: { contains: term, mode: "insensitive" } },
       { project: { projectName: { contains: term, mode: "insensitive" } } },
     ];
-
-    if (isUuid) {
-      orConditions.push({ caseId: term });
-    }
 
     where.OR = orConditions;
   }
@@ -255,10 +252,39 @@ export async function getUnassignedCases() {
   return cases;
 }
 
-// ─── WRITE Operations (Phase 2) ───────────────────────────────────────────────
+/**
+ * Generates system Case ID based on format: LAC-YYYY-MM-XXXX (e.g. LAC-2026-08-0001)
+ */
+export async function generateCaseId(tx?: Prisma.TransactionClient): Promise<string> {
+  const client = tx || prisma;
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const prefix = `LAC-${year}-${month}-`;
+
+  const lastCase = await client.acquisitionCase.findFirst({
+    where: { caseId: { startsWith: prefix } },
+    orderBy: { caseId: "desc" },
+    select: { caseId: true },
+  });
+
+  let nextSeq = 1;
+  if (lastCase?.caseId) {
+    const parts = lastCase.caseId.split("-");
+    const lastSeqNum = parseInt(parts[parts.length - 1], 10);
+    if (!isNaN(lastSeqNum)) {
+      nextSeq = lastSeqNum + 1;
+    }
+  }
+
+  return `${prefix}${String(nextSeq).padStart(4, "0")}`;
+}
+
+// Retain alias for backwards compatibility if needed
+export const generateNextCaseId = generateCaseId;
 
 export async function createCase(input: CreateCaseInput) {
-  const { project, land, owners, caseTitle, remarks, createdById } = input;
+  const { caseId: customCaseId, project, land, owners, caseTitle, remarks, createdById } = input;
 
   // Check duplicate land title
   const existingLand = await prisma.landParcel.findUnique({
@@ -269,6 +295,9 @@ export async function createCase(input: CreateCaseInput) {
   }
 
   const result = await prisma.$transaction(async (tx) => {
+    // Generate Case ID using LAC-YYYY-MM-XXXX format
+    const caseId = customCaseId || await generateCaseId(tx);
+
     // 1. Create or find Project
     const dbProject = await tx.project.upsert({
       where: { projectName: project.projectName },
@@ -286,6 +315,7 @@ export async function createCase(input: CreateCaseInput) {
     // 2. Create Acquisition Case
     const dbCase = await tx.acquisitionCase.create({
       data: {
+        caseId,
         caseTitle,
         projectId: dbProject.projectId,
         status: CaseStatus.CASE_REGISTERED,

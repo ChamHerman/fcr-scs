@@ -114,7 +114,7 @@ export const CompensationReportList: React.FC = () => {
         <div className="topbar-left">
           <h1 style={{ marginBottom: 0 }}>Compensation Reports</h1>
           <div className="sub">
-            Review and generate compensation calculation reports (Backend Integrated)
+            Review and generate compensation calculation reports
           </div>
         </div>
         <div className="topbar-right" style={{ display: "flex", alignItems: "center", gap: "12px" }}>

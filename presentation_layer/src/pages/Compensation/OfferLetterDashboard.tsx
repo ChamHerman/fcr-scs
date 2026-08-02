@@ -116,7 +116,7 @@ export const OfferLetterDashboard: React.FC = () => {
         <div className="topbar-left">
           <h1 style={{ marginBottom: 0 }}>Offer Letter Dashboard</h1>
           <div className="sub">
-            Track and manage formal compensation offer letters (Connected to Backend)
+            Track and manage formal compensation offer letters
           </div>
         </div>
         <div className="topbar-right">

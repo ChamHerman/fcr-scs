@@ -8,7 +8,7 @@ const pool = new Pool({ connectionString })
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 
-const generateCaseId = (idx: number) => `CASE-2026-${String(idx).padStart(3, '0')}`;
+const generateCaseId = (idx: number) => `LAC-2026-08-${String(idx).padStart(4, '0')}`;
 
 const statuses = [
   'Approved', 
@@ -82,8 +82,10 @@ async function main() {
     });
 
     if (!dbCase) {
+      const caseId = generateCaseId(i + 1);
       dbCase = await prisma.acquisitionCase.create({
         data: {
+          caseId,
           caseTitle,
           projectId: dbProj.projectId,
           status: i === 0 ? CaseStatus.CASE_REGISTERED : i === 1 ? CaseStatus.VALUER_ASSIGNED : CaseStatus.VALUATION_APPROVED,

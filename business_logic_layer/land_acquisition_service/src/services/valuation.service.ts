@@ -99,6 +99,7 @@ export async function createOrUpdateReport(input: CreateValuationInput) {
   if (!caseData) throw new Error("Case not found");
 
   const allowedStatuses: CaseStatus[] = [
+    CaseStatus.CASE_REGISTERED,
     CaseStatus.VALUER_ASSIGNED,
     CaseStatus.VALUATION_IN_PROGRESS,
     CaseStatus.VALUATION_REJECTED,
@@ -142,6 +143,19 @@ export async function createOrUpdateReport(input: CreateValuationInput) {
           createdById,
         },
         include: { acquisitionCase: true, valuer: true },
+      });
+    }
+
+    // Link valuationReport to existing CaseAssignment if unlinked
+    const assignment = await tx.caseAssignment.findFirst({
+      where: { caseId },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (assignment && !assignment.valuationReportId) {
+      await tx.caseAssignment.update({
+        where: { assignmentId: assignment.assignmentId },
+        data: { valuationReportId: report.reportId },
       });
     }
 
