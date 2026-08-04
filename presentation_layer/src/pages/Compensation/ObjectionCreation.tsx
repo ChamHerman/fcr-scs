@@ -1,20 +1,18 @@
 import * as Lucide from "lucide-react";
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Send, X, File, Upload } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Send, X, File, Upload, ArrowLeft, Loader2 } from "lucide-react";
+import { compensationApi } from "../../services/compensationApi";
 import "../../style.css";
 import "./objection.css";
 
-type CaseOption = {
-  id: string;
-  title: string;
+type OfferOption = {
+  offerId: string;
+  caseId: string;
+  caseTitle: string;
+  ownerName: string;
+  offerAmount: number;
 };
-
-const mockCases: CaseOption[] = [
-  { id: "LAC-2026-07-0024", title: "Kampung Baru Land Acquisition" },
-  { id: "LAC-2026-07-0023", title: "Taman Mewah Phase 2" },
-  { id: "LAC-2026-07-0021", title: "Desa Harmoni Relocation" },
-];
 
 type FileAttachment = {
   id: string;
@@ -25,13 +23,59 @@ type FileAttachment = {
 
 export const CreateObjection: React.FC = () => {
   const navigate = useNavigate();
-  const [selectedCase, setSelectedCase] = useState("");
+  const [searchParams] = useSearchParams();
+  const paramOfferId = searchParams.get("offerId") || "";
+
+  const [offers, setOffers] = useState<OfferOption[]>([]);
+  const [loadingOffers, setLoadingOffers] = useState<boolean>(true);
+
+  const [selectedOfferId, setSelectedOfferId] = useState<string>(paramOfferId);
   const [objectionType, setObjectionType] = useState("Form N");
+  const [requestedAmount, setRequestedAmount] = useState<number | "">("");
   const [objectionText, setObjectionText] = useState("");
   const [files, setFiles] = useState<FileAttachment[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [createdId, setCreatedId] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+
+  useEffect(() => {
+    async function loadOffers() {
+      setLoadingOffers(true);
+      try {
+        const res = await compensationApi.getAllOfferLetters();
+        const list: OfferOption[] = (res.offerLetters || []).map((o: any) => ({
+          offerId: o.offerId,
+          caseId: o.caseId,
+          caseTitle: o.acquisitionCase?.caseTitle || "Unknown Case",
+          ownerName: o.landOwnership?.landOwner?.name || "Unknown Owner",
+          offerAmount: Number(o.offerAmount || 0),
+        }));
+        setOffers(list);
+
+        if (paramOfferId && list.some((item) => item.offerId === paramOfferId)) {
+          const match = list.find((item) => item.offerId === paramOfferId);
+          if (match) {
+            setRequestedAmount(Math.round(match.offerAmount * 1.15));
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch offer letters:", err);
+      } finally {
+        setLoadingOffers(false);
+      }
+    }
+    loadOffers();
+  }, [paramOfferId]);
+
+  const handleOfferSelect = (offerId: string) => {
+    setSelectedOfferId(offerId);
+    const chosen = offers.find((o) => o.offerId === offerId);
+    if (chosen) {
+      // Suggest default requested amount (15% higher than offer amount)
+      setRequestedAmount(Math.round(chosen.offerAmount * 1.15));
+    }
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
@@ -62,44 +106,61 @@ export const CreateObjection: React.FC = () => {
 
   const validate = (): boolean => {
     const newErrors: { [key: string]: string } = {};
-    if (!selectedCase) newErrors.case = "Please select a case.";
+    if (!selectedOfferId) newErrors.offer = "Please select an offer letter / case.";
+    if (!requestedAmount || Number(requestedAmount) <= 0)
+      newErrors.amount = "Please enter a valid requested amount (> 0).";
     if (!objectionText.trim())
       newErrors.text = "Please enter your objection details.";
     if (objectionText.trim().length < 20)
-      newErrors.text = "Please provide at least 20 characters.";
+      newErrors.text = "Please provide at least 20 characters of detail.";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validate()) return;
+
+    const selectedOffer = offers.find((o) => o.offerId === selectedOfferId);
+    if (!selectedOffer) {
+      alert("Invalid offer selected.");
+      return;
+    }
+
     setSubmitting(true);
-    setTimeout(() => {
+    try {
+      const res = await compensationApi.createObjection({
+        offerId: selectedOffer.offerId,
+        caseId: selectedOffer.caseId,
+        objectionReason: objectionText,
+        requestedAmount: Number(requestedAmount),
+      });
+
+      const newObjectionId = res.objection?.objectionId;
+      setCreatedId(newObjectionId || null);
       setSubmitting(false);
       setSubmitted(true);
-      // In real app, API call here
-      console.log("Objection submitted:", {
-        selectedCase,
-        objectionType,
-        objectionText,
-        files,
-      });
-    }, 1500);
+    } catch (err: any) {
+      console.error("Submission failed:", err);
+      alert(`Submission failed: ${err.message || err}`);
+      setSubmitting(false);
+    }
   };
 
   const handleReset = () => {
-    setSelectedCase("");
+    setSelectedOfferId("");
     setObjectionType("Form N");
+    setRequestedAmount("");
     setObjectionText("");
     setFiles([]);
     setErrors({});
     setSubmitted(false);
+    setCreatedId(null);
   };
 
   if (submitted) {
     return (
       <div>
-                <div className="main blur-shape-bg">
+        <div className="main blur-shape-bg">
           <div className="objection-create">
             <div className="topbar" style={{ marginBottom: "20px" }}>
               <div className="topbar-left">
@@ -107,8 +168,8 @@ export const CreateObjection: React.FC = () => {
                 <div className="sub">Form N – Formal Objection</div>
               </div>
               <div className="topbar-right">
-                <span className="date-badge"><Lucide.Calendar size={16} className="inline" /> 24 Jul 2026</span>
-                <div className="avatar">AB</div>
+                <span className="date-badge"><Lucide.Calendar size={16} className="inline" /> {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                <div className="avatar">AO</div>
               </div>
             </div>
             <div className="form-card">
@@ -117,7 +178,7 @@ export const CreateObjection: React.FC = () => {
                 <div>
                   <strong>Objection submitted successfully!</strong>
                   <span style={{ marginLeft: "12px", fontWeight: 400 }}>
-                    The assigned Government Officer has been notified.
+                    The objection record has been saved to the database.
                   </span>
                 </div>
               </div>
@@ -130,7 +191,7 @@ export const CreateObjection: React.FC = () => {
                 >
                   Your objection (Form N) has been submitted for review.
                   <br />
-                  You will be notified once a decision is made.
+                  You will be notified once a decision is made by the Government Officer.
                 </p>
                 <div
                   style={{
@@ -140,11 +201,30 @@ export const CreateObjection: React.FC = () => {
                     marginTop: "16px",
                   }}
                 >
+                  {createdId && (
+                    <button
+                      className="btn-submit"
+                      onClick={() => navigate(`/admin/compensation/objection/review/${createdId}`)}
+                      style={{
+                        padding: "10px 24px",
+                        borderRadius: "var(--radius-full)",
+                        border: "none",
+                        background: "var(--md-primary)",
+                        color: "white",
+                        fontWeight: "600",
+                        fontSize: "14px",
+                        fontFamily: "inherit",
+                        cursor: "pointer",
+                      }}
+                    >
+                      View Submission
+                    </button>
+                  )}
                   <button
                     className="btn-cancel"
                     onClick={handleReset}
                     style={{
-                      padding: "10px 28px",
+                      padding: "10px 24px",
                       borderRadius: "var(--radius-full)",
                       border: "1.5px solid rgba(121,116,126,0.25)",
                       background: "transparent",
@@ -161,16 +241,15 @@ export const CreateObjection: React.FC = () => {
                     className="btn-submit"
                     onClick={() => navigate('/admin/compensation/objection')}
                     style={{
-                      padding: "10px 32px",
+                      padding: "10px 24px",
                       borderRadius: "var(--radius-full)",
                       border: "none",
-                      background: "var(--md-primary)",
-                      color: "white",
+                      background: "rgba(121,116,126,0.2)",
+                      color: "var(--md-on-surface)",
                       fontWeight: "600",
                       fontSize: "14px",
                       fontFamily: "inherit",
                       cursor: "pointer",
-                      boxShadow: "var(--shadow-sm)",
                     }}
                   >
                     Go to Dashboard
@@ -186,7 +265,6 @@ export const CreateObjection: React.FC = () => {
 
   return (
     <div>
-      
       <div className="main blur-shape-bg">
         <div className="objection-create">
           <div className="topbar" style={{ marginBottom: "20px" }}>
@@ -196,36 +274,69 @@ export const CreateObjection: React.FC = () => {
                 Form N – Formal Objection under Land Acquisition Act 1960
               </div>
             </div>
-            <div className="topbar-right">
-              <span className="date-badge"><Lucide.Calendar size={16} className="inline" /> 24 Jul 2026</span>
-              <div className="avatar">AB</div>
+            <div className="topbar-right" style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+              <button className="btn-outline" onClick={() => navigate('/admin/compensation/objection')}>
+                <ArrowLeft size={16} className="inline mr-1" /> Back
+              </button>
+              <div className="avatar">AO</div>
             </div>
           </div>
 
           <div className="form-card">
-            <div className="form-title">Form N – Objection</div>
+            <div className="form-title">Form N – Objection Submission</div>
             <div className="form-subtitle">
-              Submit your formal objection or additional evidence for review.
+              Submit your formal objection or additional evidence for review against a compensation award.
             </div>
 
             <div className="case-selector">
-              <label htmlFor="caseSelect">
-                Select Acquisition Case <span className="required">*</span>
+              <label htmlFor="offerSelect">
+                Select Compensation Offer / Case <span className="required">*</span>
               </label>
-              <select
-                id="caseSelect"
-                value={selectedCase}
-                onChange={(e) => setSelectedCase(e.target.value)}
-                className={errors.case ? "error" : ""}
-              >
-                <option value="">— Choose a case —</option>
-                {mockCases.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.id} – {c.title}
-                  </option>
-                ))}
-              </select>
-              {errors.case && <div className="error-text">{errors.case}</div>}
+              {loadingOffers ? (
+                <div style={{ padding: "10px", color: "var(--md-on-surface-variant)", fontSize: "14px" }}>
+                  <Loader2 size={16} className="inline animate-spin mr-2" /> Loading offer letters...
+                </div>
+              ) : (
+                <select
+                  id="offerSelect"
+                  value={selectedOfferId}
+                  onChange={(e) => handleOfferSelect(e.target.value)}
+                  className={errors.offer ? "error" : ""}
+                >
+                  <option value="">— Choose an offer letter —</option>
+                  {offers.map((o) => (
+                    <option key={o.offerId} value={o.offerId}>
+                      {o.caseTitle} — {o.ownerName} (Offered: RM {o.offerAmount.toLocaleString("en-MY")})
+                    </option>
+                  ))}
+                </select>
+              )}
+              {errors.offer && <div className="error-text">{errors.offer}</div>}
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="requestedAmount">
+                Requested Compensation Amount (RM) <span className="required">*</span>
+              </label>
+              <input
+                id="requestedAmount"
+                type="number"
+                placeholder="e.g. 550000"
+                value={requestedAmount}
+                onChange={(e) => setRequestedAmount(e.target.value === "" ? "" : Number(e.target.value))}
+                className={errors.amount ? "error" : ""}
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  borderRadius: "var(--radius-md)",
+                  border: "1.5px solid rgba(121,116,126,0.25)",
+                  background: "var(--md-surface-container-low)",
+                  fontSize: "14px",
+                  fontFamily: "inherit",
+                  color: "var(--md-on-surface)",
+                }}
+              />
+              {errors.amount && <div className="error-text">{errors.amount}</div>}
             </div>
 
             <div className="form-group">
@@ -244,7 +355,7 @@ export const CreateObjection: React.FC = () => {
 
             <div className="form-group">
               <label htmlFor="objectionText">
-                Objection Details <span className="required">*</span>
+                Objection Details & Justification <span className="required">*</span>
               </label>
               <textarea
                 id="objectionText"
@@ -343,3 +454,4 @@ export const CreateObjection: React.FC = () => {
     </div>
   );
 };
+

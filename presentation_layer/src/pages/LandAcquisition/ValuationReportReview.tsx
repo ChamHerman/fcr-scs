@@ -1,5 +1,6 @@
 import * as Lucide from "lucide-react";
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { CheckCircle, XCircle, X, Loader2 } from "lucide-react";
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
@@ -99,7 +100,7 @@ export const ValuationReportReview: React.FC = () => {
     try {
       await landAcquisitionApi.approveValuationReport(report.id);
       alert("Valuation Report Approved!\n\nCase status updated to 'VALUATION_APPROVED'.");
-      navigate("/case/valuation");
+      navigate("/admin/case/valuation");
     } catch (err: any) {
       console.error("Failed to approve report:", err);
       alert(`Approval Failed: ${err.message}`);
@@ -139,7 +140,7 @@ export const ValuationReportReview: React.FC = () => {
       await landAcquisitionApi.rejectValuationReport(report.id, reason, parseInt(acceptanceDays, 10));
       alert(`Valuation Report Rejected!\n\nReason: ${reason}\nCase status updated to 'VALUATION_REJECTED'.`);
       setShowRejectModal(false);
-      navigate("/case/valuation");
+      navigate("/admin/case/valuation");
     } catch (err: any) {
       console.error("Failed to reject report:", err);
       alert(`Rejection Failed: ${err.message}`);
@@ -181,7 +182,7 @@ export const ValuationReportReview: React.FC = () => {
         <div style={{ textAlign: "center", color: "var(--md-on-surface-variant)" }}>
           <h3>Valuation Report Not Found</h3>
           <p style={{ marginBottom: "16px" }}>No report selected or valid ID provided.</p>
-          <button className="btn-primary" onClick={() => navigate("/case/valuation")}>
+          <button className="btn-primary" onClick={() => navigate("/admin/case/valuation")}>
             Back to Valuation Dashboard
           </button>
         </div>
@@ -191,69 +192,71 @@ export const ValuationReportReview: React.FC = () => {
 
   return (
     <>
-      {showRejectModal && (
-        <div className="reject-modal-overlay" onClick={closeRejectModal}>
-          <div className="reject-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Reject Report</h3>
-              <button className="close-btn" onClick={closeRejectModal}>
-                <X size={22} />
-              </button>
-            </div>
-            <div className="form-group">
-              <label htmlFor="reason">
-                Reason for Rejection <span className="required">*</span>
-              </label>
-              <textarea
-                id="reason"
-                rows={3}
-                placeholder="Enter the reason for rejecting this report..."
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                className={reasonError ? "error" : ""}
-              />
-              {reasonError && <div className="error-text">{reasonError}</div>}
-            </div>
-            <div className="form-group">
-              <label htmlFor="days">
-                Acceptance Period (days) <span className="required">*</span>
-              </label>
-              <input
-                id="days"
-                type="number"
-                min="1"
-                placeholder="e.g., 7"
-                value={acceptanceDays}
-                onChange={(e) => setAcceptanceDays(e.target.value)}
-                className={daysError ? "error" : ""}
-              />
-              {daysError && <div className="error-text">{daysError}</div>}
-              <div
-                style={{
-                  fontSize: "12px",
-                  color: "var(--md-on-surface-variant)",
-                  opacity: 0.6,
-                  marginTop: "4px",
-                }}
-              >
-                Number of days for the valuer to revise and resubmit.
+      {showRejectModal &&
+        createPortal(
+          <div className="reject-modal-overlay" onClick={closeRejectModal}>
+            <div className="reject-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>Reject Report</h3>
+                <button className="close-btn" onClick={closeRejectModal}>
+                  <X size={22} />
+                </button>
+              </div>
+              <div className="form-group">
+                <label htmlFor="reason">
+                  Reason for Rejection <span className="required">*</span>
+                </label>
+                <textarea
+                  id="reason"
+                  rows={3}
+                  placeholder="Enter the reason for rejecting this report..."
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  className={reasonError ? "error" : ""}
+                />
+                {reasonError && <div className="error-text">{reasonError}</div>}
+              </div>
+              <div className="form-group">
+                <label htmlFor="days">
+                  Acceptance Period (days) <span className="required">*</span>
+                </label>
+                <input
+                  id="days"
+                  type="number"
+                  min="1"
+                  placeholder="e.g., 7"
+                  value={acceptanceDays}
+                  onChange={(e) => setAcceptanceDays(e.target.value)}
+                  className={daysError ? "error" : ""}
+                />
+                {daysError && <div className="error-text">{daysError}</div>}
+                <div
+                  style={{
+                    fontSize: "12px",
+                    color: "var(--md-on-surface-variant)",
+                    opacity: 0.6,
+                    marginTop: "4px",
+                  }}
+                >
+                  Number of days for the valuer to revise and resubmit.
+                </div>
+              </div>
+              <div className="modal-actions">
+                <button className="btn-cancel" onClick={closeRejectModal}>
+                  Cancel
+                </button>
+                <button
+                  className="btn-submit"
+                  onClick={handleRejectSubmit}
+                  disabled={submitting}
+                >
+                  {submitting ? "Submitting to Backend..." : "Confirm Reject"}
+                </button>
               </div>
             </div>
-            <div className="modal-actions">
-              <button className="btn-cancel" onClick={closeRejectModal}>
-                Cancel
-              </button>
-              <button
-                className="btn-submit"
-                onClick={handleRejectSubmit}
-                disabled={submitting}
-              >
-                {submitting ? "Submitting to Backend..." : "Confirm Reject"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
 
       <div
         className="flex min-h-screen"
@@ -265,7 +268,7 @@ export const ValuationReportReview: React.FC = () => {
               <div className="topbar-left">
                 <h1 style={{ marginBottom: 0 }}>Review Valuation Report</h1>
                 <div className="sub">
-                  Review the report details and take action (Connected to Backend)
+                  Review the report details and take action
                 </div>
               </div>
               <div className="topbar-right">

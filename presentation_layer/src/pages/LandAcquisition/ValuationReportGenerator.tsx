@@ -1,11 +1,12 @@
 import * as Lucide from "lucide-react";
-import React, { useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Eye, Edit, X, File } from "lucide-react";
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
+import { CaseSelectionModal } from "./CaseSelectionModal";
 import "../../style.css";
 import "./valuation_report.css";
-
 
 // --- Types ---
 type CaseData = {
@@ -47,23 +48,6 @@ type ReportRecord = {
   status: string;
 };
 
-// --- Mock Case Data (simulate navigation from dashboard) ---
-// In real app, this would come from route state or API
-const mockSelectedCase: CaseData = {
-  id: "LAC-2026-07-0024",
-  title: "Kampung Baru Land Acquisition",
-  project: "KL Sentral Redevelopment",
-  projectType: "Urban Redevelopment",
-  registrationDate: "24 Jul 2026",
-  assignedDate: "25 Jul 2026",
-  status: "Valuer Assigned",
-  statusClass: "valuation",
-  landTitleNumber: "PN 12345",
-  owner: "Ahmad Bin Abdullah",
-  ownerIc: "750101-10-5678",
-  address: "No. 45, Jalan Kampung Baru, 50300 Kuala Lumpur",
-};
-
 const mockValuer = {
   id: "V1",
   name: "Ahmad Faizal",
@@ -71,9 +55,17 @@ const mockValuer = {
 
 export const ValuationReportGenerator: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Retrieve pre-selected caseId if passed from router navigation
+  const initialCaseId = location.state?.caseId as string | undefined;
 
   // --- State ---
-  const [caseData] = useState<CaseData>(mockSelectedCase);
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(initialCaseId || null);
+  const [caseData, setCaseData] = useState<CaseData | null>(null);
+  const [loadingCase, setLoadingCase] = useState<boolean>(false);
+  const [isCaseModalOpen, setIsCaseModalOpen] = useState<boolean>(!initialCaseId);
+
   const [formData, setFormData] = useState<ReportFormData>({
     valuationMethod: "",
     marketValue: "",
@@ -93,6 +85,53 @@ export const ValuationReportGenerator: React.FC = () => {
 
   const buildingInputRef = useRef<HTMLInputElement>(null);
   const siteInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch case details from database when caseId is selected
+  const loadCaseDetails = useCallback(async (cId: string) => {
+    setLoadingCase(true);
+    try {
+      const res = await landAcquisitionApi.getCaseById(cId);
+      const c = res.case;
+      if (c) {
+        setCaseData({
+          id: c.caseId,
+          title: c.caseTitle,
+          project: c.project?.projectName || "—",
+          projectType: c.project?.projectType || "—",
+          registrationDate: c.registrationDate
+            ? new Date(c.registrationDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+            : "—",
+          assignedDate: c.updatedAt
+            ? new Date(c.updatedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+            : "—",
+          status: c.status,
+          statusClass: "valuation",
+          landTitleNumber: c.landParcel?.landTitleNo || "—",
+          owner: c.landParcel?.ownerships?.[0]?.landOwner?.name || "—",
+          ownerIc: c.landParcel?.ownerships?.[0]?.landOwner?.icNumber || "—",
+          address: c.landParcel?.address || "—",
+        });
+      }
+    } catch (err: any) {
+      console.error("Failed to fetch case details:", err);
+    } finally {
+      setLoadingCase(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedCaseId) {
+      loadCaseDetails(selectedCaseId);
+    } else {
+      setIsCaseModalOpen(true);
+    }
+  }, [selectedCaseId, loadCaseDetails]);
+
+  // Handle case selection from modal
+  const handleSelectCaseFromModal = (cId: string) => {
+    setSelectedCaseId(cId);
+    setIsCaseModalOpen(false);
+  };
 
   // --- Handlers ---
   const handleInputChange = (
@@ -128,6 +167,10 @@ export const ValuationReportGenerator: React.FC = () => {
 
   const validateForm = (): boolean => {
     const errors: { [key: string]: string } = {};
+    if (!caseData) {
+      alert("Please select a case before generating the report.");
+      return false;
+    }
     if (!formData.valuationMethod.trim()) {
       errors.valuationMethod = "Valuation method is required.";
     }
@@ -150,12 +193,16 @@ export const ValuationReportGenerator: React.FC = () => {
   };
 
   const handleEditFromPreview = () => {
-    // A1: Edit – close preview, keep form data for editing
     setIsEditMode(true);
     setShowPreview(false);
   };
 
   const handleConfirmSave = async () => {
+    if (!caseData) {
+      alert("No case selected.");
+      return;
+    }
+
     setIsSaving(true);
     try {
       const res = await landAcquisitionApi.createValuationReport({
@@ -166,12 +213,28 @@ export const ValuationReportGenerator: React.FC = () => {
         remarks: formData.remarks,
       });
 
+      // Upload attached files if present
+      if (formData.buildingAssessment) {
+        try {
+          await landAcquisitionApi.uploadDocument(caseData.id, formData.buildingAssessment, "Building Assessment");
+        } catch (fileErr) {
+          console.warn("File upload notice (building assessment):", fileErr);
+        }
+      }
+      if (formData.siteInspection) {
+        try {
+          await landAcquisitionApi.uploadDocument(caseData.id, formData.siteInspection, "Site Inspection");
+        } catch (fileErr) {
+          console.warn("File upload notice (site inspection):", fileErr);
+        }
+      }
+
       const rep = res.report;
       const newReport: ReportRecord = {
         reportId: rep.reportId,
         caseId: rep.caseId,
-        valuerId: rep.valuerId,
-        valuerName: mockValuer.name,
+        valuerId: rep.valuerId || "V1",
+        valuerName: rep.valuer?.name || mockValuer.name,
         valuationDate: new Date().toLocaleDateString("en-GB", {
           day: "2-digit",
           month: "short",
@@ -201,24 +264,24 @@ export const ValuationReportGenerator: React.FC = () => {
     if (formData.valuationMethod || formData.marketValue || formData.remarks) {
       setShowCancelConfirm(true);
     } else {
-      navigate("/case/valuation"); // Go back to dashboard
+      navigate("/admin/case/valuation");
     }
   };
 
   const confirmCancel = () => {
     setShowCancelConfirm(false);
-    navigate("/case/valuation");
+    navigate("/admin/case/valuation");
   };
 
   const handleBackToDashboard = () => {
-    navigate("/case/valuation");
+    navigate("/admin/case/valuation");
   };
 
   // --- Render ---
   const renderPreviewModal = () => {
-    if (!showPreview) return null;
+    if (!showPreview || !caseData) return null;
 
-    return (
+    return createPortal(
       <div
         className="preview-modal-overlay"
         onClick={() => setShowPreview(false)}
@@ -278,7 +341,7 @@ export const ValuationReportGenerator: React.FC = () => {
               <div className="label">Building Assessment</div>
               <div className="value">
                 {formData.buildingAssessment
-                  ? `<Lucide.Paperclip size={16} className="inline mr-1" /> ${formData.buildingAssessment.name}`
+                  ? formData.buildingAssessment.name
                   : "— Not uploaded"}
               </div>
             </div>
@@ -286,12 +349,12 @@ export const ValuationReportGenerator: React.FC = () => {
               <div className="label">Site Inspection</div>
               <div className="value">
                 {formData.siteInspection
-                  ? `<Lucide.Paperclip size={16} className="inline mr-1" /> ${formData.siteInspection.name}`
+                  ? formData.siteInspection.name
                   : "— Not uploaded"}
               </div>
             </div>
             <div className="preview-item full-width">
-              <div className="label">Status (C4)</div>
+              <div className="label">Status</div>
               <div className="status-preview">
                 <Lucide.Hourglass size={16} className="inline mr-1" /> Pending Valuation Approval
               </div>
@@ -300,7 +363,7 @@ export const ValuationReportGenerator: React.FC = () => {
 
           <div className="modal-actions">
             <button className="btn-edit" onClick={handleEditFromPreview}>
-              <Edit size={16} /> Edit (A1)
+              <Edit size={16} /> Edit
             </button>
             <button
               className="btn-confirm"
@@ -311,13 +374,14 @@ export const ValuationReportGenerator: React.FC = () => {
             </button>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body
     );
   };
 
   const renderCancelModal = () => {
     if (!showCancelConfirm) return null;
-    return (
+    return createPortal(
       <div
         className="cancel-confirm-overlay"
         onClick={() => setShowCancelConfirm(false)}
@@ -343,7 +407,8 @@ export const ValuationReportGenerator: React.FC = () => {
             </button>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body
     );
   };
 
@@ -354,8 +419,7 @@ export const ValuationReportGenerator: React.FC = () => {
         <div>
           <strong>Report saved successfully!</strong>
           <span style={{ marginLeft: "12px", fontWeight: 400 }}>
-            Case status updated to <strong>Pending Valuation Approval</strong>{" "}
-            (C4)
+            Case status updated to <strong>Pending Valuation Approval</strong>
           </span>
         </div>
       </div>
@@ -386,16 +450,18 @@ export const ValuationReportGenerator: React.FC = () => {
     <>
       {renderPreviewModal()}
       {renderCancelModal()}
+      <CaseSelectionModal
+        isOpen={isCaseModalOpen}
+        onClose={() => setIsCaseModalOpen(false)}
+        onSelectCase={handleSelectCaseFromModal}
+      />
 
       <div
         className="flex min-h-screen"
         style={{ background: "var(--md-background)", color: "var(--md-on-surface)" }}
       >
-        {/* Sidebar */}
-
-
         {/* Main Content */}
-        <main className="main blur-shape-bg">
+        <main className="main blur-shape-bg" style={{ width: "100%", padding: "24px" }}>
           <div className="report-generator-container">
             {/* Top Bar */}
             <div className="topbar" style={{ marginBottom: "20px" }}>
@@ -406,25 +472,60 @@ export const ValuationReportGenerator: React.FC = () => {
                 </div>
               </div>
               <div className="topbar-right">
-                <span className="date-badge"><Lucide.Calendar size={16} className="inline mr-1" /> 24 Jul 2026</span>
+                <span className="date-badge">
+                  <Lucide.Calendar size={16} className="inline mr-1" />
+                  {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                </span>
                 <div className="avatar">AF</div>
               </div>
             </div>
 
-            {/* Case Summary */}
-            <div className="case-summary-card">
-              <div className="case-info">
-                <span className="case-id">{caseData.id}</span>
-                <span className="case-title">{caseData.title}</span>
-                <div className="case-meta">
-                  <span><Lucide.Folder size={16} className="inline mr-1" /> {caseData.project}</span>
-                  <span><Lucide.Tag size={16} className="inline mr-1" /> {caseData.landTitleNumber}</span>
-                  <span><Lucide.User size={16} className="inline mr-1" /> {caseData.owner}</span>
-                  <span><Lucide.Calendar size={16} className="inline mr-1" /> {caseData.registrationDate}</span>
+            {/* Case Summary (hidden after report is saved successfully) */}
+            {!savedReport &&
+              (loadingCase ? (
+                <div className="case-summary-card" style={{ padding: "20px", textAlign: "center" }}>
+                  <Lucide.Loader2 size={24} className="inline animate-spin mr-2" /> Loading selected case details...
                 </div>
-              </div>
-              <span className="status-badge-lg"><Lucide.Hourglass size={16} className="inline mr-1" /> {caseData.status}</span>
-            </div>
+              ) : caseData ? (
+                <div className="case-summary-card">
+                  <div className="case-info">
+                    <span className="case-id">{caseData.id}</span>
+                    <span className="case-title">{caseData.title}</span>
+                    <div className="case-meta">
+                      <span><Lucide.Folder size={16} className="inline mr-1" /> {caseData.project}</span>
+                      <span><Lucide.Tag size={16} className="inline mr-1" /> {caseData.landTitleNumber}</span>
+                      <span><Lucide.User size={16} className="inline mr-1" /> {caseData.owner}</span>
+                      <span><Lucide.Calendar size={16} className="inline mr-1" /> {caseData.registrationDate}</span>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px" }}>
+                    <span className="status-badge-lg">
+                      <Lucide.Hourglass size={16} className="inline mr-1" /> {caseData.status}
+                    </span>
+                    <button
+                      className="btn-filter"
+                      style={{ fontSize: "12px", padding: "4px 10px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                      onClick={() => setIsCaseModalOpen(true)}
+                    >
+                      <Lucide.RefreshCw size={12} /> Change Case
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="case-summary-card" style={{ padding: "20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ color: "var(--md-on-surface-variant)" }}>
+                    <Lucide.AlertCircle size={20} className="inline mr-2 text-amber-500" />
+                    No case selected yet. Please select a case to generate a report.
+                  </div>
+                  <button
+                    className="btn-primary"
+                    style={{ padding: "6px 16px", fontSize: "13px" }}
+                    onClick={() => setIsCaseModalOpen(true)}
+                  >
+                    Select Case
+                  </button>
+                </div>
+              ))}
 
             {/* Report Form or Success State */}
             {savedReport ? (
@@ -435,7 +536,6 @@ export const ValuationReportGenerator: React.FC = () => {
                   {isEditMode ? (
                     <>
                       <Edit size={18} className="inline mr-2" /> Edit Report
-                      (A1)
                       <span
                         style={{
                           fontSize: "12px",
@@ -563,7 +663,7 @@ export const ValuationReportGenerator: React.FC = () => {
                   {/* Attach Section */}
                   <div className="attach-section">
                     <div className="attach-title">
-                      <File size={18} /> Attach Supporting Information (C2)
+                      <File size={18} /> Attach Supporting Information
                     </div>
                     <div className="attach-grid">
                       <label>Building Assessment</label>
@@ -594,7 +694,7 @@ export const ValuationReportGenerator: React.FC = () => {
                     <button
                       className="btn-generate"
                       onClick={handleGeneratePreview}
-                      disabled={isSaving}
+                      disabled={isSaving || !caseData}
                     >
                       <Eye size={18} /> Generate Report
                     </button>

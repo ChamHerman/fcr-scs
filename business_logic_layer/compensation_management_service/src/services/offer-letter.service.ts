@@ -1,5 +1,6 @@
 import { prisma } from "../prisma";
-import { CaseStatus, OfferStatus, Prisma } from "@prisma/client";
+import { CaseStatus, OfferStatus, ObjectionStatus, Prisma } from "@prisma/client";
+
 
 export interface OfferLetterFilters {
   status?: string;
@@ -122,12 +123,28 @@ export async function createOfferLetter(input: CreateOfferLetterInput) {
   return result;
 }
 
-export async function acceptOffer(offerId: string, signedDocument?: string) {
-  const offer = await prisma.offerLetter.findUnique({ where: { offerId } });
+export async function acceptOffer(offerId: string, signedDocument?: string, forceAccept: boolean = false) {
+
+  const offer = await prisma.offerLetter.findUnique({
+    where: { offerId },
+    include: { objections: true },
+  });
   if (!offer) throw new Error("Offer letter not found");
 
   if (offer.status !== OfferStatus.PENDING) {
     throw new Error(`Cannot accept offer in '${offer.status}' status`);
+  }
+
+  // Check for active (unresolved) objections related to this offer/case
+  const activeObjections = (offer.objections || []).filter(
+    (o) => o.status === ObjectionStatus.SUBMITTED || o.status === ObjectionStatus.UNDER_REVIEW
+  );
+
+  if (activeObjections.length > 0 && !forceAccept) {
+    const err: any = new Error("Active objection exists for this case/offer letter.");
+    err.code = "ACTIVE_OBJECTION_EXISTS";
+    err.objection = activeObjections[0];
+    throw err;
   }
 
   const result = await prisma.$transaction(async (tx) => {
@@ -151,6 +168,7 @@ export async function acceptOffer(offerId: string, signedDocument?: string) {
 
   return result;
 }
+
 
 export async function rejectOffer(offerId: string, remarks?: string) {
   const offer = await prisma.offerLetter.findUnique({ where: { offerId } });

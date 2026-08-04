@@ -71,7 +71,7 @@ export const CompensationComparisonList: React.FC = () => {
             <div className="topbar-left">
               <h1 style={{ marginBottom: 0 }}>Compensation Comparison</h1>
               <div className="sub">
-                Side-by-side comparison of compensation packages across cases (Connected to Backend)
+                Side-by-side comparison of compensation packages across cases
               </div>
             </div>
             <div className="topbar-right">

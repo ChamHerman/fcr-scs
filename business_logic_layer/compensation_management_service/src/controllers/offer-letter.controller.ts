@@ -74,7 +74,7 @@ export async function createOfferLetter(req: Request, res: Response): Promise<vo
 
 export async function acceptOffer(req: Request, res: Response): Promise<void> {
   const offerId = req.params.offerId as string;
-  const { signedDocument } = req.body;
+  const { signedDocument, forceAccept } = req.body;
 
   if (!offerId) {
     res.status(400).json({ error: "offerId is required" });
@@ -82,10 +82,18 @@ export async function acceptOffer(req: Request, res: Response): Promise<void> {
   }
 
   try {
-    const offer = await offerService.acceptOffer(offerId, signedDocument);
+    const offer = await offerService.acceptOffer(offerId, signedDocument, Boolean(forceAccept));
     res.json({ offerLetter: offer });
-  } catch (e: unknown) {
-    const msg = (e as Error).message;
+  } catch (e: any) {
+    const msg = e.message || "Accept offer failed";
+    if (e.code === "ACTIVE_OBJECTION_EXISTS") {
+      res.status(409).json({
+        error: msg,
+        code: "ACTIVE_OBJECTION_EXISTS",
+        activeObjection: e.objection,
+      });
+      return;
+    }
     if (msg.toLowerCase().includes("not found")) {
       res.status(404).json({ error: msg });
     } else {
@@ -93,6 +101,7 @@ export async function acceptOffer(req: Request, res: Response): Promise<void> {
     }
   }
 }
+
 
 export async function rejectOffer(req: Request, res: Response): Promise<void> {
   const offerId = req.params.offerId as string;

@@ -167,7 +167,7 @@ model Project {
 }
 
 model AcquisitionCase {
-  caseId              String               @id @default(uuid()) @db.Uuid @map("case_id")
+  caseId              String               @id @db.VarChar(255) @map("case_id")
   projectId           String               @db.Uuid @map("project_id")
   caseTitle           String               @db.VarChar(255) @map("case_title")
   status              CaseStatus           @map("status")
@@ -197,7 +197,7 @@ model AcquisitionCase {
 
 model LandParcel {
   landId      String          @id @default(uuid()) @db.Uuid @map("land_id")
-  caseId      String          @unique @db.Uuid @map("case_id") // unique to enforce one-to-one
+  caseId      String          @unique @db.VarChar(255) @map("case_id") // unique to enforce one-to-one
   landTitleNo String          @unique @db.VarChar(255) @map("land_title_no")
   lotNo       String          @db.VarChar(100) @map("lot_no")
   mukim       String          @db.VarChar(255)
@@ -268,7 +268,7 @@ model LandOwnership {
 
 model CaseDocument {
   documentId   String          @id @default(uuid()) @db.Uuid @map("document_id")
-  caseId       String          @db.Uuid @map("case_id")
+  caseId       String          @db.VarChar(255) @map("case_id")
   documentType String          @db.VarChar(100) @map("document_type")
   fileName     String          @db.VarChar(255) @map("file_name")
   fileSize     Int             @map("file_size")
@@ -290,7 +290,7 @@ model CaseDocument {
 
 model ValuationReport {
   reportId                String               @id @default(uuid()) @db.Uuid @map("report_id")
-  caseId                  String               @db.Uuid @map("case_id")
+  caseId                  String               @db.VarChar(255) @map("case_id")
   valuerId                String               @db.Uuid @map("valuer_id")
   valuationDate           DateTime?            @map("valuation_date")
   valuationMethod         String?              @db.VarChar(100) @map("valuation_method")
@@ -318,7 +318,7 @@ model ValuationReport {
 
 model CaseAssignment {
   assignmentId   String          @id @default(uuid()) @db.Uuid @map("assignment_id")
-  caseId         String          @db.Uuid @map("case_id")
+  caseId         String          @db.VarChar(255) @map("case_id")
   assignedToId   String          @db.Uuid @map("assigned_to_id")
   assignmentDate DateTime        @map("assignment_date")
   dueDate        DateTime        @map("due_date")
@@ -342,7 +342,7 @@ model CaseAssignment {
 
 model CompensationReport {
   compensationReportId String               @id @default(uuid()) @db.Uuid @map("compensation_report_id")
-  caseId               String               @db.Uuid @map("case_id")
+  caseId               String               @db.VarChar(255) @map("case_id")
   valuationReportId    String               @db.Uuid @map("valuation_report_id")
   reviewedById         String?              @db.Uuid @map("reviewed_by_id")
   approvedById         String?              @db.Uuid @map("approved_by_id")
@@ -373,7 +373,7 @@ model CompensationReport {
 model OfferLetter {
   offerId              String             @id @default(uuid()) @db.Uuid @map("offer_id")
   compensationReportId String             @db.Uuid @map("compensation_report_id") // unique for one-to-one
-  caseId               String             @db.Uuid @map("case_id")
+  caseId               String             @db.VarChar(255) @map("case_id")
   ownershipId          String             @db.Uuid @map("ownership_id")
   offerReferenceNo     String             @unique @db.VarChar(255) @map("offer_reference_no")
   offerType            String             @db.VarChar(100) @map("offer_type")
@@ -408,7 +408,7 @@ model OfferLetter {
 model Objection {
   objectionId         String              @id @default(uuid()) @db.Uuid @map("objection_id")
   offerId             String              @db.Uuid @map("offer_id")
-  caseId              String              @db.Uuid @map("case_id")
+  caseId              String              @db.VarChar(255) @map("case_id")
   objectionReason     String              @map("objection_reason")
   requestedAmount     Decimal             @db.Decimal(20, 2) @map("requested_amount")
   status              ObjectionStatus     @map("status")

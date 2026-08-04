@@ -93,12 +93,13 @@ export const compensationApi = {
     });
   },
 
-  acceptOffer: async (offerId: string, signedDocument?: string) => {
+  acceptOffer: async (offerId: string, signedDocument?: string, forceAccept?: boolean) => {
     return fetchJSON(COMPENSATION_BASE + `/api/compensation/offer-letters/${encodeURIComponent(offerId)}/accept`, {
       method: "POST",
-      body: JSON.stringify({ signedDocument }),
+      body: JSON.stringify({ signedDocument, forceAccept }),
     });
   },
+
 
   rejectOffer: async (offerId: string, remarks?: string) => {
     return fetchJSON(COMPENSATION_BASE + `/api/compensation/offer-letters/${encodeURIComponent(offerId)}/reject`, {
@@ -149,6 +150,20 @@ export const compensationApi = {
       body: JSON.stringify({ reviewRemarks }),
     });
   },
+
+  updateObjection: async (objectionId: string, payload: { objectionReason?: string; requestedAmount?: number }) => {
+    return fetchJSON(COMPENSATION_BASE + `/api/compensation/objections/${encodeURIComponent(objectionId)}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  deleteObjection: async (objectionId: string) => {
+    return fetchJSON(COMPENSATION_BASE + `/api/compensation/objections/${encodeURIComponent(objectionId)}`, {
+      method: "DELETE",
+    });
+  },
+
 
   // ─── Comparisons (Phase 8) ──────────────────────────────────────────────────
   compareCases: async (caseIds: string[]) => {

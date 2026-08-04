@@ -1,5 +1,11 @@
 export function validateCreateCasePayload(body: any): string | null {
-  const { project, land, owners, caseTitle } = body;
+  const { caseId, project, land, owners, caseTitle } = body;
+
+  if (caseId !== undefined && caseId !== null && caseId !== "") {
+    if (typeof caseId !== "string" || !/^[A-Za-z0-9\-_]+$/.test(caseId)) {
+      return "caseId must be a valid string identifier (e.g. LAC-YYYY-MM-XXXX)";
+    }
+  }
 
   if (!project) return "project details are required";
   if (!land) return "land details are required";

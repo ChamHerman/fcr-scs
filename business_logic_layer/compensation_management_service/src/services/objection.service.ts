@@ -137,3 +137,44 @@ export async function reviewObjection(input: ReviewObjectionInput) {
 
   return updated;
 }
+
+export interface UpdateObjectionInput {
+  objectionId: string;
+  objectionReason?: string;
+  requestedAmount?: number;
+}
+
+export async function updateObjection(input: UpdateObjectionInput) {
+  const { objectionId, objectionReason, requestedAmount } = input;
+
+  const existing = await prisma.objection.findUnique({ where: { objectionId } });
+  if (!existing) throw new Error("Objection record not found");
+
+  const dataToUpdate: Prisma.ObjectionUpdateInput = {};
+  if (objectionReason !== undefined) dataToUpdate.objectionReason = objectionReason;
+  if (requestedAmount !== undefined) dataToUpdate.requestedAmount = requestedAmount;
+
+  const updated = await prisma.objection.update({
+    where: { objectionId },
+    data: dataToUpdate,
+    include: {
+      acquisitionCase: true,
+      offerLetter: true,
+      objectionDocuments: true,
+    },
+  });
+
+  return updated;
+}
+
+export async function deleteObjection(objectionId: string) {
+  const existing = await prisma.objection.findUnique({ where: { objectionId } });
+  if (!existing) throw new Error("Objection record not found");
+
+  // Delete associated objection documents first
+  await prisma.objectionDocument.deleteMany({ where: { objectionId } });
+
+  await prisma.objection.delete({ where: { objectionId } });
+  return { success: true, message: "Objection deleted successfully" };
+}
+

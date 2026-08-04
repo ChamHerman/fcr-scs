@@ -91,7 +91,9 @@ function App() {
             <Route path="compensation" element={<CompensationReportList />} />
             <Route path="compensation/report" element={<CompensationReportList />} />
             <Route path="compensation/report/create" element={<CompensationReportGenerator />} />
+            <Route path="compensation/generator" element={<CompensationReportGenerator />} />
             <Route path="compensation/report/review" element={<CompensationApproval />} />
+            <Route path="compensation/review" element={<CompensationApproval />} />
             <Route path="compensation/compare" element={<CompensationComparisonList />} />
             <Route path="compensation/compare/create" element={<CompensationComparisonCreate />} />
             <Route path="compensation/offer" element={<OfferLetterDashboard />} />
@@ -99,6 +101,8 @@ function App() {
             <Route path="compensation/objection" element={<ObjectionList />} />
             <Route path="compensation/objection/create" element={<CreateObjection />} />
             <Route path="compensation/objection/review" element={<ObjectionReview />} />
+            <Route path="compensation/objection/review/:objectionId" element={<ObjectionReview />} />
+
 
             {/* Placeholder Admin Routes */}
             <Route path="valuers" element={<Placeholder title="Valuers Management" />} />

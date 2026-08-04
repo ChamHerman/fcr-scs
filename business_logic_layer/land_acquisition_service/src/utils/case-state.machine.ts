@@ -63,4 +63,12 @@ export class CaseStateMachine {
     ];
     return allowed.includes(status);
   }
+
+  public static canCreateCompensation(status: CaseStatus): boolean {
+    const allowed: CaseStatus[] = [
+      CaseStatus.VALUATION_APPROVED,
+      CaseStatus.COMPENSATION_REJECTED,
+    ];
+    return allowed.includes(status);
+  }
 }

@@ -6,6 +6,8 @@ import { landAcquisitionApi } from "../../services/landAcquisitionApi";
 import "../../style.css";
 import "./valuation_report.css";
 
+import { CaseSelectionModal } from "./CaseSelectionModal";
+
 type Report = {
   id: string;
   caseId: string;
@@ -38,6 +40,7 @@ export const ValuationReportList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [isCaseModalOpen, setIsCaseModalOpen] = useState(false);
   const itemsPerPage = 10;
 
   const loadReports = useCallback(async () => {
@@ -80,11 +83,16 @@ export const ValuationReportList: React.FC = () => {
   }, [loadReports]);
 
   const handleView = (reportId: string) => {
-    navigate(`/case/valuation/review`, { state: { reportId } });
+    navigate(`/admin/case/valuation/review`, { state: { reportId } });
   };
 
   const handleCreate = () => {
-    navigate("/case/valuation/create");
+    setIsCaseModalOpen(true);
+  };
+
+  const handleSelectCaseFromModal = (caseId: string) => {
+    setIsCaseModalOpen(false);
+    navigate("/admin/case/valuation/create", { state: { caseId } });
   };
 
   const stats = [
@@ -112,7 +120,7 @@ export const ValuationReportList: React.FC = () => {
         <div className="topbar-left">
           <h1 style={{ marginBottom: 0 }}>Valuation Reports</h1>
           <div className="sub">
-            Review and manage all submitted valuation reports (Connected to Backend Service)
+            Review and manage all submitted valuation reports
           </div>
         </div>
         <div className="topbar-right" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -244,6 +252,12 @@ export const ValuationReportList: React.FC = () => {
       >
         FCR-SCS · Valuation Report Dashboard · Connected to Business Logic Backend
       </div>
+
+      <CaseSelectionModal
+        isOpen={isCaseModalOpen}
+        onClose={() => setIsCaseModalOpen(false)}
+        onSelectCase={handleSelectCaseFromModal}
+      />
     </div>
   );
 };

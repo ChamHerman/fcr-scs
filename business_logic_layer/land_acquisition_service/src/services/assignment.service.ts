@@ -34,24 +34,13 @@ export async function assignValuer(input: AssignValuerInput) {
   const dueDate = new Date();
   dueDate.setDate(dueDate.getDate() + acceptancePeriodDays);
 
-  // 4. Transaction: ValuationReport + CaseAssignment + AcquisitionCase status update
+  // 4. Transaction: CaseAssignment + AcquisitionCase status update
   const result = await prisma.$transaction(async (tx) => {
-    // Create ValuationReport placeholder
-    const valReport = await tx.valuationReport.create({
-      data: {
-        caseId,
-        valuerId,
-        reportStatus: ReportStatus.PENDING,
-        createdById: assignedById,
-      },
-    });
-
-    // Create CaseAssignment link
+    // Create CaseAssignment record (without pre-creating a ValuationReport)
     const assignment = await tx.caseAssignment.create({
       data: {
         caseId,
         assignedToId: valuerId,
-        valuationReportId: valReport.reportId,
         assignmentDate: new Date(),
         dueDate,
         remarks: remarks || "",
@@ -63,7 +52,7 @@ export async function assignValuer(input: AssignValuerInput) {
       },
     });
 
-    // Update case status
+    // Update case status to VALUER_ASSIGNED
     await tx.acquisitionCase.update({
       where: { caseId },
       data: { status: CaseStatus.VALUER_ASSIGNED },
