@@ -93,12 +93,13 @@ export const compensationApi = {
     });
   },
 
-  acceptOffer: async (offerId: string, signedDocument?: string) => {
+  acceptOffer: async (offerId: string, signedDocument?: string, forceAccept?: boolean) => {
     return fetchJSON(COMPENSATION_BASE + `/api/compensation/offer-letters/${encodeURIComponent(offerId)}/accept`, {
       method: "POST",
-      body: JSON.stringify({ signedDocument }),
+      body: JSON.stringify({ signedDocument, forceAccept }),
     });
   },
+
 
   rejectOffer: async (offerId: string, remarks?: string) => {
     return fetchJSON(COMPENSATION_BASE + `/api/compensation/offer-letters/${encodeURIComponent(offerId)}/reject`, {

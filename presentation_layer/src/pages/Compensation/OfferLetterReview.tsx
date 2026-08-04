@@ -54,6 +54,11 @@ export const OfferLetterDetail: React.FC = () => {
   const [reasonError, setReasonError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // Active Objection Check state
+  const [activeObjection, setActiveObjection] = useState<any | null>(null);
+  const [showObjectionPrompt, setShowObjectionPrompt] = useState(false);
+  const [withdrawingObjection, setWithdrawingObjection] = useState(false);
+
   useEffect(() => {
     async function fetchOffer() {
       if (!activeOfferId) {
@@ -99,21 +104,63 @@ export const OfferLetterDetail: React.FC = () => {
     fetchOffer();
   }, [activeOfferId]);
 
-  const handleAccept = async () => {
+  const handleAccept = async (force: boolean = false) => {
     if (!offer) return;
+
+    if (!force) {
+      // Check if there are any active (unresolved) objections for this offer/case
+      try {
+        const objRes = await compensationApi.getAllObjections({ search: offer.id });
+        const list = objRes.objections || [];
+        const pending = list.find((o: any) => o.status === "SUBMITTED" || o.status === "UNDER_REVIEW");
+
+        if (pending) {
+          setActiveObjection(pending);
+          setShowObjectionPrompt(true);
+          return;
+        }
+      } catch (e) {
+        console.warn("Could not pre-check objections:", e);
+      }
+    }
+
     setSubmitting(true);
     try {
-      await compensationApi.acceptOffer(offer.id);
+      await compensationApi.acceptOffer(offer.id, undefined, force);
       setOffer((prev) => (prev ? { ...prev, status: "Accepted", statusClass: "approved" } : null));
+      setShowObjectionPrompt(false);
       alert("Offer Letter Accepted Successfully!\n\nCase status updated to 'PAYMENT_IN_PROGRESS'.");
       navigate("/admin/compensation/offer");
     } catch (err: any) {
       console.error("Accept failed:", err);
-      alert(`Accept Failed: ${err.message}`);
+      if (err.code === "ACTIVE_OBJECTION_EXISTS" || err.activeObjection) {
+        setActiveObjection(err.activeObjection || { objectionId: "OBJ-PENDING", objectionReason: "Active objection exists" });
+        setShowObjectionPrompt(true);
+      } else {
+        alert(`Accept Failed: ${err.message || err}`);
+      }
     } finally {
       setSubmitting(false);
     }
   };
+
+  const handleWithdrawObjectionAndAccept = async () => {
+    if (!activeObjection || !offer) return;
+    setWithdrawingObjection(true);
+    try {
+      if (activeObjection.objectionId) {
+        await compensationApi.deleteObjection(activeObjection.objectionId);
+      }
+      setShowObjectionPrompt(false);
+      await handleAccept(true);
+    } catch (err: any) {
+      console.error("Failed to withdraw objection:", err);
+      alert(`Could not withdraw objection: ${err.message || err}`);
+    } finally {
+      setWithdrawingObjection(false);
+    }
+  };
+
 
   const handleRejectSubmit = async () => {
     if (!reason.trim()) {
@@ -168,6 +215,63 @@ export const OfferLetterDetail: React.FC = () => {
 
   return (
     <>
+      {/* Active Objection Warning Modal */}
+      {showObjectionPrompt && activeObjection &&
+        createPortal(
+          <div className="reject-modal-overlay" onClick={() => setShowObjectionPrompt(false)}>
+            <div className="reject-modal" style={{ maxWidth: "580px" }} onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3 style={{ color: "#d32f2f", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <Lucide.AlertTriangle size={22} /> Active Objection Detected
+                </h3>
+                <button className="close-btn" onClick={() => setShowObjectionPrompt(false)}>
+                  <X size={22} />
+                </button>
+              </div>
+              <div style={{ padding: "12px 0", color: "var(--md-on-surface)" }}>
+                <p style={{ marginBottom: "12px", fontSize: "14px", lineHeight: "1.5" }}>
+                  An active formal objection (Form N) is currently linked to this case/offer letter. You must review or withdraw the objection before accepting this offer.
+                </p>
+                <div style={{ background: "var(--md-surface-container-low)", padding: "14px", borderRadius: "12px", fontSize: "13px" }}>
+                  <div style={{ fontWeight: "600", marginBottom: "4px" }}>
+                    Objection ID: <span style={{ color: "var(--md-primary)" }}>{(activeObjection.objectionId || activeObjection.id || "").slice(0, 8)}...</span>
+                  </div>
+                  <div style={{ marginBottom: "4px" }}>
+                    Reason: <em>"{activeObjection.objectionReason || activeObjection.reason || "Disagreement on valuation component"}"</em>
+                  </div>
+                  {activeObjection.requestedAmount && (
+                    <div>
+                      Requested Amount: <strong style={{ color: "var(--md-primary)" }}>RM {Number(activeObjection.requestedAmount).toLocaleString("en-MY")}</strong>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="modal-actions" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                <button
+                  className="btn-cancel"
+                  style={{ background: "#d32f2f", color: "#ffffff", border: "none" }}
+                  onClick={handleWithdrawObjectionAndAccept}
+                  disabled={withdrawingObjection}
+                >
+                  {withdrawingObjection ? "Withdrawing..." : "Withdraw Objection & Accept"}
+                </button>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <button
+                    className="btn-cancel"
+                    onClick={() => navigate(`/admin/compensation/objection/review/${activeObjection.objectionId || activeObjection.id}`)}
+                  >
+                    Review Objection
+                  </button>
+                  <button className="btn-submit" onClick={() => setShowObjectionPrompt(false)}>
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
       {showRejectModal &&
         createPortal(
           <div className="reject-modal-overlay" onClick={() => setShowRejectModal(false)}>
@@ -201,6 +305,7 @@ export const OfferLetterDetail: React.FC = () => {
           </div>,
           document.body
         )}
+
 
 
       <div className="main blur-shape-bg">
@@ -262,9 +367,10 @@ export const OfferLetterDetail: React.FC = () => {
                 <button className="btn-reject" onClick={() => setShowRejectModal(true)} disabled={submitting}>
                   <XCircle size={18} className="inline mr-1" /> Reject Offer
                 </button>
-                <button className="btn-accept" onClick={handleAccept} disabled={submitting}>
+                <button className="btn-accept" onClick={() => handleAccept()} disabled={submitting}>
                   <CheckCircle size={18} className="inline mr-1" /> Accept Offer
                 </button>
+
 
               </>
             )}
