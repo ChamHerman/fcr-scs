@@ -150,6 +150,20 @@ export const compensationApi = {
     });
   },
 
+  updateObjection: async (objectionId: string, payload: { objectionReason?: string; requestedAmount?: number }) => {
+    return fetchJSON(COMPENSATION_BASE + `/api/compensation/objections/${encodeURIComponent(objectionId)}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  deleteObjection: async (objectionId: string) => {
+    return fetchJSON(COMPENSATION_BASE + `/api/compensation/objections/${encodeURIComponent(objectionId)}`, {
+      method: "DELETE",
+    });
+  },
+
+
   // ─── Comparisons (Phase 8) ──────────────────────────────────────────────────
   compareCases: async (caseIds: string[]) => {
     return fetchJSON(COMPENSATION_BASE + "/api/compensation/comparisons", {

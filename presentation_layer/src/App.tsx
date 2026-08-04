@@ -101,6 +101,8 @@ function App() {
             <Route path="compensation/objection" element={<ObjectionList />} />
             <Route path="compensation/objection/create" element={<CreateObjection />} />
             <Route path="compensation/objection/review" element={<ObjectionReview />} />
+            <Route path="compensation/objection/review/:objectionId" element={<ObjectionReview />} />
+
 
             {/* Placeholder Admin Routes */}
             <Route path="valuers" element={<Placeholder title="Valuers Management" />} />

@@ -1,10 +1,12 @@
 import * as Lucide from "lucide-react";
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { CheckCircle, XCircle, X, ArrowLeft, Loader2 } from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
 import "../../style.css";
 import "./compensation.css";
+
 
 type OfferDetail = {
   id: string;
@@ -166,37 +168,40 @@ export const OfferLetterDetail: React.FC = () => {
 
   return (
     <>
-      {showRejectModal && (
-        <div className="reject-modal-overlay" onClick={() => setShowRejectModal(false)}>
-          <div className="reject-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Reject Offer</h3>
-              <button className="close-btn" onClick={() => setShowRejectModal(false)}>
-                <X size={22} />
-              </button>
+      {showRejectModal &&
+        createPortal(
+          <div className="reject-modal-overlay" onClick={() => setShowRejectModal(false)}>
+            <div className="reject-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>Reject Offer</h3>
+                <button className="close-btn" onClick={() => setShowRejectModal(false)}>
+                  <X size={22} />
+                </button>
+              </div>
+              <div className="form-group">
+                <label htmlFor="reason">Reason for Rejection *</label>
+                <textarea
+                  id="reason"
+                  rows={3}
+                  placeholder="State the reason for rejecting this offer..."
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+                {reasonError && <div className="error-text">{reasonError}</div>}
+              </div>
+              <div className="modal-actions">
+                <button className="btn-cancel" onClick={() => setShowRejectModal(false)}>
+                  Cancel
+                </button>
+                <button className="btn-submit" onClick={handleRejectSubmit} disabled={submitting}>
+                  {submitting ? "Submitting..." : "Confirm Reject"}
+                </button>
+              </div>
             </div>
-            <div className="form-group">
-              <label htmlFor="reason">Reason for Rejection *</label>
-              <textarea
-                id="reason"
-                rows={3}
-                placeholder="State the reason for rejecting this offer..."
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-              />
-              {reasonError && <div className="error-text">{reasonError}</div>}
-            </div>
-            <div className="modal-actions">
-              <button className="btn-cancel" onClick={() => setShowRejectModal(false)}>
-                Cancel
-              </button>
-              <button className="btn-submit" onClick={handleRejectSubmit} disabled={submitting}>
-                {submitting ? "Submitting..." : "Confirm Reject"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
+
 
       <div className="main blur-shape-bg">
         <div className="topbar" style={{ marginBottom: "20px" }}>
@@ -244,17 +249,28 @@ export const OfferLetterDetail: React.FC = () => {
             <p style={{ marginTop: "4px", fontSize: "14px", color: "var(--md-on-surface)" }}>{offer.paymentConditions}</p>
           </div>
 
-          {offer.status === "Pending" && (
-            <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
-              <button className="btn-accept" onClick={handleAccept} disabled={submitting}>
-                <CheckCircle size={18} className="inline mr-1" /> Accept Offer
-              </button>
-              <button className="btn-reject" onClick={() => setShowRejectModal(true)} disabled={submitting}>
-                <XCircle size={18} className="inline mr-1" /> Reject Offer
-              </button>
-            </div>
-          )}
+          <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", flexWrap: "wrap" }}>
+            <button
+              className="btn-outline"
+              onClick={() => navigate(`/admin/compensation/objection/create?offerId=${offer.id}`)}
+              style={{ padding: "8px 20px" }}
+            >
+              <Lucide.AlertCircle size={18} className="inline mr-1" /> Submit Objection (Form N)
+            </button>
+            {offer.status === "Pending" && (
+              <>
+                <button className="btn-reject" onClick={() => setShowRejectModal(true)} disabled={submitting}>
+                  <XCircle size={18} className="inline mr-1" /> Reject Offer
+                </button>
+                <button className="btn-accept" onClick={handleAccept} disabled={submitting}>
+                  <CheckCircle size={18} className="inline mr-1" /> Accept Offer
+                </button>
+
+              </>
+            )}
+          </div>
         </div>
+
 
         <div
           style={{

@@ -127,3 +127,51 @@ export async function rejectObjection(req: Request, res: Response): Promise<void
     }
   }
 }
+
+export async function updateObjection(req: Request, res: Response): Promise<void> {
+  const objectionId = req.params.objectionId as string;
+  const { objectionReason, requestedAmount } = req.body;
+
+  if (!objectionId) {
+    res.status(400).json({ error: "objectionId is required" });
+    return;
+  }
+
+  try {
+    const objection = await objectionService.updateObjection({
+      objectionId,
+      objectionReason,
+      requestedAmount: requestedAmount !== undefined ? parseFloat(requestedAmount) : undefined,
+    });
+    res.json({ objection });
+  } catch (e: unknown) {
+    const msg = (e as Error).message;
+    if (msg.toLowerCase().includes("not found")) {
+      res.status(404).json({ error: msg });
+    } else {
+      res.status(400).json({ error: msg });
+    }
+  }
+}
+
+export async function deleteObjection(req: Request, res: Response): Promise<void> {
+  const objectionId = req.params.objectionId as string;
+
+  if (!objectionId) {
+    res.status(400).json({ error: "objectionId is required" });
+    return;
+  }
+
+  try {
+    const result = await objectionService.deleteObjection(objectionId);
+    res.json(result);
+  } catch (e: unknown) {
+    const msg = (e as Error).message;
+    if (msg.toLowerCase().includes("not found")) {
+      res.status(404).json({ error: msg });
+    } else {
+      res.status(500).json({ error: msg });
+    }
+  }
+}
+
