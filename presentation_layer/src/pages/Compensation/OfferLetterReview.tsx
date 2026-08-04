@@ -104,7 +104,7 @@ export const OfferLetterDetail: React.FC = () => {
       await compensationApi.acceptOffer(offer.id);
       setOffer((prev) => (prev ? { ...prev, status: "Accepted", statusClass: "approved" } : null));
       alert("Offer Letter Accepted Successfully!\n\nCase status updated to 'PAYMENT_IN_PROGRESS'.");
-      navigate("/compensation/offer-letter");
+      navigate("/admin/compensation/offer");
     } catch (err: any) {
       console.error("Accept failed:", err);
       alert(`Accept Failed: ${err.message}`);
@@ -126,7 +126,7 @@ export const OfferLetterDetail: React.FC = () => {
       setOffer((prev) => (prev ? { ...prev, status: "Rejected", statusClass: "rejected" } : null));
       alert("Offer Letter Rejected.\n\nCase status updated to 'OFFER_REJECTED'.");
       setShowRejectModal(false);
-      navigate("/compensation/offer-letter");
+      navigate("/admin/compensation/offer");
     } catch (err: any) {
       console.error("Reject failed:", err);
       alert(`Reject Failed: ${err.message}`);
@@ -156,7 +156,7 @@ export const OfferLetterDetail: React.FC = () => {
           <p style={{ color: "var(--md-on-surface-variant)", marginBottom: "20px" }}>
             No offer letter selected or valid ID provided.
           </p>
-          <button className="btn-primary" onClick={() => navigate("/compensation/offer-letter")}>
+          <button className="btn-primary" onClick={() => navigate("/admin/compensation/offer")}>
             Back to Offer Letters
           </button>
         </div>
@@ -207,7 +207,7 @@ export const OfferLetterDetail: React.FC = () => {
             </div>
           </div>
           <div className="topbar-right">
-            <button className="btn-outline" onClick={() => navigate("/compensation/offer-letter")}>
+            <button className="btn-outline" onClick={() => navigate("/admin/compensation/offer")}>
               <ArrowLeft size={16} className="inline mr-1" /> Back
             </button>
           </div>

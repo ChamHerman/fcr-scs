@@ -35,6 +35,12 @@ type CompensationDetail = {
   marketValue: number;
   recommendedCompensation: number;
   remarks: string;
+  offerLetter?: {
+    id: string;
+    offerReferenceNo: string;
+    offerAmount: number;
+    status: string;
+  } | null;
 };
 
 const statusClassMap: Record<string, string> = {
@@ -74,6 +80,16 @@ export const CompensationApproval: React.FC = () => {
         const res = await compensationApi.getReportById(activeReportId);
         const r = res.report;
 
+        const o = r.offerLetters?.[0] || r.acquisitionCase?.offerLetters?.[0];
+        const offerObj = o
+          ? {
+              id: o.offerId,
+              offerReferenceNo: o.offerReferenceNo,
+              offerAmount: Number(o.offerAmount || 0),
+              status: statusLabelMap[o.status] || o.status,
+            }
+          : null;
+
         const formatted: CompensationDetail = {
           id: r.compensationReportId,
           caseId: r.caseId,
@@ -104,6 +120,7 @@ export const CompensationApproval: React.FC = () => {
           marketValue: Number(r.valuationReport?.marketValue || 0),
           recommendedCompensation: Number(r.valuationReport?.recommendedCompensation || 0),
           remarks: r.remarks || "No remarks provided.",
+          offerLetter: offerObj,
         };
 
         setReport(formatted);
@@ -119,11 +136,31 @@ export const CompensationApproval: React.FC = () => {
 
   const handleApprove = async () => {
     if (!report) return;
-    if (window.confirm("Approve this compensation report in the database?")) {
+    if (window.confirm("Approve this compensation report? An offer letter will be auto-generated.")) {
       try {
-        await compensationApi.approveReport(report.id);
-        alert(`Compensation Report Approved!\n\nCase status updated to 'COMPENSATION_APPROVED'.`);
-        navigate("/admin/compensation/report");
+        const res = await compensationApi.approveReport(report.id);
+        const generatedOffer = res.offerLetter || res.report?.offerLetters?.[0];
+        const offerRef = generatedOffer?.offerReferenceNo || "Auto-Generated";
+
+        alert(`Compensation Report Approved!\n\nOffer Letter Auto-Generated (${offerRef}).\nCase status updated to 'OFFER_ISSUED'.`);
+
+        setReport((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: "Approved",
+                statusClass: "approved",
+                offerLetter: generatedOffer
+                  ? {
+                      id: generatedOffer.offerId,
+                      offerReferenceNo: generatedOffer.offerReferenceNo,
+                      offerAmount: Number(generatedOffer.offerAmount || prev.totalAmount),
+                      status: "Pending Response",
+                    }
+                  : prev.offerLetter,
+              }
+            : null
+        );
       } catch (err: any) {
         console.error("Approve failed:", err);
         alert(`Approval Failed: ${err.message}`);
@@ -349,6 +386,47 @@ export const CompensationApproval: React.FC = () => {
             <span className="label">Valuer Remarks:</span>
             <p style={{ marginTop: "4px", fontSize: "14px", color: "var(--md-on-surface)" }}>{report.remarks}</p>
           </div>
+
+          {/* Auto-Generated Offer Letter Card Banner */}
+          {report.offerLetter && (
+            <div
+              style={{
+                marginTop: "20px",
+                marginBottom: "20px",
+                padding: "18px 20px",
+                background: "rgba(34, 197, 94, 0.08)",
+                border: "1px solid rgba(34, 197, 94, 0.3)",
+                borderRadius: "14px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: "16px",
+              }}
+            >
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#15803d", fontWeight: 600, fontSize: "15px", marginBottom: "4px" }}>
+                  <Lucide.Mail size={18} /> Compensation Offer Letter Auto-Generated
+                </div>
+                <div style={{ fontSize: "13px", color: "var(--md-on-surface-variant)" }}>
+                  Reference: <strong>{report.offerLetter.offerReferenceNo}</strong> · Amount: <strong>{formatCurrency(report.offerLetter.offerAmount)}</strong> · Status: <strong>{report.offerLetter.status}</strong>
+                </div>
+              </div>
+              <button
+                className="btn-primary"
+                style={{
+                  padding: "8px 20px",
+                  borderRadius: "9999px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+                onClick={() => navigate("/admin/compensation/offer/review", { state: { offerId: report.offerLetter?.id } })}
+              >
+                View Offer Letter
+              </button>
+            </div>
+          )}
 
           {report.status === "Pending Approval" && (
             <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", alignItems: "center", marginTop: "24px", paddingTop: "16px", borderTop: "1px solid rgba(121, 116, 126, 0.1)" }}>

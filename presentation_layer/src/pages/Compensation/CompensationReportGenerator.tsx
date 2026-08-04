@@ -78,6 +78,8 @@ export const CompensationReportGenerator: React.FC = () => {
   const [showWarning, setShowWarning] = useState(false);
   const [, setWarningAction] = useState<"review" | "cancel" | null>(null);
   const [generatedReportId, setGeneratedReportId] = useState<string | null>(null);
+  const [generatedOfferId, setGeneratedOfferId] = useState<string | null>(null);
+  const [generatedOfferRef, setGeneratedOfferRef] = useState<string | null>(null);
   const [statusUpdate, setStatusUpdate] = useState<string>("");
 
   // Load case data when selectedCaseId changes
@@ -159,6 +161,8 @@ export const CompensationReportGenerator: React.FC = () => {
         setCalculatedTotal(null);
         setShowSummary(false);
         setGeneratedReportId(null);
+        setGeneratedOfferId(null);
+        setGeneratedOfferRef(null);
         setStatusUpdate("");
       }
     } catch (err: any) {
@@ -248,6 +252,15 @@ export const CompensationReportGenerator: React.FC = () => {
 
       const repId = res.report?.compensationReportId || res.reportId;
       setGeneratedReportId(repId);
+
+      const offer = res.offerLetter || res.report?.offerLetters?.[0];
+      if (offer) {
+        setGeneratedOfferId(offer.offerId);
+        setGeneratedOfferRef(offer.offerReferenceNo);
+      } else {
+        setGeneratedOfferId(null);
+        setGeneratedOfferRef(null);
+      }
 
       const statusStr = res.requiresApproval
         ? "Pending Compensation Approval"
@@ -560,14 +573,35 @@ export const CompensationReportGenerator: React.FC = () => {
                           <div style={{ fontSize: "13px", color: "var(--md-on-surface-variant)" }}>
                             <strong>Report ID:</strong> {generatedReportId}<br />
                             <strong>Status:</strong> {statusUpdate}
+                            {generatedOfferRef && (
+                              <>
+                                <br />
+                                <span style={{ color: "#15803d", fontWeight: 600 }}>
+                                  <Lucide.Mail size={14} className="inline mr-1" />
+                                  Offer Letter Auto-Generated:
+                                </span>{" "}
+                                <strong>{generatedOfferRef}</strong>
+                              </>
+                            )}
                           </div>
-                          <button
-                            className="btn-primary"
-                            style={{ marginTop: "12px", fontSize: "13px", padding: "6px 16px", cursor: "pointer" }}
-                            onClick={() => navigate("/admin/compensation/report")}
-                          >
-                            Go to Compensation Reports
-                          </button>
+                          <div style={{ display: "flex", gap: "10px", marginTop: "12px", flexWrap: "wrap" }}>
+                            {generatedOfferId && (
+                              <button
+                                className="btn-primary"
+                                style={{ fontSize: "13px", padding: "6px 16px", cursor: "pointer", background: "#16a34a" }}
+                                onClick={() => navigate("/admin/compensation/offer/review", { state: { offerId: generatedOfferId } })}
+                              >
+                                View Offer Letter
+                              </button>
+                            )}
+                            <button
+                              className="btn-outline"
+                              style={{ fontSize: "13px", padding: "6px 16px", cursor: "pointer" }}
+                              onClick={() => navigate("/admin/compensation/report")}
+                            >
+                              Go to Compensation Reports
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>

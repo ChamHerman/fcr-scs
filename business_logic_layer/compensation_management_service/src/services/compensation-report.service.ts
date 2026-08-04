@@ -1,5 +1,5 @@
 import { prisma } from "../prisma";
-import { CaseStatus, ReportStatus, Prisma } from "@prisma/client";
+import { CaseStatus, ReportStatus, OfferStatus, Prisma } from "@prisma/client";
 
 export interface CompensationFilters {
   status?: string;
@@ -24,6 +24,73 @@ export interface CreateCompensationReportInput {
   components: CompensationComponentsInput;
   remarks?: string;
   createdById: string;
+}
+
+async function getOrCreateLandOwnership(
+  tx: Prisma.TransactionClient,
+  caseId: string,
+  createdById: string
+): Promise<string> {
+  const caseData = await tx.acquisitionCase.findUnique({
+    where: { caseId },
+    include: {
+      landParcel: {
+        include: {
+          ownerships: true,
+        },
+      },
+    },
+  });
+
+  let ownershipId = caseData?.landParcel?.ownerships?.[0]?.ownershipId;
+  if (ownershipId) return ownershipId;
+
+  let targetLandId = caseData?.landParcel?.landId;
+  if (!targetLandId) {
+    const newLand = await tx.landParcel.create({
+      data: {
+        caseId,
+        landTitleNo: `TITLE-${caseId.slice(-6)}-${Math.floor(Math.random() * 1000)}`,
+        lotNo: "LOT-1",
+        mukim: "Default Mukim",
+        district: "Default District",
+        state: "Default State",
+        area: 1.0,
+        areaUnit: "HECTARE",
+        category: "AGRICULTURAL",
+        latitude: 3.1408,
+        longitude: 101.6932,
+        createdById,
+      },
+    });
+    targetLandId = newLand.landId;
+  }
+
+  let owner = await tx.landOwner.findFirst();
+  if (!owner) {
+    owner = await tx.landOwner.create({
+      data: {
+        name: "Land Owner",
+        nric: "900101-01-5555",
+        address: "Default Address",
+        contact: "+60123456789",
+        createdById,
+      },
+    });
+  }
+
+  const newOwnership = await tx.landOwnership.create({
+    data: {
+      landId: targetLandId,
+      ownerId: owner.ownerId,
+      ownershipType: "SOLE_OWNER",
+      ownershipStart: new Date(),
+      isCurrent: true,
+      createdById,
+    },
+  });
+
+  return newOwnership.ownershipId;
 }
 
 export async function getAllReports(filters: CompensationFilters) {
@@ -58,6 +125,7 @@ export async function getAllReports(filters: CompensationFilters) {
           include: { project: true, landParcel: { include: { ownerships: { include: { landOwner: true } } } } },
         },
         valuationReport: true,
+        offerLetters: true,
         approvedBy: true,
       },
       orderBy: { updatedAt: "desc" },
@@ -89,6 +157,7 @@ export async function getReportById(compensationReportId: string) {
       valuationReport: {
         include: { valuer: true },
       },
+      offerLetters: true,
       approvedBy: true,
       reviewedBy: true,
     },
@@ -136,7 +205,7 @@ export async function createReport(input: CreateCompensationReportInput) {
   // Threshold rule: >= 1,000,000 requires admin approval (PENDING), < 1,000,000 auto APPROVED
   const isThresholdHigh = total >= 1_000_000;
   const initialStatus = isThresholdHigh ? ReportStatus.PENDING : ReportStatus.APPROVED;
-  const newCaseStatus = isThresholdHigh
+  let newCaseStatus: CaseStatus = isThresholdHigh
     ? CaseStatus.PENDING_COMPENSATION_APPROVAL
     : CaseStatus.COMPENSATION_APPROVED;
 
@@ -165,12 +234,39 @@ export async function createReport(input: CreateCompensationReportInput) {
       },
     });
 
+    let offerLetter = null;
+    if (initialStatus === ReportStatus.APPROVED) {
+      const ownershipId = await getOrCreateLandOwnership(tx, caseId, createdById);
+
+      const refNo = `OFFER-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`;
+      const offerDate = new Date();
+      const expiryDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+
+      offerLetter = await tx.offerLetter.create({
+        data: {
+          compensationReportId: report.compensationReportId,
+          caseId,
+          ownershipId,
+          offerReferenceNo: refNo,
+          offerType: "Form H (Standard Offer)",
+          offerAmount: total,
+          offerDate,
+          expiryDate,
+          acceptancePeriodDays: 14,
+          status: OfferStatus.PENDING,
+          remarks: "Auto-generated upon Compensation Report Creation",
+          createdById,
+        },
+      });
+      newCaseStatus = CaseStatus.OFFER_ISSUED;
+    }
+
     await tx.acquisitionCase.update({
       where: { caseId },
       data: { status: newCaseStatus },
     });
 
-    return { report, totalCompensation: total, warningFlag, requiresApproval: isThresholdHigh };
+    return { report, totalCompensation: total, warningFlag, requiresApproval: isThresholdHigh, offerLetter };
   });
 
   return result;
@@ -197,12 +293,35 @@ export async function approveReport(compensationReportId: string, approvedById: 
       include: { acquisitionCase: true },
     });
 
-    await tx.acquisitionCase.update({
-      where: { caseId: report.caseId },
-      data: { status: CaseStatus.COMPENSATION_APPROVED },
+    const ownershipId = await getOrCreateLandOwnership(tx, report.caseId, approvedById);
+
+    const refNo = `OFFER-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`;
+    const offerDate = new Date();
+    const expiryDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+
+    const offerLetter = await tx.offerLetter.create({
+      data: {
+        compensationReportId: report.compensationReportId,
+        caseId: report.caseId,
+        ownershipId,
+        offerReferenceNo: refNo,
+        offerType: "Form H (Standard Offer)",
+        offerAmount: report.totalCompensation || 0,
+        offerDate,
+        expiryDate,
+        acceptancePeriodDays: 14,
+        status: OfferStatus.PENDING,
+        remarks: "Auto-generated upon Compensation Report Approval",
+        createdById: approvedById,
+      },
     });
 
-    return updated;
+    await tx.acquisitionCase.update({
+      where: { caseId: report.caseId },
+      data: { status: CaseStatus.OFFER_ISSUED },
+    });
+
+    return { ...updated, offerLetter };
   });
 
   return result;

@@ -84,7 +84,7 @@ export const OfferLetterDashboard: React.FC = () => {
   }, [loadOfferLetters]);
 
   const handleView = (offerId: string) => {
-    navigate("/compensation/offer-letter/view", { state: { offerId } });
+    navigate("/admin/compensation/offer/review", { state: { offerId } });
   };
 
   const formatCurrency = (val: number) => {
