@@ -39,6 +39,7 @@ import MemberPaymentStatus from './pages/Member/MemberPaymentStatus';
 import VerifyAuditTrail from './pages/Member/VerifyAuditTrail';
 import { CaseManagementDashboard } from './pages/LandAcquisition/CaseDashboard';
 import { CaseRegistration } from './pages/LandAcquisition/CaseRegistration';
+import { CaseEdit } from './pages/LandAcquisition/CaseEdit';
 import { CaseView } from './pages/LandAcquisition/CaseDetails';
 import { CaseAssignment } from './pages/LandAcquisition/CaseAssignment';
 import { ValuationReportGenerator } from './pages/LandAcquisition/ValuationReportGenerator';
@@ -55,6 +56,16 @@ import { ObjectionReview } from './pages/Compensation/ObjectionReview';
 import { CompensationComparisonCreate } from './pages/Compensation/ComparisonCreation';
 import { CompensationComparisonList } from './pages/Compensation/ComparisonDashboard';
 import { Placeholder } from './pages/Placeholder';
+import { ProcessAIValuation } from './pages/PredictionDashboard/ProcessAIValuation';
+import { ReviewAIValuation } from './pages/PredictionDashboard/ReviewAIValuation';
+import { RetrainAIModel } from './pages/PredictionDashboard/RetrainAIModel';
+import { ViewValuationResults } from './pages/PredictionDashboard/ViewValuationResults';
+import { PredictionDashboard } from './pages/PredictionDashboard/PredictionDashboard';
+import { ViewValuationHistory } from './pages/PredictionDashboard/ViewValuationHistory';
+import { GenerateReports } from './pages/Reports/GenerateReports';
+import { ViewReports } from './pages/Reports/ViewReports';
+import { ScheduleReportsGeneration } from './pages/Reports/ScheduleReportsGeneration';
+import { ReportsDashboard } from './pages/Reports/ReportsDashboard';
 
 function App() {
   return (
@@ -77,11 +88,14 @@ function App() {
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<DashboardOverview />} />
             <Route path="land-acquisition" element={<CaseManagementDashboard />} />
-            
+
             {/* Case Management */}
             <Route path="case" element={<CaseManagementDashboard />} />
             <Route path="case/register" element={<CaseRegistration />} />
+            <Route path="case/edit" element={<CaseEdit />} />
+            <Route path="case/:caseId/edit" element={<CaseEdit />} />
             <Route path="case/details" element={<CaseView />} />
+            <Route path="case/details/:caseId" element={<CaseView />} />
             <Route path="case/assign" element={<CaseAssignment />} />
             <Route path="case/valuation" element={<ValuationReportList />} />
             <Route path="case/valuation/create" element={<ValuationReportGenerator />} />
@@ -91,7 +105,9 @@ function App() {
             <Route path="compensation" element={<CompensationReportList />} />
             <Route path="compensation/report" element={<CompensationReportList />} />
             <Route path="compensation/report/create" element={<CompensationReportGenerator />} />
+            <Route path="compensation/generator" element={<CompensationReportGenerator />} />
             <Route path="compensation/report/review" element={<CompensationApproval />} />
+            <Route path="compensation/review" element={<CompensationApproval />} />
             <Route path="compensation/compare" element={<CompensationComparisonList />} />
             <Route path="compensation/compare/create" element={<CompensationComparisonCreate />} />
             <Route path="compensation/offer" element={<OfferLetterDashboard />} />
@@ -99,11 +115,13 @@ function App() {
             <Route path="compensation/objection" element={<ObjectionList />} />
             <Route path="compensation/objection/create" element={<CreateObjection />} />
             <Route path="compensation/objection/review" element={<ObjectionReview />} />
+            <Route path="compensation/objection/review/:objectionId" element={<ObjectionReview />} />
+
 
             {/* Dashboard & User Management */}
             <Route path="profile" element={<UserProfile />} />
             <Route path="users" element={<UserAdministration />} />
-            
+
             {/* System Audit & Monitoring */}
             <Route path="audit-logs" element={<AuditLogs />} />
             <Route path="alerts" element={<AlertMonitoring />} />
@@ -112,6 +130,17 @@ function App() {
             {/* Placeholder Admin Routes */}
             <Route path="valuers" element={<Placeholder title="Valuers Management" />} />
             <Route path="forms" element={<Placeholder title="Forms & Templates" />} />
+            <Route path="reports" element={<ReportsDashboard />} />
+            <Route path="reports/generate" element={<GenerateReports />} />
+            <Route path="reports/view/:reportId" element={<ViewReports />} />
+            <Route path="reports/schedule" element={<ScheduleReportsGeneration />} />
+            <Route path="prediction" element={<PredictionDashboard />} />
+            <Route path="prediction/process" element={<ProcessAIValuation />} />
+            <Route path="prediction/review" element={<ReviewAIValuation />} />
+            <Route path="prediction/retrain" element={<RetrainAIModel />} />
+            <Route path="prediction/results" element={<ViewValuationResults />} />
+            <Route path="prediction/history" element={<ViewValuationHistory />} />
+            <Route path="prediction/history" element={<ViewValuationHistory />} />
             <Route path="settings" element={<Placeholder title="System Settings" />} />
 
             {/* Payment Routes */}

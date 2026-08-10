@@ -124,6 +124,17 @@ Defined in `tailwind.config.js`. Used to create organic, generous rounding.
   - **Error**: Soft red (`md-error`) background with dark red text.
   - **General/Warning**: Soft yellow (`md-warning`) background with dark brown text.
 
+### 7. Global Modal System (`createPortal` & Centered Overlay)
+- All pop-up modals must be rendered using `react-dom`'s `createPortal(..., document.body)` to mount directly at the document root level, escaping any parent layout boundaries or container overflow clips.
+- Standardized modal overlays (`.md-modal-overlay`, `.preview-modal-overlay`, `.reject-modal-overlay`, `.cancel-confirm-overlay`) are defined globally in `src/index.css` with `position: fixed !important`, `inset: 0`, `width: 100vw`, `height: 100vh`, `zIndex: 99999`, and a dark backdrop blur (`rgba(0,0,0,0.6)`).
+- Standardized modal content containers (`.md-modal-content`, `.preview-modal`, `.reject-modal`, `.cancel-confirm-modal`) are styled with `margin: auto`, `position: relative`, flexbox centering, organic `16px` border radius, and elevation shadows, ensuring pop-up modals remain fixed at the center of the viewport screen across all devices using the `index.css` modal design.
+- **Action Button Placement Rules**:
+  - In all modal footers, page action bars, and confirm dialogs, always place the primary **Confirm / Accept / Submit** action button on the far **right** side of the container, preceded by the **Reject / Cancel** secondary button on its left.
+  ```text
+  Placement Layout:
+  |                                       Reject/Cancel   Accept |
+  ```
+
 ## Usage Guidelines
 1. **Never use pure white backgrounds**: Always utilize the `md-background` or `md-surface-container` colors to maintain the tonal relationship.
 2. **Layering Strategy**: Combine cards with `md-blur-shape` utilities behind them to create atmospheric depth.
@@ -132,3 +143,6 @@ Defined in `tailwind.config.js`. Used to create organic, generous rounding.
 5. **Button Variants**: Use `combined` for primary CTAs requiring a gradient, and `animated-primary` for subtle attention-grabbing without aggressive movement.
 6. **Iconography**: Strictly use `lucide-react` SVG icons. Do not use emojis in the UI as they break visual consistency and tone across different operating systems.
 7. **Admin Layout Wrapping**: Do not wrap individual module pages (e.g., Land Acquisition, Compensation, Payment) in manual `min-h-screen` or `w-full` fixed-height flex containers. The global `<AdminLayout />` component intrinsically handles the main content wrapper layout (via `.admin-content`). Allow pages to naturally expand to fill this content area seamlessly.
+8. **Global Modal Centering**: Always wrap pop-up modal dialogs in `createPortal(..., document.body)` and apply the global `.md-modal-overlay` / `.md-modal-content` CSS rules from `src/index.css` to guarantee viewport screen centering across the whole window.
+9. **Action Button Alignment**: Place the confirm/accept button at the right side of the container or page, preceded by the cancel/reject button to its left (`| Reject/Cancel   Accept |`).
+

@@ -1,6 +1,8 @@
 /.opencode
 /.agents
 node_modules/
+dist/
+**/dist/
 /graphify-out
 /_self
 # Ignore all files starting with .env anywhere in the repository

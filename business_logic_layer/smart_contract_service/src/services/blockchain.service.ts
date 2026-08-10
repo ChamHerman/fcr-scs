@@ -4,7 +4,20 @@ import { Pool } from "pg";
 import * as crypto from "crypto";
 import * as ethereum from "./ethereum.service";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+if (!process.env.DATABASE_URL) {
+  if (process.env.ALLOW_DEV_DB_FALLBACK === "true") {
+    console.warn(
+      "[WARN] [blockchain.service] DATABASE_URL is missing. Using dev fallback database URL because ALLOW_DEV_DB_FALLBACK=true is set."
+    );
+    process.env.DATABASE_URL = "postgresql://fcr_app:postgres@127.0.0.1:5432/fcr_scs?schema=public";
+  } else if (process.env.NODE_ENV !== "test") {
+    throw new Error("DATABASE_URL environment variable is missing in blockchain.service");
+  }
+}
+
+const connectionString = process.env.DATABASE_URL;
+
+const pool = new Pool({ connectionString });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 

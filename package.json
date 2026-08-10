@@ -3,11 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "dev:backend": "npm run dev --workspace=business_logic_layer",
+    "dev:frontend": "npm run dev --workspace=presentation_layer",
     "dev": "npm run dev --workspace=presentation_layer",
     "build": "npm run build --workspace=presentation_layer"
   },
   "workspaces": [
     "presentation_layer",
+    "business_logic_layer",
     "business_logic_layer/*",
     "data_layer/*"
   ]

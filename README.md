@@ -19,7 +19,7 @@ This project is developed as part of the **BMSE3004 Collaborative Development** 
 
 ## Current project status
 
-> **Initial Project Structure.** The repository has been structured according to the Layered Architecture model. The presentation layer currently contains the initial React application. Business logic and data layers are scaffolded but not yet implemented.
+> **Unified Modular Monolith Backend & Integrated Layers.** The repository implements a layered architecture. The business logic layer features a unified Node.js/TypeScript Express server (`server.ts`) mounting domain routes (`payment_service`, `smart_contract_service`). The data layer includes PostgreSQL database integration with Prisma ORM v7 (`@prisma/adapter-pg`), Hardhat Ethereum ledger smart contracts, and environment configuration validation supporting both source and compiled `dist/` execution layouts.
 
 ### Project Structure (Layered Architecture)
 
@@ -38,17 +38,18 @@ fcr-scs/
 │   ├── vite.config.ts
 │   └── package.json
 ├── business_logic_layer/         # (Node.js & Python Services)
+│   ├── server.ts                 # Unified Express API Server entrypoint
+│   ├── payment_service/          # Bank details management & multi-sig payments
+│   ├── smart_contract_service/   # Blockchain integration & document verification
 │   ├── user_management_service/
 │   ├── compensation_management_service/
-│   ├── smart_contract_service/
 │   ├── reporting_service/
 │   ├── land_acquisition_service/
-│   ├── ai_prediction_service/
-│   └── payment_service/
+│   └── ai_prediction_service/
 ├── data_layer/                   # (Data Access & Infrastructure)
-│   ├── database/
+│   ├── database/                 # PostgreSQL schema, Prisma migrations & seed scripts
+│   ├── blockchain_ledger/        # Solidity smart contracts & Hardhat environment
 │   ├── ai_model_repository/
-│   ├── blockchain_ledger/
 │   └── document_storage/
 ├── DESIGN.md                     # Material Design 3 implementation guide
 ├── LICENSE                       # MIT
@@ -60,11 +61,13 @@ fcr-scs/
 | Module | Layer | Tech | Status |
 |---|---|---|---|
 | Frontend | Presentation | React, TypeScript, Tailwind CSS, Vite, GSAP | In progress |
-| Services | Business Logic | Node.js, Express, RESTful API | Planned |
+| Services | Business Logic | Node.js, Express, RESTful API (Unified Server) | Implemented |
+| Payment Service | Business Logic | Node.js, Express, Prisma ORM | Implemented |
+| Blockchain Service | Business Logic | Ethers.js v6, Solidity, Sepolia / Local Hardhat | Implemented |
 | AI Service | Business Logic | Python, Scikit-learn, TensorFlow, OpenCV | Planned |
-| Database | Data | PostgreSQL | Planned |
-| Blockchain | Data | Solidity, Ethereum Sepolia Testnet, Ethers.js | Planned |
-| Reporting | Business Logic | jsPDF, PDFKit, Chart.js | Planned |
+| Database | Data | PostgreSQL, Prisma ORM v7 (`@prisma/adapter-pg`) | Implemented |
+| Blockchain Ledger | Data | Solidity (`CompensationLedger.sol`), Hardhat | Implemented |
+| Reporting | Business Logic | jsPDF, PDFKit, Chart.js | In progress |
 
 ## Development environment
 
@@ -125,6 +128,22 @@ The application will launch at `http://localhost:5173` by default.
 ```bash
 npm run build
 npm run preview
+```
+
+### 5. Setup and run Business Logic Layer Server
+
+```bash
+cd ../business_logic_layer
+npm install
+npm test
+npm run dev
+```
+
+The unified API server will listen on `http://localhost:3030`. To build and run compiled distribution output:
+
+```bash
+npm run build
+npm start
 ```
 
 ## Design system
