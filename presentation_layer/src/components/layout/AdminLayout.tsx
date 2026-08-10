@@ -417,13 +417,25 @@ export const AdminLayout: React.FC = () => {
 
             <div className="nav-section">
               {!isCollapsed && <span className="nav-label">System</span>}
+              <NavLink to="/admin/profile" className="nav-item" title={isCollapsed ? "Profile" : ""}>
+                <Users size={22} className="nav-icon" />
+                {!isCollapsed && <span>My Profile</span>}
+              </NavLink>
+              <NavLink to="/admin/users" className="nav-item" title={isCollapsed ? "User Admin" : ""}>
+                <Users size={22} className="nav-icon" />
+                {!isCollapsed && <span>User Admin</span>}
+              </NavLink>
+              <NavLink to="/admin/audit-logs" className="nav-item" title={isCollapsed ? "Audit Logs" : ""}>
+                <ClipboardList size={22} className="nav-icon" />
+                {!isCollapsed && <span>Audit Logs</span>}
+              </NavLink>
+              <NavLink to="/admin/alerts" className="nav-item" title={isCollapsed ? "Alerts" : ""}>
+                <Sparkles size={22} className="nav-icon" />
+                {!isCollapsed && <span>Alerts</span>}
+              </NavLink>
               <NavLink to="/admin/settings" className="nav-item" title={isCollapsed ? "Settings" : ""}>
                 <Settings size={22} className="nav-icon" />
                 {!isCollapsed && <span>Settings</span>}
-              </NavLink>
-              <NavLink to="/admin/users" className="nav-item" title={isCollapsed ? "Users" : ""}>
-                <Users size={22} className="nav-icon" />
-                {!isCollapsed && <span>Users</span>}
               </NavLink>
             </div>
 

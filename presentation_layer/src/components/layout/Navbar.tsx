@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../ui/Button';
 import classNames from 'classnames';
 
 export const Navbar: React.FC = () => {
+  const navigate = useNavigate();
   const [isVisible, setIsVisible] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
 
@@ -40,8 +41,8 @@ export const Navbar: React.FC = () => {
           <Link to="/verify-audit-trail" className="text-md-on-surface hover:text-md-primary transition-colors text-sm">Verify Certificate</Link>
           <Link to="/admin" className="text-md-on-surface hover:text-md-primary transition-colors font-medium text-sm">Admin Portal</Link>
           <Link to="/member" className="text-md-on-surface hover:text-md-primary transition-colors font-medium text-sm">Member Portal</Link>
-          <Button variant="outlined" size="sm">Login</Button>
-          <Button variant="filled" size="sm">Register</Button>
+          <Button variant="outlined" size="sm" onClick={() => navigate('/login')}>Login</Button>
+          <Button variant="filled" size="sm" onClick={() => navigate('/register')}>Register</Button>
         </div>
       </div>
     </nav>
