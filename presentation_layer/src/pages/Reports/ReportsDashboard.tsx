@@ -4,8 +4,8 @@ import { Eye, FileText, Clock, PlusCircle, Search } from 'lucide-react';
 import '../../style.css';
 import '../LandAcquisition/case_management.css';
 import './reports.css';
+import { STATES, REPORT_TYPES } from './reportConstants';
 
-const STATES: Record<string, string[]> = {
   Johor: ['Batu Pahat', 'Johor Bahru', 'Kluang', 'Kota Tinggi', 'Kulai', 'Mersing', 'Muar', 'Pontian', 'Segamat', 'Tangkak'],
   Kedah: ['Baling', 'Bandar Baharu', 'Kota Setar', 'Kuala Muda', 'Kubang Pasu', 'Kulim', 'Langkawi', 'Padang Terap', 'Pendang', 'Pokok Sena', 'Sik', 'Yan'],
   Kelantan: ['Bachok', 'Gua Musang', 'Jeli', 'Kota Bharu', 'Kuala Krai', 'Machang', 'Pasir Mas', 'Pasir Puteh', 'Tanah Merah', 'Tumpat'],
@@ -162,6 +162,7 @@ export const ReportsDashboard: React.FC = () => {
           <span className="count">Generated reports</span>
         </div>
         <div className="right">
+          <button className="btn-primary" onClick={() => navigate('/admin/reports/generate')}>Generate Report</button>
           <button className="btn-outline" onClick={() => navigate('/admin/reports/schedule')}>Schedule Reports</button>
         </div>
       </div>

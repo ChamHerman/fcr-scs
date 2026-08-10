@@ -80,10 +80,24 @@ const REPORT_DATA: ReportItem[] = [
   }
 ];
 
+const getStoredReports = (): ReportItem[] => {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+
+  try {
+    const storedReports = window.localStorage.getItem('generated_reports');
+    return storedReports ? JSON.parse(storedReports) : [];
+  } catch {
+    return [];
+  }
+};
+
 export const ViewReports: React.FC = () => {
   const { reportId } = useParams();
   const navigate = useNavigate();
-  const selectedReport = REPORT_DATA.find((report) => report.id === reportId);
+  const allReports = [...REPORT_DATA, ...getStoredReports()];
+  const selectedReport = allReports.find((report) => report.id === reportId);
 
   useEffect(() => {
     if (reportId && !selectedReport) {
