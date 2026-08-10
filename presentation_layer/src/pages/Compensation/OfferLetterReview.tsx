@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { CheckCircle, XCircle, X, ArrowLeft, Loader2 } from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
+import { useModalPopIn } from "../../hooks/useModalPopIn";
 import "../../style.css";
 import "./compensation.css";
 
@@ -213,13 +214,16 @@ export const OfferLetterDetail: React.FC = () => {
     );
   }
 
+  const promptModalRef = useModalPopIn(showObjectionPrompt);
+  const rejectModalRef = useModalPopIn(showRejectModal);
+
   return (
     <>
       {/* Active Objection Warning Modal */}
       {showObjectionPrompt && activeObjection &&
         createPortal(
           <div className="reject-modal-overlay" onClick={() => setShowObjectionPrompt(false)}>
-            <div className="reject-modal" style={{ maxWidth: "580px" }} onClick={(e) => e.stopPropagation()}>
+            <div ref={promptModalRef} className="reject-modal" style={{ maxWidth: "580px", borderRadius: "28px" }} onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
                 <h3 style={{ color: "#d32f2f", display: "flex", alignItems: "center", gap: "8px" }}>
                   <Lucide.AlertTriangle size={22} /> Active Objection Detected
@@ -275,7 +279,7 @@ export const OfferLetterDetail: React.FC = () => {
       {showRejectModal &&
         createPortal(
           <div className="reject-modal-overlay" onClick={() => setShowRejectModal(false)}>
-            <div className="reject-modal" onClick={(e) => e.stopPropagation()}>
+            <div ref={rejectModalRef} className="reject-modal" style={{ borderRadius: "28px" }} onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
                 <h3>Reject Offer</h3>
                 <button className="close-btn" onClick={() => setShowRejectModal(false)}>

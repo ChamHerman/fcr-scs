@@ -6,6 +6,7 @@ import { compensationApi } from "../../services/compensationApi";
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
 import { CaseSelectionModal } from "../LandAcquisition/CaseSelectionModal";
 import { Calculator, FileText, CheckCircle, AlertTriangle } from "lucide-react";
+import { useModalPopIn } from "../../hooks/useModalPopIn";
 import "../../style.css";
 import "./compensation.css";
 
@@ -290,6 +291,8 @@ export const CompensationReportGenerator: React.FC = () => {
     return `RM ${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
+  const warningModalRef = useModalPopIn(showWarning);
+
   const handleSelectCaseFromModal = (cId: string) => {
     setSelectedCaseId(cId);
     setIsCaseModalOpen(false);
@@ -331,18 +334,18 @@ export const CompensationReportGenerator: React.FC = () => {
             onClick={() => setShowWarning(false)}
           >
             <div
+              ref={warningModalRef}
               className="preview-modal"
               style={{
                 position: "relative",
                 maxWidth: "460px",
                 width: "90%",
                 padding: "24px",
-                borderRadius: "16px",
+                borderRadius: "28px",
                 background: "var(--md-surface-container, #ffffff)",
                 boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.3)",
                 display: "flex",
                 flexDirection: "column",
-                animation: "none",
                 margin: "auto",
               }}
               onClick={(e) => e.stopPropagation()}

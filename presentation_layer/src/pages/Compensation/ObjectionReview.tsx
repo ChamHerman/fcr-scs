@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { CheckCircle, XCircle, ArrowLeft, Loader2, Edit2, Trash2, X, FileText, ExternalLink } from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
+import { useModalPopIn } from "../../hooks/useModalPopIn";
 import "../../style.css";
 import "./objection.css";
 
@@ -284,13 +285,16 @@ export const ObjectionReview: React.FC = () => {
   const isActionable = objection.rawStatus === "SUBMITTED" || objection.rawStatus === "UNDER_REVIEW";
   const isResolved = objection.rawStatus === "APPROVED" || objection.rawStatus === "REJECTED";
 
+  const editModalRef = useModalPopIn(showEditModal);
+  const deleteModalRef = useModalPopIn(showDeleteModal);
+
   return (
     <div className="flex min-h-screen" style={{ background: "var(--md-background)", color: "var(--md-on-surface)" }}>
       {/* Edit Modal */}
       {showEditModal &&
         createPortal(
           <div className="reject-modal-overlay" onClick={() => setShowEditModal(false)}>
-            <div className="reject-modal" onClick={(e) => e.stopPropagation()}>
+            <div ref={editModalRef} className="reject-modal" style={{ borderRadius: "28px" }} onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
                 <h3>Edit Objection Details</h3>
                 <button className="close-btn" onClick={() => setShowEditModal(false)}>
@@ -328,7 +332,7 @@ export const ObjectionReview: React.FC = () => {
       {showDeleteModal &&
         createPortal(
           <div className="reject-modal-overlay" onClick={() => setShowDeleteModal(false)}>
-            <div className="reject-modal" onClick={(e) => e.stopPropagation()}>
+            <div ref={deleteModalRef} className="reject-modal" style={{ borderRadius: "28px" }} onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
                 <h3 style={{ color: "#d32f2f" }}>Confirm Deletion</h3>
                 <button className="close-btn" onClick={() => setShowDeleteModal(false)}>

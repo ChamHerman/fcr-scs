@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { CheckCircle, XCircle, X, Loader2 } from "lucide-react";
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
+import { useModalPopIn } from "../../hooks/useModalPopIn";
 import "../../style.css";
 import "./valuation_report.css";
 
@@ -190,12 +191,14 @@ export const ValuationReportReview: React.FC = () => {
     );
   }
 
+  const rejectModalRef = useModalPopIn(showRejectModal);
+
   return (
     <>
       {showRejectModal &&
         createPortal(
           <div className="reject-modal-overlay" onClick={closeRejectModal}>
-            <div className="reject-modal" onClick={(e) => e.stopPropagation()}>
+            <div ref={rejectModalRef} className="reject-modal" style={{ borderRadius: "28px" }} onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
                 <h3>Reject Report</h3>
                 <button className="close-btn" onClick={closeRejectModal}>

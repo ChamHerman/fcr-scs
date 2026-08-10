@@ -40,7 +40,6 @@ export default {
         '3xl': '48px',
       },
       transitionTimingFunction: {
-        'md-emphasized': 'cubic-bezier(0.2, 0, 0, 1)',
         'md-bouncy': 'cubic-bezier(0.34, 1.56, 0.64, 1)',
       },
       keyframes: {

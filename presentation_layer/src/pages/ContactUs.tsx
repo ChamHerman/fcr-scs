@@ -136,7 +136,7 @@ export const ContactUs: React.FC = () => {
               <Button type="button" variant="text" onClick={() => window.history.back()} disabled={isSubmitting}>
                 Cancel
               </Button>
-              <Button type="submit" variant="combined" size="lg" isLoading={isSubmitting}>
+              <Button type="submit" variant="filled" size="lg" isLoading={isSubmitting}>
                 Send Message
               </Button>
             </div>

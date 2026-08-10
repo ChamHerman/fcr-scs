@@ -28,7 +28,6 @@ export const ActionMenuPortal: React.FC<ActionMenuPortalProps> = ({ actions, isO
     if (!isOpen) return;
     
     const handleScroll = (e: Event) => {
-      // Ignore scrolling inside the menu itself
       if (menuRef.current && menuRef.current.contains(e.target as Node)) return;
       onClose();
     };
@@ -63,11 +62,11 @@ export const ActionMenuPortal: React.FC<ActionMenuPortalProps> = ({ actions, isO
             top: coords.top, left: coords.left,
             backgroundColor: 'var(--md-surface-container, #F3EDF7)',
             boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            borderRadius: '12px',
+            borderRadius: '16px',
             zIndex: 9999,
             minWidth: '160px',
             overflow: 'hidden',
-            border: '1px solid var(--md-outline, #79747E)'
+            border: '1px solid rgba(121, 116, 126, 0.3)'
           }}
         >
           {actions.map((action, idx) => (
@@ -82,7 +81,7 @@ export const ActionMenuPortal: React.FC<ActionMenuPortalProps> = ({ actions, isO
                 padding: '10px 16px', 
                 fontSize: '14px', 
                 cursor: 'pointer', 
-                borderBottom: idx < actions.length - 1 ? '1px solid var(--md-surface-container-low, #E7E0EC)' : 'none', 
+                borderBottom: idx < actions.length - 1 ? '1px solid rgba(231, 224, 236, 0.6)' : 'none', 
                 color: 'var(--md-on-surface, #1C1B1F)' 
               }}
               onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--md-surface-container-low, #E7E0EC)'}

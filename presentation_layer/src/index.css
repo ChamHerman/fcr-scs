@@ -23,6 +23,7 @@
     --md-on-warning: #3C2900;
     --md-success: #E4F4E5;
     --md-on-success: #0D3A11;
+    --md-shimmer: rgba(255, 255, 255, 0.22);
   }
 
   .dark {
@@ -43,6 +44,7 @@
     --md-on-warning: #3C2900;
     --md-success: #A3D9A5;
     --md-on-success: #0D3A11;
+    --md-shimmer: rgba(255, 255, 255, 0.10);
   }
 
   body {
@@ -72,7 +74,7 @@
     background: rgba(0, 0, 0, 0.6) !important;
     backdrop-filter: blur(4px) !important;
     -webkit-backdrop-filter: blur(4px) !important;
-    display: flex !important;
+    display: flex;
     align-items: center !important;
     justify-content: center !important;
     z-index: 99999 !important;
@@ -88,13 +90,33 @@
     margin: auto !important;
     background: var(--md-surface-container, #ffffff) !important;
     color: var(--md-on-surface) !important;
-    border-radius: 16px !important;
+    border-radius: 28px !important;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2) !important;
     max-height: 85vh !important;
     display: flex !important;
     flex-direction: column !important;
     overflow: auto !important;
     animation: none !important;
-    transform: none !important;
+  }
+
+  /* Dropdown Select Controls & Option List Rules */
+  select {
+    border-radius: var(--radius-xl, 28px);
+  }
+
+  select option {
+    border-radius: 14px !important;
+    padding: 10px 16px !important;
+    margin: 4px 0 !important;
+    background-color: var(--md-surface-container, #F3EDF7) !important;
+    color: var(--md-on-surface, #1C1B1F) !important;
+  }
+
+  select option:hover,
+  select option:focus,
+  select option:checked {
+    background-color: var(--md-secondary-container, #E8DEF8) !important;
+    color: var(--md-on-secondary-container, #1D192B) !important;
+    border-radius: 14px !important;
   }
 }

@@ -18,3 +18,4 @@ dist/
 !**/*.env.example
 !**/*.env.template
 /.reasonix
+/.ua
