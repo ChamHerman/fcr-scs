@@ -19,3 +19,4 @@ dist/
 !**/*.env.template
 presentation_layer/package.json
 package-lock.json
+package-lock.json

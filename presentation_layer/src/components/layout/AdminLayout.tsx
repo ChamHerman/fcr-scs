@@ -21,7 +21,9 @@ import {
   Mail,
   FolderOpen,
   Moon,
-  Sun
+  Sun,
+  BrainCircuit,
+  Sparkles
 } from 'lucide-react';
 
 export const AdminLayout: React.FC = () => {
@@ -402,22 +404,34 @@ export const AdminLayout: React.FC = () => {
             </div>
 
             <div className="nav-section">
-              {!isCollapsed && <span className="nav-label">System Audit & Settings</span>}
+              {!isCollapsed && <span className="nav-label">AI & Reports</span>}
+              <NavLink to="/admin/prediction" className="nav-item" title={isCollapsed ? "AI Valuation" : ""}>
+                <BrainCircuit size={22} className="nav-icon" />
+                {!isCollapsed && <span>AI Valuation</span>}
+              </NavLink>
+              <NavLink to="/admin/reports" className="nav-item" title={isCollapsed ? "Reports" : ""}>
+                <PieChart size={22} className="nav-icon" />
+                {!isCollapsed && <span>Reports</span>}
+              </NavLink>
+            </div>
+
+            <div className="nav-section">
+              {!isCollapsed && <span className="nav-label">System</span>}
+              <NavLink to="/admin/profile" className="nav-item" title={isCollapsed ? "Profile" : ""}>
+                <Users size={22} className="nav-icon" />
+                {!isCollapsed && <span>My Profile</span>}
+              </NavLink>
+              <NavLink to="/admin/users" className="nav-item" title={isCollapsed ? "User Admin" : ""}>
+                <Users size={22} className="nav-icon" />
+                {!isCollapsed && <span>User Admin</span>}
+              </NavLink>
               <NavLink to="/admin/audit-logs" className="nav-item" title={isCollapsed ? "Audit Logs" : ""}>
                 <ClipboardList size={22} className="nav-icon" />
                 {!isCollapsed && <span>Audit Logs</span>}
               </NavLink>
               <NavLink to="/admin/alerts" className="nav-item" title={isCollapsed ? "Alerts" : ""}>
-                <BarChart2 size={22} className="nav-icon" />
-                {!isCollapsed && <span>Alert Monitoring</span>}
-              </NavLink>
-              <NavLink to="/admin/reports" className="nav-item" title={isCollapsed ? "Reports" : ""}>
-                <PieChart size={22} className="nav-icon" />
-                {!isCollapsed && <span>System Reports</span>}
-              </NavLink>
-              <NavLink to="/admin/users" className="nav-item" title={isCollapsed ? "Users" : ""}>
-                <Users size={22} className="nav-icon" />
-                {!isCollapsed && <span>Users</span>}
+                <Sparkles size={22} className="nav-icon" />
+                {!isCollapsed && <span>Alerts</span>}
               </NavLink>
               <NavLink to="/admin/settings" className="nav-item" title={isCollapsed ? "Settings" : ""}>
                 <Settings size={22} className="nav-icon" />
