@@ -12,6 +12,6 @@ app.use("/api/smart-contract", blockchainRoutes);
 if (process.env.NODE_ENV !== "test") {
   const port = process.env.PORT || 3001;
   app.listen(port, () =>
-    console.log("Smart Contract Service on :" + port)
+    console.log(`[${new Date().toISOString()}] [INFO] [smart-contract-service] Listening on port ${port}`)
   );
 }

@@ -15,6 +15,6 @@ app.use("/api/bank-details", bankDetailsRoutes);
 if (process.env.NODE_ENV !== "test") {
   const port = process.env.PORT || 3002;
   app.listen(port, () => {
-    console.log(`Payment Service running on :${port}`);
+    console.log(`[${new Date().toISOString()}] [INFO] [payment-service] Listening on port ${port}`);
   });
 }

@@ -5,18 +5,20 @@ import * as dotenv from "dotenv";
 dotenv.config();
 
 function loadAbi() {
-  const abiPath = path.resolve(
-    __dirname,
-    "../../../../data_layer/blockchain_ledger/artifacts/contracts/CompensationLedger.sol/CompensationLedger.json"
-  );
-  if (fs.existsSync(abiPath)) {
-    return JSON.parse(fs.readFileSync(abiPath, "utf-8"));
+  const candidates = [
+    path.resolve(__dirname, "../../../../../data_layer/blockchain_ledger/artifacts/contracts/CompensationLedger.sol/CompensationLedger.json"),
+    path.resolve(__dirname, "../../../../data_layer/blockchain_ledger/artifacts/contracts/CompensationLedger.sol/CompensationLedger.json"),
+    path.resolve(process.cwd(), "../data_layer/blockchain_ledger/artifacts/contracts/CompensationLedger.sol/CompensationLedger.json"),
+    path.resolve(process.cwd(), "data_layer/blockchain_ledger/artifacts/contracts/CompensationLedger.sol/CompensationLedger.json"),
+    path.resolve(process.cwd(), "../../data_layer/blockchain_ledger/artifacts/contracts/CompensationLedger.sol/CompensationLedger.json"),
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return JSON.parse(fs.readFileSync(candidate, "utf-8"));
+    }
   }
-  const altPath = path.resolve(
-    process.cwd(),
-    "../../data_layer/blockchain_ledger/artifacts/contracts/CompensationLedger.sol/CompensationLedger.json"
-  );
-  return JSON.parse(fs.readFileSync(altPath, "utf-8"));
+  throw new Error("CompensationLedger.json ABI file not found");
 }
 
 const ABI = loadAbi();
@@ -45,7 +47,7 @@ function getContract(): ethers.Contract {
     _contract = new ethers.Contract(contractAddress, ABI.abi, wallet);
 
     const networkType = isLocalNode() ? "Hardhat local node" : "Sepolia testnet";
-    console.log("Ethereum service: connected to", networkType, "at", getRpcUrl());
+    console.log(`[${new Date().toISOString()}] [INFO] [ethereum-service] Connected to ${networkType} at ${getRpcUrl()}`);
   }
   return _contract;
 }
