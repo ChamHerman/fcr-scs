@@ -21,6 +21,8 @@ presentation_layer/
     ├── index.css            # Global CSS, base styles, --md-shimmer variables, and modal overlay rules.
     ├── App.tsx              # Router configuration (react-router-dom).
     ├── main.tsx             # Entry point with NotificationProvider.
+    ├── hooks/
+    │   └── useScrollEdges.ts  # Reports isScrollable / atTop / atBottom for scroll affordances.
     ├── components/
     │   ├── layout/          # Global layout components.
     │   │   ├── Layout.tsx   # Wrapper combining Navbar, Outlet, and Footer.
@@ -55,6 +57,7 @@ Defined in `tailwind.config.js` and `index.css`.
 - **`md-outline`**: Light `#79747E` / Dark `#938F99`
 - **`md-on-surface-variant`**: Light `#49454F` / Dark `#CAC4D0`
 - **`--md-shimmer`**: Light `rgba(255,255,255,0.22)` / Dark `rgba(255,255,255,0.10)`
+- **`--md-scrollbar-thumb`**: Light `rgba(121,116,126,0.4)` / Dark `rgba(147,143,153,0.45)` — used by `.md-scroll-thin`
 
 ### Typography
 - **Font Family**: Roboto (imported via Google Fonts).
@@ -83,17 +86,28 @@ Defined in `tailwind.config.js`. Standard card, input, and modal radius is **`xl
   - `text`: Ghost button (`bg-transparent text-md-primary`).
   - `fab`: Floating Action Button (`rounded-2xl`).
 - **Universal GSAP Shimmer**: Absolutely-positioned gradient sweep bar using `--md-shimmer` animated continuously via GSAP (`duration: 2.4s`, `ease: power1.inOut`). Skipped when disabled or loading.
-- **Disabled State**: Greyed low surface (`disabled:bg-md-surface-container-low disabled:text-md-on-surface-variant/55 disabled:cursor-not-allowed`).
+- **Disabled State**: The variant keeps its own skin — fill, border, elevation and ghosting all survive — and the colour is simply drained out of it with `grayscale opacity-60 cursor-not-allowed`. A disabled `outlined` button therefore stays outlined, and a disabled `text` button stays a ghost instead of growing a grey box. Hover classes live in a separate `hoverClasses` map and are withheld when disabled, because CSS `:hover` still matches a disabled element. `pointer-events-none` is deliberately **not** used: it would suppress `cursor-not-allowed`, the only feedback a dead button offers. Shimmer and all four GSAP handlers are skipped.
 
 ### 2. Card (`Card.tsx`)
 - Standard **28px (`rounded-xl`)** border radius.
 - `interactive = true` by default (elevates and tints on hover).
 - `cursor-pointer` applies strictly when `clickable` is true or an `onClick` handler is passed.
 
-### 3. Form Controls (`Input.tsx`, `Textarea.tsx`, `Select.tsx`)
+### 3. Form Controls (`Input.tsx`, `Textarea.tsx`)
 - All 4 corners rounded-xl (**28px**).
 - Horizontal padding `px-5` so text clears the pill curve.
 - Labels sit cleanly inside the pill at top-2 left-5.
+
+### 3a. Dropdown (`Select.tsx`)
+Dropdowns are the one deliberate exception to the all-4-corners rule: **the bottom corners square off so the list reads as flowing out of the field.**
+
+- Not a native `<select>` — a `role="combobox"` trigger plus a portalled `role="listbox"` panel. Owning the corners is impossible otherwise: the popup a browser draws for a native `<select>` is OS-rendered, and `option { border-radius }` is silently ignored.
+- **Shape**: field is `rounded-xl` closed; opening animates it to `rounded-b-none` (or `rounded-t-none` when the panel flips above). The panel is square on all four corners and drops its shared border edge, so field and list read as one slab.
+- Panel is `md-surface-container` with an `md-outline/30` border, GSAP pop-in matching the modal (`back.out(1.6)`), flips upward near the viewport bottom, and scrolls at 280px using `.md-scroll-thin`.
+- Selected row is `md-secondary-container` + check; the active row is `md-surface-container-low`.
+- Keyboard: ↑↓ traversal, Home/End, Enter/Space to commit, Escape to dismiss, and type-ahead. Closes on outside click and on outside scroll.
+- `onChange` hands back the **value string**, not a `ChangeEvent` — there is no native element to source one from. Pass `name` to get a hidden mirrored input for native form posts.
+- Raw `<select>` elements still present in feature pages are not this component. They inherit only the squared-bottom field shape from the global `select` rule in `index.css`; their popup stays OS-drawn.
 
 ### 4. Modal (`Modal.tsx`)
 - Standard portal component mounting to `document.body` with `.md-modal-overlay` and `.md-modal-content`.
@@ -101,6 +115,9 @@ Defined in `tailwind.config.js`. Standard card, input, and modal radius is **`xl
 - GSAP pop-in (`~0.28s, back.out(1.6)`).
 - Persistent content mounting (`keepMounted = true` default) so typed input state is preserved across close/reopen.
 - Standard footer placement: `[ Cancel (text) ] [ Confirm / Danger (filled/danger) ]`.
+- **Scrolling**: the panel is capped at `85vh` and never scrolls itself (`.md-modal-content` is `overflow: hidden`, which also clips content to the 28px radius). The **body is the only scroller** (`flex-1 min-h-0 overflow-y-auto`), so the title and the action row stay pinned however tall the content grows. `min-h-0` is load-bearing — without it a flex child refuses to shrink below its content and the whole panel scrolls instead.
+- **Scroll affordance** (driven by `useScrollEdges`): a hairline arms under the header once the body is scrolled down, and above the footer while content remains below, each paired with a 24px `.md-modal-fade` dissolve. Both ends are bare when content fits, and the borders reserve their space as `border-transparent` so arming them shifts nothing. Padding lives on the three rows, not the panel, so the 8px `.md-scroll-thin` scrollbar tracks the panel edge.
+- Legacy page-level modals (`.preview-modal`, `.cancel-confirm-modal`, `.reject-modal`) still scroll as a whole panel; the single-scroller rule is scoped to `.md-modal-content`.
 
 ### 5. Action Menu Portal (`ActionMenuPortal.tsx`)
 - Menu border: `md-outline/30` (`rgba(121, 116, 126, 0.3)`).
@@ -117,6 +134,8 @@ Defined in `tailwind.config.js`. Standard card, input, and modal radius is **`xl
 
 ## Usage Guidelines
 1. **Never use pure white or pure black backgrounds**: Always utilize `md-background` or `md-surface-container`.
-2. **Standard Radius**: Standard cards, inputs, and modals must use `28px` (`rounded-xl`).
+2. **Standard Radius**: Standard cards, inputs, and modals must use `28px` (`rounded-xl`). The single exception is dropdowns, whose bottom corners square off so the list joins the field.
 3. **Motion**: Always use `md-bouncy` (`cubic-bezier(0.34, 1.56, 0.64, 1)`).
 4. **Action Button Alignment**: Place the confirm/accept button at the right side of the container, preceded by the cancel/reject button to its left (`| Cancel   Confirm |`).
+5. **Disabled means drained, not replaced**: never swap a component's variant classes out for a grey block. Keep the skin and apply `grayscale opacity-60 cursor-not-allowed`, withholding hover classes rather than overriding them.
+6. **Scrollable regions**: any container that can overflow uses `.md-scroll-thin` for the scrollbar, and pins its own header/footer rather than letting the whole panel scroll.

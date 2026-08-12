@@ -5,6 +5,7 @@ import { useGSAP } from '@gsap/react';
 import { X } from 'lucide-react';
 import { Button } from './Button';
 import classNames from 'classnames';
+import { useScrollEdges } from '../../hooks/useScrollEdges';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -43,11 +44,34 @@ export const Modal: React.FC<ModalProps> = ({
   const overlayRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
+  // Drives the scroll affordances. Gated on isOpen because a closed modal is
+  // display:none, where every scroll measurement reads zero.
+  const {
+    ref: bodyRef,
+    measure: measureBody,
+    isScrollable,
+    atTop,
+    atBottom,
+  } = useScrollEdges<HTMLDivElement>(isOpen);
+
+  const hasHeader = Boolean(title || subtitle);
+  const hasFooter = Boolean(footer || cancelText || confirmText);
+  const showTopEdge = isScrollable && !atTop;
+  const showBottomEdge = isScrollable && !atBottom;
+
   useEffect(() => {
     if (isOpen && !hasOpened) {
       setHasOpened(true);
     }
   }, [isOpen, hasOpened]);
+
+  // The panel is display:none until opened, so the first honest measurement can
+  // only happen on the frame after it becomes visible.
+  useEffect(() => {
+    if (!isOpen) return;
+    const frame = requestAnimationFrame(measureBody);
+    return () => cancelAnimationFrame(frame);
+  }, [isOpen, measureBody]);
 
   useGSAP(() => {
     if (!hasOpened) return;
@@ -103,12 +127,11 @@ export const Modal: React.FC<ModalProps> = ({
     }
   };
 
-  const renderFooter = () => {
+  const renderFooterContent = () => {
     if (footer) return footer;
-    if (!cancelText && !confirmText) return null;
 
     return (
-      <div className="flex items-center justify-end gap-3 pt-4 border-t border-md-outline/10">
+      <div className="flex items-center justify-end gap-3">
         {cancelText && (
           <Button variant="text" size="md" onClick={onClose} disabled={confirmLoading}>
             {cancelText}
@@ -141,15 +164,20 @@ export const Modal: React.FC<ModalProps> = ({
       <div
         ref={contentRef}
         className={classNames(
-          'md-modal-content w-full rounded-xl bg-md-surface-container p-6 shadow-2xl border border-md-outline/10',
+          'md-modal-content w-full rounded-xl bg-md-surface-container shadow-2xl border border-md-outline/10',
           maxWidth,
           className
         )}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal Header */}
-        {(title || subtitle) && (
-          <div className="flex items-start justify-between mb-4">
+        {/* Modal Header — pinned; hairline arms once the body is scrolled down */}
+        {hasHeader && (
+          <div
+            className={classNames(
+              'flex items-start justify-between shrink-0 px-6 pt-6 pb-4 transition-colors duration-200 ease-md-bouncy border-b',
+              showTopEdge ? 'border-md-outline/10' : 'border-transparent'
+            )}
+          >
             <div>
               {title && <h3 className="text-xl font-bold text-md-on-surface">{title}</h3>}
               {subtitle && <p className="text-xs text-md-on-surface-variant mt-1">{subtitle}</p>}
@@ -164,11 +192,39 @@ export const Modal: React.FC<ModalProps> = ({
           </div>
         )}
 
-        {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto mb-4">{children}</div>
+        {/* Modal Body — the only scroller in the panel */}
+        <div className="relative flex-1 min-h-0 flex flex-col">
+          <div
+            ref={bodyRef}
+            className={classNames(
+              'md-modal-body md-scroll-thin flex-1 min-h-0 overflow-y-auto overscroll-contain px-6',
+              !hasHeader && 'pt-6',
+              !hasFooter && 'pb-6'
+            )}
+          >
+            {children}
+          </div>
+          <div
+            aria-hidden="true"
+            className={classNames('md-modal-fade md-modal-fade-top', showTopEdge && 'is-visible')}
+          />
+          <div
+            aria-hidden="true"
+            className={classNames('md-modal-fade md-modal-fade-bottom', showBottomEdge && 'is-visible')}
+          />
+        </div>
 
-        {/* Modal Footer */}
-        {renderFooter()}
+        {/* Modal Footer — pinned; hairline arms while content remains below */}
+        {hasFooter && (
+          <div
+            className={classNames(
+              'shrink-0 px-6 pb-6 pt-4 transition-colors duration-200 ease-md-bouncy border-t',
+              showBottomEdge ? 'border-md-outline/10' : 'border-transparent'
+            )}
+          >
+            {renderFooterContent()}
+          </div>
+        )}
       </div>
     </div>,
     document.body

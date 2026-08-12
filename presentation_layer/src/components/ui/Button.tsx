@@ -29,8 +29,14 @@ export const Button: React.FC<ButtonProps> = ({
   const isTrulyDisabled = disabled && !isLoading;
 
   const baseClasses = 'inline-flex relative overflow-hidden items-center justify-center font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-primary focus-visible:ring-offset-2 transition-colors duration-200';
-  
-  const disabledClasses = 'bg-neutral-300 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-500 shadow-none cursor-not-allowed border-none';
+
+  /**
+   * Disabled keeps the variant's own skin (fill, border, elevation, ghost) and
+   * simply drains the colour out of it, so an outlined button stays outlined and
+   * a text button stays a ghost. No `pointer-events-none` here on purpose — it
+   * would suppress `cursor-not-allowed`, the only feedback a dead button gives.
+   */
+  const disabledClasses = 'grayscale opacity-60 cursor-not-allowed';
 
   const sizeClasses = {
     sm: 'h-9 px-4 text-sm',
@@ -38,22 +44,38 @@ export const Button: React.FC<ButtonProps> = ({
     lg: 'h-12 px-8 text-base',
   };
 
+  // Static skin — always applied, disabled or not.
   const variantClasses = {
-    filled: 'bg-md-primary text-md-on-primary shadow-sm hover:shadow-md rounded-full',
-    'animated-primary': 'bg-md-primary text-md-on-primary shadow-sm hover:shadow-md rounded-full',
-    tonal: 'bg-md-secondary-container text-md-on-secondary-container hover:bg-md-secondary-container/80 rounded-full',
-    secondary: 'bg-md-secondary-container text-md-on-secondary-container hover:bg-md-secondary-container/80 rounded-full',
-    combined: 'bg-transparent text-md-primary border border-md-outline hover:bg-md-primary/10 rounded-full',
-    outlined: 'bg-transparent text-md-primary border border-md-outline hover:bg-md-primary/10 rounded-full',
-    danger: 'bg-md-error text-md-on-error hover:bg-md-error/90 rounded-full',
-    text: 'bg-transparent text-md-primary hover:bg-md-primary/10 rounded-full',
-    fab: 'bg-md-tertiary text-md-background shadow-md hover:shadow-xl hover:bg-md-tertiary/90 rounded-2xl h-14 w-14 p-0',
+    filled: 'bg-md-primary text-md-on-primary shadow-sm rounded-full',
+    'animated-primary': 'bg-md-primary text-md-on-primary shadow-sm rounded-full',
+    tonal: 'bg-md-secondary-container text-md-on-secondary-container rounded-full',
+    secondary: 'bg-md-secondary-container text-md-on-secondary-container rounded-full',
+    combined: 'bg-transparent text-md-primary border border-md-outline rounded-full',
+    outlined: 'bg-transparent text-md-primary border border-md-outline rounded-full',
+    danger: 'bg-md-error text-md-on-error rounded-full',
+    text: 'bg-transparent text-md-primary rounded-full',
+    fab: 'bg-md-tertiary text-md-background shadow-md rounded-2xl h-14 w-14 p-0',
+  };
+
+  // Hover affordances live apart from the skin: CSS `:hover` still matches a
+  // disabled button, so these must be withheld rather than overridden.
+  const hoverClasses = {
+    filled: 'hover:shadow-md',
+    'animated-primary': 'hover:shadow-md',
+    tonal: 'hover:bg-md-secondary-container/80',
+    secondary: 'hover:bg-md-secondary-container/80',
+    combined: 'hover:bg-md-primary/10',
+    outlined: 'hover:bg-md-primary/10',
+    danger: 'hover:bg-md-error/90',
+    text: 'hover:bg-md-primary/10',
+    fab: 'hover:shadow-xl hover:bg-md-tertiary/90',
   };
 
   const classes = classNames(
     baseClasses,
     variant !== 'fab' ? sizeClasses[size] : '',
-    isTrulyDisabled ? disabledClasses : variantClasses[variant],
+    variantClasses[variant],
+    isTrulyDisabled ? disabledClasses : hoverClasses[variant],
     isLoading ? 'cursor-wait opacity-90' : '',
     className
   );

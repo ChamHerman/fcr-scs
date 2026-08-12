@@ -88,7 +88,7 @@ export const ContactUs: React.FC = () => {
             <Select 
               label="Subject"
               value={formData.subject}
-              onChange={(e) => handleChange('subject', e.target.value)}
+              onChange={(subject) => handleChange('subject', subject)}
               options={[
                 { value: 'general', label: 'General Inquiry' },
                 { value: 'support', label: 'Technical Support' },

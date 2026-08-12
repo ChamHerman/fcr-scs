@@ -177,6 +177,7 @@ export const DesignSystem: React.FC = () => {
   const { notify } = useNotification();
   const [isDark, setIsDark] = useState<boolean>(() => document.documentElement.classList.contains('dark'));
   const [modalOpen, setModalOpen] = useState(false);
+  const [scrollModalOpen, setScrollModalOpen] = useState(false);
   const [modalInput, setModalInput] = useState('Persistent draft content');
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -186,6 +187,7 @@ export const DesignSystem: React.FC = () => {
     email: '',
     message: '',
     status: 'active',
+    state: 'selangor',
     method: 'email',
     subscribe: true,
     notify: true,
@@ -381,16 +383,43 @@ export const DesignSystem: React.FC = () => {
             ))}
           </div>
 
-          <DemoCard label="Loading, Disabled & FAB" hint="isLoading shows spinner · disabled drops to greyed low surface with no shimmer or bounce.">
+          <DemoCard label="Loading & FAB" hint="isLoading swaps the label for a spinner and locks the cursor to wait.">
             <div className="flex flex-wrap items-center gap-6">
               <Button variant="filled" isLoading size="md">Loading</Button>
-              <Button variant="filled" disabled size="md">Disabled Primary</Button>
-              <Button variant="tonal" disabled size="md">Disabled Tonal</Button>
-              <Button variant="outlined" disabled size="md">Disabled Outlined</Button>
               <Button variant="danger" size="md">Danger CTA</Button>
               <div className="flex items-center gap-3">
                 <Button variant="fab" title="Floating Action Button"><Scale size={24} /></Button>
                 <span className="text-xs text-md-on-surface-variant">FAB · rounded-2xl · md-tertiary</span>
+              </div>
+            </div>
+          </DemoCard>
+
+          <DemoCard
+            label="Disabled — same skin, colour drained"
+            hint="Disabled keeps each variant's own fill, border, elevation and ghosting, then applies grayscale + 60% opacity. Outlined keeps its border; text stays a ghost with no grey box. No hover tint, no shimmer, no bounce — only cursor-not-allowed."
+          >
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-5">
+              {([
+                ['filled', 'Filled'],
+                ['tonal', 'Tonal'],
+                ['outlined', 'Outlined'],
+                ['danger', 'Danger'],
+                ['text', 'Text'],
+              ] as const).map(([variant, name]) => (
+                <div key={variant} className="flex flex-col gap-2">
+                  <span className="text-[11px] uppercase tracking-wide text-md-on-surface-variant">{name}</span>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <Button variant={variant} size="md">Enabled</Button>
+                    <Button variant={variant} size="md" disabled>Disabled</Button>
+                  </div>
+                </div>
+              ))}
+              <div className="flex flex-col gap-2">
+                <span className="text-[11px] uppercase tracking-wide text-md-on-surface-variant">FAB</span>
+                <div className="flex items-center gap-3">
+                  <Button variant="fab" title="Enabled FAB"><Scale size={24} /></Button>
+                  <Button variant="fab" disabled title="Disabled FAB"><Scale size={24} /></Button>
+                </div>
               </div>
             </div>
           </DemoCard>
@@ -427,7 +456,7 @@ export const DesignSystem: React.FC = () => {
         </Section>
 
         {/* === Forms === */}
-        <Section id="forms" index={7} title="Form Controls" subtitle="All 4 corners rounded-xl (28px), px-5 padding sitting inside the pill, border md-outline/30 focus md-primary." icon={FileText}>
+        <Section id="forms" index={7} title="Form Controls" subtitle="Inputs and textareas keep all 4 corners rounded-xl (28px); dropdowns square off their bottom corners while open so the list joins the field. px-5 padding sitting inside the pill, border md-outline/30 focus md-primary." icon={FileText}>
           <div className="grid lg:grid-cols-2 gap-6">
             <DemoCard label="Inputs & Select (rounded-xl 28px)">
               <div className="space-y-5">
@@ -447,7 +476,7 @@ export const DesignSystem: React.FC = () => {
                 <Select
                   label="Status"
                   value={form.status}
-                  onChange={(e) => setForm({ ...form, status: e.target.value })}
+                  onChange={(status) => setForm({ ...form, status })}
                   options={[
                     { value: 'active', label: 'Active' },
                     { value: 'pending', label: 'Pending' },
@@ -475,6 +504,52 @@ export const DesignSystem: React.FC = () => {
               </DemoCard>
             </div>
           </div>
+
+          <DemoCard
+            label="Dropdown — squared bottom corners"
+            hint="Open one: the field's bottom corners square off and the MD3 panel hangs seamlessly off it, square on all four corners. Closed, the field returns to a full 28px pill. Flips above the field near the viewport bottom; long lists scroll at 280px. Keyboard: ↑↓, Home/End, Enter, Esc, type-ahead."
+            className="mt-6"
+          >
+            <div className="grid sm:grid-cols-3 gap-6">
+              <Select
+                label="State"
+                value={form.state}
+                onChange={(state) => setForm({ ...form, state })}
+                options={[
+                  { value: 'johor', label: 'Johor' },
+                  { value: 'kedah', label: 'Kedah' },
+                  { value: 'kelantan', label: 'Kelantan' },
+                  { value: 'melaka', label: 'Melaka' },
+                  { value: 'nsembilan', label: 'Negeri Sembilan' },
+                  { value: 'pahang', label: 'Pahang' },
+                  { value: 'penang', label: 'Penang' },
+                  { value: 'perak', label: 'Perak' },
+                  { value: 'perlis', label: 'Perlis' },
+                  { value: 'sabah', label: 'Sabah' },
+                  { value: 'sarawak', label: 'Sarawak' },
+                  { value: 'selangor', label: 'Selangor' },
+                  { value: 'terengganu', label: 'Terengganu' },
+                ]}
+              />
+              <Select
+                label="Unselected"
+                value=""
+                onChange={() => {}}
+                placeholder="Choose a project type…"
+                options={[
+                  { value: 'highway', label: 'Highway' },
+                  { value: 'rail', label: 'Rail' },
+                  { value: 'utility', label: 'Utility' },
+                ]}
+              />
+              <Select
+                label="Disabled"
+                value="locked"
+                disabled
+                options={[{ value: 'locked', label: 'Locked by workflow' }]}
+              />
+            </div>
+          </DemoCard>
 
           <div className="grid lg:grid-cols-2 gap-6 mt-6">
             <DemoCard label="Selection Controls">
@@ -540,7 +615,7 @@ export const DesignSystem: React.FC = () => {
         </Section>
 
         {/* === Overlay & Modal === */}
-        <Section id="overlay" index={8} title="Overlay & Modal" subtitle="New Modal standard component: portal to document.body, GSAP pop-in (~0.28s back.out), persistent mounted content across close/reopen." icon={LayoutGrid}>
+        <Section id="overlay" index={8} title="Overlay & Modal" subtitle="Portal to document.body, GSAP pop-in (~0.28s back.out), persistent mounted content across close/reopen. The body is the only scroller, so headers and footers stay pinned no matter how tall the content gets." icon={LayoutGrid}>
           <div className="grid md:grid-cols-2 gap-6">
             <DemoCard label="Overlay / Backdrop" hint="rgba(0,0,0,0.6) + backdrop-blur(4px), covering 100vw/100vh.">
               <div className="relative rounded-xl overflow-hidden border border-md-outline/20 h-56">
@@ -568,6 +643,21 @@ export const DesignSystem: React.FC = () => {
               </div>
             </DemoCard>
           </div>
+
+          <DemoCard
+            label="Scrollable Modal — content taller than the panel"
+            hint="Header and footer stay pinned while only the body scrolls. A hairline plus a 24px fade arms under the header once you scroll down, and above the footer while content remains below — both disappear at the ends. Short content renders with no dividers at all."
+            className="mt-6"
+          >
+            <div className="flex flex-col items-start gap-4">
+              <Button variant="filled" size="md" onClick={() => setScrollModalOpen(true)}>
+                Open Scrollable Modal
+              </Button>
+              <p className="text-xs text-md-on-surface-variant">
+                Panel is capped at 85vh · body is the only scroller · 8px tonal scrollbar tracks the panel edge.
+              </p>
+            </div>
+          </DemoCard>
         </Section>
 
         {/* === Notifications === */}
@@ -775,6 +865,54 @@ export const DesignSystem: React.FC = () => {
           <p className="text-xs text-md-on-surface-variant">
             Close this modal using the overlay backdrop or Cancel button, then reopen it — notice your input is preserved!
           </p>
+        </div>
+      </Modal>
+
+      {/* Scrollable Modal instance — body overflows, header and footer stay pinned */}
+      <Modal
+        isOpen={scrollModalOpen}
+        onClose={() => setScrollModalOpen(false)}
+        title="Objection Review"
+        subtitle="Case CASE-1045 · Kelantan Rice Field Lot 7"
+        cancelText="Cancel"
+        confirmText="Approve Objection"
+        onConfirm={() => {
+          setScrollModalOpen(false);
+          notify({ type: 'success', title: 'Objection Approved', message: 'CASE-1045 moved to revaluation.' });
+        }}
+      >
+        <div className="space-y-4 pt-1">
+          <p className="text-sm text-md-on-surface-variant">
+            Scroll this body: the title above and the action row below never move, and the hairline plus
+            fade at each end appears only while there is more content in that direction.
+          </p>
+
+          {[
+            ['Claimant', 'Nurul Aisyah binti Rahman'],
+            ['Lot Number', 'PT 4471, Mukim Kuala Krai'],
+            ['Land Area', '1.82 hectares'],
+            ['Land Category', 'Agricultural — paddy'],
+            ['Acquisition Purpose', 'East Coast Rail Link alignment'],
+            ['Gazette Reference', 'JPT/KEL/2026/0182'],
+            ['Section 4 Notice', '14 January 2026'],
+            ['Section 8 Declaration', '27 February 2026'],
+            ['Initial Valuation', 'RM 132,500.00'],
+            ['Claimed Valuation', 'RM 188,000.00'],
+            ['Variance', 'RM 55,500.00 (41.9%)'],
+            ['Objection Ground', 'Comparable sales evidence understated'],
+            ['Valuer Assigned', 'Ir. Tan Wei Ming (VR-2291)'],
+            ['Site Inspection', '11 March 2026'],
+            ['Objection Filed', '3 March 2026'],
+            ['Statutory Deadline', '2 May 2026'],
+          ].map(([field, detail]) => (
+            <div
+              key={field}
+              className="flex items-baseline justify-between gap-6 py-3 border-b border-md-outline/10 last:border-b-0"
+            >
+              <span className="text-xs uppercase tracking-wide text-md-on-surface-variant shrink-0">{field}</span>
+              <span className="text-sm text-md-on-surface text-right">{detail}</span>
+            </div>
+          ))}
         </div>
       </Modal>
     </div>
