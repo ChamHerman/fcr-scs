@@ -144,8 +144,8 @@ const STATUS_BADGES: { label: string; bg: string; fg: string; dot: string }[] = 
   { label: 'Approved', bg: 'bg-[#e6f4ea]', fg: 'text-[#1e7b4a]', dot: 'bg-[#1e7b4a]' },
   { label: 'Pending', bg: 'bg-[#fef7e0]', fg: 'text-[#8d6e00]', dot: 'bg-[#8d6e00]' },
   { label: 'Rejected', bg: 'bg-[#fce8e6]', fg: 'text-[#b3261e]', dot: 'bg-[#b3261e]' },
-  { label: 'Offer', bg: 'bg-md-secondary-container', fg: 'text-[#4d3a7a]', dot: 'bg-[#4d3a7a]' },
-  { label: 'Closed', bg: 'bg-[#e8e0ec]', fg: 'text-md-on-surface-variant', dot: 'bg-md-on-surface-variant' },
+  { label: 'Offer', bg: 'bg-sky-100', fg: 'text-sky-800', dot: 'bg-sky-800' },
+  { label: 'Closed', bg: 'bg-slate-100', fg: 'text-slate-600', dot: 'bg-slate-600' },
 ];
 
 const NAV_SECTIONS = [
