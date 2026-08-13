@@ -50,11 +50,11 @@ enum Decision {
 }
 
 enum UserRole {
-  ADMIN
+  SYSTEM_ADMINISTRATOR
+  GOVERNMENT_ADMINISTRATOR
   GOVERNMENT_OFFICER
   LAND_VALUER
-  LAND_OWNER
-  DEVELOPER
+  DISPLACED_COMMUNITY_MEMBER
 }
 
 enum AreaUnit {
@@ -71,40 +71,67 @@ enum PaymentStatus {
   CANCELLED
 }
 
+enum AlertChannel {
+  IN_APP
+  EMAIL
+  DASHBOARD
+}
+
+enum AlertUrgency {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum DeadlineStatus {
+  PENDING
+  APPROACHING
+  EXCEEDED
+  COMPLETED
+}
+
+enum LogType {
+  COMPLIANCE
+  BACKUP
+}
+
 model BlockchainRecord {
   id                  String    @id @default(uuid())
   caseId              String    @unique
   transactionHash     String?
   documentHash        String
-  status              String    @default("Published") // Published | Voided
+  status              String    @default("Published")
   voidReason          String?
   voidTransactionHash String?
   publishedAt         DateTime  @default(now())
   voidedAt            DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime? @map("deleted_at")
 }
 
 model PaymentCase {
-  id                    String                 @id @default(uuid())
-  caseId                String                 @unique
-  beneficiaryId         String
-  amount                Decimal
-  bankName              String?
-  accountNumber         String?
-  accountHolderName     String?
-  phoneNumber           String?
-  encryptedBankDetails  String?
-  myKadNumber           String?
-  status                String                 @default("Approved")
-  requiredSignatures    Int                    @default(1)
+  id                   String                 @id @default(uuid())
+  caseId               String                 @unique
+  beneficiaryId        String
+  amount               Decimal
+  bankName             String?
+  accountNumber        String?
+  accountHolderName    String?
+  phoneNumber          String?
+  encryptedBankDetails String?
+  myKadNumber          String?
+  status               String                 @default("Approved")
+  requiredSignatures   Int                    @default(1)
   currentSignatures     Int                    @default(0)
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  authorisations        PaymentAuthorisation[]
-  receipt               PaymentReceipt?
-  failedTransactions    FailedTransaction[]
-  receiverBankDetails   ReceiverBankDetails?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  deletedAt            DateTime?              @map("deleted_at")
+  authorisations       PaymentAuthorisation[]
+  receipt              PaymentReceipt?
+  failedTransactions   FailedTransaction[]
+  receiverBankDetails  ReceiverBankDetails?
 }
 
 model PaymentAuthorisation {
@@ -112,17 +139,19 @@ model PaymentAuthorisation {
   paymentCase   PaymentCase @relation(fields: [paymentCaseId], references: [id])
   paymentCaseId String
   adminId       String
-  action        String      // initiate | authorise | reject
+  action        String
   reason        String?
   createdAt     DateTime    @default(now())
+  deletedAt     DateTime?   @map("deleted_at")
 }
 
 model PaymentReceipt {
-  id                   String      @id @default(uuid())
-  paymentCase          PaymentCase @relation(fields: [paymentCaseId], references: [id])
-  paymentCaseId        String      @unique
-  bankReferenceNumber  String
-  generatedAt          DateTime    @default(now())
+  id                  String      @id @default(uuid())
+  paymentCase         PaymentCase @relation(fields: [paymentCaseId], references: [id])
+  paymentCaseId       String      @unique
+  bankReferenceNumber String
+  generatedAt         DateTime    @default(now())
+  deletedAt           DateTime?   @map("deleted_at")
 }
 
 model FailedTransaction {
@@ -130,9 +159,10 @@ model FailedTransaction {
   paymentCase   PaymentCase @relation(fields: [paymentCaseId], references: [id])
   paymentCaseId String
   errorLog      String
-  resolution    String?     // retry | request_details | schedule_tomorrow
+  resolution    String?
   resolvedAt    DateTime?
   createdAt     DateTime    @default(now())
+  deletedAt     DateTime?   @map("deleted_at")
 }
 
 model ReceiverBankDetails {
@@ -145,6 +175,7 @@ model ReceiverBankDetails {
   encryptedBankDetails String
   paymentCaseId        String      @unique
   paymentCase          PaymentCase @relation(fields: [paymentCaseId], references: [id])
+  deletedAt            DateTime?   @map("deleted_at")
 }
 
 model Project {
@@ -154,12 +185,10 @@ model Project {
   purpose       String
   budget        Decimal           @db.Decimal(20, 2)
   fundingSource String            @db.VarChar(255) @map("funding_source")
-
   cases         AcquisitionCase[]
-
-  // Auditing fields (placed at bottom)
   createdAt     DateTime          @default(now()) @map("created_at")
   updatedAt     DateTime          @updatedAt @map("updated_at")
+  deletedAt     DateTime?         @map("deleted_at")
   createdById   String            @db.Uuid @map("created_by_id")
   createdBy     User              @relation("ProjectCreatedBy", fields: [createdById], references: [userId])
 
@@ -173,20 +202,17 @@ model AcquisitionCase {
   status              CaseStatus           @map("status")
   registrationDate    DateTime             @map("registration_date")
   remarks             String
-
   project             Project              @relation(fields: [projectId], references: [projectId])
-  // one-to-one with LandParcel
-  landParcel          LandParcel?          @relation("AcquisitionCaseToLandParcel") // reverse side, foreign key on LandParcel
+  landParcel          LandParcel?          @relation("AcquisitionCaseToLandParcel")
   valuationReports    ValuationReport[]
   caseAssignments     CaseAssignment[]
   compensationReports CompensationReport[]
   offerLetters        OfferLetter[]
   caseDocuments       CaseDocument[]
   objections          Objection[]
-
-  // Auditing fields
   createdAt           DateTime             @default(now()) @map("created_at")
   updatedAt           DateTime             @updatedAt @map("updated_at")
+  deletedAt           DateTime?            @map("deleted_at")
   createdById         String               @db.Uuid @map("created_by_id")
   createdBy           User                 @relation("CreatedCases", fields: [createdById], references: [userId])
 
@@ -196,27 +222,25 @@ model AcquisitionCase {
 }
 
 model LandParcel {
-  landId      String          @id @default(uuid()) @db.Uuid @map("land_id")
-  caseId      String          @unique @db.VarChar(255) @map("case_id") // unique to enforce one-to-one
-  landTitleNo String          @unique @db.VarChar(255) @map("land_title_no")
-  lotNo       String          @db.VarChar(100) @map("lot_no")
-  mukim       String          @db.VarChar(255)
-  district    String          @db.VarChar(255)
-  state       String          @db.VarChar(100)
-  area        Decimal         @db.Decimal(12, 2)
-  areaUnit    AreaUnit        @map("area_unit")
-  category    String          @db.VarChar(100)
-  longitude   Decimal         @db.Decimal(10, 7)
-  latitude    Decimal         @db.Decimal(10, 7)
-
+  landId          String          @id @default(uuid()) @db.Uuid @map("land_id")
+  caseId          String          @unique @db.VarChar(255) @map("case_id")
+  landTitleNo     String          @unique @db.VarChar(255) @map("land_title_no")
+  lotNo           String          @db.VarChar(100) @map("lot_no")
+  mukim           String          @db.VarChar(255)
+  district        String          @db.VarChar(255)
+  state           String          @db.VarChar(100)
+  area            Decimal         @db.Decimal(12, 2)
+  areaUnit        AreaUnit        @map("area_unit")
+  category        String          @db.VarChar(100)
+  longitude       Decimal         @db.Decimal(10, 7)
+  latitude        Decimal         @db.Decimal(10, 7)
   acquisitionCase AcquisitionCase @relation("AcquisitionCaseToLandParcel", fields: [caseId], references: [caseId])
-  ownerships  LandOwnership[]
-
-  // Auditing fields
-  createdAt   DateTime        @default(now()) @map("created_at")
-  updatedAt   DateTime        @updatedAt @map("updated_at")
-  createdById String          @db.Uuid @map("created_by_id")
-  createdBy   User            @relation("LandParcelCreatedBy", fields: [createdById], references: [userId])
+  ownerships      LandOwnership[]
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  deletedAt       DateTime?       @map("deleted_at")
+  createdById     String          @db.Uuid @map("created_by_id")
+  createdBy       User            @relation("LandParcelCreatedBy", fields: [createdById], references: [userId])
 
   @@index([caseId])
   @@index([district])
@@ -225,64 +249,58 @@ model LandParcel {
 }
 
 model LandOwner {
-  ownerId    String          @id @default(uuid()) @db.Uuid @map("owner_id")
-  name       String          @db.VarChar(255)
-  nric       String          @db.VarChar(100)
-  address    String
-  contact    String          @db.VarChar(100)
-
-  ownerships LandOwnership[]
-
-  // Auditing fields
-  createdAt  DateTime        @default(now()) @map("created_at")
-  updatedAt  DateTime        @updatedAt @map("updated_at")
-  createdById String         @db.Uuid @map("created_by_id")
-  createdBy  User            @relation("LandOwnerCreatedBy", fields: [createdById], references: [userId])
+  ownerId     String          @id @default(uuid()) @db.Uuid @map("owner_id")
+  name        String          @db.VarChar(255)
+  nric        String          @db.VarChar(100)
+  address     String
+  contact     String          @db.VarChar(100)
+  ownerships  LandOwnership[]
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  deletedAt   DateTime?       @map("deleted_at")
+  createdById String          @db.Uuid @map("created_by_id")
+  createdBy   User            @relation("LandOwnerCreatedBy", fields: [createdById], references: [userId])
 
   @@map("land_owner")
 }
 
 model LandOwnership {
-  ownershipId   String        @id @default(uuid()) @db.Uuid @map("ownership_id")
-  landId        String        @db.Uuid @map("land_id")
-  ownerId       String        @db.Uuid @map("owner_id")
-  ownershipType String        @db.VarChar(100) @map("ownership_type")
-  ownershipStart DateTime?    @map("ownership_start")
-  ownershipEnd   DateTime?    @map("ownership_end")
-  isCurrent      Boolean      @default(true) @map("is_current")
+  ownershipId    String        @id @default(uuid()) @db.Uuid @map("ownership_id")
+  landId         String        @db.Uuid @map("land_id")
+  ownerId        String        @db.Uuid @map("owner_id")
+  ownershipType  String        @db.VarChar(100) @map("ownership_type")
+  ownershipStart DateTime?     @map("ownership_start")
+  ownershipEnd   DateTime?     @map("ownership_end")
+  isCurrent      Boolean       @default(true) @map("is_current")
+  landParcel     LandParcel    @relation(fields: [landId], references: [landId])
+  landOwner      LandOwner     @relation(fields: [ownerId], references: [ownerId])
+  offerLetters   OfferLetter[]
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  deletedAt      DateTime?     @map("deleted_at")
+  createdById    String        @db.Uuid @map("created_by_id")
+  createdBy      User          @relation("LandOwnershipCreatedBy", fields: [createdById], references: [userId])
 
-  landParcel    LandParcel    @relation(fields: [landId], references: [landId])
-  landOwner     LandOwner     @relation(fields: [ownerId], references: [ownerId])
-  offerLetters  OfferLetter[]
-
-  // Auditing fields
-  createdAt     DateTime      @default(now()) @map("created_at")
-  updatedAt     DateTime      @updatedAt @map("updated_at")
-  createdById   String        @db.Uuid @map("created_by_id")
-  createdBy     User          @relation("LandOwnershipCreatedBy", fields: [createdById], references: [userId])
-
-  @@map("land_ownership")
   @@index([landId])
   @@index([ownerId])
+  @@map("land_ownership")
 }
 
 model CaseDocument {
-  documentId   String          @id @default(uuid()) @db.Uuid @map("document_id")
-  caseId       String          @db.VarChar(255) @map("case_id")
-  documentType String          @db.VarChar(100) @map("document_type")
-  fileName     String          @db.VarChar(255) @map("file_name")
-  fileSize     Int             @map("file_size")
-  filePath     String          @db.VarChar(500) @map("file_path")
-  mimeType     String          @db.VarChar(100) @map("mime_type")
-  checksum     String          @db.VarChar(255) @map("checksum")
-
+  documentId      String          @id @default(uuid()) @db.Uuid @map("document_id")
+  caseId          String          @db.VarChar(255) @map("case_id")
+  documentType    String          @db.VarChar(100) @map("document_type")
+  fileName        String          @db.VarChar(255) @map("file_name")
+  fileSize        Int             @map("file_size")
+  filePath        String          @db.VarChar(500) @map("file_path")
+  mimeType        String          @db.VarChar(100) @map("mime_type")
+  checksum        String          @db.VarChar(255) @map("checksum")
   acquisitionCase AcquisitionCase @relation(fields: [caseId], references: [caseId])
-
-  // Auditing fields (uploadDate removed, uploadedById → createdById)
-  createdAt    DateTime        @default(now()) @map("created_at")
-  updatedAt    DateTime        @updatedAt @map("updated_at")
-  createdById  String          @db.Uuid @map("created_by_id")
-  createdBy    User            @relation(fields: [createdById], references: [userId])
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  deletedAt       DateTime?       @map("deleted_at")
+  createdById     String          @db.Uuid @map("created_by_id")
+  createdBy       User            @relation(fields: [createdById], references: [userId])
 
   @@index([caseId])
   @@map("case_document")
@@ -293,20 +311,18 @@ model ValuationReport {
   caseId                  String               @db.VarChar(255) @map("case_id")
   valuerId                String               @db.Uuid @map("valuer_id")
   valuationDate           DateTime?            @map("valuation_date")
-  valuationMethod         String?              @db.VarChar(100) @map("valuation_method")
+  valuationMethod          String?              @db.VarChar(100) @map("valuation_method")
   marketValue             Decimal?             @db.Decimal(20, 2) @map("market_value")
   recommendedCompensation Decimal?             @db.Decimal(20, 2) @map("recommended_compensation")
   remarks                 String?
   reportStatus            ReportStatus?        @map("report_status")
-
   acquisitionCase         AcquisitionCase      @relation(fields: [caseId], references: [caseId])
   valuer                  User                 @relation("Valuer", fields: [valuerId], references: [userId])
   compensationReports     CompensationReport[]
-  caseAssignment          CaseAssignment?      // reverse of one-to-one
-
-  // Auditing fields
+  caseAssignment          CaseAssignment?
   createdAt               DateTime             @default(now()) @map("created_at")
   updatedAt               DateTime             @updatedAt @map("updated_at")
+  deletedAt               DateTime?            @map("deleted_at")
   createdById             String               @db.Uuid @map("created_by_id")
   createdBy               User                 @relation("CreatedValuationReport", fields: [createdById], references: [userId])
 
@@ -317,53 +333,45 @@ model ValuationReport {
 }
 
 model CaseAssignment {
-  assignmentId   String          @id @default(uuid()) @db.Uuid @map("assignment_id")
-  caseId         String          @db.VarChar(255) @map("case_id")
-  assignedToId   String          @db.Uuid @map("assigned_to_id")
-  assignmentDate DateTime        @map("assignment_date")
-  dueDate        DateTime        @map("due_date")
-  remarks        String?
-
-  acquisitionCase AcquisitionCase @relation(fields: [caseId], references: [caseId])
-  assignedTo      User            @relation("AssignedToUser", fields: [assignedToId], references: [userId])
-
-  // one-to-one with ValuationReport
-  valuationReportId String?       @unique @db.Uuid @map("valuation_report_id")
+  assignmentId      String           @id @default(uuid()) @db.Uuid @map("assignment_id")
+  caseId            String           @db.VarChar(255) @map("case_id")
+  assignedToId      String           @db.Uuid @map("assigned_to_id")
+  assignmentDate    DateTime         @map("assignment_date")
+  dueDate           DateTime         @map("due_date")
+  remarks           String?
+  acquisitionCase   AcquisitionCase  @relation(fields: [caseId], references: [caseId])
+  assignedTo        User             @relation("AssignedToUser", fields: [assignedToId], references: [userId])
+  valuationReportId String?          @unique @db.Uuid @map("valuation_report_id")
   valuationReport   ValuationReport? @relation(fields: [valuationReportId], references: [reportId])
-
-  // Auditing fields (assignedById → createdById)
-  createdAt       DateTime        @default(now()) @map("created_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
-  createdById     String          @db.Uuid @map("created_by_id")
-  createdBy       User            @relation("AssignedByUser", fields: [createdById], references: [userId])
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  deletedAt         DateTime?        @map("deleted_at")
+  createdById       String           @db.Uuid @map("created_by_id")
+  createdBy         User             @relation("AssignedByUser", fields: [createdById], references: [userId])
 
   @@map("case_assignment")
 }
 
 model CompensationReport {
-  compensationReportId String               @id @default(uuid()) @db.Uuid @map("compensation_report_id")
-  caseId               String               @db.VarChar(255) @map("case_id")
-  valuationReportId    String               @db.Uuid @map("valuation_report_id")
-  reviewedById         String?              @db.Uuid @map("reviewed_by_id")
-  approvedById         String?              @db.Uuid @map("approved_by_id")
-  approvedAt           DateTime?            @map("approved_at")
-  totalCompensation    Decimal?             @db.Decimal(20, 2) @map("total_compensation")
+  compensationReportId String          @id @default(uuid()) @db.Uuid @map("compensation_report_id")
+  caseId               String          @db.VarChar(255) @map("case_id")
+  valuationReportId    String          @db.Uuid @map("valuation_report_id")
+  reviewedById         String?         @db.Uuid @map("reviewed_by_id")
+  approvedById         String?         @db.Uuid @map("approved_by_id")
+  approvedAt           DateTime?       @map("approved_at")
+  totalCompensation    Decimal?        @db.Decimal(20, 2) @map("total_compensation")
   remarks              String?
-  status               ReportStatus         @map("status")
-
-  acquisitionCase      AcquisitionCase      @relation(fields: [caseId], references: [caseId])
-  valuationReport      ValuationReport      @relation(fields: [valuationReportId], references: [reportId])
-  reviewedBy           User?                @relation("ReviewedByUser", fields: [reviewedById], references: [userId])
-  approvedBy           User?                @relation("ApprovedByUser", fields: [approvedById], references: [userId])
-
-  // one-to-many with OfferLetter
-  offerLetters OfferLetter[]
-
-  // Auditing fields (preparedById → createdById, preparedDate removed)
-  createdAt            DateTime             @default(now()) @map("created_at")
-  updatedAt            DateTime             @updatedAt @map("updated_at")
-  createdById          String               @db.Uuid @map("created_by_id")
-  createdBy            User                 @relation("PreparedByUser", fields: [createdById], references: [userId])
+  status               ReportStatus    @map("status")
+  acquisitionCase      AcquisitionCase @relation(fields: [caseId], references: [caseId])
+  valuationReport      ValuationReport @relation(fields: [valuationReportId], references: [reportId])
+  reviewedBy           User?           @relation("ReviewedByUser", fields: [reviewedById], references: [userId])
+  approvedBy           User?           @relation("ApprovedByUser", fields: [approvedById], references: [userId])
+  offerLetters         OfferLetter[]
+  createdAt            DateTime        @default(now()) @map("created_at")
+  updatedAt            DateTime        @updatedAt @map("updated_at")
+  deletedAt            DateTime?       @map("deleted_at")
+  createdById          String          @db.Uuid @map("created_by_id")
+  createdBy            User            @relation("PreparedByUser", fields: [createdById], references: [userId])
 
   @@index([caseId])
   @@index([status])
@@ -372,7 +380,7 @@ model CompensationReport {
 
 model OfferLetter {
   offerId              String             @id @default(uuid()) @db.Uuid @map("offer_id")
-  compensationReportId String             @db.Uuid @map("compensation_report_id") // unique for one-to-one
+  compensationReportId String             @db.Uuid @map("compensation_report_id")
   caseId               String             @db.VarChar(255) @map("case_id")
   ownershipId          String             @db.Uuid @map("ownership_id")
   offerReferenceNo     String             @unique @db.VarChar(255) @map("offer_reference_no")
@@ -387,15 +395,13 @@ model OfferLetter {
   signedDocument       String?            @map("signed_document")
   blockchainHash       String?            @db.VarChar(255) @map("blockchain_hash")
   remarks              String?
-
   compensationReport   CompensationReport @relation(fields: [compensationReportId], references: [compensationReportId])
   acquisitionCase      AcquisitionCase    @relation(fields: [caseId], references: [caseId])
   landOwnership        LandOwnership      @relation(fields: [ownershipId], references: [ownershipId])
   objections           Objection[]
-
-  // Auditing fields
   createdAt            DateTime           @default(now()) @map("created_at")
   updatedAt            DateTime           @updatedAt @map("updated_at")
+  deletedAt            DateTime?          @map("deleted_at")
   createdById          String             @db.Uuid @map("created_by_id")
   createdBy            User               @relation("OfferLetterCreatedBy", fields: [createdById], references: [userId])
 
@@ -418,15 +424,13 @@ model Objection {
   decision            Decision?           @map("decision")
   revisedCompensation Decimal?            @db.Decimal(20, 2) @map("revised_compensation")
   resolutionDate      DateTime?           @map("resolution_date")
-
   offerLetter         OfferLetter         @relation(fields: [offerId], references: [offerId])
   acquisitionCase     AcquisitionCase     @relation(fields: [caseId], references: [caseId])
   reviewedBy          User?               @relation("ReviewedByUser", fields: [reviewedById], references: [userId])
   objectionDocuments  ObjectionDocument[]
-
-  // Auditing fields (submittedAt → createdAt, submittedById → createdById)
   createdAt           DateTime            @default(now()) @map("created_at")
   updatedAt           DateTime            @updatedAt @map("updated_at")
+  deletedAt           DateTime?           @map("deleted_at")
   createdById         String              @db.Uuid @map("created_by_id")
   createdBy           User                @relation("SubmittedByUser", fields: [createdById], references: [userId])
 
@@ -436,51 +440,190 @@ model Objection {
 }
 
 model ObjectionDocument {
-  documentId   String    @id @default(uuid()) @db.Uuid @map("document_id")
-  objectionId  String    @db.Uuid @map("objection_id")
-  fileName     String    @db.VarChar(255) @map("file_name")
-  filePath     String    @db.VarChar(500) @map("file_path")
-  mimeType     String    @db.VarChar(100) @map("mime_type")
-  checksum     String    @db.VarChar(255) @map("checksum")
-
-  objection    Objection @relation(fields: [objectionId], references: [objectionId])
-
-  // Auditing fields (uploadDate → createdAt, uploadedById → createdById)
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
-  createdById  String    @db.Uuid @map("created_by_id")
-  createdBy    User      @relation(fields: [createdById], references: [userId])
+  documentId  String    @id @default(uuid()) @db.Uuid @map("document_id")
+  objectionId String    @db.Uuid @map("objection_id")
+  fileName    String    @db.VarChar(255) @map("file_name")
+  filePath    String    @db.VarChar(500) @map("file_path")
+  mimeType    String    @db.VarChar(100) @map("mime_type")
+  checksum    String    @db.VarChar(255) @map("checksum")
+  objection   Objection @relation(fields: [objectionId], references: [objectionId])
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+  createdById String    @db.Uuid @map("created_by_id")
+  createdBy   User      @relation(fields: [createdById], references: [userId])
 
   @@map("objection_document")
 }
 
 model User {
- userId String @id @default(uuid()) @db.Uuid
- name String
- email String @unique
- passwordHash String
- role UserRole
- isActive Boolean @default(true)
- lastLoginAt DateTime?
+  userId               String    @id @default(uuid()) @db.Uuid @map("user_id")
+  name                 String    @db.VarChar(255)
+  email                String    @unique @db.VarChar(255)
+  contactNumber        String    @unique @db.VarChar(100) @map("contact_number")
+  identificationNumber String    @unique @db.VarChar(100) @map("identification_number")
+  passwordHash         String    @map("password_hash")
+  role                 UserRole
+  isActive             Boolean   @default(true) @map("is_active")
+  profilePictureUrl    String?   @map("profile_picture_url")
+  mfaEnabled           Boolean   @default(false) @map("mfa_enabled")
+  mfaSecret            String?   @map("mfa_secret")
+  lastLoginAt          DateTime? @map("last_login_at")
 
- createdProjects Project[] @relation("ProjectCreatedBy")
- createdCases AcquisitionCase[] @relation("CreatedCases")
- createdLandParcels LandParcel[] @relation("LandParcelCreatedBy")
- createdLandOwners LandOwner[] @relation("LandOwnerCreatedBy")
- createdOwnerships LandOwnership[] @relation("LandOwnershipCreatedBy")
- 
- assignedToCases CaseAssignment[] @relation("AssignedToUser")
- assignedByCases CaseAssignment[] @relation("AssignedByUser")
- valuerReports ValuationReport[] @relation("Valuer")
- createdValuationReports ValuationReport[] @relation("CreatedValuationReport")
- preparedReports CompensationReport[] @relation("PreparedByUser")
- reviewedReports CompensationReport[] @relation("ReviewedByUser")
- approvedReports CompensationReport[]  @relation("ApprovedByUser")
- submittedObjections Objection[] @relation("SubmittedByUser")
- reviewedObjections Objection[] @relation("ReviewedByUser")
- createdOfferLetters OfferLetter[] @relation("OfferLetterCreatedBy")
- caseDocuments CaseDocument[]
- objectionDocuments ObjectionDocument[]
- createdAt DateTime @default(now())
- updatedAt DateTime @updatedAt
+  createdProjects         Project[]             @relation("ProjectCreatedBy")
+  createdCases            AcquisitionCase[]     @relation("CreatedCases")
+  createdLandParcels      LandParcel[]          @relation("LandParcelCreatedBy")
+  createdLandOwners       LandOwner[]           @relation("LandOwnerCreatedBy")
+  createdOwnerships       LandOwnership[]       @relation("LandOwnershipCreatedBy")
+  assignedToCases         CaseAssignment[]      @relation("AssignedToUser")
+  assignedByCases         CaseAssignment[]      @relation("AssignedByUser")
+  valuerReports           ValuationReport[]     @relation("Valuer")
+  createdValuationReports ValuationReport[]     @relation("CreatedValuationReport")
+  preparedReports         CompensationReport[]  @relation("PreparedByUser")
+  reviewedReports         CompensationReport[]  @relation("ReviewedByUser")
+  approvedReports         CompensationReport[]  @relation("ApprovedByUser")
+  submittedObjections     Objection[]           @relation("SubmittedByUser")
+  reviewedObjections      Objection[]           @relation("ReviewedByUser")
+  createdOfferLetters     OfferLetter[]         @relation("OfferLetterCreatedBy")
+  caseDocuments           CaseDocument[]
+  objectionDocuments      ObjectionDocument[]
+
+  sessions                UserSession[]
+  passwordResets          PasswordReset[]
+  auditLogs               AuditLog[]
+  alerts                  SystemAlert[]
+  createdEmailTemplates   EmailTemplate[]
+
+  createdAt               DateTime              @default(now()) @map("created_at")
+  updatedAt               DateTime              @updatedAt @map("updated_at")
+  deletedAt               DateTime?             @map("deleted_at")
+
+  @@map("user")
+}
+
+model UserSession {
+  sessionId    String   @id @default(uuid()) @db.Uuid @map("session_id")
+  userId       String   @db.Uuid @map("user_id")
+  sessionToken String   @unique @db.VarChar(255) @map("session_token")
+  ipAddress    String   @db.VarChar(45) @map("ip_address")
+  deviceInfo   String?  @map("device_info")
+  lastActivity DateTime @default(now()) @map("last_activity")
+  expiresAt    DateTime @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user         User     @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_session")
+}
+
+model PasswordReset {
+  resetId    String   @id @default(uuid()) @db.Uuid @map("reset_id")
+  userId     String   @db.Uuid @map("user_id")
+  resetToken String   @unique @db.VarChar(255) @map("reset_token")
+  expiresAt  DateTime @map("expires_at")
+  isUsed     Boolean  @default(false) @map("is_used")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user       User     @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset")
+}
+
+model AuditLog {
+  logId           String   @id @default(uuid()) @db.Uuid @map("log_id")
+  userId          String?  @db.Uuid @map("user_id")
+  userRole        String?  @db.VarChar(100) @map("user_role")
+  activityType    String   @db.VarChar(100) @map("activity_type")
+  moduleName      String   @db.VarChar(100) @map("module_name")
+  caseReference   String?  @db.VarChar(255) @map("case_reference")
+  ipAddress       String   @db.VarChar(45) @map("ip_address")
+  deviceInfo      String?  @map("device_info")
+  activityDetails String?  @map("activity_details")
+  systemResponse  String?  @map("system_response")
+  isArchived      Boolean  @default(false) @map("is_archived")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  user            User?    @relation(fields: [userId], references: [userId], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([activityType])
+  @@index([moduleName])
+  @@index([caseReference])
+  @@index([createdAt])
+  @@map("audit_log")
+}
+
+model SystemAlert {
+  alertId        String       @id @default(uuid()) @db.Uuid @map("alert_id")
+  recipientId    String       @db.Uuid @map("recipient_id")
+  alertType      String       @db.VarChar(100) @map("alert_type")
+  channel        AlertChannel @map("channel")
+  urgencyLevel   AlertUrgency @default(MEDIUM) @map("urgency_level")
+  caseReference  String?      @db.VarChar(255) @map("case_reference")
+  message        String
+  isAcknowledged Boolean      @default(false) @map("is_acknowledged")
+  acknowledgedAt DateTime?    @map("acknowledged_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  recipient      User         @relation(fields: [recipientId], references: [userId], onDelete: Cascade)
+
+  @@index([recipientId])
+  @@index([isAcknowledged])
+  @@map("system_alert")
+}
+
+model ProcessDeadline {
+  deadlineId    String         @id @default(uuid()) @db.Uuid @map("deadline_id")
+  caseReference String         @db.VarChar(255) @map("case_reference")
+  processType   String         @db.VarChar(100) @map("process_type")
+  issuanceDate  DateTime       @map("issuance_date")
+  dueDate       DateTime       @map("due_date")
+  status        DeadlineStatus @default(PENDING) @map("status")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  @@index([caseReference])
+  @@index([status])
+  @@map("process_deadline")
+}
+
+model EmailTemplate {
+  templateId   String   @id @default(uuid()) @db.Uuid @map("template_id")
+  templateName String   @unique @db.VarChar(100) @map("template_name")
+  subject      String   @db.VarChar(255)
+  bodyContent  String   @map("body_content")
+  createdById  String   @db.Uuid @map("created_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  createdBy    User     @relation(fields: [createdById], references: [userId])
+
+  @@map("email_template")
+}
+
+model SystemMetric {
+  metricId            String   @id @default(uuid()) @db.Uuid @map("metric_id")
+  uptimeSeconds       BigInt   @map("uptime_seconds")
+  averageResponseTime Decimal  @db.Decimal(10, 2) @map("average_response_time")
+  peakUsagePeriod     String?  @db.VarChar(100) @map("peak_usage_period")
+  transactionVolume   Int      @map("transaction_volume")
+  errorRate           Decimal  @db.Decimal(5, 2) @map("error_rate")
+  resourceUtilisation String?  @map("resource_utilisation")
+  recordedAt          DateTime @default(now()) @map("recorded_at")
+
+  @@index([recordedAt])
+  @@map("system_metric")
+}
+
+model ComplianceBackupLog {
+  logId     String   @id @default(uuid()) @db.Uuid @map("log_id")
+  logType   LogType  @map("log_type")
+  status    String   @db.VarChar(50)
+  details   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([logType])
+  @@map("compliance_backup_log")
 }

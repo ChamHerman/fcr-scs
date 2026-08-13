@@ -7,6 +7,18 @@ import { Layout } from './components/layout/Layout';
 import { Home } from './pages/Home';
 import { ContactUs } from './pages/ContactUs';
 import { DesignSystem } from './pages/DesignSystem/DesignSystem';
+
+import { Login } from './pages/Login/Login';
+import { Register } from './pages/Login/Register';
+import { ForgotPassword } from './pages/Login/ForgotPassword';
+
+import { DashboardOverview } from './pages/Dashboard/DashboardOverview';
+import { UserProfile } from './pages/Dashboard/UserProfile';
+import { UserAdministration } from './pages/Dashboard/UserAdministration';
+
+import { AuditLogs } from './pages/Audit/AuditLogs';
+import { AlertMonitoring } from './pages/Audit/AlertMonitoring';
+import { SystemReports } from './pages/Audit/SystemReports';
 import PaymentSubmitBankDetails from './pages/Payment/SubmitBankDetails';
 import TrackPaymentStatus from './pages/Payment/TrackPaymentStatus';
 
@@ -69,14 +81,16 @@ function App() {
           <Route path="/verify-audit-trail" element={<SmartContractVerifyAuditTrail />} />
           <Route path="/track-payment" element={<TrackPaymentStatus />} />
         </Route>
-        <Route path="/login" element={<div>Login Page (Mock)</div>} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/unauthorized" element={<div>Unauthorized Access. You do not have permission to view this page.</div>} />
         {/* Admin Routes - Protected */}
         <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
           <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<CaseManagementDashboard />} />
+            <Route index element={<DashboardOverview />} />
             <Route path="land-acquisition" element={<CaseManagementDashboard />} />
-            
+
             {/* Case Management */}
             <Route path="case" element={<CaseManagementDashboard />} />
             <Route path="case/register" element={<CaseRegistration />} />
@@ -106,6 +120,15 @@ function App() {
             <Route path="compensation/objection/review/:objectionId" element={<ObjectionReview />} />
 
 
+            {/* Dashboard & User Management */}
+            <Route path="profile" element={<UserProfile />} />
+            <Route path="users" element={<UserAdministration />} />
+
+            {/* System Audit & Monitoring */}
+            <Route path="audit-logs" element={<AuditLogs />} />
+            <Route path="alerts" element={<AlertMonitoring />} />
+            <Route path="reports" element={<SystemReports />} />
+
             {/* Placeholder Admin Routes */}
             <Route path="valuers" element={<Placeholder title="Valuers Management" />} />
             <Route path="forms" element={<Placeholder title="Forms & Templates" />} />
@@ -121,7 +144,6 @@ function App() {
             <Route path="prediction/history" element={<ViewValuationHistory />} />
             <Route path="prediction/history" element={<ViewValuationHistory />} />
             <Route path="settings" element={<Placeholder title="System Settings" />} />
-            <Route path="users" element={<Placeholder title="User Management" />} />
 
             {/* Payment Routes */}
             <Route path="payment">

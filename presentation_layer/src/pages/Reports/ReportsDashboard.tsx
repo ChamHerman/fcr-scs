@@ -4,36 +4,7 @@ import { Eye, FileText, Clock, PlusCircle, Search } from 'lucide-react';
 import '../../style.css';
 import '../LandAcquisition/case_management.css';
 import './reports.css';
-
-const STATES: Record<string, string[]> = {
-  Johor: ['Batu Pahat', 'Johor Bahru', 'Kluang', 'Kota Tinggi', 'Kulai', 'Mersing', 'Muar', 'Pontian', 'Segamat', 'Tangkak'],
-  Kedah: ['Baling', 'Bandar Baharu', 'Kota Setar', 'Kuala Muda', 'Kubang Pasu', 'Kulim', 'Langkawi', 'Padang Terap', 'Pendang', 'Pokok Sena', 'Sik', 'Yan'],
-  Kelantan: ['Bachok', 'Gua Musang', 'Jeli', 'Kota Bharu', 'Kuala Krai', 'Machang', 'Pasir Mas', 'Pasir Puteh', 'Tanah Merah', 'Tumpat'],
-  Melaka: ['Alor Gajah', 'Melaka Tengah', 'Jasin'],
-  'Negeri Sembilan': ['Jelebu', 'Jempol', 'Kuala Pilah', 'Port Dickson', 'Rembau', 'Seremban', 'Tampin'],
-  Pahang: ['Bentong', 'Bera', 'Cameron Highlands', 'Jerantut', 'Kuantan', 'Lipis', 'Maran', 'Pekan', 'Raub', 'Rompin', 'Temerloh'],
-  Penang: ['Seberang Perai Utara', 'Seberang Perai Tengah', 'Seberang Perai Selatan', 'Timur Laut', 'Barat Daya'],
-  Perak: ['Bagan Datuk', 'Batang Padang', 'Hilir Perak', 'Hulu Perak', 'Kampar', 'Kerian', 'Kinta', 'Kuala Kangsar', 'Larut, Matang dan Selama', 'Manjung', 'Muallim', 'Perak Tengah'],
-  Perlis: ['Arau', 'Kangar', 'Padang Besar'],
-  Sabah: ['Beaufort', 'Beluran', 'Kalabakan', 'Keningau', 'Kinabatangan', 'Kota Belud', 'Kota Kinabalu', 'Kota Marudu', 'Kuala Penyu', 'Kudat', 'Kunak', 'Lahad Datu', 'Membakut', 'Nabawan', 'Papar', 'Penampang', 'Pitas', 'Ranau', 'Sandakan', 'Semporna', 'Sipitang', 'Tambunan', 'Tawau', 'Telupid', 'Tenom', 'Tongod', 'Tuaran'],
-  Sarawak: ['Asajaya', 'Bau', 'Belaga', 'Beluru', 'Betong', 'Bintulu', 'Dalit', 'Daro', 'Julau', 'Kanowit', 'Kapit', 'Kuching', 'Lawas', 'Limbang', 'Lubok Antu', 'Lundu', 'Marudi', 'Matu', 'Meradong', 'Miri', 'Mukah', 'Pakan', 'Pusa', 'Samarahan', 'Saratok', 'Sarikei', 'Selangau', 'Serian', 'Sibu', 'Simunjan', 'Song', 'Sri Aman', 'Tatau', 'Tebedu', 'Telang Usan'],
-  Selangor: ['Gombak', 'Hulu Langat', 'Hulu Selangor', 'Klang', 'Kuala Langat', 'Kuala Selangor', 'Petaling', 'Sabak Bernam', 'Sepang'],
-  Terengganu: ['Besut', 'Dungun', 'Hulu Terengganu', 'Kemaman', 'Kuala Nerus', 'Kuala Terengganu', 'Marang', 'Setiu'],
-  'Kuala Lumpur': ['Kuala Lumpur'],
-  Labuan: ['Labuan'],
-  Putrajaya: ['Putrajaya']
-};
-
-const REPORT_TYPES = [
-  'Compensation Summary Report',
-  'Compensation Breakdown Report',
-  'Asset Valuation Report',
-  'Blockchain Audit Report',
-  'Payment Report',
-  'Case Status Report',
-  'Performance Report',
-  'Compliance Report'
-];
+import { STATES, REPORT_TYPES } from './reportConstants';
 
 const REPORT_ROWS = [
   {
@@ -162,6 +133,7 @@ export const ReportsDashboard: React.FC = () => {
           <span className="count">Generated reports</span>
         </div>
         <div className="right">
+          <button className="btn-primary" onClick={() => navigate('/admin/reports/generate')}>Generate Report</button>
           <button className="btn-outline" onClick={() => navigate('/admin/reports/schedule')}>Schedule Reports</button>
         </div>
       </div>

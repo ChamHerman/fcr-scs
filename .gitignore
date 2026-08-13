@@ -19,3 +19,4 @@ dist/
 !**/*.env.template
 /.reasonix
 /.ua
+package-lock.json
