@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../ui/Button';
+import { Logo } from '../ui/Logo';
 import classNames from 'classnames';
 
 export const Navbar: React.FC = () => {
@@ -29,11 +30,13 @@ export const Navbar: React.FC = () => {
       isVisible ? "translate-y-0" : "-translate-y-full"
     )}>
       <div className="max-w-7xl mx-auto flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-full bg-md-primary flex items-center justify-center text-md-on-primary font-bold text-lg">
-            FCR
-          </div>
-          <Link to="/" className="font-bold text-xl text-md-on-surface">FCR-SCS</Link>
+        <div className="flex items-center gap-3">
+          <Link to="/" className="flex items-center gap-2.5">
+            <Logo className="w-9 h-9 text-md-primary" />
+            <span className="font-bold text-xl text-md-on-surface tracking-tight">
+              Smart Contract Resettlement
+            </span>
+          </Link>
         </div>
         <div className="hidden md:flex items-center gap-6">
           <Link to="/submit-bank-details" className="text-md-on-surface hover:text-md-primary transition-colors text-sm">Submit Bank Details</Link>

@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { CheckCircle, XCircle, X, ArrowLeft, Loader2 } from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
+import { useModalPopIn } from "../../hooks/useModalPopIn";
 import "../../style.css";
 import "./compensation.css";
 
@@ -193,6 +194,8 @@ export const CompensationApproval: React.FC = () => {
     return "RM " + val.toLocaleString("en-MY", { minimumFractionDigits: 2 });
   };
 
+  const rejectModalRef = useModalPopIn(showRejectModal);
+
   const renderRejectModal = () => {
     if (!showRejectModal) return null;
     return createPortal(
@@ -216,18 +219,18 @@ export const CompensationApproval: React.FC = () => {
         onClick={() => setShowRejectModal(false)}
       >
         <div
+          ref={rejectModalRef}
           className="preview-modal"
           style={{
             position: "relative",
             maxWidth: "480px",
             width: "90%",
             padding: "24px",
-            borderRadius: "16px",
+            borderRadius: "28px",
             background: "var(--md-surface-container, #ffffff)",
             boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.3)",
             display: "flex",
             flexDirection: "column",
-            animation: "none",
             margin: "auto",
           }}
           onClick={(e) => e.stopPropagation()}

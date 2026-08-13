@@ -88,7 +88,7 @@ export const ContactUs: React.FC = () => {
             <Select 
               label="Subject"
               value={formData.subject}
-              onChange={(e) => handleChange('subject', e.target.value)}
+              onChange={(subject) => handleChange('subject', subject)}
               options={[
                 { value: 'general', label: 'General Inquiry' },
                 { value: 'support', label: 'Technical Support' },
@@ -136,7 +136,7 @@ export const ContactUs: React.FC = () => {
               <Button type="button" variant="text" onClick={() => window.history.back()} disabled={isSubmitting}>
                 Cancel
               </Button>
-              <Button type="submit" variant="combined" size="lg" isLoading={isSubmitting}>
+              <Button type="submit" variant="filled" size="lg" isLoading={isSubmitting}>
                 Send Message
               </Button>
             </div>

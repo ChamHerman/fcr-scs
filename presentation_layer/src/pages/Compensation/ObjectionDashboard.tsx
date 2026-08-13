@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { Eye, ChevronLeft, ChevronRight, Loader2, Plus, Edit2, Trash2, X } from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
+import { useModalPopIn } from "../../hooks/useModalPopIn";
 import "../../style.css";
 import "./compensation.css";
 
@@ -167,13 +168,16 @@ export const ObjectionDashboard: React.FC = () => {
     },
   ];
 
+  const editModalRef = useModalPopIn(Boolean(editItem));
+  const deleteModalRef = useModalPopIn(Boolean(deleteId));
+
   return (
     <div className="compensation-dashboard">
       {/* Edit Modal */}
       {editItem &&
         createPortal(
           <div className="reject-modal-overlay" onClick={() => setEditItem(null)}>
-            <div className="reject-modal" onClick={(e) => e.stopPropagation()}>
+            <div ref={editModalRef} className="reject-modal" style={{ borderRadius: "28px" }} onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
                 <h3>Edit Objection</h3>
                 <button className="close-btn" onClick={() => setEditItem(null)}>
@@ -217,7 +221,7 @@ export const ObjectionDashboard: React.FC = () => {
       {deleteId &&
         createPortal(
           <div className="reject-modal-overlay" onClick={() => setDeleteId(null)}>
-            <div className="reject-modal" onClick={(e) => e.stopPropagation()}>
+            <div ref={deleteModalRef} className="reject-modal" style={{ borderRadius: "28px" }} onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
                 <h3 style={{ color: "var(--md-error, #cf6679)" }}>Confirm Delete Objection</h3>
                 <button className="close-btn" onClick={() => setDeleteId(null)}>

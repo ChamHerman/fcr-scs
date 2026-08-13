@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import * as Lucide from "lucide-react";
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
+import { useModalPopIn } from "../../hooks/useModalPopIn";
 import "../../style.css";
 import "./valuation_report.css";
 
@@ -26,6 +27,7 @@ export const CaseSelectionModal: React.FC<CaseSelectionModalProps> = ({
 }) => {
   const [cases, setCases] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const modalRef = useModalPopIn(isOpen);
 
   const statusKey = allowedStatuses.join(",");
 
@@ -73,6 +75,7 @@ export const CaseSelectionModal: React.FC<CaseSelectionModalProps> = ({
       onClick={onClose}
     >
       <div
+        ref={modalRef}
         className="preview-modal"
         style={{
           position: "relative",
@@ -80,13 +83,12 @@ export const CaseSelectionModal: React.FC<CaseSelectionModalProps> = ({
           width: "90%",
           maxHeight: "85vh",
           padding: "24px",
-          borderRadius: "16px",
+          borderRadius: "28px",
           background: "var(--md-surface-container, #ffffff)",
           boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          animation: "none",
           margin: "auto",
         }}
         onClick={(e) => e.stopPropagation()}

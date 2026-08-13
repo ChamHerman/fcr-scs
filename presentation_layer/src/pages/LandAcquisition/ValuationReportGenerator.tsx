@@ -5,6 +5,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Eye, Edit, X, File } from "lucide-react";
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
 import { CaseSelectionModal } from "./CaseSelectionModal";
+import { useModalPopIn } from "../../hooks/useModalPopIn";
 import "../../style.css";
 import "./valuation_report.css";
 
@@ -278,6 +279,9 @@ export const ValuationReportGenerator: React.FC = () => {
   };
 
   // --- Render ---
+  const previewModalRef = useModalPopIn(showPreview);
+  const cancelModalRef = useModalPopIn(showCancelConfirm);
+
   const renderPreviewModal = () => {
     if (!showPreview || !caseData) return null;
 
@@ -286,7 +290,7 @@ export const ValuationReportGenerator: React.FC = () => {
         className="preview-modal-overlay"
         onClick={() => setShowPreview(false)}
       >
-        <div className="preview-modal" onClick={(e) => e.stopPropagation()}>
+        <div ref={previewModalRef} className="preview-modal" style={{ borderRadius: "28px" }} onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h2><Lucide.FileText size={20} className="inline mr-1" /> Valuation Report</h2>
             <button className="close-btn" onClick={() => setShowPreview(false)}>
@@ -387,7 +391,9 @@ export const ValuationReportGenerator: React.FC = () => {
         onClick={() => setShowCancelConfirm(false)}
       >
         <div
+          ref={cancelModalRef}
           className="cancel-confirm-modal"
+          style={{ borderRadius: "28px" }}
           onClick={(e) => e.stopPropagation()}
         >
           <h3>Cancel without saving?</h3>

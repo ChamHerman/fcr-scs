@@ -23,6 +23,9 @@
     --md-on-warning: #3C2900;
     --md-success: #E4F4E5;
     --md-on-success: #0D3A11;
+    --md-shimmer: rgba(255, 255, 255, 0.22);
+    --md-scrollbar-thumb: rgba(121, 116, 126, 0.4);
+    --md-scrollbar-thumb-hover: rgba(121, 116, 126, 0.65);
   }
 
   .dark {
@@ -43,6 +46,9 @@
     --md-on-warning: #3C2900;
     --md-success: #A3D9A5;
     --md-on-success: #0D3A11;
+    --md-shimmer: rgba(255, 255, 255, 0.10);
+    --md-scrollbar-thumb: rgba(147, 143, 153, 0.45);
+    --md-scrollbar-thumb-hover: rgba(147, 143, 153, 0.7);
   }
 
   body {
@@ -72,7 +78,7 @@
     background: rgba(0, 0, 0, 0.6) !important;
     backdrop-filter: blur(4px) !important;
     -webkit-backdrop-filter: blur(4px) !important;
-    display: flex !important;
+    display: flex;
     align-items: center !important;
     justify-content: center !important;
     z-index: 99999 !important;
@@ -88,13 +94,103 @@
     margin: auto !important;
     background: var(--md-surface-container, #ffffff) !important;
     color: var(--md-on-surface) !important;
-    border-radius: 16px !important;
+    border-radius: 28px !important;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2) !important;
     max-height: 85vh !important;
     display: flex !important;
     flex-direction: column !important;
-    overflow: auto !important;
     animation: none !important;
-    transform: none !important;
+  }
+
+  /* Legacy page-level modals scroll as a whole panel (header and footer included). */
+  .preview-modal,
+  .cancel-confirm-modal,
+  .reject-modal {
+    overflow: auto !important;
+  }
+
+  /*
+   * The ui/Modal panel never scrolls itself — its body does. Hiding overflow here
+   * is what keeps the header and footer pinned and clips content to the 28px radius.
+   */
+  .md-modal-content {
+    overflow: hidden !important;
+  }
+
+  /* Scroll affordance: 24px dissolve at whichever end still has content. */
+  .md-modal-fade {
+    position: absolute;
+    left: 0;
+    right: 10px; /* clears the 8px scrollbar gutter */
+    height: 24px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .md-modal-fade.is-visible {
+    opacity: 1;
+  }
+
+  .md-modal-fade-top {
+    top: 0;
+    background: linear-gradient(to bottom, var(--md-surface-container, #F3EDF7), transparent);
+  }
+
+  .md-modal-fade-bottom {
+    bottom: 0;
+    background: linear-gradient(to top, var(--md-surface-container, #F3EDF7), transparent);
+  }
+
+  /* Thin tonal scrollbar, shared by the modal body and the Select panel. */
+  .md-scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--md-scrollbar-thumb) transparent;
+  }
+
+  .md-scroll-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .md-scroll-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .md-scroll-thin::-webkit-scrollbar-thumb {
+    background-color: var(--md-scrollbar-thumb);
+    border-radius: 9999px;
+  }
+
+  .md-scroll-thin::-webkit-scrollbar-thumb:hover {
+    background-color: var(--md-scrollbar-thumb-hover);
+  }
+
+  /*
+   * Dropdown Select Controls & Option List Rules
+   *
+   * Dropdown fields keep the 28px curve on top and square off at the bottom, so
+   * the list reads as flowing out of the field. ui/Select renders its own MD3
+   * panel; the raw <select> elements still in the pages fall back to the OS list
+   * (which cannot be themed) but share this field shape.
+   */
+  select {
+    border-radius: var(--radius-xl, 28px) var(--radius-xl, 28px) 0 0;
+  }
+
+  select option {
+    border-radius: 14px !important;
+    padding: 10px 16px !important;
+    margin: 4px 0 !important;
+    background-color: var(--md-surface-container, #F3EDF7) !important;
+    color: var(--md-on-surface, #1C1B1F) !important;
+  }
+
+  select option:hover,
+  select option:focus,
+  select option:checked {
+    background-color: var(--md-secondary-container, #E8DEF8) !important;
+    color: var(--md-on-secondary-container, #1D192B) !important;
+    border-radius: 14px !important;
   }
 }

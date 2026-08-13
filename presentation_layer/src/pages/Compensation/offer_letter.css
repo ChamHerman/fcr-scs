@@ -471,7 +471,7 @@
 .reject-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -489,7 +489,8 @@
 }
 .reject-modal {
   background: var(--md-surface-container);
-  border-radius: var(--radius-lg);
+  color: var(--md-on-surface);
+  border-radius: var(--radius-xl);
   max-width: 460px;
   width: 92%;
   padding: 28px 32px;

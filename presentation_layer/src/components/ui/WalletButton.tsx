@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
-import { Wallet, Copy, CheckCircle2 } from 'lucide-react';
+import { Wallet, Copy } from 'lucide-react';
 import { useNotification } from './NotificationSystem';
 
 interface WalletButtonProps {
@@ -10,13 +10,17 @@ interface WalletButtonProps {
 }
 
 export const WalletButton: React.FC<WalletButtonProps> = ({ 
-  walletAddress = '0x71C...976F', 
+  walletAddress = '0x71C7656EC7ab88b098defB751B7401B5f6d8976F', 
   adminId = 'Admin' 
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const { notify } = useNotification();
   const { contextSafe } = useGSAP({ scope: containerRef });
+
+  const truncatedAddress = walletAddress.length > 12
+    ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
+    : walletAddress;
 
   const handleMouseEnter = contextSafe(() => {
     gsap.to(cardRef.current, {
@@ -48,7 +52,7 @@ export const WalletButton: React.FC<WalletButtonProps> = ({
     notify({
       type: 'success',
       title: 'Address Copied',
-      message: `${walletAddress} copied to clipboard.`
+      message: `${truncatedAddress} copied to clipboard.`
     });
   });
 
@@ -79,7 +83,7 @@ export const WalletButton: React.FC<WalletButtonProps> = ({
           className="absolute inset-0 backface-hidden rounded-full flex items-center justify-center bg-md-primary text-md-on-primary font-mono text-sm shadow-md"
           style={{ backfaceVisibility: 'hidden', transform: 'rotateX(180deg)' }}
         >
-          {walletAddress}
+          {truncatedAddress}
           <Copy className="w-3.5 h-3.5 ml-2 opacity-80" />
         </div>
       </div>

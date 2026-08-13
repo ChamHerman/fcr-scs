@@ -491,18 +491,18 @@ table tbody tr:last-child td {
   background: #8d6e00;
 }
 .status-badge.closed {
-  background: #e8e0ec;
-  color: var(--md-on-surface-variant);
+  background: #f1f5f9;
+  color: #475569;
 }
 .status-badge.closed .dot {
-  background: var(--md-on-surface-variant);
+  background: #475569;
 }
 .status-badge.offer {
-  background: var(--md-secondary-container);
-  color: #4d3a7a;
+  background: #e0f2fe;
+  color: #075985;
 }
 .status-badge.offer .dot {
-  background: #4d3a7a;
+  background: #075985;
 }
 .status-badge.payment {
   background: #d9f0fc;
@@ -1129,19 +1129,20 @@ table tbody tr:last-child td {
   background: #8d6e00;
 }
 .status-badge-lg.closed {
-  background: #e8e0ec;
-  color: var(--md-on-surface-variant);
+  background: #f1f5f9;
+  color: #475569;
 }
 .status-badge-lg.closed .dot {
-  background: var(--md-on-surface-variant);
+  background: #475569;
 }
 .status-badge-lg.offer {
-  background: var(--md-secondary-container);
-  color: #4d3a7a;
+  background: #e0f2fe;
+  color: #075985;
 }
 .status-badge-lg.offer .dot {
-  background: #4d3a7a;
+  background: #075985;
 }
+
 .status-badge-lg.payment {
   background: #d9f0fc;
   color: #0b5b8c;
