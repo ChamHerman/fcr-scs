@@ -59,7 +59,7 @@ export default function VerifyAuditTrail() {
       const fileHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
       console.log("Client-side hash:", fileHash);
 
-      const res = await blockchainApi.verifyDocument(selectedFile);
+      const res = await blockchainApi.verify(selectedFile);
       setResult(res);
     } catch (err: any) {
       setError(err.message || 'Verification failed');

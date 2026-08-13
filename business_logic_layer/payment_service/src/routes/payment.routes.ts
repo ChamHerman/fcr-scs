@@ -9,6 +9,7 @@ router.post("/bank-details", ctrl.submitBankDetails);
 router.post("/initiate", ctrl.initiate);
 router.post("/authorise", ctrl.authorise);
 router.post("/reject", ctrl.reject);
+router.post("/cancel", ctrl.cancel);
 router.post("/retry", ctrl.retry);
 router.post("/request-details-update", ctrl.requestDetailsUpdate);
 router.post("/schedule-tomorrow", ctrl.scheduleTomorrow);

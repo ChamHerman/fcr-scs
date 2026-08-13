@@ -20,3 +20,4 @@ dist/
 /.reasonix
 /.ua
 package-lock.json
+/.zcode

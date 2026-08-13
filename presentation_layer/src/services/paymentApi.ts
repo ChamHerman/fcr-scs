@@ -11,6 +11,8 @@ export const paymentApi = {
     paymentFetch("/api/payments/authorise", { method: "POST", body: JSON.stringify(d) }),
   reject: (d: { caseId: string; adminId: string; reason: string }) =>
     paymentFetch("/api/payments/reject", { method: "POST", body: JSON.stringify(d) }),
+  cancelPayment: (d: { caseId: string; adminId: string; reason: string }) =>
+    paymentFetch("/api/payments/cancel", { method: "POST", body: JSON.stringify(d) }),
   retry: (caseId: string) =>
     paymentFetch("/api/payments/retry", { method: "POST", body: JSON.stringify({ caseId }) }),
   requestDetailsUpdate: (caseId: string) =>
@@ -19,8 +21,6 @@ export const paymentApi = {
     paymentFetch("/api/payments/schedule-tomorrow", { method: "POST", body: JSON.stringify({ caseId }) }),
   getStatus: (caseId: string) =>
     paymentFetch("/api/payments/status/" + encodeURIComponent(caseId)),
-  getCaseStatus: (id: string) =>
-    paymentFetch("/api/payments/case-status/" + encodeURIComponent(id)),
   getAllCases: () => paymentFetch("/api/payments/cases"),
   getPendingAuthorisations: () => paymentFetch("/api/payments/pending-authorisations"),
   getFailedTransactions: () => paymentFetch("/api/payments/failed"),

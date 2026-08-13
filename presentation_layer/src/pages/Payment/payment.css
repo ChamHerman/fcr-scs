@@ -1,0 +1,118 @@
+/* ============================================================
+   FCR-SCS · Payments & Blockchain module styles
+   PLAN_HM_1308 §4 — status badges are payment/blockchain-specific.
+   Deliberately does NOT reuse case-management badge classes.
+   Import this file from every redesigned payment/blockchain page.
+   ============================================================ */
+
+/* ---- Status badges (payment + blockchain) ---- */
+.payment-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 14px 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.payment-badge .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+/* Paid / Published / Confirmed */
+.payment-badge.approved {
+  background: #e6f4ea;
+  color: #1e7b4a;
+}
+.payment-badge.approved .dot {
+  background: #1e7b4a;
+}
+/* Pre-transfer / in-flight states */
+.payment-badge.pending {
+  background: #fef7e0;
+  color: #8d6e00;
+}
+.payment-badge.pending .dot {
+  background: #8d6e00;
+}
+/* Transfer Failed / Transfer Rejected / Voided */
+.payment-badge.rejected {
+  background: #fce8e6;
+  color: #b3261e;
+}
+.payment-badge.rejected .dot {
+  background: #b3261e;
+}
+/* Payment Disputed */
+.payment-badge.error {
+  background: #fdecea;
+  color: #b3261e;
+  box-shadow: inset 0 0 0 1px rgba(179, 38, 30, 0.35);
+}
+.payment-badge.error .dot {
+  background: #b3261e;
+}
+/* CANCELLED */
+.payment-badge.cancelled {
+  background: #f1f5f9;
+  color: #475569;
+}
+.payment-badge.cancelled .dot {
+  background: #475569;
+}
+/* Ready to Publish (blockchain) */
+.payment-badge.info {
+  background: #e0f2fe;
+  color: #075985;
+}
+.payment-badge.info .dot {
+  background: #075985;
+}
+
+/* ---- Queue hint under a row ---- */
+.payment-hint {
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ---- Detail rows inside modals ---- */
+.payment-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.payment-detail-item {
+  background: var(--md-surface-container-low);
+  border: 1px solid rgba(121, 116, 126, 0.1);
+  border-radius: 16px;
+  padding: 12px 14px;
+}
+.payment-detail-item .label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--md-on-surface-variant);
+  margin-bottom: 4px;
+}
+.payment-detail-item .value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--md-on-surface);
+  word-break: break-word;
+}
+.payment-detail-item .value.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+}
+
+@media (max-width: 768px) {
+  .payment-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
