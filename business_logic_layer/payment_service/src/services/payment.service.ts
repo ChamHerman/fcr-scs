@@ -153,6 +153,32 @@ export async function rejectTransfer(caseId: string, adminId: string, reason: st
   });
 }
 
+// PLAN_HM_1308 §7.4: Cancel (new) → Approval(CANCEL, reason) + CANCELLED; only pre-transfer.
+const PRE_TRANSFER_STATUSES = ["Approved", "Bank Details Submitted", "Transfer Initiated", "Authorised", "Scheduled"];
+
+export async function cancelPayment(caseId: string, adminId: string, reason: string) {
+  const pc = await prisma.paymentCase.findUnique({ where: { caseId } });
+  if (!pc) throw new Error("Case not found");
+  if (!PRE_TRANSFER_STATUSES.includes(pc.status)) {
+    throw new Error("Only pre-transfer payments can be cancelled");
+  }
+
+  await prisma.paymentAuthorisation.create({
+    data: {
+      paymentCaseId: pc.id,
+      adminId,
+      action: "cancel",
+      reason,
+    },
+  });
+
+  return prisma.paymentCase.update({
+    where: { caseId },
+    data: { status: "CANCELLED" },
+    include: { authorisations: true },
+  });
+}
+
 export async function retryPayment(caseId: string) {
   const pc = await prisma.paymentCase.findUnique({
     where: { caseId },

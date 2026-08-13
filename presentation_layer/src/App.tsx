@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { AdminLayout } from './components/layout/AdminLayout';
 import { MemberLayout } from './components/layout/MemberLayout';
+import { AdminIdentityProvider } from './context/AdminIdentityContext';
 
 import { Layout } from './components/layout/Layout';
 import { Home } from './pages/Home';
@@ -87,7 +88,7 @@ function App() {
         <Route path="/unauthorized" element={<div>Unauthorized Access. You do not have permission to view this page.</div>} />
         {/* Admin Routes - Protected */}
         <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
-          <Route path="/admin" element={<AdminLayout />}>
+          <Route path="/admin" element={<AdminIdentityProvider><AdminLayout /></AdminIdentityProvider>}>
             <Route index element={<DashboardOverview />} />
             <Route path="land-acquisition" element={<CaseManagementDashboard />} />
 

@@ -92,6 +92,29 @@ export async function reject(req: Request, res: Response): Promise<void> {
   }
 }
 
+export async function cancel(req: Request, res: Response): Promise<void> {
+  const { caseId, adminId, reason } = req.body;
+  if (!caseId || !adminId) {
+    res.status(400).json({ error: "caseId and adminId are required" });
+    return;
+  }
+  if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
+    res.status(400).json({ error: "Cancellation reason is required" });
+    return;
+  }
+  try {
+    const paymentCase = await paymentService.cancelPayment(caseId, adminId, reason);
+    res.json({ paymentCase });
+  } catch (e: unknown) {
+    const msg = (e as Error).message;
+    if (msg.toLowerCase().includes("not found")) {
+      res.status(404).json({ error: msg });
+    } else {
+      res.status(400).json({ error: msg });
+    }
+  }
+}
+
 export async function retry(req: Request, res: Response): Promise<void> {
   const { caseId } = req.body;
   if (!caseId) {

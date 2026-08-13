@@ -2,6 +2,14 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient, CaseStatus, ReportStatus, OfferStatus, ObjectionStatus, AreaUnit, UserRole } from '@prisma/client'
 import { Pool } from 'pg'
 
+/**
+ * NOTE: this seed targets the CURRENT module schema (pre-integrated-redesign).
+ * The integrated redesign plan (PLAN_HM_1308.MD) replaces the payment/blockchain
+ * tables and discards these scaffold rows; a fresh settlement seed from accepted
+ * offers is a Phase-1 follow-up. For now the seed stays compatible with the
+ * existing PaymentCase / BlockchainRecord models so the admin demo has data.
+ */
+
 const connectionString = 'postgresql://fcr_app:postgres@127.0.0.1:5432/fcr_scs?schema=public'
 
 const pool = new Pool({ connectionString })
@@ -31,8 +39,10 @@ async function main() {
       userId: '00000000-0000-0000-0000-000000000001',
       name: 'System Admin',
       email: 'admin@fcr-scs.gov.my',
+      contactNumber: '011-00000001',
+      identificationNumber: '000101-14-0001',
       passwordHash: '$2b$10$xyz...',
-      role: UserRole.ADMIN,
+      role: UserRole.SYSTEM_ADMINISTRATOR,
       isActive: true,
     },
   });
@@ -45,6 +55,8 @@ async function main() {
       userId: '00000000-0000-0000-0000-000000000002',
       name: 'Ahmad Faizal',
       email: 'ahmad.faizal@fcr-scs.gov.my',
+      contactNumber: '011-00000002',
+      identificationNumber: '750101-14-0002',
       passwordHash: '$2b$10$xyz...',
       role: UserRole.LAND_VALUER,
       isActive: true,
