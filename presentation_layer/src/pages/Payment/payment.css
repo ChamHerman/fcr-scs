@@ -111,6 +111,33 @@
   font-size: 13px;
 }
 
+/* ---- Case ID cell: clickable id + copy icon (DESIGN.md) ---- */
+.case-id-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.case-id-wrap .case-id {
+  cursor: pointer;
+}
+.case-id-wrap .case-id:hover {
+  text-decoration: underline;
+}
+.case-id-wrap .copy-id-btn {
+  opacity: 0.6;
+}
+.case-id-wrap:hover .copy-id-btn {
+  opacity: 1;
+}
+
+/* ---- Inline row-action icons (DESIGN.md — Row actions are inline icons) ---- */
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+
 @media (max-width: 768px) {
   .payment-detail-grid {
     grid-template-columns: 1fr;

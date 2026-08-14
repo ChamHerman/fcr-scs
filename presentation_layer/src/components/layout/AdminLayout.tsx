@@ -23,7 +23,12 @@ import {
   Moon,
   Sun,
   BrainCircuit,
-  Sparkles
+  Sparkles,
+  Send,
+  PenLine,
+  AlertTriangle,
+  Upload,
+  Ban
 } from 'lucide-react';
 import { IdentitySwitcher } from '../admin/IdentitySwitcher';
 
@@ -377,15 +382,15 @@ export const AdminLayout: React.FC = () => {
                     {!isCollapsed && <span>Payments Overview</span>}
                   </NavLink>
                   <NavLink to="/admin/payment/initiate" className="nav-item" title={isCollapsed ? "Initiate" : ""}>
-                    <CreditCard size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                    <Send size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
                     {!isCollapsed && <span>Initiate</span>}
                   </NavLink>
                   <NavLink to="/admin/payment/pending" className="nav-item" title={isCollapsed ? "Pending Authorisations" : ""}>
-                    <CreditCard size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                    <PenLine size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
                     {!isCollapsed && <span>Pending Authorisations</span>}
                   </NavLink>
                   <NavLink to="/admin/payment/failed" className="nav-item" title={isCollapsed ? "Failed Transactions" : ""}>
-                    <CreditCard size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                    <AlertTriangle size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
                     {!isCollapsed && <span>Failed Transactions</span>}
                   </NavLink>
                   <NavLink to="/admin/blockchain" end className="nav-item" title={isCollapsed ? "Blockchain Overview" : ""}>
@@ -393,11 +398,11 @@ export const AdminLayout: React.FC = () => {
                     {!isCollapsed && <span>Blockchain Overview</span>}
                   </NavLink>
                   <NavLink to="/admin/blockchain/publish" className="nav-item" title={isCollapsed ? "Publish" : ""}>
-                    <LinkIcon size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                    <Upload size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
                     {!isCollapsed && <span>Publish</span>}
                   </NavLink>
                   <NavLink to="/admin/blockchain/void" className="nav-item" title={isCollapsed ? "Void" : ""}>
-                    <LinkIcon size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                    <Ban size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
                     {!isCollapsed && <span>Void</span>}
                   </NavLink>
                 </>

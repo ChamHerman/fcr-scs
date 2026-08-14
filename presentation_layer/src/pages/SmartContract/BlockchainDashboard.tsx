@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, Activity, Wallet, Loader2, RefreshCw, FilePlus2, Undo2, Lock } from 'lucide-react';
+import { Clock, User, Activity, Wallet, Loader2, RefreshCw, FilePlus2, Undo2, Lock, Eye, Upload, Ban, CheckCircle2 } from 'lucide-react';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { blockchainApi } from '../../services/blockchainApi';
@@ -7,7 +7,8 @@ import { paymentApi } from '../../services/paymentApi';
 import { useWallet } from '../../hooks/useWallet';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
-import { ActionMenuPortal } from '../../components/ui/ActionMenuPortal';
+import { IconButton } from '../../components/ui/IconButton';
+import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
@@ -39,13 +40,11 @@ export const BlockchainDashboard: React.FC = () => {
   const { notify } = useNotification();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [appliedFilter, setAppliedFilter] = useState('All');
   const [records, setRecords] = useState<LedgerRow[]>([]);
   const [readyRows, setReadyRows] = useState<LedgerRow[]>([]);
-  const [networkInfo, setNetworkInfo] = useState<{ name: string; chainId: number; isLocal: boolean } | null>(null);
+  const [networkInfo, setNetworkInfo] = useState<{ name: string; label?: string; chainId: number; isLocal: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
   const [followUps, setFollowUps] = useState<Record<string, string>>({});
   const containerRef = useRef<HTMLDivElement>(null);
@@ -128,7 +127,7 @@ export const BlockchainDashboard: React.FC = () => {
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return allRows.filter((r) => {
-      const mStatus = appliedFilter === 'All' || r.status === appliedFilter;
+      const mStatus = statusFilter === 'All' || r.status === statusFilter;
       const mSearch =
         !q ||
         (r.publicId ?? '').toLowerCase().includes(q) ||
@@ -136,7 +135,7 @@ export const BlockchainDashboard: React.FC = () => {
         (r.transactionHash ?? '').toLowerCase().includes(q);
       return mStatus && mSearch;
     });
-  }, [allRows, searchQuery, appliedFilter]);
+  }, [allRows, searchQuery, statusFilter]);
 
   const handleFollowUp = async (row: LedgerRow, key: string) => {
     const choice = FOLLOW_UP_CHOICES.find((c) => c.key === key);
@@ -156,24 +155,13 @@ export const BlockchainDashboard: React.FC = () => {
     }
   };
 
-  const buildMenu = (row: LedgerRow) => {
-    const items: { label: string; onClick: () => void }[] = [];
-    items.push({ label: 'View Details', onClick: () => setModal({ type: 'view', row }) });
-    if (row.status === 'Ready to Publish') {
-      items.push({ label: 'Publish to Blockchain', onClick: () => setModal({ type: 'publish', row }) });
-    }
-    if (row.status === 'Published') {
-      items.push({ label: 'Void Ledger Record', onClick: () => setModal({ type: 'void', row }) });
-    }
-    if (row.status === 'Voided') {
-      FOLLOW_UP_CHOICES.forEach((c) => {
-        items.push({ label: c.label, onClick: () => handleFollowUp(row, c.key) });
-      });
-    }
-    return items;
-  };
-
   const closeModal = () => setModal(null);
+
+  const followUpIcons = {
+    CREATE_CORRECTED_CERTIFICATE: FilePlus2,
+    REOPEN_PAYMENT: Undo2,
+    KEEP_VOIDED: CheckCircle2,
+  } as const;
 
   return (
     <div className="main" ref={containerRef}>
@@ -184,7 +172,7 @@ export const BlockchainDashboard: React.FC = () => {
             Full view of the ledger — publish, void and reconcile records.
             {networkInfo && (
               <span className="text-sm font-semibold text-gray-600 ml-2">
-                Network: {networkInfo.isLocal ? 'Hardhat Local' : 'Sepolia Testnet'} ({networkInfo.name})
+                Network: {networkInfo.label ?? (networkInfo.isLocal ? 'Hardhat Local' : 'Sepolia Testnet')} ({networkInfo.name})
               </span>
             )}
           </div>
@@ -238,8 +226,7 @@ export const BlockchainDashboard: React.FC = () => {
             onChange={setStatusFilter}
             placeholder="All statuses"
           />
-          <Button variant="filled" size="sm" onClick={() => { setAppliedFilter(statusFilter); }}>Apply</Button>
-          <Button variant="outlined" size="sm" onClick={() => { setStatusFilter('All'); setAppliedFilter('All'); setSearchQuery(''); }}>Clear</Button>
+          <Button variant="outlined" size="sm" onClick={() => { setStatusFilter('All'); setSearchQuery(''); }}>Clear</Button>
         </div>
       </div>
 
@@ -283,8 +270,8 @@ export const BlockchainDashboard: React.FC = () => {
               ) : (
                 filtered.map((row) => (
                   <tr key={row.id}>
-                    <td><span className="case-id">{row.publicId ?? row.caseId}</span></td>
-                    <td><span className="meta-text">{row.caseId}</span></td>
+                    <td><span className="meta-text">{row.publicId ?? row.caseId}</span></td>
+                    <td><CaseIdCell caseId={row.caseId} onView={() => setModal({ type: 'view', row })} /></td>
                     <td>
                       <span className="meta-text">{row.recordType ?? 'Original'}</span>
                       {followUps[row.caseId] && (
@@ -294,13 +281,31 @@ export const BlockchainDashboard: React.FC = () => {
                     <td style={{ fontFamily: 'monospace', color: 'var(--md-on-surface-variant)' }}>{fmtTx(row.transactionHash)}</td>
                     <td><span className="meta-text">{fmtDate(row.publishedAt ?? row.createdAt)}</span></td>
                     <td>{ledgerBadge(row.status)}</td>
-                    <td style={{ position: 'relative' }}>
-                      <ActionMenuPortal
-                        isOpen={activeMenu === row.id}
-                        onToggle={() => setActiveMenu(activeMenu === row.id ? null : row.id)}
-                        onClose={() => setActiveMenu(null)}
-                        actions={buildMenu(row)}
-                      />
+                    <td>
+                      <div className="row-actions">
+                        <IconButton title="View Details" onClick={() => setModal({ type: 'view', row })}>
+                          <Eye size={16} />
+                        </IconButton>
+                        {row.status === 'Ready to Publish' && (
+                          <IconButton title="Publish to Blockchain" variant="primary" onClick={() => setModal({ type: 'publish', row })}>
+                            <Upload size={16} />
+                          </IconButton>
+                        )}
+                        {row.status === 'Published' && (
+                          <IconButton title="Void Ledger Record" variant="danger" onClick={() => setModal({ type: 'void', row })}>
+                            <Ban size={16} />
+                          </IconButton>
+                        )}
+                        {row.status === 'Voided' &&
+                          FOLLOW_UP_CHOICES.map((c) => {
+                            const Icon = followUpIcons[c.key as keyof typeof followUpIcons];
+                            return (
+                              <IconButton key={c.key} title={c.label} variant="primary" onClick={() => handleFollowUp(row, c.key)}>
+                                <Icon size={16} />
+                              </IconButton>
+                            );
+                          })}
+                      </div>
                     </td>
                   </tr>
                 ))

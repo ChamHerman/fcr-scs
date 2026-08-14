@@ -8,6 +8,7 @@ import { useWallet } from '../../hooks/useWallet';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { blockchainStatusClassMap } from '../Payment/statusMaps';
+import { copyToClipboard } from '../../utils/clipboard';
 
 /**
  * Shared modals for the blockchain module (PLAN_HM_1308 §5.5, §5.6, §5.7).
@@ -327,12 +328,7 @@ export const FOLLOW_UP_CHOICES: FollowUpChoice[] = [
 ];
 
 export const copyHash = async (value: string, notify: (n: { type: 'success'; title: string; message?: string }) => void) => {
-  try {
-    await navigator.clipboard.writeText(value);
-    notify({ type: 'success', title: 'Copied to clipboard' });
-  } catch {
-    notify({ type: 'success', title: 'Hash', message: value });
-  }
+  await copyToClipboard(value, notify);
 };
 
 /**

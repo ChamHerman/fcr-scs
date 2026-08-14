@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, Hourglass, Fingerprint, Loader2 } from 'lucide-react';
+import { Clock, User, Hourglass, Fingerprint, Loader2, Eye, PenLine, XCircle } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { paymentApi } from '../../services/paymentApi';
-import { ActionMenuPortal } from '../../components/ui/ActionMenuPortal';
+import { IconButton } from '../../components/ui/IconButton';
+import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Button } from '../../components/ui/Button';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
@@ -19,6 +20,8 @@ import {
   fmtDate,
   initiatorOf,
   hasSignedOrInitiated,
+  isAuthoriseable,
+  signaturesLeft,
 } from './paymentModals';
 import type { PaymentRow } from './paymentModals';
 
@@ -35,9 +38,8 @@ export default function PendingAuthorisations() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState(deepLink || '');
-  const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
-  const { identityId, identityLabel } = useAdminIdentity();
+  const { identityId } = useAdminIdentity();
   const pageRef = useRef<HTMLDivElement>(null);
 
   useGSAP(() => {
@@ -63,12 +65,12 @@ export default function PendingAuthorisations() {
   }, [loadData]);
 
   const stats = useMemo(() => {
-    const outstanding = cases.filter((c) => !hasSignedOrInitiated(c, identityId)).length;
+    const outstanding = cases.reduce((sum, c) => sum + signaturesLeft(c), 0);
     return [
-      { label: 'Awaiting Approval', value: cases.length, change: 'Transfer Initiated', icon: Hourglass },
-      { label: 'Signatures Outstanding', value: outstanding, change: `You (${identityLabel}) can sign`, icon: Fingerprint },
+      { label: 'Awaiting Approval', value: cases.length, change: 'Requires action', icon: Hourglass },
+      { label: 'Signatures Outstanding', value: outstanding, change: `Bank 1 + approvals model`, icon: Fingerprint },
     ];
-  }, [cases, identityId, identityLabel]);
+  }, [cases]);
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -155,25 +157,26 @@ export default function PendingAuthorisations() {
                   const blocked = hasSignedOrInitiated(pc, identityId);
                   return (
                     <tr key={pc.caseId} className={deepLink === pc.caseId ? 'bg-md-secondary-container/40' : ''}>
-                      <td><span className="case-id">{pc.caseId}</span></td>
+                      <td><CaseIdCell caseId={pc.caseId} onView={() => setModal({ type: 'view', pc })} /></td>
                       <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
                       <td style={{ fontWeight: 600 }}>{fmtAmount(pc.amount)}</td>
                       <td><span className="meta-text">{pc.currentSignatures}/{pc.requiredSignatures || 1}</span></td>
                       <td><span className="meta-text">{initiator || '—'}</span></td>
                       <td>{paymentBadge(pc.status)}</td>
-                      <td style={{ position: 'relative' }}>
-                        <ActionMenuPortal
-                          isOpen={activeMenu === pc.caseId}
-                          onToggle={() => setActiveMenu(activeMenu === pc.caseId ? null : pc.caseId)}
-                          onClose={() => setActiveMenu(null)}
-                          actions={[
-                            { label: 'View Details', onClick: () => setModal({ type: 'view', pc }) },
-                            ...(blocked
-                              ? []
-                              : [{ label: 'Authorise Transfer', onClick: () => setModal({ type: 'authorise', pc }) }]),
-                            { label: 'Reject Transfer', onClick: () => setModal({ type: 'reject', pc }) },
-                          ]}
-                        />
+                      <td>
+                        <div className="row-actions">
+                          <IconButton title="View Details" onClick={() => setModal({ type: 'view', pc })}>
+                            <Eye size={16} />
+                          </IconButton>
+                          {isAuthoriseable(pc, identityId) && (
+                            <IconButton title="Authorise Transfer" variant="primary" onClick={() => setModal({ type: 'authorise', pc })}>
+                              <PenLine size={16} />
+                            </IconButton>
+                          )}
+                          <IconButton title="Reject Transfer" variant="danger" onClick={() => setModal({ type: 'reject', pc })}>
+                            <XCircle size={16} />
+                          </IconButton>
+                        </div>
                         {blocked && (
                           <div className="payment-hint mt-1">
                             <Fingerprint size={12} /> You cannot authorise a transfer you initiated or previously signed.

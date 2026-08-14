@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, DollarSign, User, XCircle, Hourglass, Loader2, Eye } from 'lucide-react';
+import { Clock, DollarSign, User, XCircle, Hourglass, Loader2, Eye, Send, PenLine, RotateCcw, PencilLine, CalendarClock, Download, Ban, BadgeCheck } from 'lucide-react';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { paymentApi } from '../../services/paymentApi';
-import { ActionMenuPortal } from '../../components/ui/ActionMenuPortal';
+import { IconButton } from '../../components/ui/IconButton';
+import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
@@ -31,7 +32,8 @@ import {
   fmtDate,
   maskAccount,
   hasBankDetails,
-  hasSignedOrInitiated,
+  isAuthoriseable,
+  PRE_TRANSFER_STATUSES,
 } from './paymentModals';
 import type { PaymentRow } from './paymentModals';
 
@@ -52,11 +54,9 @@ const ITEMS_PER_PAGE = 10;
 export default function PaymentDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [appliedFilter, setAppliedFilter] = useState('All');
   const [allCases, setAllCases] = useState<PaymentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const { identityId } = useAdminIdentity();
@@ -87,7 +87,7 @@ export default function PaymentDashboard() {
   }, [loadData]);
 
   const stats = useMemo(() => {
-    const pending = allCases.filter((c) => c.status === 'Transfer Initiated').length;
+    const pending = allCases.filter((c) => (c.status === 'Transfer Initiated' || c.status === 'Authorised') && (c.currentSignatures ?? 0) < (c.requiredSignatures ?? 1)).length;
     const failed = allCases.filter((c) => normalizePaymentStatus(c.status) === 'Transfer Failed').length;
     const paid = allCases.filter((c) => c.status === 'Paid').length;
     return [
@@ -101,7 +101,7 @@ export default function PaymentDashboard() {
   const filteredCases = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return allCases.filter((c) => {
-      const matchesStatus = appliedFilter === 'All' || c.status === appliedFilter;
+      const matchesStatus = statusFilter === 'All' || c.status === statusFilter;
       const matchesSearch =
         !q ||
         c.caseId.toLowerCase().includes(q) ||
@@ -109,50 +109,12 @@ export default function PaymentDashboard() {
         (c.bankName ?? '').toLowerCase().includes(q);
       return matchesStatus && matchesSearch;
     });
-  }, [allCases, searchQuery, appliedFilter]);
+  }, [allCases, searchQuery, statusFilter]);
 
   const totalCount = filteredCases.length;
   const pageCount = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
   const safePage = Math.min(currentPage, pageCount);
   const pageRows = filteredCases.slice((safePage - 1) * ITEMS_PER_PAGE, safePage * ITEMS_PER_PAGE);
-
-  const buildMenu = (pc: PaymentRow) => {
-    const items: { label: string; onClick: () => void }[] = [];
-    items.push({ label: 'View Details', onClick: () => setModal({ type: 'view', pc }) });
-
-    if (pc.status === 'Approved' || pc.status === 'Bank Details Submitted') {
-      if (hasBankDetails(pc)) {
-        items.push({ label: 'Initiate Transfer', onClick: () => setModal({ type: 'initiate', pc }) });
-      }
-    }
-
-    if (pc.status === 'Transfer Initiated') {
-      if (!hasSignedOrInitiated(pc, identityId)) {
-        items.push({ label: 'Authorise Transfer', onClick: () => setModal({ type: 'authorise', pc }) });
-      }
-      items.push({ label: 'Reject Transfer', onClick: () => setModal({ type: 'reject', pc }) });
-    }
-
-    if (normalizePaymentStatus(pc.status) === 'Transfer Failed') {
-      items.push({ label: 'Retry Payment', onClick: () => setModal({ type: 'retry', pc }) });
-      items.push({ label: 'Request Details Update', onClick: () => setModal({ type: 'request-update', pc }) });
-      items.push({ label: 'Schedule Tomorrow', onClick: () => setModal({ type: 'schedule', pc }) });
-    }
-
-    if (pc.status === 'Paid') {
-      items.push({ label: 'Download Receipt', onClick: () => downloadReceipt(pc, notify) });
-    }
-
-    if (['Approved', 'Bank Details Submitted', 'Transfer Initiated', 'Authorised', 'Scheduled'].includes(pc.status)) {
-      items.push({ label: 'Cancel Payment', onClick: () => setModal({ type: 'cancel', pc }) });
-    }
-
-    if (pc.status === 'Payment Disputed') {
-      items.push({ label: 'Mark Resolved', onClick: () => setModal({ type: 'resolve-dispute', pc }) });
-    }
-
-    return items;
-  };
 
   const closeModal = () => setModal(null);
 
@@ -202,25 +164,17 @@ export default function PaymentDashboard() {
             label="Status"
             options={PAYMENT_STATUSES.map((s) => ({ value: s, label: s === 'All' ? 'All statuses' : s }))}
             value={statusFilter}
-            onChange={setStatusFilter}
-            placeholder="All statuses"
-          />
-          <Button
-            variant="filled"
-            size="sm"
-            onClick={() => {
-              setAppliedFilter(statusFilter);
+            onChange={(v) => {
+              setStatusFilter(v);
               setCurrentPage(1);
             }}
-          >
-            Apply
-          </Button>
+            placeholder="All statuses"
+          />
           <Button
             variant="outlined"
             size="sm"
             onClick={() => {
               setStatusFilter('All');
-              setAppliedFilter('All');
               setSearchQuery('');
               setCurrentPage(1);
             }}
@@ -268,9 +222,10 @@ export default function PaymentDashboard() {
               ) : (
                 pageRows.map((pc) => {
                   const needsBank = !hasBankDetails(pc);
+                  const openView = () => setModal({ type: 'view', pc });
                   return (
                     <tr key={pc.caseId}>
-                      <td><span className="case-id">{pc.caseId}</span></td>
+                      <td><CaseIdCell caseId={pc.caseId} onView={openView} /></td>
                       <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
                       <td>
                         {pc.bankName ? `${pc.bankName} ${maskAccount(pc.accountNumber)}` : '—'}
@@ -284,13 +239,55 @@ export default function PaymentDashboard() {
                       <td><span className="meta-text">{fmtDate(pc.updatedAt || pc.createdAt)}</span></td>
                       <td><span className="meta-text">{pc.currentSignatures}/{pc.requiredSignatures || 1}</span></td>
                       <td>{paymentBadge(pc.status)}</td>
-                      <td style={{ position: 'relative' }}>
-                        <ActionMenuPortal
-                          isOpen={activeMenu === pc.caseId}
-                          onToggle={() => setActiveMenu(activeMenu === pc.caseId ? null : pc.caseId)}
-                          onClose={() => setActiveMenu(null)}
-                          actions={buildMenu(pc)}
-                        />
+                      <td>
+                        <div className="row-actions">
+                          <IconButton title="View Details" onClick={openView}>
+                            <Eye size={16} />
+                          </IconButton>
+                          {(pc.status === 'Approved' || pc.status === 'Bank Details Submitted') && hasBankDetails(pc) && (
+                            <IconButton title="Initiate Transfer" variant="primary" onClick={() => setModal({ type: 'initiate', pc })}>
+                              <Send size={16} />
+                            </IconButton>
+                          )}
+                          {isAuthoriseable(pc, identityId) && (
+                            <IconButton title="Authorise Transfer" variant="primary" onClick={() => setModal({ type: 'authorise', pc })}>
+                              <PenLine size={16} />
+                            </IconButton>
+                          )}
+                          {(pc.status === 'Transfer Initiated' || pc.status === 'Authorised') && (
+                            <IconButton title="Reject Transfer" variant="danger" onClick={() => setModal({ type: 'reject', pc })}>
+                              <XCircle size={16} />
+                            </IconButton>
+                          )}
+                          {normalizePaymentStatus(pc.status) === 'Transfer Failed' && (
+                            <>
+                              <IconButton title="Retry Payment" variant="primary" onClick={() => setModal({ type: 'retry', pc })}>
+                                <RotateCcw size={16} />
+                              </IconButton>
+                              <IconButton title="Request Details Update" onClick={() => setModal({ type: 'request-update', pc })}>
+                                <PencilLine size={16} />
+                              </IconButton>
+                              <IconButton title="Schedule Tomorrow" onClick={() => setModal({ type: 'schedule', pc })}>
+                                <CalendarClock size={16} />
+                              </IconButton>
+                            </>
+                          )}
+                          {pc.status === 'Paid' && (
+                            <IconButton title="Download Receipt" variant="primary" onClick={() => downloadReceipt(pc, notify)}>
+                              <Download size={16} />
+                            </IconButton>
+                          )}
+                          {PRE_TRANSFER_STATUSES.includes(pc.status) && (
+                            <IconButton title="Cancel Payment" variant="danger" onClick={() => setModal({ type: 'cancel', pc })}>
+                              <Ban size={16} />
+                            </IconButton>
+                          )}
+                          {pc.status === 'Payment Disputed' && (
+                            <IconButton title="Mark Resolved" variant="primary" onClick={() => setModal({ type: 'resolve-dispute', pc })}>
+                              <BadgeCheck size={16} />
+                            </IconButton>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

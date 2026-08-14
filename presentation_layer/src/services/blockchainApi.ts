@@ -2,6 +2,8 @@ import { blockchainFetch, BLOCKCHAIN_BASE } from "./api";
 
 export const blockchainApi = {
   getNetworkInfo: () => blockchainFetch("/api/smart-contract/network"),
+  setNetwork: (network: string) =>
+    blockchainFetch("/api/smart-contract/network", { method: "POST", body: JSON.stringify({ network }) }),
   getRecords: (status?: string) =>
     blockchainFetch("/api/smart-contract/records" + (status ? "?status=" + encodeURIComponent(status) : "")),
   getRecord: (caseId: string) =>

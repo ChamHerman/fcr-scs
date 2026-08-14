@@ -43,7 +43,12 @@ export async function initiateTransfer(caseId: string, adminId: string) {
   const pc = await prisma.paymentCase.findUnique({ where: { caseId } });
   if (!pc) throw new Error("Case not found");
 
-  const requiredSigs = calculateRequiredSignatures(Number(pc.amount));
+  // Signature model: the bank initiator always contributes 1 signature; admin
+  // approvals add the rest. required = 1 + (1 + floor(amount / 1_000_000)), so
+  // 1M needs 1 bank + 2 approvals = 3 total. The initiating admin's signature
+  // does NOT count as an approval (SoD) — they can only initiate.
+  const approvalQuota = calculateRequiredSignatures(Number(pc.amount));
+  const requiredSigs = 1 + approvalQuota;
 
   await prisma.paymentAuthorisation.create({
     data: {
@@ -257,7 +262,7 @@ export async function getPaymentStatus(caseId: string) {
 
 export async function getPendingAuthorisations() {
   return prisma.paymentCase.findMany({
-    where: { status: "Transfer Initiated" },
+    where: { status: { in: ["Transfer Initiated", "Authorised"] } },
     include: { authorisations: true },
   });
 }

@@ -7,6 +7,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 const router = Router();
 
 router.get("/network", ctrl.getNetwork);
+router.post("/network", ctrl.setNetwork);
 router.post("/publish", walletAuth, ctrl.publish);
 router.post("/void", walletAuth, ctrl.voidLedger);
 router.get("/records", ctrl.getRecords);

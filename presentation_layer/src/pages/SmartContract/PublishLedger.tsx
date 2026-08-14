@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, Wallet, Loader2, UploadCloud, RefreshCw } from 'lucide-react';
+import { Clock, User, Wallet, Loader2, UploadCloud, RefreshCw, Eye, Upload } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
@@ -7,7 +7,8 @@ import { blockchainApi } from '../../services/blockchainApi';
 import { paymentApi } from '../../services/paymentApi';
 import { useWallet } from '../../hooks/useWallet';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
-import { ActionMenuPortal } from '../../components/ui/ActionMenuPortal';
+import { IconButton } from '../../components/ui/IconButton';
+import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Button } from '../../components/ui/Button';
 import { WalletButton } from '../../components/ui/WalletButton';
@@ -31,10 +32,10 @@ export const PublishLedger: React.FC = () => {
   const { walletConnected, walletAddress, error: walletError, connectWallet } = useWallet();
   const { identityId } = useAdminIdentity();
   const [rows, setRows] = useState<LedgerRow[]>([]);
+  const [networkInfo, setNetworkInfo] = useState<{ name: string; label?: string; isLocal: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState(deepLink || '');
-  const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
   const pageRef = useRef<HTMLDivElement>(null);
 
@@ -50,9 +51,10 @@ export const PublishLedger: React.FC = () => {
       // Ready to publish = payment Paid (or confirmed) + certificate exists +
       // no active ledger record. Certificate state is derived client-side (no
       // certificate table in the legacy backend — flagged PLAN_HM_1308 §8).
-      const [paidRes, recData] = await Promise.all([
+      const [paidRes, recData, netData] = await Promise.all([
         paymentApi.getAllCases().catch(() => ({ cases: [] })),
         blockchainApi.getRecords().catch(() => ({ records: [] })),
+        blockchainApi.getNetworkInfo().catch(() => null),
       ]);
       const existing = new Set((recData.records || []).map((r: any) => r.caseId));
       const paid = (paidRes.cases || []).filter(
@@ -72,6 +74,7 @@ export const PublishLedger: React.FC = () => {
         }))
       );
       setRows(derived);
+      setNetworkInfo(netData);
     } catch (err: any) {
       setError(err.message || 'Failed to load publish queue');
     } finally {
@@ -95,7 +98,14 @@ export const PublishLedger: React.FC = () => {
       <div className="topbar publish-header">
         <div className="topbar-left">
           <h1>Publish to Ledger</h1>
-          <div className="sub">Records ready to be published on-chain — derived from payment + certificate state.</div>
+          <div className="sub">
+            Records ready to be published on-chain — derived from payment + certificate state.
+            {networkInfo && (
+              <span className="text-sm font-semibold text-gray-600 ml-2">
+                Network: {networkInfo.label ?? (networkInfo.isLocal ? 'Hardhat Local' : 'Sepolia Testnet')} ({networkInfo.name})
+              </span>
+            )}
+          </div>
         </div>
         <div className="topbar-right">
           {walletConnected ? (
@@ -166,22 +176,21 @@ export const PublishLedger: React.FC = () => {
               ) : (
                 filtered.map((row) => (
                   <tr key={row.id} className={deepLink === row.caseId ? 'bg-md-secondary-container/40' : ''}>
-                    <td><span className="case-id">{row.publicId ?? row.caseId}</span></td>
-                    <td><span className="meta-text">{row.caseId}</span></td>
+                    <td><span className="meta-text">{row.publicId ?? row.caseId}</span></td>
+                    <td><CaseIdCell caseId={row.caseId} onView={() => setModal({ type: 'view', row })} /></td>
                     <td>{row.beneficiary || '—'}</td>
                     <td style={{ fontWeight: 600 }}>{fmtAmount(row.amount)}</td>
                     <td><span className="meta-text">v{row.certificateVersion ?? 1}</span></td>
                     <td>{ledgerBadge(row.status)}</td>
-                    <td style={{ position: 'relative' }}>
-                      <ActionMenuPortal
-                        isOpen={activeMenu === row.id}
-                        onToggle={() => setActiveMenu(activeMenu === row.id ? null : row.id)}
-                        onClose={() => setActiveMenu(null)}
-                        actions={[
-                          { label: 'View Details', onClick: () => setModal({ type: 'view', row }) },
-                          { label: 'Publish to Blockchain', onClick: () => setModal({ type: 'publish', row }) },
-                        ]}
-                      />
+                    <td>
+                      <div className="row-actions">
+                        <IconButton title="View Details" onClick={() => setModal({ type: 'view', row })}>
+                          <Eye size={16} />
+                        </IconButton>
+                        <IconButton title="Publish to Blockchain" variant="primary" onClick={() => setModal({ type: 'publish', row })}>
+                          <Upload size={16} />
+                        </IconButton>
+                      </div>
                     </td>
                   </tr>
                 ))
