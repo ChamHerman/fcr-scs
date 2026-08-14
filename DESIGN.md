@@ -122,6 +122,7 @@ Dropdowns are the one deliberate exception to the all-4-corners rule: **the bott
 ### 5. Action Menu Portal (`ActionMenuPortal.tsx`)
 - Menu border: `md-outline/30` (`rgba(121, 116, 126, 0.3)`).
 - Item divider: `md-surface-container-low/60` (`rgba(231, 224, 236, 0.6)`).
+- **Overflow only**: a 3-dots menu is reserved for rows carrying more than four actions. Fewer actions use inline `IconButton`s in a `.row-actions` cell (see Admin List & Row-Action Patterns below) — one click beats a menu hop.
 
 ### 6. Wallet Button (`WalletButton.tsx`)
 - 3D flip card design. Default `walletAddress` takes full address string.
@@ -132,6 +133,32 @@ Dropdowns are the one deliberate exception to the all-4-corners rule: **the bott
 - `<Logo />`: Original SVG mark combining isometric land hex boundary with central lightning bolt, using `fill="currentColor"` for automatic purple/lilac adaptation.
 - `<Navbar />`: Sticky auto-hiding header featuring `<Logo />` and wordmark "Smart Contract Resettlement".
 
+## Admin List & Row-Action Patterns
+
+Admin list pages (Payments Overview, Initiate, Pending Authorisations, Failed Transactions, Blockchain Overview, Publish, Void) follow these interaction standards.
+
+### Row actions are inline icons, not 3-dots menus
+- Each row action renders as its own `IconButton` inside a `.row-actions` cell — one click, no menu hop.
+- Use `ActionMenuPortal` only when a row carries more than four actions or needs grouped choices; otherwise inline icons win.
+- Every icon-only button carries a `title` tooltip and an `aria-label`.
+- Destructive actions (reject, void, cancel) use the `danger` tint; primary actions (initiate, authorise, publish) use the `primary` tint; view and neutral actions use `neutral`.
+- Canonical action icons: Eye = view details, Send = initiate, PenLine = authorise/sign, XCircle = reject, Ban = cancel/void, RotateCcw = retry, PencilLine = request details update, CalendarClock = schedule, Download = receipt, BadgeCheck = resolve, Upload = publish to blockchain, FilePlus2 = create corrected certificate, Undo2 = reopen payment.
+
+### Case ID cells are clickable and copyable
+- The case ID renders as a link-styled span (`cursor: pointer`, underline on hover) that opens the row's detail modal directly — no separate menu step.
+- A copy icon sits beside every case ID (`CaseIdCell`), writing the ID to the clipboard with a success toast.
+
+### Filters apply immediately
+- Selecting a status (or bank) applies the filter instantly — no Apply button, no draft/applied state. Clear resets the filter.
+
+### Sidebar icons
+- Each sidebar item within a module gets a distinct icon (Initiate = Send, Pending = PenLine, Failed = AlertTriangle, Publish = Upload, Void = Ban); sibling items never share an icon.
+
+### Signature progress
+- Lists show signatures as `current/required` (e.g. `1/3`); action modals show how many remain ("2 left").
+- Model: the bank initiator always contributes 1 signature; admin approvals add the rest. `required = 1 + approvals` where `approvals = 1 + floor(amount / 1,000,000)`.
+- Authorise/sign actions are offered only while signatures are outstanding (`current < required`); once the total is met the transfer is already in process.
+
 ## Usage Guidelines
 1. **Never use pure white or pure black backgrounds**: Always utilize `md-background` or `md-surface-container`.
 2. **Standard Radius**: Standard cards, inputs, and modals must use `28px` (`rounded-xl`). The single exception is dropdowns, whose bottom corners square off so the list joins the field.
@@ -139,3 +166,7 @@ Dropdowns are the one deliberate exception to the all-4-corners rule: **the bott
 4. **Action Button Alignment**: Place the confirm/accept button at the right side of the container, preceded by the cancel/reject button to its left (`| Cancel   Confirm |`).
 5. **Disabled means drained, not replaced**: never swap a component's variant classes out for a grey block. Keep the skin and apply `grayscale opacity-60 cursor-not-allowed`, withholding hover classes rather than overriding them.
 6. **Scrollable regions**: any container that can overflow uses `.md-scroll-thin` for the scrollbar, and pins its own header/footer rather than letting the whole panel scroll.
+7. **Row actions are inline icons**: replace 3-dots menus with one `IconButton` per action unless a row has more than four actions. Always provide `title` + `aria-label`.
+8. **Case IDs are interactive**: clicking the case ID opens its detail modal, and a copy icon sits beside every case ID.
+9. **Filters apply on selection**: no Apply button — changing the dropdown value filters immediately.
+10. **Distinct sidebar icons**: sibling nav items within a module never share an icon.

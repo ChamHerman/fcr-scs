@@ -11,6 +11,20 @@ export async function getNetwork(_req: Request, res: Response): Promise<void> {
   }
 }
 
+export async function setNetwork(req: Request, res: Response): Promise<void> {
+  const { network } = req.body as { network?: string };
+  if (!network) {
+    res.status(400).json({ error: "network is required" });
+    return;
+  }
+  try {
+    const active = ethereumService.setActiveNetwork(network);
+    res.json(active);
+  } catch (e: unknown) {
+    res.status(400).json({ error: (e as Error).message });
+  }
+}
+
 export async function publish(req: Request, res: Response): Promise<void> {
   const { caseId, documentHash } = req.body as { caseId?: string; documentHash?: string };
   if (!caseId || !documentHash) {

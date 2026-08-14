@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, CheckCircle2, Loader2, Eye, ShieldCheck } from 'lucide-react';
+import { Clock, User, CheckCircle2, Loader2, Eye, Send } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { paymentApi } from '../../services/paymentApi';
-import { ActionMenuPortal } from '../../components/ui/ActionMenuPortal';
+import { IconButton } from '../../components/ui/IconButton';
+import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
+import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
 import '../LandAcquisition/case_management.css';
 import './payment.css';
@@ -14,7 +16,6 @@ import {
   InitiateTransferModal,
   paymentBadge,
   fmtAmount,
-  fmtDate,
   maskAccount,
   hasBankDetails,
   isReadyToInitiate,
@@ -31,7 +32,6 @@ export default function InitiateTransfer() {
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState(deepLink || '');
   const [bankFilter, setBankFilter] = useState('All banks');
-  const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
   const pageRef = useRef<HTMLDivElement>(null);
 
@@ -123,9 +123,13 @@ export default function InitiateTransfer() {
       <div className="filter-bar">
         <SearchInput placeholder="Search case ID or beneficiary..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
         <div className="filter-group">
-          <select value={bankFilter} onChange={(e) => setBankFilter(e.target.value)}>
-            {banks.map((b) => <option key={b}>{b}</option>)}
-          </select>
+          <Select
+            label="Bank"
+            options={banks.map((b) => ({ value: b, label: b }))}
+            value={bankFilter}
+            onChange={setBankFilter}
+            placeholder="All banks"
+          />
           <Button variant="outlined" size="sm" onClick={() => { setSearchQuery(''); setBankFilter('All banks'); }}>Clear</Button>
         </div>
       </div>
@@ -163,23 +167,22 @@ export default function InitiateTransfer() {
               ) : (
                 filtered.map((pc) => (
                   <tr key={pc.caseId} className={deepLink === pc.caseId ? 'bg-md-secondary-container/40' : ''}>
-                    <td><span className="case-id">{pc.caseId}</span></td>
+                    <td><CaseIdCell caseId={pc.caseId} onView={() => setModal({ type: 'view', pc })} /></td>
                     <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
                     <td>{pc.bankName ? `${pc.bankName} ${maskAccount(pc.accountNumber)}` : '—'}</td>
                     <td style={{ fontWeight: 600 }}>{fmtAmount(pc.amount)}</td>
                     <td>
                       <span className="payment-badge approved"><span className="dot" />Verified</span>
                     </td>
-                    <td style={{ position: 'relative' }}>
-                      <ActionMenuPortal
-                        isOpen={activeMenu === pc.caseId}
-                        onToggle={() => setActiveMenu(activeMenu === pc.caseId ? null : pc.caseId)}
-                        onClose={() => setActiveMenu(null)}
-                        actions={[
-                          { label: 'View Details', onClick: () => setModal({ type: 'view', pc }) },
-                          { label: 'Initiate Transfer', onClick: () => setModal({ type: 'initiate', pc }) },
-                        ]}
-                      />
+                    <td>
+                      <div className="row-actions">
+                        <IconButton title="View Details" onClick={() => setModal({ type: 'view', pc })}>
+                          <Eye size={16} />
+                        </IconButton>
+                        <IconButton title="Initiate Transfer" variant="primary" onClick={() => setModal({ type: 'initiate', pc })}>
+                          <Send size={16} />
+                        </IconButton>
+                      </div>
                     </td>
                   </tr>
                 ))

@@ -222,16 +222,26 @@ async function main() {
     const caseId = generateCaseId(i);
     const user = users[i % users.length];
     const status = statuses[i % statuses.length];
-    const amount = (Math.floor(Math.random() * 50) + 1) * 10000;
-    
-    let currentSignatures = 0;
-    let requiredSignatures = 1 + Math.floor(amount / 1000000);
+    // Every 5th case is a large settlement (>= RM1M) so the multi-signature
+    // model (bank 1 + N approvals, e.g. "1/3", "2 left") is visible in the demo.
+    const amount = i % 5 === 0
+      ? (Math.floor(Math.random() * 3) + 1) * 1000000
+      : (Math.floor(Math.random() * 50) + 1) * 10000;
 
-    if (status === 'Transfer Initiated' || status === 'Authorised' || status === 'Paid' || status === 'Failed') {
-      currentSignatures = 1;
+    // Signature model: bank initiator always contributes 1 signature + admin
+    // approvals, where approvals = 1 + floor(amount / 1_000_000).
+    const requiredSignatures = 2 + Math.floor(amount / 1000000);
+
+    let currentSignatures = 0;
+
+    if (status === 'Transfer Initiated' || status === 'Failed') {
+      currentSignatures = 1; // bank signature only
+    }
+    if (status === 'Authorised') {
+      currentSignatures = Math.max(1, requiredSignatures - 1); // one approval left
     }
     if (status === 'Paid') {
-      currentSignatures = requiredSignatures;
+      currentSignatures = requiredSignatures; // quota met, transfer executed
     }
 
     const pc = await prisma.paymentCase.upsert({
@@ -239,6 +249,7 @@ async function main() {
       update: {
         status,
         currentSignatures,
+        requiredSignatures,
         amount
       },
       create: {
@@ -264,10 +275,27 @@ async function main() {
         await prisma.paymentAuthorisation.create({
           data: {
             paymentCaseId: pc.id,
-            adminId: "admin-initiator",
+            adminId: "admin-01",
             action: "initiate",
           }
         });
+      }
+
+      // Authorised / Paid rows carry one recorded approval (Admin B) so the
+      // signature list and SoD display look real.
+      if (status === 'Authorised' || status === 'Paid') {
+        const existingApprove = await prisma.paymentAuthorisation.findFirst({
+          where: { paymentCaseId: pc.id, action: "authorise" }
+        });
+        if (!existingApprove) {
+          await prisma.paymentAuthorisation.create({
+            data: {
+              paymentCaseId: pc.id,
+              adminId: "admin-02",
+              action: "authorise",
+            }
+          });
+        }
       }
     }
 

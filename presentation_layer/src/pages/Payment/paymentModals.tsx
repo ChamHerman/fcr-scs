@@ -55,6 +55,17 @@ export const hasSignedOrInitiated = (pc: PaymentRow, adminId: string) => {
   return signersOf(pc).includes(adminId);
 };
 
+/** Signatures still needed: required − current (bank 1 + approvals model). */
+export const signaturesLeft = (pc: PaymentRow) =>
+  Math.max(0, (pc.requiredSignatures ?? 1) - (pc.currentSignatures ?? 0));
+
+/** Authorise/sign is offered only while signatures are outstanding — once the
+ *  total is met the transfer is already in process (DESIGN.md). */
+export const isAuthoriseable = (pc: PaymentRow, adminId: string) =>
+  (pc.status === 'Transfer Initiated' || pc.status === 'Authorised') &&
+  signaturesLeft(pc) > 0 &&
+  !hasSignedOrInitiated(pc, adminId);
+
 export const fmtAmount = (v: string | number) => `RM ${Number(v || 0).toLocaleString('en-MY')}`;
 
 export const maskAccount = (n?: string | null) =>
@@ -245,7 +256,9 @@ export const InitiateTransferModal: React.FC<MutatingModalProps> = ({ pc, onClos
           </div>
 
           <div className="text-sm text-md-on-surface-variant bg-md-surface-container-low rounded-xl px-4 py-3 border border-md-outline/10">
-            This admin counts as <strong className="text-md-on-surface">approval 1 of {pc.requiredSignatures || 1}</strong>.
+            The bank initiator's signature (1) is recorded automatically. This admin adds{' '}
+            <strong className="text-md-on-surface">approval 1 of {Math.max(0, (pc.requiredSignatures || 1) - 1)}</strong> — total required{' '}
+            <strong className="text-md-on-surface">{pc.requiredSignatures || 1}</strong> signatures.
             <div className="mt-1 flex items-center gap-2">
               <Lock size={13} />
               Initiating as: <strong className="text-md-on-surface">{identityLabel} ({identityId})</strong>
@@ -306,6 +319,9 @@ export const AuthoriseTransferModal: React.FC<MutatingModalProps> = ({ pc, onClo
             <div className="label">Multi-signature progress</div>
             <div className="value">
               {current} of {required} signatures
+            </div>
+            <div className="text-xs text-md-on-surface-variant mt-1">
+              {signaturesLeft(pc)} left to meet the threshold
             </div>
           </div>
 

@@ -68,6 +68,7 @@ import { GenerateReports } from './pages/Reports/GenerateReports';
 import { ViewReports } from './pages/Reports/ViewReports';
 import { ScheduleReportsGeneration } from './pages/Reports/ScheduleReportsGeneration';
 import { ReportsDashboard } from './pages/Reports/ReportsDashboard';
+import { SettingsPage } from './pages/Settings/SettingsPage';
 
 function App() {
   return (
@@ -144,7 +145,7 @@ function App() {
             <Route path="prediction/results" element={<ViewValuationResults />} />
             <Route path="prediction/history" element={<ViewValuationHistory />} />
             <Route path="prediction/history" element={<ViewValuationHistory />} />
-            <Route path="settings" element={<Placeholder title="System Settings" />} />
+            <Route path="settings" element={<SettingsPage />} />
 
             {/* Payment Routes */}
             <Route path="payment">

@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, Wallet, Loader2, Ban, RefreshCw } from 'lucide-react';
+import { Clock, User, Wallet, Loader2, Ban, RefreshCw, Eye } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { blockchainApi } from '../../services/blockchainApi';
 import { useWallet } from '../../hooks/useWallet';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
-import { ActionMenuPortal } from '../../components/ui/ActionMenuPortal';
+import { IconButton } from '../../components/ui/IconButton';
+import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Button } from '../../components/ui/Button';
 import { WalletButton } from '../../components/ui/WalletButton';
@@ -29,10 +30,10 @@ export const VoidLedger: React.FC = () => {
   const { walletConnected, walletAddress, error: walletError, connectWallet } = useWallet();
   const { identityId } = useAdminIdentity();
   const [records, setRecords] = useState<LedgerRow[]>([]);
+  const [networkInfo, setNetworkInfo] = useState<{ name: string; label?: string; isLocal: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState(deepLink || '');
-  const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
   const pageRef = useRef<HTMLDivElement>(null);
 
@@ -45,7 +46,10 @@ export const VoidLedger: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await blockchainApi.getRecords('Published');
+      const [res, netData] = await Promise.all([
+        blockchainApi.getRecords('Published'),
+        blockchainApi.getNetworkInfo().catch(() => null),
+      ]);
       const mapped: LedgerRow[] = (res.records || []).map((r: any) => ({
         id: r.id,
         caseId: r.caseId,
@@ -58,6 +62,7 @@ export const VoidLedger: React.FC = () => {
         recordType: 'Original',
       }));
       setRecords(mapped);
+      setNetworkInfo(netData);
     } catch (err: any) {
       setError(err.message || 'Failed to load published records');
     } finally {
@@ -81,7 +86,14 @@ export const VoidLedger: React.FC = () => {
       <div className="topbar void-header">
         <div className="topbar-left">
           <h1>Void Ledger Record</h1>
-          <div className="sub">Void published records — edge cases only. Published records are immutable by design.</div>
+          <div className="sub">
+            Void published records — edge cases only. Published records are immutable by design.
+            {networkInfo && (
+              <span className="text-sm font-semibold text-gray-600 ml-2">
+                Network: {networkInfo.label ?? (networkInfo.isLocal ? 'Hardhat Local' : 'Sepolia Testnet')} ({networkInfo.name})
+              </span>
+            )}
+          </div>
         </div>
         <div className="topbar-right">
           {walletConnected ? (
@@ -151,21 +163,20 @@ export const VoidLedger: React.FC = () => {
               ) : (
                 filtered.map((row) => (
                   <tr key={row.id} className={deepLink === row.caseId ? 'bg-md-secondary-container/40' : ''}>
-                    <td><span className="case-id">{row.publicId ?? row.caseId}</span></td>
-                    <td><span className="meta-text">{row.caseId}</span></td>
+                    <td><span className="meta-text">{row.publicId ?? row.caseId}</span></td>
+                    <td><CaseIdCell caseId={row.caseId} onView={() => setModal({ type: 'view', row })} /></td>
                     <td style={{ fontFamily: 'monospace', color: 'var(--md-on-surface-variant)' }}>{fmtTx(row.transactionHash)}</td>
                     <td><span className="meta-text">{fmtDate(row.publishedAt)}</span></td>
                     <td>{ledgerBadge(row.status)}</td>
-                    <td style={{ position: 'relative' }}>
-                      <ActionMenuPortal
-                        isOpen={activeMenu === row.id}
-                        onToggle={() => setActiveMenu(activeMenu === row.id ? null : row.id)}
-                        onClose={() => setActiveMenu(null)}
-                        actions={[
-                          { label: 'View Details', onClick: () => setModal({ type: 'view', row }) },
-                          { label: 'Void Ledger Record', onClick: () => setModal({ type: 'void', row }) },
-                        ]}
-                      />
+                    <td>
+                      <div className="row-actions">
+                        <IconButton title="View Details" onClick={() => setModal({ type: 'view', row })}>
+                          <Eye size={16} />
+                        </IconButton>
+                        <IconButton title="Void Ledger Record" variant="danger" onClick={() => setModal({ type: 'void', row })}>
+                          <Ban size={16} />
+                        </IconButton>
+                      </div>
                     </td>
                   </tr>
                 ))
