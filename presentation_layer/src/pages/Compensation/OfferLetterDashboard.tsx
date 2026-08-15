@@ -202,7 +202,7 @@ export const OfferLetterDashboard: React.FC = () => {
                       </span>
                     </td>
                     <td style={{ textAlign: "center" }}>
-                      <button className="btn-view" onClick={() => handleView(o.id)}>
+                      <button className="btn-view" onClick={() => handleView(o.id)}>  
                         <Eye size={14} style={{ display: "inline", marginRight: "4px" }} /> View
                       </button>
                     </td>
