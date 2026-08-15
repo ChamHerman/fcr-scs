@@ -52,6 +52,7 @@ export const ValuationReportReview: React.FC = () => {
   const [reasonError, setReasonError] = useState("");
   const [daysError, setDaysError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const rejectModalRef = useModalPopIn(showRejectModal);
 
   useEffect(() => {
     async function fetchReport() {
@@ -190,8 +191,6 @@ export const ValuationReportReview: React.FC = () => {
       </div>
     );
   }
-
-  const rejectModalRef = useModalPopIn(showRejectModal);
 
   return (
     <>

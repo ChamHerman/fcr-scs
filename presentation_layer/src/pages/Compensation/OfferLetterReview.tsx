@@ -59,6 +59,8 @@ export const OfferLetterDetail: React.FC = () => {
   const [activeObjection, setActiveObjection] = useState<any | null>(null);
   const [showObjectionPrompt, setShowObjectionPrompt] = useState(false);
   const [withdrawingObjection, setWithdrawingObjection] = useState(false);
+  const promptModalRef = useModalPopIn(showObjectionPrompt);
+  const rejectModalRef = useModalPopIn(showRejectModal);
 
   useEffect(() => {
     async function fetchOffer() {
@@ -214,13 +216,9 @@ export const OfferLetterDetail: React.FC = () => {
     );
   }
 
-  const promptModalRef = useModalPopIn(showObjectionPrompt);
-  const rejectModalRef = useModalPopIn(showRejectModal);
-
   return (
     <>
-      {/* Active Objection Warning Modal */}
-      {showObjectionPrompt && activeObjection &&
+      {/* Active Objection Warning Modal */}      {showObjectionPrompt && activeObjection &&
         createPortal(
           <div className="reject-modal-overlay" onClick={() => setShowObjectionPrompt(false)}>
             <div ref={promptModalRef} className="reject-modal" style={{ maxWidth: "580px", borderRadius: "28px" }} onClick={(e) => e.stopPropagation()}>

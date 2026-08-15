@@ -109,6 +109,8 @@ model BlockchainRecord {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
   deletedAt           DateTime? @map("deleted_at")
+
+  @@map("blockchain_record")
 }
 
 model PaymentCase {
@@ -132,6 +134,8 @@ model PaymentCase {
   receipt              PaymentReceipt?
   failedTransactions   FailedTransaction[]
   receiverBankDetails  ReceiverBankDetails?
+
+  @@map("payment_case")
 }
 
 model PaymentAuthorisation {
@@ -143,6 +147,8 @@ model PaymentAuthorisation {
   reason        String?
   createdAt     DateTime    @default(now())
   deletedAt     DateTime?   @map("deleted_at")
+
+  @@map("payment_authorisation")
 }
 
 model PaymentReceipt {
@@ -152,6 +158,8 @@ model PaymentReceipt {
   bankReferenceNumber String
   generatedAt         DateTime    @default(now())
   deletedAt           DateTime?   @map("deleted_at")
+
+  @@map("payment_receipt")
 }
 
 model FailedTransaction {
@@ -163,6 +171,8 @@ model FailedTransaction {
   resolvedAt    DateTime?
   createdAt     DateTime    @default(now())
   deletedAt     DateTime?   @map("deleted_at")
+
+  @@map("failed_transaction")
 }
 
 model ReceiverBankDetails {
@@ -176,6 +186,8 @@ model ReceiverBankDetails {
   paymentCaseId        String      @unique
   paymentCase          PaymentCase @relation(fields: [paymentCaseId], references: [id])
   deletedAt            DateTime?   @map("deleted_at")
+
+  @@map("receiver_bank_details")
 }
 
 model Project {

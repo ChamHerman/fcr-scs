@@ -67,6 +67,8 @@ export const ObjectionReview: React.FC = () => {
   // Delete Modal State
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const editModalRef = useModalPopIn(showEditModal);
+  const deleteModalRef = useModalPopIn(showDeleteModal);
 
   useEffect(() => {
     async function fetchObjection() {
@@ -284,9 +286,6 @@ export const ObjectionReview: React.FC = () => {
 
   const isActionable = objection.rawStatus === "SUBMITTED" || objection.rawStatus === "UNDER_REVIEW";
   const isResolved = objection.rawStatus === "APPROVED" || objection.rawStatus === "REJECTED";
-
-  const editModalRef = useModalPopIn(showEditModal);
-  const deleteModalRef = useModalPopIn(showDeleteModal);
 
   return (
     <div className="flex min-h-screen" style={{ background: "var(--md-background)", color: "var(--md-on-surface)" }}>
