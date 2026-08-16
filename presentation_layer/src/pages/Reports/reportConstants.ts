@@ -18,12 +18,25 @@ export const STATES: Record<string, string[]> = {
 };
 
 export const REPORT_TYPES = [
-  'Compensation Summary Report',
-  'Compensation Breakdown Report',
-  'Asset Valuation Report',
-  'Blockchain Audit Report',
-  'Payment Report',
   'Case Status Report',
+  'Payment Report',
+  'Blockchain Audit Report',
+  'Compensation Summary Report',
+  'Asset Valuation Report',
   'Performance Report',
   'Compliance Report'
+];
+
+export const REPORT_STATUS_OPTIONS = [
+  'All',
+  'CASE_REGISTERED',
+  'VALUATION_IN_PROGRESS',
+  'PENDING_VALUATION_APPROVAL',
+  'VALUATION_APPROVED',
+  'PENDING_COMPENSATION_APPROVAL',
+  'COMPENSATION_APPROVED',
+  'OFFER_ISSUED',
+  'PAYMENT_IN_PROGRESS',
+  'PAYMENT_COMPLETED',
+  'CASE_CLOSED'
 ];
