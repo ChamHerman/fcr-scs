@@ -21,6 +21,7 @@ import {
   PAYMENT_STATUS_OPTIONS,
   BLOCKCHAIN_STATUS_OPTIONS
 } from './reportConstants';
+import { ReportSummaryCards, ReportDataTable } from './reportComponents';
 import {
   fetchCaseStatusReport,
   fetchPaymentReport,
@@ -40,108 +41,6 @@ const REPORT_CODE: Record<string, string> = {
   'Blockchain Audit Report': 'FR-RPT-013',
 };
 
-/* ─────────────────────────── Preview primitives ─────────────────────────── */
-
-const PreviewSummary: React.FC<{ data: ReportGeneratedResponse }> = ({ data }) => {
-  const s = data.summary ?? {};
-  let cards: { label: string; value: React.ReactNode }[] = [];
-
-  if (data.reportType === "Case Status Report") {
-    cards = [
-      { label: 'Total Cases Found', value: s.totalCases ?? 0 },
-      { label: 'Active Acquisition', value: s.activeCases ?? 0 },
-      { label: 'Completed / Closed', value: s.completedCases ?? 0 },
-      { label: 'Average Lifecycle Aging', value: s.averageAgingDays ?? '0 days' },
-    ];
-  } else if (data.reportType === "Payment Report") {
-    cards = [
-      { label: 'Total Disbursements', value: s.totalDisbursement ?? 'RM 0.00' },
-      { label: 'Success Rate', value: s.successRate ?? '0%' },
-      { label: 'Paid Records', value: s.successfulPayments ?? 0 },
-      { label: 'Pending / Processing', value: s.pendingPayments ?? 0 },
-    ];
-  } else {
-    cards = [
-      { label: 'Total Ledger Records', value: s.totalRecords ?? 0 },
-      { label: 'Published On-Chain', value: s.publishedRecords ?? 0 },
-      { label: 'Voided Records', value: s.voidedRecords ?? 0 },
-      { label: 'Cryptographic Integrity', value: s.integrityStatus ?? 'Verified' },
-    ];
-  }
-
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-      {cards.map((c) => (
-        <div key={c.label} className="bg-md-surface-container rounded-xl p-5 shadow-sm">
-          <div className="text-[13px] font-medium text-md-on-surface-variant tracking-wide">{c.label}</div>
-          <div className="text-2xl font-bold mt-1 tracking-tight">{c.value}</div>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-const PreviewTable: React.FC<{ data: ReportGeneratedResponse }> = ({ data }) => {
-  const isSuccessStatus = (val: string) =>
-    ['Paid', 'Published', 'Approved', 'Completed', 'COMPENSATION_APPROVED', 'CASE_CLOSED'].includes(val);
-
-  return (
-    <div className="bg-md-surface-container rounded-xl shadow-sm overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr>
-            {data.details && data.details.length > 0 ? (
-              Object.keys(data.details[0]).map((key) => (
-                <th key={key} className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant whitespace-nowrap">
-                  {key.replace(/([A-Z])/g, ' $1').toUpperCase()}
-                </th>
-              ))
-            ) : (
-              <>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Case ID</th>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Title</th>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Status</th>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Date</th>
-              </>
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {data.details && data.details.length > 0 ? (
-            data.details.slice(0, 25).map((row, idx) => (
-              <tr key={idx} className="border-t border-md-outline/10 hover:bg-md-primary/5 transition-colors">
-                {Object.values(row).map((val: any, cIdx) => (
-                  <td key={cIdx} className="px-4 py-3">
-                    {typeof val === 'string' && (val.startsWith('0x') || val.length > 30) ? (
-                      <span className="font-medium font-mono text-xs text-md-on-surface-variant">{val.slice(0, 16)}...</span>
-                    ) : typeof val === 'string' && isSuccessStatus(val) ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full py-0.5 pl-2 pr-3 text-xs font-semibold bg-[#e6f4ea] text-[#1e7b4a]">
-                        <span className="w-2 h-2 rounded-full bg-[#1e7b4a]" />
-                        {val}
-                      </span>
-                    ) : (
-                      <span className="text-md-on-surface-variant">{String(val ?? '-')}</span>
-                    )}
-                  </td>
-                ))}
-              </tr>
-            ))
-          ) : (
-            <tr>
-              <td colSpan={6} className="px-4 py-8 text-center text-md-on-surface-variant">
-                <AlertCircle size={24} className="mx-auto mb-2 opacity-50" />
-                No preview records found. Adjust your filters.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-};
-
-/* ─────────────────────────────── Main page ─────────────────────────────── */
-
 export const GenerateReports: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -151,6 +50,16 @@ export const GenerateReports: React.FC = () => {
   // "Generate Filtering Report" on a report page) — users cannot switch type.
   const rawType = searchParams.get('type') || 'Case Status Report';
   const category = SUPPORTED_TYPES.includes(rawType) ? rawType : 'Case Status Report';
+
+  // Back returns to the report page the user came from, when known.
+  const fromPath = searchParams.get('from');
+  const handleBack = () => {
+    if (fromPath) {
+      navigate(fromPath);
+    } else {
+      navigate(-1);
+    }
+  };
 
   const [state, setState] = useState<string>('All');
   const [location, setLocation] = useState<string>('All');
@@ -252,13 +161,13 @@ export const GenerateReports: React.FC = () => {
       {/* Topbar */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3">
-          <Button variant="tonal" size="sm" onClick={() => navigate('/admin/reports')}>
+          <Button variant="tonal" size="sm" onClick={handleBack}>
             <ArrowLeft size={16} />
             Back
           </Button>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl md:text-3xl font-bold">Generate Statutory Reports</h1>
+              <h1 className="text-2xl md:text-3xl font-bold">Generate Filtering Reports</h1>
               <span className="px-2 py-1 rounded-lg bg-md-primary/15 text-md-primary font-bold text-xs whitespace-nowrap">
                 {REPORT_CODE[category]}
               </span>
@@ -363,8 +272,8 @@ export const GenerateReports: React.FC = () => {
 
         {previewData && (
           <>
-            <PreviewSummary data={previewData} />
-            <PreviewTable data={previewData} />
+            <ReportSummaryCards data={previewData} />
+            <ReportDataTable data={previewData} />
           </>
         )}
       </div>
@@ -390,8 +299,8 @@ export const GenerateReports: React.FC = () => {
       >
         {previewData && (
           <div className="space-y-4">
-            <PreviewSummary data={previewData} />
-            <PreviewTable data={previewData} />
+            <ReportSummaryCards data={previewData} />
+            <ReportDataTable data={previewData} />
           </div>
         )}
       </Modal>

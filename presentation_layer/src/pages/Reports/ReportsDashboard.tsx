@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Clock,
+  Download,
+  FileText,
   Filter,
   CheckCircle2,
   TrendingUp,
@@ -28,9 +30,18 @@ import { Doughnut, Line, Bar } from 'react-chartjs-2';
 import { Button } from '../../components/ui/Button';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Select } from '../../components/ui/Select';
+import { Modal } from '../../components/ui/Modal';
+import { useNotification } from '../../components/ui/NotificationSystem';
 import { STATES } from './reportConstants';
-import { fetchDashboardOverview } from '../../services/reportApi';
-import type { DashboardOverviewData } from '../../services/reportApi';
+import { StatusBadge, ReportSummaryCards, ReportDataTable } from './reportComponents';
+import {
+  fetchDashboardOverview,
+  fetchCaseStatusReport,
+  fetchPaymentReport,
+  fetchBlockchainAuditReport,
+  downloadReportPdf
+} from '../../services/reportApi';
+import type { DashboardOverviewData, ReportGeneratedResponse } from '../../services/reportApi';
 
 ChartJS.register(
   CategoryScale,
@@ -49,26 +60,44 @@ interface ReportsDashboardProps {
   reportCategory?: 'Case Status' | 'Payment' | 'Blockchain Audit';
 }
 
-/* Design-system status badge palette (mirrors DesignSystem.tsx STATUS_BADGES). */
-const STATUS_STYLES = {
-  green: { bg: 'bg-[#e6f4ea]', fg: 'text-[#1e7b4a]', dot: 'bg-[#1e7b4a]' },
-  amber: { bg: 'bg-[#fef7e0]', fg: 'text-[#8d6e00]', dot: 'bg-[#8d6e00]' },
-  red: { bg: 'bg-[#fce8e6]', fg: 'text-[#b3261e]', dot: 'bg-[#b3261e]' },
-  blue: { bg: 'bg-[#e3f2fd]', fg: 'text-[#0b5b8c]', dot: 'bg-[#0b5b8c]' },
-} as const;
+/* Per-category fallback data used when the backend is unreachable. */
+const FALLBACK_CATEGORY_DATA: Record<string, ReportGeneratedResponse> = {
+  'Case Status': {
+    reportType: 'Case Status Report',
+    reportId: 'FR-RPT-015-DEMO',
+    generatedAt: new Date().toISOString(),
+    filterApplied: {},
+    summary: { totalCases: 2, activeCases: 1, completedCases: 1, averageAgingDays: '12 days' },
+    details: [
+      { caseId: 'LAC-2026-0012', title: 'Pantai Cenang Land Acquisition', state: 'Kedah', district: 'Langkawi', status: 'VALUATION_IN_PROGRESS', date: '2026-08-14', lifecycleAging: '12 days' },
+      { caseId: 'LAC-2026-0011', title: 'Desaru Coastal Highway Expansion', state: 'Johor', district: 'Kota Tinggi', status: 'COMPENSATION_APPROVED', date: '2026-08-12', lifecycleAging: '15 days' },
+    ],
+  },
+  'Payment': {
+    reportType: 'Payment Report',
+    reportId: 'FR-RPT-014-DEMO',
+    generatedAt: new Date().toISOString(),
+    filterApplied: {},
+    summary: { totalRecords: 2, totalDisbursement: 'RM 2,450,000.00', successfulPayments: 1, pendingPayments: 1, successRate: '50%' },
+    details: [
+      { caseId: 'PAY-0089', payeeName: 'Tanjong Tokong Beneficiary', bankName: 'Maybank', amount: 'RM 1,200,000.00', status: 'Paid', bankReference: 'MBB-2026-9921', date: '2026-08-10' },
+      { caseId: 'PAY-0088', payeeName: 'Gombak Rail Beneficiary', bankName: 'CIMB Bank', amount: 'RM 750,000.00', status: 'Approved', bankReference: 'Pending Clearance', date: '2026-08-09' },
+    ],
+  },
+  'Blockchain Audit': {
+    reportType: 'Blockchain Audit Report',
+    reportId: 'FR-RPT-013-DEMO',
+    generatedAt: new Date().toISOString(),
+    filterApplied: {},
+    summary: { totalRecords: 2, publishedRecords: 2, voidedRecords: 0, integrityStatus: '100% Cryptographically Verified' },
+    details: [
+      { caseId: 'BC-2026-004', transactionHash: '0x89ab...34fe', documentHash: '0x12cd...78ba', status: 'Published', publishedAt: '2026-08-08' },
+      { caseId: 'BC-2026-003', transactionHash: '0x45cd...11aa', documentHash: '0x99ee...22cc', status: 'Published', publishedAt: '2026-08-05' },
+    ],
+  },
+};
 
-function statusStyle(status: string) {
-  const s = status.toUpperCase().replace(/_/g, ' ');
-  if (['PAID', 'PUBLISHED', 'APPROVED', 'COMPLETED', 'CASE CLOSED', 'COMPENSATION APPROVED'].includes(s)) {
-    return STATUS_STYLES.green;
-  }
-  if (['VOIDED', 'FAILED', 'REJECTED'].includes(s)) return STATUS_STYLES.red;
-  if (['CASE REGISTERED', 'REGISTERED', 'NOTARIZED'].includes(s)) return STATUS_STYLES.blue;
-  return STATUS_STYLES.amber;
-}
-
-/* Stat card follows the DesignSystem "Dashboard Patterns — Stat Cards" recipe:
-   surface-container fill, rounded-xl, sm shadow lifting to md + slight scale. */
+/* Stat card follows the DesignSystem "Dashboard Patterns — Stat Cards" recipe. */
 const StatCard: React.FC<{
   icon: React.ReactNode;
   label: string;
@@ -87,11 +116,20 @@ const StatCard: React.FC<{
 
 export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCategory }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { notify } = useNotification();
+
   const [data, setData] = useState<DashboardOverviewData | null>(null);
+  const [categoryData, setCategoryData] = useState<ReportGeneratedResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedState, setSelectedState] = useState('All states');
+  const [fullReportOpen, setFullReportOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
+  const categorySeqRef = useRef(0);
+
+  /* Overview data (charts + totals) is only needed on the overview page. */
   const loadData = async () => {
     setLoading(true);
     try {
@@ -131,23 +169,65 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
         monthlyTrends: {
           "Feb": 4, "Mar": 8, "Apr": 14, "May": 19, "Jun": 21, "Jul": 26, "Aug": 24
         },
-        recentActivity: [
-          { id: "LAC-2026-0012", title: "Pantai Cenang Land Acquisition", category: "Case Status", location: "Kedah / Langkawi", date: "2026-08-14", status: "VALUATION_IN_PROGRESS", agingDays: "12d" },
-          { id: "LAC-2026-0011", title: "Desaru Coastal Highway Expansion", category: "Case Status", location: "Johor / Kota Tinggi", date: "2026-08-12", status: "COMPENSATION_APPROVED", agingDays: "15d" },
-          { id: "PAY-0089", title: "Disbursement for Tanjong Tokong", category: "Payment", location: "National / Bank Transfer", date: "2026-08-10", status: "Paid", bankDetails: "Maybank (••••4321)", bankReference: "MBB-2026-9921" },
-          { id: "PAY-0088", title: "Compensation for Gombak Rail", category: "Payment", location: "National / Bank Transfer", date: "2026-08-09", status: "Approved", bankDetails: "CIMB Bank (••••1188)", bankReference: "Pending Clearance" },
-          { id: "BC-2026-004", title: "Smart Contract Settlement #004", category: "Blockchain Audit", location: "Ethereum Sepolia", date: "2026-08-08", status: "Published", transactionHash: "0x89ab...34fe", documentHash: "0x12cd...78ba" },
-          { id: "BC-2026-003", title: "Valuation Notarization #003", category: "Blockchain Audit", location: "Ethereum Sepolia", date: "2026-08-05", status: "Published", transactionHash: "0x45cd...11aa", documentHash: "0x99ee...22cc" }
-        ]
+        recentActivity: []
       });
     } finally {
       setLoading(false);
     }
   };
 
+  /* Category pages fetch only their own records from the dedicated endpoint. */
+  const loadCategoryData = useCallback(async () => {
+    if (!reportCategory) return;
+    const seq = ++categorySeqRef.current;
+    setLoading(true);
+    try {
+      let res: ReportGeneratedResponse;
+      if (reportCategory === 'Payment') {
+        res = await fetchPaymentReport({});
+      } else if (reportCategory === 'Blockchain Audit') {
+        res = await fetchBlockchainAuditReport({});
+      } else {
+        res = await fetchCaseStatusReport({});
+      }
+      if (seq !== categorySeqRef.current) return;
+      setCategoryData(res);
+    } catch (err) {
+      console.warn(`Could not fetch ${reportCategory} data, using fallback`, err);
+      if (seq !== categorySeqRef.current) return;
+      setCategoryData(FALLBACK_CATEGORY_DATA[reportCategory]);
+    } finally {
+      if (seq === categorySeqRef.current) setLoading(false);
+    }
+  }, [reportCategory]);
+
   useEffect(() => {
-    loadData();
-  }, []);
+    if (reportCategory) {
+      setCategoryData(null);
+      loadCategoryData();
+    } else {
+      loadData();
+    }
+  }, [loadCategoryData, reportCategory]);
+
+  const handleRefresh = () => {
+    if (reportCategory) loadCategoryData();
+    else loadData();
+  };
+
+  const handleFullDownload = async () => {
+    if (!reportCategory) return;
+    setDownloading(true);
+    try {
+      await downloadReportPdf(`${reportCategory} Report`, {});
+      setDownloading(false);
+      setFullReportOpen(false);
+      notify({ type: 'success', title: 'Report downloaded', message: 'The full report PDF has been generated and downloaded.' });
+    } catch (err: any) {
+      setDownloading(false);
+      notify({ type: 'error', title: 'Download failed', message: err.message || 'Something went wrong while generating the PDF.' });
+    }
+  };
 
   // Case Status Chart Data
   const caseLabels = data ? Object.keys(data.caseStatusDistribution).map(k => k.replace(/_/g, ' ')) : [];
@@ -218,11 +298,21 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
     ],
   };
 
-  const filteredActivity = (data?.recentActivity || []).filter(item => {
-    const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) || item.id.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesState = selectedState === 'All states' || item.location.includes(selectedState);
-    return matchesSearch && matchesState;
-  });
+  /* Category records, filtered client-side by search + state. */
+  const categoryDetails = useMemo(() => categoryData?.details ?? [], [categoryData]);
+
+  const filteredDetails = useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    return categoryDetails.filter((row: any) => {
+      const haystack = Object.values(row).join(' ').toLowerCase();
+      const matchesSearch = !term || haystack.includes(term);
+      let matchesState = true;
+      if (reportCategory === 'Case Status' && selectedState !== 'All states' && row.state) {
+        matchesState = row.state === selectedState;
+      }
+      return matchesSearch && matchesState;
+    });
+  }, [categoryDetails, searchTerm, selectedState, reportCategory]);
 
   // Page Header Details
   const getHeaderInfo = () => {
@@ -272,7 +362,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
           <p className="text-md-on-surface-variant mt-1 max-w-2xl">{headerInfo.subtitle}</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="tonal" size="sm" onClick={loadData}>
+          <Button variant="tonal" size="sm" onClick={handleRefresh}>
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
             Refresh
           </Button>
@@ -288,30 +378,30 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
         {/* Case Status View Specific KPIs */}
         {reportCategory === 'Case Status' && (
           <>
-            <StatCard icon={<FolderKanban size={16} className="text-[#6750A4]" />} label="Total Acquisition Cases" value={data?.kpis.totalCases ?? 0} sub="Registered in System" />
-            <StatCard icon={<TrendingUp size={16} className="text-[#a8600b]" />} label="Active in Pipeline" value={Math.max(0, (data?.kpis.totalCases ?? 0) - (data?.kpis.completedCases ?? 0))} sub="In Progress / Review" />
-            <StatCard icon={<CheckCircle2 size={16} className="text-[#1e7b4a]" />} label="Completed / Closed" value={data?.kpis.completedCases ?? 0} sub="Fully Settled" />
-            <StatCard icon={<Clock size={16} className="text-[#0b5b8c]" />} label="Avg Lifecycle Duration" value="18 days" sub="From Notice to Settlement" />
+            <StatCard icon={<FolderKanban size={16} className="text-[#6750A4]" />} label="Total Acquisition Cases" value={categoryData?.summary?.totalCases ?? 0} sub="Registered in System" />
+            <StatCard icon={<TrendingUp size={16} className="text-[#a8600b]" />} label="Active in Pipeline" value={categoryData?.summary?.activeCases ?? 0} sub="In Progress / Review" />
+            <StatCard icon={<CheckCircle2 size={16} className="text-[#1e7b4a]" />} label="Completed / Closed" value={categoryData?.summary?.completedCases ?? 0} sub="Fully Settled" />
+            <StatCard icon={<Clock size={16} className="text-[#0b5b8c]" />} label="Avg Lifecycle Duration" value={categoryData?.summary?.averageAgingDays ?? '0 days'} sub="From Notice to Settlement" />
           </>
         )}
 
         {/* Payment View Specific KPIs */}
         {reportCategory === 'Payment' && (
           <>
-            <StatCard icon={<CreditCard size={16} className="text-[#1e7b4a]" />} label="Total Disbursed" value={`RM ${((data?.kpis.totalPaidAmount || 0) / 1000000).toFixed(2)}M`} sub="Paid to Landowners" />
-            <StatCard icon={<FolderKanban size={16} className="text-[#6750A4]" />} label="Total Approved Volume" value={`RM ${((data?.kpis.totalCompensationAmount || 0) / 1000000).toFixed(2)}M`} sub="Statutory Approved" />
-            <StatCard icon={<CheckCircle2 size={16} className="text-[#0b5b8c]" />} label="Disbursement Success Rate" value="98.4%" sub="Bank Transfer Clearance" />
-            <StatCard icon={<TrendingUp size={16} className="text-[#a8600b]" />} label="Pending Authorisation" value={`RM ${Math.max(0, ((data?.kpis.totalCompensationAmount || 0) - (data?.kpis.totalPaidAmount || 0)) / 1000000).toFixed(2)}M`} sub="Awaiting Bank Transfer" />
+            <StatCard icon={<CreditCard size={16} className="text-[#1e7b4a]" />} label="Total Disbursements" value={categoryData?.summary?.totalDisbursement ?? 'RM 0.00'} sub="Paid to Landowners" />
+            <StatCard icon={<CheckCircle2 size={16} className="text-[#0b5b8c]" />} label="Disbursement Success Rate" value={categoryData?.summary?.successRate ?? '0%'} sub="Bank Transfer Clearance" />
+            <StatCard icon={<FolderKanban size={16} className="text-[#6750A4]" />} label="Paid Records" value={categoryData?.summary?.successfulPayments ?? 0} sub="Settled in Full" />
+            <StatCard icon={<TrendingUp size={16} className="text-[#a8600b]" />} label="Pending / Processing" value={categoryData?.summary?.pendingPayments ?? 0} sub="Awaiting Bank Transfer" />
           </>
         )}
 
         {/* Blockchain Audit View Specific KPIs */}
         {reportCategory === 'Blockchain Audit' && (
           <>
-            <StatCard icon={<ShieldCheck size={16} className="text-[#0b5b8c]" />} label="Total Ledger Entries" value={data?.kpis.totalBlockchainRecords ?? 0} sub="Smart Contract Events" />
-            <StatCard icon={<CheckCircle2 size={16} className="text-[#1e7b4a]" />} label="Published On-Chain" value={data?.kpis.publishedBlockchainRecords ?? 0} sub="Ethereum Sepolia Verified" />
-            <StatCard icon={<AlertCircle size={16} className="text-[#b3261e]" />} label="Voided / Revoked" value={data?.kpis.voidedBlockchainRecords ?? 0} sub="Superseded Contracts" />
-            <StatCard icon={<ShieldCheck size={16} className="text-[#6750A4]" />} label="Cryptographic Integrity" value="100% Verified" sub="SHA-256 Validated" />
+            <StatCard icon={<ShieldCheck size={16} className="text-[#0b5b8c]" />} label="Total Ledger Records" value={categoryData?.summary?.totalRecords ?? 0} sub="Smart Contract Events" />
+            <StatCard icon={<CheckCircle2 size={16} className="text-[#1e7b4a]" />} label="Published On-Chain" value={categoryData?.summary?.publishedRecords ?? 0} sub="Ethereum Sepolia Verified" />
+            <StatCard icon={<AlertCircle size={16} className="text-[#b3261e]" />} label="Voided / Revoked" value={categoryData?.summary?.voidedRecords ?? 0} sub="Superseded Contracts" />
+            <StatCard icon={<ShieldCheck size={16} className="text-[#6750A4]" />} label="Cryptographic Integrity" value={categoryData?.summary?.integrityStatus ?? 'Verified'} sub="SHA-256 Validated" />
           </>
         )}
 
@@ -388,7 +478,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
           <div className="flex flex-wrap items-center gap-3">
             <SearchInput
               containerClassName="flex-1 min-w-[220px]"
-              placeholder={`Search ${reportCategory} by title or ID...`}
+              placeholder={`Search ${reportCategory} records by ID, title or reference...`}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -417,18 +507,28 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
             </Button>
           </div>
 
-          {/* Table Header Row */}
+          {/* Table Header Row + Report Actions */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-sm font-medium text-md-on-surface-variant">
-              {reportCategory} Records ({filteredActivity.length})
+              {reportCategory} Records ({filteredDetails.length})
             </span>
-            <Button
-              variant="filled"
-              onClick={() => navigate(`/admin/reports/generate?type=${reportCategory} Report`)}
-            >
-              <Filter size={14} />
-              Generate Filtering Report
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="filled"
+                onClick={() => setFullReportOpen(true)}
+                disabled={!categoryData}
+              >
+                <FileText size={14} />
+                Generate Full Report
+              </Button>
+              <Button
+                variant="tonal"
+                onClick={() => navigate(`/admin/reports/generate?type=${reportCategory} Report&from=${encodeURIComponent(location.pathname)}`)}
+              >
+                <Filter size={14} />
+                Generate Filtering Report
+              </Button>
+            </div>
           </div>
 
           {/* Data Table */}
@@ -448,8 +548,9 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
                   ) : reportCategory === 'Payment' ? (
                     <>
                       <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Record ID</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Title / Description</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Bank Details</th>
+                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Payee / Title</th>
+                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Bank Name</th>
+                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Amount</th>
                       <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Bank Reference</th>
                       <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Date</th>
                       <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Status</th>
@@ -457,7 +558,6 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
                   ) : (
                     <>
                       <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Record ID</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Title / Description</th>
                       <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Transaction Hash</th>
                       <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Document Hash</th>
                       <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Date</th>
@@ -467,56 +567,79 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
                 </tr>
               </thead>
               <tbody>
-                {filteredActivity.length === 0 ? (
+                {filteredDetails.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-md-on-surface-variant">
+                    <td colSpan={reportCategory === 'Payment' ? 7 : reportCategory === 'Blockchain Audit' ? 5 : 6} className="px-4 py-8 text-center text-md-on-surface-variant">
                       <AlertCircle size={24} className="mx-auto mb-2 opacity-50" />
                       No records found matching the selected criteria.
                     </td>
                   </tr>
                 ) : (
-                  filteredActivity.map((item) => {
-                    const badge = statusStyle(item.status);
-                    return (
-                      <tr key={item.id} className="border-t border-md-outline/10 hover:bg-md-primary/5 transition-colors">
-                        <td className="px-4 py-3 font-semibold text-md-primary text-[13px]">{item.id}</td>
-                        <td className="px-4 py-3 font-medium">{item.title}</td>
-
-                        {reportCategory === 'Case Status' ? (
-                          <>
-                            <td className="px-4 py-3 text-md-on-surface-variant">{item.location}</td>
-                            <td className="px-4 py-3 text-md-on-surface-variant">{item.date}</td>
-                            <td className="px-4 py-3 text-md-on-surface-variant">{item.agingDays || 'N/A'}</td>
-                          </>
-                        ) : reportCategory === 'Payment' ? (
-                          <>
-                            <td className="px-4 py-3 text-md-on-surface-variant">{item.bankDetails || 'N/A'}</td>
-                            <td className="px-4 py-3 text-md-on-surface-variant">{item.bankReference || 'N/A'}</td>
-                            <td className="px-4 py-3 text-md-on-surface-variant">{item.date}</td>
-                          </>
-                        ) : (
-                          <>
-                            <td className="px-4 py-3 font-mono text-xs text-md-on-surface-variant">{item.transactionHash || 'N/A'}</td>
-                            <td className="px-4 py-3 font-mono text-xs text-md-on-surface-variant">{item.documentHash || 'N/A'}</td>
-                            <td className="px-4 py-3 text-md-on-surface-variant">{item.date}</td>
-                          </>
-                        )}
-
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex items-center gap-1.5 rounded-full py-0.5 pl-2 pr-3 text-xs font-semibold ${badge.bg} ${badge.fg}`}>
-                            <span className={`w-2 h-2 rounded-full ${badge.dot}`} />
-                            {item.status.replace(/_/g, ' ')}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })
+                  filteredDetails.map((row: any, idx) => (
+                    <tr key={idx} className="border-t border-md-outline/10 hover:bg-md-primary/5 transition-colors">
+                      {reportCategory === 'Case Status' ? (
+                        <>
+                          <td className="px-4 py-3 font-semibold text-md-primary text-[13px]">{row.caseId}</td>
+                          <td className="px-4 py-3 font-medium">{row.title}</td>
+                          <td className="px-4 py-3 text-md-on-surface-variant">{`${row.state} / ${row.district}`}</td>
+                          <td className="px-4 py-3 text-md-on-surface-variant">{row.date}</td>
+                          <td className="px-4 py-3 text-md-on-surface-variant">{row.lifecycleAging}</td>
+                          <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
+                        </>
+                      ) : reportCategory === 'Payment' ? (
+                        <>
+                          <td className="px-4 py-3 font-semibold text-md-primary text-[13px]">{row.caseId}</td>
+                          <td className="px-4 py-3 font-medium">{row.payeeName}</td>
+                          <td className="px-4 py-3 text-md-on-surface-variant">{row.bankName}</td>
+                          <td className="px-4 py-3 font-medium">{row.amount}</td>
+                          <td className="px-4 py-3 text-md-on-surface-variant">{row.bankReference}</td>
+                          <td className="px-4 py-3 text-md-on-surface-variant">{row.date}</td>
+                          <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="px-4 py-3 font-semibold text-md-primary text-[13px]">{row.caseId}</td>
+                          <td className="px-4 py-3 font-mono text-xs text-md-on-surface-variant">{row.transactionHash}</td>
+                          <td className="px-4 py-3 font-mono text-xs text-md-on-surface-variant">{row.documentHash}</td>
+                          <td className="px-4 py-3 text-md-on-surface-variant">{row.publishedAt}</td>
+                          <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
+                        </>
+                      )}
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>
           </div>
         </>
       )}
+
+      {/* Full Report Preview-before-download Modal */}
+      <Modal
+        isOpen={fullReportOpen}
+        onClose={() => !downloading && setFullReportOpen(false)}
+        title={`${reportCategory ? `${reportCategory} Report` : 'Report'} — Full Preview`}
+        subtitle="Complete report without filters. Review the report below, then download the PDF."
+        maxWidth="max-w-3xl"
+        footer={
+          <div className="flex items-center justify-end gap-3">
+            <Button variant="text" disabled={downloading} onClick={() => setFullReportOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="filled" isLoading={downloading} onClick={handleFullDownload}>
+              <Download size={14} />
+              Download PDF
+            </Button>
+          </div>
+        }
+      >
+        {categoryData && (
+          <div className="space-y-4">
+            <ReportSummaryCards data={categoryData} />
+            <ReportDataTable data={categoryData} />
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };
