@@ -33,6 +33,11 @@ export interface DashboardOverviewData {
     location: string;
     date: string;
     status: string;
+    agingDays?: string;
+    bankDetails?: string;
+    bankReference?: string;
+    transactionHash?: string;
+    documentHash?: string;
   }>;
 }
 

@@ -3,7 +3,7 @@ import PDFDocument from "pdfkit";
 export const generatePdfBuffer = async (reportTitle: string, reportData: any): Promise<Buffer> => {
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ margin: 40, size: "A4" });
+      const doc = new PDFDocument({ margin: 40, size: "A4", bufferPages: true });
       const buffers: Buffer[] = [];
 
       doc.on("data", buffers.push.bind(buffers));
@@ -18,18 +18,18 @@ export const generatePdfBuffer = async (reportTitle: string, reportData: any): P
       const alternatingRowBg = "#FBF8FD";
 
       // Header Banner
-      doc.rect(40, 40, doc.page.width - 80, 70).fill(primaryColor);
+      doc.rect(40, 40, doc.page.width - 80, 75).fill(primaryColor);
 
-      doc.fillColor("#FFFFFF").fontSize(16).font("Helvetica-Bold")
-        .text("FAIR COMPENSATION & RESETTLEMENT SMART CONTRACT SYSTEM", 55, 55, { align: "left" });
+      doc.fillColor("#FFFFFF").fontSize(15).font("Helvetica-Bold")
+        .text("FAIR COMPENSATION & RESETTLEMENT SMART CONTRACT SYSTEM", 55, 50, { width: doc.page.width - 240, align: "left" });
       
-      doc.fontSize(10).font("Helvetica")
-        .text("Government Administration Reporting & Audit Subsystem (FCR-SCS)", 55, 78, { align: "left" });
+      doc.fontSize(9.5).font("Helvetica")
+        .text("Government Administration Reporting & Audit Subsystem (FCR-SCS)", 55, doc.y + 4, { align: "left" });
       
       doc.fontSize(9).text(`Report ID: ${reportData.reportId || "N/A"}`, doc.page.width - 200, 78, { width: 145, align: "right" });
 
       doc.moveDown(3);
-      doc.y = 125;
+      doc.y = 130;
 
       // Report Title & Meta Info
       doc.fillColor(textColor).fontSize(15).font("Helvetica-Bold").text(reportTitle, 40, doc.y);
@@ -58,11 +58,11 @@ export const generatePdfBuffer = async (reportTitle: string, reportData: any): P
       let summaryText = "";
       if (reportData.summary) {
         if (reportData.reportType === "Case Status Report") {
-          summaryText = `Total Cases: ${reportData.summary.totalCases}  |  Active Cases: ${reportData.summary.activeCases}  |  Completed: ${reportData.summary.completedCases}  |  Avg Lifecycle Aging: ${reportData.summary.averageAgingDays}`;
+          summaryText = `Total Cases: ${reportData.summary.totalCases ?? 0}  |  Active Cases: ${reportData.summary.activeCases ?? 0}  |  Completed: ${reportData.summary.completedCases ?? 0}  |  Avg Lifecycle Aging: ${reportData.summary.averageAgingDays ?? '0 days'}`;
         } else if (reportData.reportType === "Payment Report") {
-          summaryText = `Total Disbursement: ${reportData.summary.totalDisbursement}  |  Success Rate: ${reportData.summary.successRate}  |  Paid: ${reportData.summary.successfulPayments}  |  Pending: ${reportData.summary.pendingPayments}  |  Failed: ${reportData.summary.failedPayments}`;
+          summaryText = `Total Disbursement: ${reportData.summary.totalDisbursement ?? 'RM 0.00'}  |  Success Rate: ${reportData.summary.successRate ?? '100%'}  |  Paid: ${reportData.summary.successfulPayments ?? 0}  |  Pending: ${reportData.summary.pendingPayments ?? 0}`;
         } else if (reportData.reportType === "Blockchain Audit Report") {
-          summaryText = `Total Records: ${reportData.summary.totalRecords}  |  Published On-chain: ${reportData.summary.publishedRecords}  |  Voided: ${reportData.summary.voidedRecords}  |  Ledger Status: ${reportData.summary.integrityStatus}`;
+          summaryText = `Total Records: ${reportData.summary.totalRecords ?? 0}  |  Published On-chain: ${reportData.summary.publishedRecords ?? 0}  |  Voided: ${reportData.summary.voidedRecords ?? 0}  |  Ledger Status: ${reportData.summary.integrityStatus ?? 'Verified'}`;
         } else {
           summaryText = JSON.stringify(reportData.summary);
         }
@@ -126,7 +126,7 @@ function renderCaseStatusTable(doc: PDFKit.PDFDocument, items: any[], headerBg: 
 
   // Rows
   items.slice(0, 40).forEach((item, idx) => {
-    if (y > doc.page.height - 60) {
+    if (y + 20 > doc.page.height - 45) {
       doc.addPage();
       y = 40;
     }
@@ -136,12 +136,12 @@ function renderCaseStatusTable(doc: PDFKit.PDFDocument, items: any[], headerBg: 
     doc.rect(startX, y, doc.page.width - 80, 18).stroke(borderColor);
 
     doc.fillColor(textCol).fontSize(7.5).font("Helvetica");
-    doc.text(item.caseId, startX + 5, y + 5, { width: colWidths[0] - 8, lineBreak: false });
-    doc.text(item.caseTitle, startX + colWidths[0] + 5, y + 5, { width: colWidths[1] - 8, lineBreak: false });
-    doc.text(item.location, startX + colWidths[0] + colWidths[1] + 5, y + 5, { width: colWidths[2] - 8, lineBreak: false });
-    doc.text(item.status, startX + colWidths[0] + colWidths[1] + colWidths[2] + 5, y + 5, { width: colWidths[3] - 8, lineBreak: false });
-    doc.text(item.registrationDate, startX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, y + 5, { width: colWidths[4] - 8, lineBreak: false });
-    doc.text(`${item.agingDays}d`, startX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4] + 5, y + 5, { width: colWidths[5] - 8, lineBreak: false });
+    doc.text(item.caseId || "-", startX + 5, y + 5, { width: colWidths[0] - 8, lineBreak: false });
+    doc.text(item.title || item.caseTitle || "-", startX + colWidths[0] + 5, y + 5, { width: colWidths[1] - 8, lineBreak: false });
+    doc.text(item.location || `${item.state || 'Selangor'} / ${item.district || 'Petaling'}`, startX + colWidths[0] + colWidths[1] + 5, y + 5, { width: colWidths[2] - 8, lineBreak: false });
+    doc.text(item.status || "-", startX + colWidths[0] + colWidths[1] + colWidths[2] + 5, y + 5, { width: colWidths[3] - 8, lineBreak: false });
+    doc.text(item.date || item.registrationDate || "-", startX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, y + 5, { width: colWidths[4] - 8, lineBreak: false });
+    doc.text(item.lifecycleAging || `${item.agingDays || 0}d`, startX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4] + 5, y + 5, { width: colWidths[5] - 8, lineBreak: false });
 
     y += 18;
   });
@@ -170,7 +170,7 @@ function renderPaymentTable(doc: PDFKit.PDFDocument, items: any[], headerBg: str
 
   // Rows
   items.slice(0, 40).forEach((item, idx) => {
-    if (y > doc.page.height - 60) {
+    if (y + 20 > doc.page.height - 45) {
       doc.addPage();
       y = 40;
     }
@@ -180,12 +180,12 @@ function renderPaymentTable(doc: PDFKit.PDFDocument, items: any[], headerBg: str
     doc.rect(startX, y, doc.page.width - 80, 18).stroke(borderColor);
 
     doc.fillColor(textCol).fontSize(7.5).font("Helvetica");
-    doc.text(item.caseId, startX + 5, y + 5, { width: colWidths[0] - 8, lineBreak: false });
-    doc.text(item.formattedAmount, startX + colWidths[0] + 5, y + 5, { width: colWidths[1] - 8, lineBreak: false });
-    doc.text(`${item.bankName} (${item.accountNumber})`, startX + colWidths[0] + colWidths[1] + 5, y + 5, { width: colWidths[2] - 8, lineBreak: false });
-    doc.text(item.bankReference, startX + colWidths[0] + colWidths[1] + colWidths[2] + 5, y + 5, { width: colWidths[3] - 8, lineBreak: false });
-    doc.text(item.status, startX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, y + 5, { width: colWidths[4] - 8, lineBreak: false });
-    doc.text(item.createdAt, startX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4] + 5, y + 5, { width: colWidths[5] - 8, lineBreak: false });
+    doc.text(item.caseId || "-", startX + 5, y + 5, { width: colWidths[0] - 8, lineBreak: false });
+    doc.text(item.amount || item.formattedAmount || "-", startX + colWidths[0] + 5, y + 5, { width: colWidths[1] - 8, lineBreak: false });
+    doc.text(item.bankName || `${item.bankDetails || 'Bank Transfer'}`, startX + colWidths[0] + colWidths[1] + 5, y + 5, { width: colWidths[2] - 8, lineBreak: false });
+    doc.text(item.bankReference || "-", startX + colWidths[0] + colWidths[1] + colWidths[2] + 5, y + 5, { width: colWidths[3] - 8, lineBreak: false });
+    doc.text(item.status || "-", startX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, y + 5, { width: colWidths[4] - 8, lineBreak: false });
+    doc.text(item.date || item.createdAt || "-", startX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4] + 5, y + 5, { width: colWidths[5] - 8, lineBreak: false });
 
     y += 18;
   });
@@ -213,7 +213,7 @@ function renderBlockchainTable(doc: PDFKit.PDFDocument, items: any[], headerBg: 
 
   // Rows
   items.slice(0, 40).forEach((item, idx) => {
-    if (y > doc.page.height - 60) {
+    if (y + 20 > doc.page.height - 45) {
       doc.addPage();
       y = 40;
     }
@@ -223,11 +223,13 @@ function renderBlockchainTable(doc: PDFKit.PDFDocument, items: any[], headerBg: 
     doc.rect(startX, y, doc.page.width - 80, 18).stroke(borderColor);
 
     doc.fillColor(textCol).fontSize(7.5).font("Helvetica");
-    doc.text(item.caseId, startX + 5, y + 5, { width: colWidths[0] - 8, lineBreak: false });
-    doc.text(item.transactionHash, startX + colWidths[0] + 5, y + 5, { width: colWidths[1] - 8, lineBreak: false });
-    doc.text(item.documentHash, startX + colWidths[0] + colWidths[1] + 5, y + 5, { width: colWidths[2] - 8, lineBreak: false });
-    doc.text(item.verificationStatus, startX + colWidths[0] + colWidths[1] + colWidths[2] + 5, y + 5, { width: colWidths[3] - 8, lineBreak: false });
-    doc.text(item.publishedAt, startX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, y + 5, { width: colWidths[4] - 8, lineBreak: false });
+    doc.text(item.caseId || "-", startX + 5, y + 5, { width: colWidths[0] - 8, lineBreak: false });
+    const tx = item.transactionHash || "-";
+    doc.text(tx.length > 25 ? `${tx.slice(0, 16)}...` : tx, startX + colWidths[0] + 5, y + 5, { width: colWidths[1] - 8, lineBreak: false });
+    const docHash = item.documentHash || "-";
+    doc.text(docHash.length > 25 ? `${docHash.slice(0, 16)}...` : docHash, startX + colWidths[0] + colWidths[1] + 5, y + 5, { width: colWidths[2] - 8, lineBreak: false });
+    doc.text(item.status || item.verificationStatus || "-", startX + colWidths[0] + colWidths[1] + colWidths[2] + 5, y + 5, { width: colWidths[3] - 8, lineBreak: false });
+    doc.text(item.publishedAt || "-", startX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, y + 5, { width: colWidths[4] - 8, lineBreak: false });
 
     y += 18;
   });

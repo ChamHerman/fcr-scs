@@ -15,7 +15,7 @@ import {
 import '../../style.css';
 import '../LandAcquisition/case_management.css';
 import './reports.css';
-import { STATES, REPORT_TYPES, REPORT_STATUS_OPTIONS } from './reportConstants';
+import { STATES, REPORT_TYPES, CASE_STATUS_OPTIONS, PAYMENT_STATUS_OPTIONS, BLOCKCHAIN_STATUS_OPTIONS } from './reportConstants';
 import {
   fetchCaseStatusReport,
   fetchPaymentReport,
@@ -45,6 +45,17 @@ export const GenerateReports: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const locationOptions = useMemo(() => STATES[state] ?? [], [state]);
+
+  const currentStatusOptions = useMemo(() => {
+    if (category === 'Payment Report') return PAYMENT_STATUS_OPTIONS;
+    if (category === 'Blockchain Audit Report') return BLOCKCHAIN_STATUS_OPTIONS;
+    return CASE_STATUS_OPTIONS;
+  }, [category]);
+
+  const handleCategoryChange = (newCategory: string) => {
+    setCategory(newCategory);
+    setStatus('All');
+  };
 
   const loadPreview = async () => {
     setLoading(true);
@@ -152,7 +163,7 @@ export const GenerateReports: React.FC = () => {
                 className="filter-bar select"
                 style={{ width: '100%', marginTop: 8 }}
                 value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                onChange={(e) => handleCategoryChange(e.target.value)}
               >
                 <option value="Case Status Report">Case Status Report (FR-RPT-015)</option>
                 <option value="Payment Report">Payment Report (FR-RPT-014)</option>
@@ -210,7 +221,7 @@ export const GenerateReports: React.FC = () => {
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
                 >
-                  {REPORT_STATUS_OPTIONS.map((st) => (
+                  {currentStatusOptions.map((st) => (
                     <option key={st} value={st}>{st.replace(/_/g, ' ')}</option>
                   ))}
                 </select>
@@ -228,7 +239,7 @@ export const GenerateReports: React.FC = () => {
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
                 >
-                  {REPORT_STATUS_OPTIONS.map((st) => (
+                  {currentStatusOptions.map((st) => (
                     <option key={st} value={st}>{st.replace(/_/g, ' ')}</option>
                   ))}
                 </select>

@@ -27,7 +27,7 @@ export const REPORT_TYPES = [
   'Compliance Report'
 ];
 
-export const REPORT_STATUS_OPTIONS = [
+export const CASE_STATUS_OPTIONS = [
   'All',
   'CASE_REGISTERED',
   'VALUATION_IN_PROGRESS',
@@ -39,4 +39,18 @@ export const REPORT_STATUS_OPTIONS = [
   'PAYMENT_IN_PROGRESS',
   'PAYMENT_COMPLETED',
   'CASE_CLOSED'
+];
+
+export const PAYMENT_STATUS_OPTIONS = [
+  'All',
+  'Approved',
+  'Transfer Initiated',
+  'Paid',
+  'Failed'
+];
+
+export const BLOCKCHAIN_STATUS_OPTIONS = [
+  'All',
+  'Published',
+  'Voided'
 ];
