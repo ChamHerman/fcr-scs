@@ -55,6 +55,8 @@ import bankDetailsRoutes from "./payment_service/src/routes/bank-details.routes"
 import blockchainRoutes from "./smart_contract_service/src/routes/blockchain.routes";
 import landAcquisitionRoutes from "./land_acquisition_service/src/routes/land-acquisition.routes";
 import compensationRoutes from "./compensation_management_service/src/routes/compensation.routes";
+import userRoutes from "./user_management_service/src/routes/user.routes";
+import emailTemplateRoutes from "./user_management_service/src/routes/email-template.routes";
 
 export const app = express();
 
@@ -76,6 +78,8 @@ app.use("/api/bank-details", bankDetailsRoutes);
 app.use("/api/smart-contract", blockchainRoutes);
 app.use("/api/land-acquisition", landAcquisitionRoutes);
 app.use("/api/compensation", compensationRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/email-templates", emailTemplateRoutes);
 
 if (process.env.NODE_ENV !== "test") {
   app.listen(PORT, () => {

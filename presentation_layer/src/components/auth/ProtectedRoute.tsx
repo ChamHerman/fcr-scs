@@ -1,28 +1,25 @@
 import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
-
-// In a real app, this would come from a context or global state (e.g. Redux/Zustand)
-export const useAuth = () => {
-  // Mocking auth state for demonstration
-  return {
-    isAuthenticated: true,
-    role: 'admin', // change to 'member' to test member portal
-  };
-};
+import { useAuth } from '../../context/AuthContext';
 
 interface ProtectedRouteProps {
   allowedRoles: string[];
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) => {
-  const { isAuthenticated, role } = useAuth();
+  const { isAuthenticated, user } = useAuth();
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !user) {
     return <Navigate to="/login" replace />;
   }
 
-  if (!allowedRoles.includes(role)) {
-    // If a member tries to access an admin route, redirect them to a secure fallback
+  // Simplified role check. In reality, handle mapping between DB roles (e.g. SYSTEM_ADMINISTRATOR) and UI roles ('admin', 'member').
+  // The seeder creates 'SYSTEM_ADMINISTRATOR', so we check if the user role includes 'admin' (case insensitive for flexibility).
+  const normalizedRole = user.role.toLowerCase();
+  const hasAccess = allowedRoles.some(allowedRole => normalizedRole.includes(allowedRole.toLowerCase()));
+
+  if (!hasAccess) {
+    // If a user tries to access a route they don't have permission for, redirect to unauthorized
     return <Navigate to="/unauthorized" replace />;
   }
 

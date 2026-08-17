@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import {
@@ -28,13 +28,17 @@ import {
   PenLine,
   AlertTriangle,
   Upload,
-  Ban
+  Ban,
+  LogOut
 } from 'lucide-react';
 import { IdentitySwitcher } from '../admin/IdentitySwitcher';
+import { useAuth } from '../../context/AuthContext';
 
 export const AdminLayout: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { logout } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [financeExpanded, setFinanceExpanded] = useState(false);
   const [landAcquisitionExpanded, setLandAcquisitionExpanded] = useState(false);
@@ -463,6 +467,28 @@ export const AdminLayout: React.FC = () => {
               >
                 {isDark ? <Sun size={22} className="nav-icon" /> : <Moon size={22} className="nav-icon" />}
                 {!isCollapsed && <span>{isDark ? 'Light Mode' : 'Dark Mode'}</span>}
+              </button>
+
+              <button
+                type="button"
+                className="nav-item"
+                onClick={() => {
+                  logout();
+                  navigate('/login');
+                }}
+                style={{
+                  cursor: 'pointer',
+                  justifyContent: isCollapsed ? 'center' : 'flex-start',
+                  width: '100%',
+                  background: 'transparent',
+                  border: 'none',
+                  textAlign: 'left',
+                  marginTop: '8px',
+                  color: '#ef4444'
+                }}
+              >
+                <LogOut size={22} className="nav-icon" style={{ opacity: 1 }} />
+                {!isCollapsed && <span>Logout</span>}
               </button>
             </div>
           </nav>

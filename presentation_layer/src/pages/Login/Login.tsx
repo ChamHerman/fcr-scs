@@ -1,20 +1,38 @@
 import React, { useState } from 'react';
 import { MD3Button, MD3Input, MD3Card, MD3BlurBackground } from '../MD3Components';
-import { LogIn, KeyRound } from 'lucide-react';
+import { LogIn, KeyRound, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import { authService } from '../../services/auth.service';
 
 export const Login: React.FC = () => {
   const [step, setStep] = useState<'credentials' | 'otp'>('credentials');
-  const [isAdmin, setIsAdmin] = useState(false); // Simulated for OTP
+  const [email, setEmail] = useState('admin@fcrscs.gov.my');
+  const [password, setPassword] = useState('password123');
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isAdmin) {
-      setStep('otp');
-    } else {
-      // Simulate success
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      const response = await authService.login(email, password);
+      login(response.token, response.user);
+      
+      // Navigate to admin dashboard after successful login
       navigate('/admin');
+    } catch (err: any) {
+      if (err.response && err.response.data && err.response.data.error) {
+        setError(err.response.data.error);
+      } else {
+        setError('Failed to connect to the server. Please try again later.');
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -36,36 +54,38 @@ export const Login: React.FC = () => {
           <p className="text-md-on-surface-variant">Sign in to continue to FCR-SCS</p>
         </div>
 
+        {error && (
+          <div className="mb-6 flex items-center gap-2 p-4 text-sm text-md-error bg-md-error-container rounded-lg">
+            <AlertCircle size={20} />
+            <p>{error}</p>
+          </div>
+        )}
+
         {step === 'credentials' ? (
           <form onSubmit={handleLogin} className="space-y-6">
             <MD3Input 
               type="email" 
               label="Email Address" 
-              defaultValue="admin@fcr-scs.com"
+              value={email}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+              required
             />
             <MD3Input 
               type="password" 
               label="Password" 
-              defaultValue="password"
+              value={password}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+              required
             />
             
             <div className="flex items-center justify-between">
-              <label className="flex items-center text-sm cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  className="mr-2 accent-md-primary"
-                  checked={isAdmin}
-                  onChange={(e) => setIsAdmin(e.target.checked)}
-                />
-                <span className="text-md-on-surface-variant">Admin (Simulate OTP)</span>
-              </label>
-              <a href="/forgot-password" onClick={(e) => { e.preventDefault(); navigate('/forgot-password'); }} className="text-sm font-medium text-md-primary hover:underline">
+              <a href="/forgot-password" onClick={(e) => { e.preventDefault(); navigate('/forgot-password'); }} className="text-sm font-medium text-md-primary hover:underline ml-auto">
                 Forgot password?
               </a>
             </div>
 
-            <MD3Button type="submit" className="w-full">
-              Sign In
+            <MD3Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? 'Signing In...' : 'Sign In'}
             </MD3Button>
             
             <div className="text-center mt-6">
