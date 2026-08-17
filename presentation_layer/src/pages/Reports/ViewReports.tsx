@@ -1,9 +1,8 @@
 import React, { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { BarChart3, Clock, PieChart } from 'lucide-react';
-import '../../style.css';
-import '../LandAcquisition/case_management.css';
-import './reports.css';
+import { BarChart3, Clock, Download, PieChart } from 'lucide-react';
+import { Button } from '../../components/ui/Button';
+import { SearchInput } from '../../components/ui/SearchInput';
 
 type ReportItem = {
   id: string;
@@ -93,6 +92,14 @@ const getStoredReports = (): ReportItem[] => {
   }
 };
 
+const StatCard: React.FC<{ label: string; value: string; sub: string }> = ({ label, value, sub }) => (
+  <div className="bg-md-surface-container rounded-xl p-5 shadow-sm transition-all duration-300 ease-md-bouncy hover:shadow-md hover:scale-[1.01]">
+    <div className="text-[13px] font-medium text-md-on-surface-variant tracking-wide">{label}</div>
+    <div className="text-2xl font-bold mt-1 tracking-tight">{value}</div>
+    <div className="text-xs text-md-on-surface-variant mt-1.5">{sub}</div>
+  </div>
+);
+
 export const ViewReports: React.FC = () => {
   const { reportId } = useParams();
   const navigate = useNavigate();
@@ -106,84 +113,69 @@ export const ViewReports: React.FC = () => {
   }, [reportId, selectedReport, navigate]);
 
   return (
-    <div className="main">
-      <div className="topbar">
-        <div className="topbar-left">
-          <h1>View Reports</h1>
-          <div className="sub">Review the overview for each report and open a detailed breakdown for any record.</div>
-        </div>
-        <div className="topbar-right">
-          <div className="date-badge">
-            <Clock size={16} className="inline mr-1" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+    <div className="space-y-6">
+      {/* Topbar */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl md:text-3xl font-bold">View Reports</h1>
+            <span className="px-2 py-1 rounded-lg bg-md-primary/15 text-md-primary font-bold text-xs">
+              {selectedReport ? selectedReport.type : 'Report'}
+            </span>
           </div>
-          <div className="avatar">
-            <BarChart3 size={20} />
-          </div>
+          <p className="text-md-on-surface-variant mt-1 max-w-2xl">
+            Review the overview for each report and open a detailed breakdown for any record.
+          </p>
         </div>
+        <span className="inline-flex items-center gap-2 text-sm text-md-on-surface-variant px-3.5 py-2 rounded-full bg-md-surface-container shadow-sm">
+          <Clock size={16} />
+          {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+        </span>
       </div>
 
       {!selectedReport ? (
-        <div className="report-detail-card" style={{ marginTop: 20 }}>
-          <div className="topbar">
-            <div className="topbar-left">
-              <h2>Report not found</h2>
-              <div className="sub">Please go back and select a valid report.</div>
+        <div className="bg-md-surface-container rounded-xl p-8 shadow-sm">
+          <div className="flex items-center gap-3">
+            <BarChart3 size={24} className="text-md-on-surface-variant" />
+            <div>
+              <h2 className="text-lg font-semibold">Report not found</h2>
+              <p className="text-sm text-md-on-surface-variant">Please go back and select a valid report.</p>
             </div>
           </div>
         </div>
       ) : (
         <>
-          <div className="stats-grid">
-            <div className="stat-card">
-              <div className="stat-label">Total compensation</div>
-              <div className="stat-number">{selectedReport.totalCompensation}</div>
-              <div className="stat-change">Live summary</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Pending review</div>
-              <div className="stat-number">{selectedReport.pendingReview}</div>
-              <div className="stat-change">Awaiting action</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Approval rate</div>
-              <div className="stat-number">{selectedReport.approvalRate}</div>
-              <div className="stat-change">Above target</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Generated</div>
-              <div className="stat-number">{selectedReport.generatedAt}</div>
-              <div className="stat-change">Latest cycle</div>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <StatCard label="Total compensation" value={selectedReport.totalCompensation} sub="Live summary" />
+            <StatCard label="Pending review" value={selectedReport.pendingReview} sub="Awaiting action" />
+            <StatCard label="Approval rate" value={selectedReport.approvalRate} sub="Above target" />
+            <StatCard label="Generated" value={selectedReport.generatedAt} sub="Latest cycle" />
           </div>
 
-          <div className="report-detail-card" style={{ marginTop: 20 }}>
-            <div className="topbar" style={{ marginBottom: 12 }}>
-              <div className="topbar-left">
-                <h2 style={{ fontSize: 20, margin: 0 }}>{selectedReport.title}</h2>
-                <div className="sub">{selectedReport.summary}</div>
+          <div className="bg-md-surface-container rounded-xl p-6 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+              <div>
+                <h2 className="text-lg font-semibold">{selectedReport.title}</h2>
+                <p className="text-sm text-md-on-surface-variant mt-0.5">{selectedReport.summary}</p>
               </div>
-              <div className="topbar-right">
-                <span className={`status-badge ${selectedReport.status === 'Completed' ? 'approved' : 'pending'}`}><span className="dot" />{selectedReport.status}</span>
-              </div>
+              <span className={`inline-flex items-center gap-1.5 rounded-full py-0.5 pl-2 pr-3 text-xs font-semibold ${selectedReport.status === 'Completed' ? 'bg-[#e6f4ea] text-[#1e7b4a]' : 'bg-[#fef7e0] text-[#8d6e00]'}`}>
+                <span className={`w-2 h-2 rounded-full ${selectedReport.status === 'Completed' ? 'bg-[#1e7b4a]' : 'bg-[#8d6e00]'}`} />
+                {selectedReport.status}
+              </span>
             </div>
 
-            <div className="stats-grid" style={{ marginBottom: 16 }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
               {selectedReport.breakdown.map((item) => (
-                <div key={item.label} className="stat-card">
-                  <div className="stat-label">{item.label}</div>
-                  <div className="stat-number">{item.value}</div>
-                </div>
+                <StatCard key={item.label} label={item.label} value={item.value} sub="Live summary" />
               ))}
             </div>
 
-            <div className="filter-bar" style={{ marginBottom: 0 }}>
-              <div className="search-wrap">
-                <PieChart size={16} className="search-icon" />
-                <input value={`Owner: ${selectedReport.owner}`} readOnly />
-              </div>
-              <div className="filter-group">
-                <button className="btn-outline">Download report</button>
-              </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <SearchInput containerClassName="flex-1 min-w-[220px]" value={`Owner: ${selectedReport.owner}`} readOnly onChange={() => {}} />
+              <Button variant="tonal" size="sm">
+                <Download size={14} />
+                Download report
+              </Button>
             </div>
           </div>
         </>
@@ -191,3 +183,5 @@ export const ViewReports: React.FC = () => {
     </div>
   );
 };
+
+export default ViewReports;

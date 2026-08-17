@@ -81,27 +81,39 @@ export async function fetchBlockchainAuditReport(filters?: ReportFilterOptions):
   return fetchJSON(`${BASE_URL}/api/reports/blockchain-audit${query}`);
 }
 
-export async function downloadReportPdf(
-  reportCategory: "Case Status Report" | "Payment Report" | "Blockchain Audit Report" | string,
-  filters?: ReportFilterOptions
-): Promise<void> {
-  let endpoint = "case-status";
-  if (reportCategory.includes("Payment")) {
-    endpoint = "payment";
-  } else if (reportCategory.includes("Blockchain")) {
-    endpoint = "blockchain-audit";
-  }
+function resolveReportEndpoint(reportCategory: string): string {
+  if (reportCategory.includes("Payment")) return "payment";
+  if (reportCategory.includes("Blockchain")) return "blockchain-audit";
+  return "case-status";
+}
 
+/**
+ * Fetch the generated report PDF as a Blob without triggering a download.
+ * Used by the preview-before-download flow; the caller decides when to save.
+ */
+export async function fetchReportPdfBlob(
+  reportCategory: string,
+  filters?: ReportFilterOptions
+): Promise<Blob> {
+  const endpoint = resolveReportEndpoint(reportCategory);
   const queryParams = { ...filters, format: "pdf" } as Record<string, string>;
   const query = buildQuery(queryParams);
   const url = `${BASE_URL}/api/reports/${endpoint}${query}`;
 
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`Failed to download report PDF (${response.status})`);
+    throw new Error(`Failed to generate report PDF (${response.status})`);
   }
+  return response.blob();
+}
 
-  const blob = await response.blob();
+export async function downloadReportPdf(
+  reportCategory: "Case Status Report" | "Payment Report" | "Blockchain Audit Report" | string,
+  filters?: ReportFilterOptions
+): Promise<void> {
+  const endpoint = resolveReportEndpoint(reportCategory);
+  const blob = await fetchReportPdfBlob(reportCategory, filters);
+
   const downloadUrl = window.URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = downloadUrl;

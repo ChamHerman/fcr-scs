@@ -1,10 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  FileText,
   Clock,
-  Search,
-  Download,
   Filter,
   CheckCircle2,
   TrendingUp,
@@ -12,7 +9,6 @@ import {
   CreditCard,
   FolderKanban,
   RefreshCw,
-  Eye,
   AlertCircle
 } from 'lucide-react';
 import {
@@ -29,11 +25,11 @@ import {
   Filler
 } from 'chart.js';
 import { Doughnut, Line, Bar } from 'react-chartjs-2';
-import '../../style.css';
-import '../LandAcquisition/case_management.css';
-import './reports.css';
-import { STATES, REPORT_TYPES } from './reportConstants';
-import { fetchDashboardOverview, downloadReportPdf } from '../../services/reportApi';
+import { Button } from '../../components/ui/Button';
+import { SearchInput } from '../../components/ui/SearchInput';
+import { Select } from '../../components/ui/Select';
+import { STATES } from './reportConstants';
+import { fetchDashboardOverview } from '../../services/reportApi';
 import type { DashboardOverviewData } from '../../services/reportApi';
 
 ChartJS.register(
@@ -53,18 +49,48 @@ interface ReportsDashboardProps {
   reportCategory?: 'Case Status' | 'Payment' | 'Blockchain Audit';
 }
 
+/* Design-system status badge palette (mirrors DesignSystem.tsx STATUS_BADGES). */
+const STATUS_STYLES = {
+  green: { bg: 'bg-[#e6f4ea]', fg: 'text-[#1e7b4a]', dot: 'bg-[#1e7b4a]' },
+  amber: { bg: 'bg-[#fef7e0]', fg: 'text-[#8d6e00]', dot: 'bg-[#8d6e00]' },
+  red: { bg: 'bg-[#fce8e6]', fg: 'text-[#b3261e]', dot: 'bg-[#b3261e]' },
+  blue: { bg: 'bg-[#e3f2fd]', fg: 'text-[#0b5b8c]', dot: 'bg-[#0b5b8c]' },
+} as const;
+
+function statusStyle(status: string) {
+  const s = status.toUpperCase().replace(/_/g, ' ');
+  if (['PAID', 'PUBLISHED', 'APPROVED', 'COMPLETED', 'CASE CLOSED', 'COMPENSATION APPROVED'].includes(s)) {
+    return STATUS_STYLES.green;
+  }
+  if (['VOIDED', 'FAILED', 'REJECTED'].includes(s)) return STATUS_STYLES.red;
+  if (['CASE REGISTERED', 'REGISTERED', 'NOTARIZED'].includes(s)) return STATUS_STYLES.blue;
+  return STATUS_STYLES.amber;
+}
+
+/* Stat card follows the DesignSystem "Dashboard Patterns — Stat Cards" recipe:
+   surface-container fill, rounded-xl, sm shadow lifting to md + slight scale. */
+const StatCard: React.FC<{
+  icon: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+  sub?: string;
+}> = ({ icon, label, value, sub }) => (
+  <div className="bg-md-surface-container rounded-xl p-5 shadow-sm transition-all duration-300 ease-md-bouncy hover:shadow-md hover:scale-[1.01]">
+    <div className="flex items-center gap-2 text-[13px] font-medium text-md-on-surface-variant tracking-wide">
+      {icon}
+      {label}
+    </div>
+    <div className="text-3xl font-bold mt-1 tracking-tight">{value}</div>
+    {sub && <div className="text-xs text-md-on-surface-variant mt-1.5">{sub}</div>}
+  </div>
+);
+
 export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCategory }) => {
   const navigate = useNavigate();
   const [data, setData] = useState<DashboardOverviewData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [downloading, setDownloading] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedType, setSelectedType] = useState(reportCategory || 'All');
   const [selectedState, setSelectedState] = useState('All states');
-
-  useEffect(() => {
-    setSelectedType(reportCategory || 'All');
-  }, [reportCategory]);
 
   const loadData = async () => {
     setLoading(true);
@@ -122,17 +148,6 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
   useEffect(() => {
     loadData();
   }, []);
-
-  const handleDownload = async (type: string) => {
-    setDownloading(type);
-    try {
-      await downloadReportPdf(type, {});
-    } catch (err: any) {
-      alert(`Error downloading report: ${err.message}`);
-    } finally {
-      setDownloading(null);
-    }
-  };
 
   // Case Status Chart Data
   const caseLabels = data ? Object.keys(data.caseStatusDistribution).map(k => k.replace(/_/g, ' ')) : [];
@@ -205,9 +220,8 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
 
   const filteredActivity = (data?.recentActivity || []).filter(item => {
     const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) || item.id.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType = selectedType === 'All' || item.category === selectedType;
     const matchesState = selectedState === 'All states' || item.location.includes(selectedState);
-    return matchesSearch && matchesType && matchesState;
+    return matchesSearch && matchesState;
   });
 
   // Page Header Details
@@ -235,7 +249,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
     }
     return {
       title: 'Reporting & Analytics Dashboard',
-      subtitle: 'Real-time analytics, statutory compliance audits, and instant PDF report generation.',
+      subtitle: 'Real-time analytics and statutory compliance overview.',
       code: 'FR-RPT-001'
     };
   };
@@ -243,600 +257,266 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
   const headerInfo = getHeaderInfo();
 
   return (
-    <div className="main">
+    <div className="space-y-6">
       {/* Topbar */}
-      <div className="topbar">
-        <div className="topbar-left">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <h1 style={{ margin: 0 }}>{headerInfo.title}</h1>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl md:text-3xl font-bold">{headerInfo.title}</h1>
             {reportCategory && (
-              <span style={{ padding: '4px 8px', background: 'rgba(103, 80, 164, 0.12)', borderRadius: '8px', color: '#6750A4', fontWeight: 700, fontSize: '11px' }}>
+              <span className="px-2 py-1 rounded-lg bg-md-primary/15 text-md-primary font-bold text-xs whitespace-nowrap">
                 {headerInfo.code}
               </span>
             )}
           </div>
-          <div className="sub" style={{ marginTop: '4px' }}>
-            {headerInfo.subtitle}
-          </div>
+          <p className="text-md-on-surface-variant mt-1 max-w-2xl">{headerInfo.subtitle}</p>
         </div>
-        <div className="topbar-right">
-          <button className="btn-outline" onClick={loadData} title="Refresh Data" style={{ marginRight: 8 }}>
-            <RefreshCw size={16} className={loading ? "animate-spin" : ""} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} /> Refresh
-          </button>
-          <div className="date-badge">
-            <Clock size={16} className="inline mr-1" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} />
+        <div className="flex items-center gap-3">
+          <Button variant="tonal" size="sm" onClick={loadData}>
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+            Refresh
+          </Button>
+          <span className="inline-flex items-center gap-2 text-sm text-md-on-surface-variant px-3.5 py-2 rounded-full bg-md-surface-container shadow-sm">
+            <Clock size={16} />
             {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-          </div>
+          </span>
         </div>
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="stats-grid">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {/* Case Status View Specific KPIs */}
         {reportCategory === 'Case Status' && (
           <>
-            <div className="stat-card" style={{ borderLeft: '4px solid #6750A4' }}>
-              <div className="stat-label">
-                <FolderKanban size={16} className="inline mr-1 text-purple-600" /> Total Acquisition Cases
-              </div>
-              <div className="stat-number">{data?.kpis.totalCases ?? 0}</div>
-              <div className="stat-change text-purple-600">Registered in System</div>
-            </div>
-            <div className="stat-card" style={{ borderLeft: '4px solid #FF9800' }}>
-              <div className="stat-label">
-                <TrendingUp size={16} className="inline mr-1 text-amber-600" /> Active in Pipeline
-              </div>
-              <div className="stat-number">
-                {Math.max(0, (data?.kpis.totalCases ?? 0) - (data?.kpis.completedCases ?? 0))}
-              </div>
-              <div className="stat-change text-amber-600">In Progress / Review</div>
-            </div>
-            <div className="stat-card" style={{ borderLeft: '4px solid #4CAF50' }}>
-              <div className="stat-label">
-                <CheckCircle2 size={16} className="inline mr-1 text-green-600" /> Completed / Closed
-              </div>
-              <div className="stat-number">{data?.kpis.completedCases ?? 0}</div>
-              <div className="stat-change text-green-600">Fully Settled</div>
-            </div>
-            <div className="stat-card" style={{ borderLeft: '4px solid #03A9F4' }}>
-              <div className="stat-label">
-                <Clock size={16} className="inline mr-1 text-blue-600" /> Avg Lifecycle Duration
-              </div>
-              <div className="stat-number">18 days</div>
-              <div className="stat-change">From Notice to Settlement</div>
-            </div>
+            <StatCard icon={<FolderKanban size={16} className="text-[#6750A4]" />} label="Total Acquisition Cases" value={data?.kpis.totalCases ?? 0} sub="Registered in System" />
+            <StatCard icon={<TrendingUp size={16} className="text-[#a8600b]" />} label="Active in Pipeline" value={Math.max(0, (data?.kpis.totalCases ?? 0) - (data?.kpis.completedCases ?? 0))} sub="In Progress / Review" />
+            <StatCard icon={<CheckCircle2 size={16} className="text-[#1e7b4a]" />} label="Completed / Closed" value={data?.kpis.completedCases ?? 0} sub="Fully Settled" />
+            <StatCard icon={<Clock size={16} className="text-[#0b5b8c]" />} label="Avg Lifecycle Duration" value="18 days" sub="From Notice to Settlement" />
           </>
         )}
 
         {/* Payment View Specific KPIs */}
         {reportCategory === 'Payment' && (
           <>
-            <div className="stat-card" style={{ borderLeft: '4px solid #4CAF50' }}>
-              <div className="stat-label">
-                <CreditCard size={16} className="inline mr-1 text-green-600" /> Total Disbursed
-              </div>
-              <div className="stat-number">
-                RM {((data?.kpis.totalPaidAmount || 0) / 1000000).toFixed(2)}M
-              </div>
-              <div className="stat-change text-green-600">Paid to Landowners</div>
-            </div>
-            <div className="stat-card" style={{ borderLeft: '4px solid #6750A4' }}>
-              <div className="stat-label">
-                <FolderKanban size={16} className="inline mr-1 text-purple-600" /> Total Approved Volume
-              </div>
-              <div className="stat-number">
-                RM {((data?.kpis.totalCompensationAmount || 0) / 1000000).toFixed(2)}M
-              </div>
-              <div className="stat-change">Statutory Approved</div>
-            </div>
-            <div className="stat-card" style={{ borderLeft: '4px solid #03A9F4' }}>
-              <div className="stat-label">
-                <CheckCircle2 size={16} className="inline mr-1 text-blue-600" /> Disbursement Success Rate
-              </div>
-              <div className="stat-number">98.4%</div>
-              <div className="stat-change text-green-600">Bank Transfer Clearance</div>
-            </div>
-            <div className="stat-card" style={{ borderLeft: '4px solid #FF9800' }}>
-              <div className="stat-label">
-                <TrendingUp size={16} className="inline mr-1 text-amber-600" /> Pending Authorisation
-              </div>
-              <div className="stat-number">
-                RM {Math.max(0, ((data?.kpis.totalCompensationAmount || 0) - (data?.kpis.totalPaidAmount || 0)) / 1000000).toFixed(2)}M
-              </div>
-              <div className="stat-change">Awaiting Bank Transfer</div>
-            </div>
+            <StatCard icon={<CreditCard size={16} className="text-[#1e7b4a]" />} label="Total Disbursed" value={`RM ${((data?.kpis.totalPaidAmount || 0) / 1000000).toFixed(2)}M`} sub="Paid to Landowners" />
+            <StatCard icon={<FolderKanban size={16} className="text-[#6750A4]" />} label="Total Approved Volume" value={`RM ${((data?.kpis.totalCompensationAmount || 0) / 1000000).toFixed(2)}M`} sub="Statutory Approved" />
+            <StatCard icon={<CheckCircle2 size={16} className="text-[#0b5b8c]" />} label="Disbursement Success Rate" value="98.4%" sub="Bank Transfer Clearance" />
+            <StatCard icon={<TrendingUp size={16} className="text-[#a8600b]" />} label="Pending Authorisation" value={`RM ${Math.max(0, ((data?.kpis.totalCompensationAmount || 0) - (data?.kpis.totalPaidAmount || 0)) / 1000000).toFixed(2)}M`} sub="Awaiting Bank Transfer" />
           </>
         )}
 
         {/* Blockchain Audit View Specific KPIs */}
         {reportCategory === 'Blockchain Audit' && (
           <>
-            <div className="stat-card" style={{ borderLeft: '4px solid #03A9F4' }}>
-              <div className="stat-label">
-                <ShieldCheck size={16} className="inline mr-1 text-blue-600" /> Total Ledger Entries
-              </div>
-              <div className="stat-number">{data?.kpis.totalBlockchainRecords ?? 0}</div>
-              <div className="stat-change text-purple-600">Smart Contract Events</div>
-            </div>
-            <div className="stat-card" style={{ borderLeft: '4px solid #4CAF50' }}>
-              <div className="stat-label">
-                <CheckCircle2 size={16} className="inline mr-1 text-green-600" /> Published On-Chain
-              </div>
-              <div className="stat-number">{data?.kpis.publishedBlockchainRecords ?? 0}</div>
-              <div className="stat-change text-green-600">Ethereum Sepolia Verified</div>
-            </div>
-            <div className="stat-card" style={{ borderLeft: '4px solid #B00020' }}>
-              <div className="stat-label">
-                <AlertCircle size={16} className="inline mr-1 text-red-600" /> Voided / Revoked
-              </div>
-              <div className="stat-number">{data?.kpis.voidedBlockchainRecords ?? 0}</div>
-              <div className="stat-change">Superseded Contracts</div>
-            </div>
-            <div className="stat-card" style={{ borderLeft: '4px solid #6750A4' }}>
-              <div className="stat-label">
-                <ShieldCheck size={16} className="inline mr-1 text-purple-600" /> Cryptographic Integrity
-              </div>
-              <div className="stat-number" style={{ fontSize: '18px' }}>100% Verified</div>
-              <div className="stat-change text-green-600">SHA-256 Validated</div>
-            </div>
+            <StatCard icon={<ShieldCheck size={16} className="text-[#0b5b8c]" />} label="Total Ledger Entries" value={data?.kpis.totalBlockchainRecords ?? 0} sub="Smart Contract Events" />
+            <StatCard icon={<CheckCircle2 size={16} className="text-[#1e7b4a]" />} label="Published On-Chain" value={data?.kpis.publishedBlockchainRecords ?? 0} sub="Ethereum Sepolia Verified" />
+            <StatCard icon={<AlertCircle size={16} className="text-[#b3261e]" />} label="Voided / Revoked" value={data?.kpis.voidedBlockchainRecords ?? 0} sub="Superseded Contracts" />
+            <StatCard icon={<ShieldCheck size={16} className="text-[#6750A4]" />} label="Cryptographic Integrity" value="100% Verified" sub="SHA-256 Validated" />
           </>
         )}
 
         {/* Overview (All) Default KPIs */}
         {!reportCategory && (
           <>
-            <div className="stat-card" style={{ borderLeft: '4px solid #6750A4' }}>
-              <div className="stat-label">
-                <FolderKanban size={16} className="inline mr-1 text-purple-600" /> Total Acquisition Cases
-              </div>
-              <div className="stat-number">{data?.kpis.totalCases ?? 0}</div>
-              <div className="stat-change text-green-600">
-                {data?.kpis.completedCases ?? 0} Completed / Closed
-              </div>
-            </div>
-
-            <div className="stat-card" style={{ borderLeft: '4px solid #4CAF50' }}>
-              <div className="stat-label">
-                <CreditCard size={16} className="inline mr-1 text-green-600" /> Total Paid Out
-              </div>
-              <div className="stat-number">
-                RM {((data?.kpis.totalPaidAmount || 0) / 1000000).toFixed(2)}M
-              </div>
-              <div className="stat-change">
-                Out of RM {((data?.kpis.totalCompensationAmount || 0) / 1000000).toFixed(2)}M Approved
-              </div>
-            </div>
-
-            <div className="stat-card" style={{ borderLeft: '4px solid #03A9F4' }}>
-              <div className="stat-label">
-                <ShieldCheck size={16} className="inline mr-1 text-blue-600" /> Blockchain Notarized
-              </div>
-              <div className="stat-number">{data?.kpis.publishedBlockchainRecords ?? 0}</div>
-              <div className="stat-change text-purple-600">
-                Ethereum Sepolia Verified
-              </div>
-            </div>
-
-            <div className="stat-card" style={{ borderLeft: '4px solid #FF9800' }}>
-              <div className="stat-label">
-                <TrendingUp size={16} className="inline mr-1 text-amber-600" /> Pipeline In Review
-              </div>
-              <div className="stat-number">
-                {(data?.kpis.pendingValuation ?? 0) + (data?.kpis.pendingCompensation ?? 0)}
-              </div>
-              <div className="stat-change">Needs review / approval</div>
-            </div>
+            <StatCard icon={<FolderKanban size={16} className="text-[#6750A4]" />} label="Total Acquisition Cases" value={data?.kpis.totalCases ?? 0} sub={`${data?.kpis.completedCases ?? 0} Completed / Closed`} />
+            <StatCard icon={<CreditCard size={16} className="text-[#1e7b4a]" />} label="Total Paid Out" value={`RM ${((data?.kpis.totalPaidAmount || 0) / 1000000).toFixed(2)}M`} sub={`Out of RM ${((data?.kpis.totalCompensationAmount || 0) / 1000000).toFixed(2)}M Approved`} />
+            <StatCard icon={<ShieldCheck size={16} className="text-[#0b5b8c]" />} label="Blockchain Notarized" value={data?.kpis.publishedBlockchainRecords ?? 0} sub="Ethereum Sepolia Verified" />
+            <StatCard icon={<TrendingUp size={16} className="text-[#a8600b]" />} label="Pipeline In Review" value={(data?.kpis.pendingValuation ?? 0) + (data?.kpis.pendingCompensation ?? 0)} sub="Needs review / approval" />
           </>
         )}
       </div>
 
-      {/* Quick Export Banners - Shown ONLY on Overview */}
+      {/* Visualization Graphs — Overview only */}
       {!reportCategory && (
-        <div style={{ marginTop: '24px', marginBottom: '24px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '14px', color: 'var(--md-on-surface)' }}>
-            Quick Export Official Reports
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-            {/* Card 1: Case Status Report */}
-            <div style={{
-              background: 'var(--md-surface-container)',
-              borderRadius: '20px',
-              padding: '20px',
-              border: '1px solid rgba(121, 116, 126, 0.12)',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
-            }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                  <span style={{ padding: '6px 10px', background: 'rgba(103, 80, 164, 0.12)', borderRadius: '12px', color: '#6750A4', fontWeight: 700, fontSize: '12px' }}>FR-RPT-015</span>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Case Status Report</h3>
-                </div>
-                <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#666', lineHeight: 1.4 }}>
-                  Detailed breakdown of acquisition cases, lifecycle milestones, assigned officers, and aging metrics.
-                </p>
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  className="btn-primary"
-                  onClick={() => handleDownload("Case Status Report")}
-                  disabled={downloading === "Case Status Report"}
-                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                >
-                  <Download size={14} /> {downloading === "Case Status Report" ? "Generating..." : "Download Official PDF"}
-                </button>
-                <button
-                  className="btn-outline"
-                  onClick={() => navigate('/admin/reports/generate?type=Case Status Report')}
-                >
-                  Configure Filter
-                </button>
-              </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="bg-md-surface-container rounded-xl p-6 shadow-sm">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base font-semibold">Case Status Distribution</h3>
+              <span className="text-xs text-md-on-surface-variant">FR-RPT-006</span>
             </div>
-
-            {/* Card 2: Payment Report */}
-            <div style={{
-              background: 'var(--md-surface-container)',
-              borderRadius: '20px',
-              padding: '20px',
-              border: '1px solid rgba(121, 116, 126, 0.12)',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
-            }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                  <span style={{ padding: '6px 10px', background: 'rgba(76, 175, 80, 0.12)', borderRadius: '12px', color: '#2E7D32', fontWeight: 700, fontSize: '12px' }}>FR-RPT-014</span>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Payment Report</h3>
-                </div>
-                <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#666', lineHeight: 1.4 }}>
-                  Full disbursement ledger, transaction clearance reference numbers, success rates, and payment durations.
-                </p>
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  className="btn-primary"
-                  onClick={() => handleDownload("Payment Report")}
-                  disabled={downloading === "Payment Report"}
-                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', backgroundColor: '#2E7D32' }}
-                >
-                  <Download size={14} /> {downloading === "Payment Report" ? "Generating..." : "Download Official PDF"}
-                </button>
-                <button
-                  className="btn-outline"
-                  onClick={() => navigate('/admin/reports/generate?type=Payment Report')}
-                >
-                  Configure Filter
-                </button>
-              </div>
+            <div className="h-60 flex items-center justify-center">
+              <Doughnut data={doughnutData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }} />
             </div>
+          </div>
 
-            {/* Card 3: Blockchain Audit Report */}
-            <div style={{
-              background: 'var(--md-surface-container)',
-              borderRadius: '20px',
-              padding: '20px',
-              border: '1px solid rgba(121, 116, 126, 0.12)',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
-            }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                  <span style={{ padding: '6px 10px', background: 'rgba(3, 169, 244, 0.12)', borderRadius: '12px', color: '#0277BD', fontWeight: 700, fontSize: '12px' }}>FR-RPT-013</span>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Blockchain Audit Report</h3>
-                </div>
-                <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#666', lineHeight: 1.4 }}>
-                  Cryptographic document hash records, Sepolia smart contract transaction hashes, and notarization statuses.
-                </p>
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  className="btn-primary"
-                  onClick={() => handleDownload("Blockchain Audit Report")}
-                  disabled={downloading === "Blockchain Audit Report"}
-                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', backgroundColor: '#0277BD' }}
-                >
-                  <Download size={14} /> {downloading === "Blockchain Audit Report" ? "Generating..." : "Download Official PDF"}
-                </button>
-                <button
-                  className="btn-outline"
-                  onClick={() => navigate('/admin/reports/generate?type=Blockchain Audit Report')}
-                >
-                  Configure Filter
-                </button>
-              </div>
+          <div className="bg-md-surface-container rounded-xl p-6 shadow-sm">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base font-semibold">Acquisition Cases Growth (2026)</h3>
+              <span className="text-xs text-md-on-surface-variant">Monthly Trends</span>
+            </div>
+            <div className="h-60">
+              <Line data={lineChartData} options={{ responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }} />
+            </div>
+          </div>
+
+          <div className="lg:col-span-2 bg-md-surface-container rounded-xl p-6 shadow-sm">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base font-semibold">Disbursement Status Financial Breakdown</h3>
+              <span className="text-xs text-md-on-surface-variant">In Thousands (RM)</span>
+            </div>
+            <div className="h-60">
+              <Bar data={barChartData} options={{ responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }} />
+            </div>
+          </div>
+
+          <div className="bg-md-surface-container rounded-xl p-6 shadow-sm">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base font-semibold">Blockchain Notarization Status</h3>
+              <span className="text-xs text-md-on-surface-variant">Ethereum Sepolia</span>
+            </div>
+            <div className="h-60 flex items-center justify-center">
+              <Doughnut data={blockchainDoughnutData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }} />
+            </div>
+          </div>
+
+          <div className="bg-md-surface-container rounded-xl p-6 shadow-sm">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base font-semibold">Notarization Activity Velocity</h3>
+              <span className="text-xs text-md-on-surface-variant">Monthly Audit Trail</span>
+            </div>
+            <div className="h-60">
+              <Line data={lineChartData} options={{ responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }} />
             </div>
           </div>
         </div>
       )}
 
-      {/* Chart.js Visualizations Section */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px', marginBottom: '28px' }}>
-        {/* Case Status View / Overview Charts */}
-        {(!reportCategory || reportCategory === 'Case Status') && (
-          <>
-            <div style={{
-              background: 'var(--md-surface-container)',
-              borderRadius: '24px',
-              padding: '24px',
-              border: '1px solid rgba(121, 116, 126, 0.12)',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Case Status Distribution</h3>
-                <span style={{ fontSize: '12px', color: '#666' }}>FR-RPT-006</span>
+      {/* Record Table — category views only */}
+      {reportCategory && (
+        <>
+          {/* Filter Bar */}
+          <div className="flex flex-wrap items-center gap-3">
+            <SearchInput
+              containerClassName="flex-1 min-w-[220px]"
+              placeholder={`Search ${reportCategory} by title or ID...`}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            {reportCategory === 'Case Status' && (
+              <div className="w-52">
+                <Select
+                  label="State"
+                  value={selectedState}
+                  onChange={setSelectedState}
+                  options={[
+                    { value: 'All states', label: 'All States' },
+                    ...Object.keys(STATES).map((s) => ({ value: s, label: s })),
+                  ]}
+                />
               </div>
-              <div style={{ height: '240px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Doughnut data={doughnutData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }} />
-              </div>
-            </div>
-
-            <div style={{
-              background: 'var(--md-surface-container)',
-              borderRadius: '24px',
-              padding: '24px',
-              border: '1px solid rgba(121, 116, 126, 0.12)',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Acquisition Cases Growth (2026)</h3>
-                <span style={{ fontSize: '12px', color: '#666' }}>Monthly Trends</span>
-              </div>
-              <div style={{ height: '240px' }}>
-                <Line data={lineChartData} options={{ responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }} />
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* Payment View Charts */}
-        {(!reportCategory || reportCategory === 'Payment') && (
-          <div style={{
-            gridColumn: (!reportCategory || reportCategory === 'Payment') ? '1 / -1' : undefined,
-            background: 'var(--md-surface-container)',
-            borderRadius: '24px',
-            padding: '24px',
-            border: '1px solid rgba(121, 116, 126, 0.12)',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Disbursement Status Financial Breakdown</h3>
-              <span style={{ fontSize: '12px', color: '#666' }}>In Thousands (RM)</span>
-            </div>
-            <div style={{ height: '220px' }}>
-              <Bar data={barChartData} options={{ responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }} />
-            </div>
+            )}
+            <Button
+              variant="text"
+              size="sm"
+              onClick={() => {
+                setSearchTerm('');
+                setSelectedState('All states');
+              }}
+            >
+              Clear
+            </Button>
           </div>
-        )}
 
-        {/* Blockchain View Charts / Overview Charts */}
-        {(!reportCategory || reportCategory === 'Blockchain Audit') && (
-          <>
-            <div style={{
-              background: 'var(--md-surface-container)',
-              borderRadius: '24px',
-              padding: '24px',
-              border: '1px solid rgba(121, 116, 126, 0.12)',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Blockchain Notarization Status</h3>
-                <span style={{ fontSize: '12px', color: '#666' }}>Ethereum Sepolia</span>
-              </div>
-              <div style={{ height: '240px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Doughnut data={blockchainDoughnutData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }} />
-              </div>
-            </div>
-
-            <div style={{
-              background: 'var(--md-surface-container)',
-              borderRadius: '24px',
-              padding: '24px',
-              border: '1px solid rgba(121, 116, 126, 0.12)',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Notarization Activity Velocity</h3>
-                <span style={{ fontSize: '12px', color: '#666' }}>Monthly Audit Trail</span>
-              </div>
-              <div style={{ height: '240px' }}>
-                <Line data={lineChartData} options={{ responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }} />
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Filter Bar */}
-      <div className="filter-bar">
-        <div className="search-wrap">
-          <Search size={16} className="search-icon" />
-          <input
-            placeholder={`Search ${reportCategory || 'activity'} by title or ID...`}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <div className="filter-group">
-          {!reportCategory && (
-            <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
-              <option value="All">All Categories</option>
-              <option value="Case Status">Case Status</option>
-              <option value="Payment">Payment</option>
-              <option value="Blockchain Audit">Blockchain Audit</option>
-            </select>
-          )}
-          {(selectedType === 'Case Status' || (!reportCategory && selectedType === 'All')) && (
-            <select
-              value={selectedState}
-              onChange={(e) => setSelectedState(e.target.value)}
+          {/* Table Header Row */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="text-sm font-medium text-md-on-surface-variant">
+              {reportCategory} Records ({filteredActivity.length})
+            </span>
+            <Button
+              variant="filled"
+              onClick={() => navigate(`/admin/reports/generate?type=${reportCategory} Report`)}
             >
-              <option value="All states">All states</option>
-              {Object.keys(STATES).map((state) => (
-                <option key={state} value={state}>{state}</option>
-              ))}
-            </select>
-          )}
-          <button className="btn-filter" onClick={() => loadData()}>
-            <Filter size={14} style={{ display: 'inline', marginRight: 4 }} /> Apply
-          </button>
-          <button className="btn-clear" onClick={() => {
-            setSearchTerm('');
-            setSelectedType(reportCategory || 'All');
-            setSelectedState('All states');
-          }}>Clear</button>
-        </div>
-      </div>
-
-      {/* Activity Table */}
-      <div className="action-bar">
-        <div className="left">
-          <span className="count">
-            {reportCategory ? `${reportCategory} Records` : 'Recent Tracked System Records'} ({filteredActivity.length})
-          </span>
-        </div>
-        <div className="right" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          {reportCategory ? (
-            <>
-              <button
-                className="btn-primary"
-                onClick={() => handleDownload(`${reportCategory} Report`)}
-                disabled={downloading === `${reportCategory} Report`}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-              >
-                <Download size={14} className={downloading === `${reportCategory} Report` ? "animate-spin" : ""} />
-                {downloading === `${reportCategory} Report` ? "Generating..." : "Generate Completed Report"}
-              </button>
-              <button
-                className="btn-outline"
-                onClick={() => navigate(`/admin/reports/generate?type=${reportCategory} Report`)}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-              >
-                <Filter size={14} />
-                Generate Filtering Report
-              </button>
-            </>
-          ) : (
-            <button
-              className="btn-primary"
-              onClick={() => navigate('/admin/reports/generate')}
-            >
+              <Filter size={14} />
               Generate Filtering Report
-            </button>
-          )}
-        </div>
-      </div>
+            </Button>
+          </div>
 
-      <div className="table-wrap">
-        <div className="table-scroll">
-          <table>
-            <thead>
-              {selectedType === 'Case Status' ? (
+          {/* Data Table */}
+          <div className="bg-md-surface-container rounded-xl shadow-sm overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
                 <tr>
-                  <th>Record ID</th>
-                  <th>Title / Description</th>
-                  <th>State / Location</th>
-                  <th>Date</th>
-                  <th>Lifecycle Aging</th>
-                  <th>Status</th>
-                  <th>Action</th>
+                  {reportCategory === 'Case Status' ? (
+                    <>
+                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Record ID</th>
+                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Title / Description</th>
+                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">State / Location</th>
+                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Date</th>
+                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Lifecycle Aging</th>
+                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Status</th>
+                    </>
+                  ) : reportCategory === 'Payment' ? (
+                    <>
+                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Record ID</th>
+                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Title / Description</th>
+                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Bank Details</th>
+                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Bank Reference</th>
+                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Date</th>
+                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Status</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Record ID</th>
+                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Title / Description</th>
+                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Transaction Hash</th>
+                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Document Hash</th>
+                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Date</th>
+                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Status</th>
+                    </>
+                  )}
                 </tr>
-              ) : selectedType === 'Payment' ? (
-                <tr>
-                  <th>Record ID</th>
-                  <th>Title / Description</th>
-                  <th>Bank Details</th>
-                  <th>Bank Reference</th>
-                  <th>Date</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              ) : selectedType === 'Blockchain Audit' ? (
-                <tr>
-                  <th>Record ID</th>
-                  <th>Title / Description</th>
-                  <th>Transaction Hash</th>
-                  <th>Document Hash</th>
-                  <th>Date</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              ) : (
-                <tr>
-                  <th>Record ID / Reference</th>
-                  <th>Title / Description</th>
-                  <th>Category</th>
-                  <th>State / Location</th>
-                  <th>Date</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              )}
-            </thead>
-            <tbody>
-              {filteredActivity.length === 0 ? (
-                <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '32px', color: '#777' }}>
-                    <AlertCircle size={24} style={{ margin: '0 auto 8px auto', display: 'block', color: '#999' }} />
-                    No records found matching the selected criteria.
-                  </td>
-                </tr>
-              ) : (
-                filteredActivity.map((item) => (
-                  <tr key={item.id}>
-                    <td><span style={{ fontWeight: 600, color: 'var(--md-on-surface)' }}>{item.id}</span></td>
-                    <td><span className="case-title">{item.title}</span></td>
-                    
-                    {selectedType === 'Case Status' ? (
-                      <>
-                        <td>{item.location}</td>
-                        <td>{item.date}</td>
-                        <td>{item.agingDays || 'N/A'}</td>
-                      </>
-                    ) : selectedType === 'Payment' ? (
-                      <>
-                        <td>{item.bankDetails || 'N/A'}</td>
-                        <td>{item.bankReference || 'N/A'}</td>
-                        <td>{item.date}</td>
-                      </>
-                    ) : selectedType === 'Blockchain Audit' ? (
-                      <>
-                        <td><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{item.transactionHash || 'N/A'}</span></td>
-                        <td><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{item.documentHash || 'N/A'}</span></td>
-                        <td>{item.date}</td>
-                      </>
-                    ) : (
-                      <>
-                        <td><span style={{ fontWeight: 600, fontSize: '13px', color: '#6750A4' }}>{item.category}</span></td>
-                        <td>{item.location}</td>
-                        <td>{item.date}</td>
-                      </>
-                    )}
-
-                    <td>
-                      <span className={`status-badge ${item.status === 'Paid' || item.status === 'Published' || item.status === 'CASE_CLOSED' ? 'approved' : 'pending'}`}>
-                        <span className="dot" />{item.status.replace(/_/g, ' ')}
-                      </span>
-                    </td>
-                    <td>
-                      <button
-                        className="btn-outline"
-                        onClick={() => handleDownload(item.category === "Payment" ? "Payment Report" : item.category === "Blockchain Audit" ? "Blockchain Audit Report" : "Case Status Report")}
-                      >
-                        <Download size={13} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} /> PDF
-                      </button>
+              </thead>
+              <tbody>
+                {filteredActivity.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-md-on-surface-variant">
+                      <AlertCircle size={24} className="mx-auto mb-2 opacity-50" />
+                      No records found matching the selected criteria.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                ) : (
+                  filteredActivity.map((item) => {
+                    const badge = statusStyle(item.status);
+                    return (
+                      <tr key={item.id} className="border-t border-md-outline/10 hover:bg-md-primary/5 transition-colors">
+                        <td className="px-4 py-3 font-semibold text-md-primary text-[13px]">{item.id}</td>
+                        <td className="px-4 py-3 font-medium">{item.title}</td>
+
+                        {reportCategory === 'Case Status' ? (
+                          <>
+                            <td className="px-4 py-3 text-md-on-surface-variant">{item.location}</td>
+                            <td className="px-4 py-3 text-md-on-surface-variant">{item.date}</td>
+                            <td className="px-4 py-3 text-md-on-surface-variant">{item.agingDays || 'N/A'}</td>
+                          </>
+                        ) : reportCategory === 'Payment' ? (
+                          <>
+                            <td className="px-4 py-3 text-md-on-surface-variant">{item.bankDetails || 'N/A'}</td>
+                            <td className="px-4 py-3 text-md-on-surface-variant">{item.bankReference || 'N/A'}</td>
+                            <td className="px-4 py-3 text-md-on-surface-variant">{item.date}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-4 py-3 font-mono text-xs text-md-on-surface-variant">{item.transactionHash || 'N/A'}</td>
+                            <td className="px-4 py-3 font-mono text-xs text-md-on-surface-variant">{item.documentHash || 'N/A'}</td>
+                            <td className="px-4 py-3 text-md-on-surface-variant">{item.date}</td>
+                          </>
+                        )}
+
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center gap-1.5 rounded-full py-0.5 pl-2 pr-3 text-xs font-semibold ${badge.bg} ${badge.fg}`}>
+                            <span className={`w-2 h-2 rounded-full ${badge.dot}`} />
+                            {item.status.replace(/_/g, ' ')}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 };
