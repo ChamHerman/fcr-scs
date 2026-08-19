@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertTriangle, Lock, ShieldCheck, Wallet, Copy, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, Loader2, Lock, ShieldCheck, Wallet, Copy, CheckCircle2 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { Textarea } from '../../components/ui/Textarea';
@@ -9,6 +9,7 @@ import { useNotification } from '../../components/ui/NotificationSystem';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { blockchainStatusClassMap } from '../Payment/statusMaps';
 import { copyToClipboard } from '../../utils/clipboard';
+import { sendLedgerTransaction, waitForLedgerReceipt } from './walletTx';
 
 /**
  * Shared modals for the blockchain module (PLAN_HM_1308 §5.5, §5.6, §5.7).
@@ -63,7 +64,7 @@ export const ViewLedgerModal: React.FC<{ row: LedgerRow | null; onClose: () => v
         <div className="payment-detail-grid">
           <div className="payment-detail-item">
             <div className="label">Record ID</div>
-            <div className="value mono">{row.publicId ?? row.caseId}</div>
+            <div className="value mono text-md-primary font-bold">{row.publicId ?? row.caseId}</div>
           </div>
           <div className="payment-detail-item">
             <div className="label">Case</div>
@@ -116,18 +117,47 @@ export const PublishModal: React.FC<{ row: LedgerRow | null; onClose: () => void
   const { walletAddress, walletConnected, connectWallet, error: walletError } = useWallet();
   const { notify } = useNotification();
   const [loading, setLoading] = useState(false);
+  const [stage, setStage] = useState<'wallet' | 'mining' | 'recording'>('wallet');
   const [resultTx, setResultTx] = useState('');
 
   const confirm = async () => {
     if (!row) return;
     if (!walletConnected || !walletAddress) return;
     setLoading(true);
+    setStage('wallet');
     try {
-      const res = await blockchainApi.publish({ caseId: row.caseId, documentHash: row.documentHash || '', walletAddress });
-      setResultTx(res.transactionHash);
-      notify({ type: 'success', title: 'Published on-chain', message: `Record for ${row.caseId} published. Tx ${fmtTx(res.transactionHash)}` });
-      setTimeout(() => { onClose(); onDone(); }, 1200);
+      const net = await blockchainApi.getNetworkInfo();
+      if (!net.contractAddress) {
+        throw new Error('No contract address configured for the active network — set it in the smart-contract service env.');
+      }
+
+      // 1. Prompt the admin's MetaMask to sign + send the publish transaction
+      const txHash = await sendLedgerTransaction({
+        from: walletAddress,
+        functionName: 'publishRecord',
+        args: [row.caseId, row.documentHash || ''],
+        network: { chainId: net.chainId, contractAddress: net.contractAddress },
+      });
+      setResultTx(txHash);
+
+      // 2. Wait until the transaction is actually mined on-chain
+      setStage('mining');
+      await waitForLedgerReceipt(txHash);
+
+      // 3. Record the real transaction hash + Published status in the database
+      setStage('recording');
+      await blockchainApi.publish({
+        caseId: row.caseId,
+        documentHash: row.documentHash || '',
+        walletAddress,
+        transactionHash: txHash,
+      });
+
+      notify({ type: 'success', title: 'Published on-chain', message: `Record for ${row.caseId} published · Tx ${fmtTx(txHash)}` });
+      onClose();
+      onDone();
     } catch (e: any) {
+      console.error('[blockchain] publish failed:', e);
       notify({ type: 'error', title: 'Publish failed', message: e.message });
     } finally {
       setLoading(false);
@@ -187,11 +217,20 @@ export const PublishModal: React.FC<{ row: LedgerRow | null; onClose: () => void
           ) : (
             <div className="flex items-center gap-2 text-sm bg-md-success/10 border border-md-success/30 rounded-xl px-4 py-3 text-md-on-success">
               <ShieldCheck size={16} />
-              Wallet authorised · {walletAddress.slice(0, 6)}…{walletAddress.slice(-4)}
+              Wallet authorised · {walletAddress.slice(0, 6)}…{walletAddress.slice(-4)} — MetaMask will ask you to approve the publish transaction.
             </div>
           )}
 
-          {resultTx && (
+          {loading && (
+            <div className="flex items-center gap-2 text-sm bg-md-primary/10 border border-md-primary/30 rounded-xl px-4 py-3 text-md-on-surface">
+              <Loader2 size={16} className="animate-spin shrink-0" />
+              {stage === 'wallet' && 'Waiting for approval in MetaMask…'}
+              {stage === 'mining' && <>Transaction sent — waiting for on-chain confirmation ({fmtTx(resultTx)})…</>}
+              {stage === 'recording' && 'Confirmed on-chain — recording in the ledger database…'}
+            </div>
+          )}
+
+          {resultTx && !loading && (
             <div className="flex items-center gap-2 text-sm bg-md-success/10 border border-md-success/30 rounded-xl px-4 py-3 text-md-on-success break-words">
               <CheckCircle2 size={16} className="shrink-0" />
               Transaction {fmtTx(resultTx)}
@@ -209,6 +248,8 @@ export const VoidModal: React.FC<{ row: LedgerRow | null; onClose: () => void; o
   const { walletAddress, walletConnected, connectWallet, error: walletError } = useWallet();
   const { notify } = useNotification();
   const [loading, setLoading] = useState(false);
+  const [stage, setStage] = useState<'wallet' | 'mining' | 'recording'>('wallet');
+  const [resultTx, setResultTx] = useState('');
   const [reason, setReason] = useState('');
   const [followUp, setFollowUp] = useState('');
 
@@ -217,13 +258,42 @@ export const VoidModal: React.FC<{ row: LedgerRow | null; onClose: () => void; o
     if (!walletConnected || !walletAddress) return;
     if (!reason.trim()) return;
     setLoading(true);
+    setStage('wallet');
     try {
-      const res = await blockchainApi.voidRecord({ caseId: row.caseId, voidReason: reason.trim(), walletAddress });
-      notify({ type: 'success', title: 'Record voided on-chain', message: `Void tx ${fmtTx(res.transactionHash)}` });
+      const net = await blockchainApi.getNetworkInfo();
+      if (!net.contractAddress) {
+        throw new Error('No contract address configured for the active network — set it in the smart-contract service env.');
+      }
+
+      // 1. Prompt the admin's MetaMask to sign + send the void transaction
+      const txHash = await sendLedgerTransaction({
+        from: walletAddress,
+        functionName: 'voidRecord',
+        args: [row.caseId, reason.trim()],
+        network: { chainId: net.chainId, contractAddress: net.contractAddress },
+      });
+      setResultTx(txHash);
+
+      // 2. Wait until the transaction is actually mined on-chain
+      setStage('mining');
+      await waitForLedgerReceipt(txHash);
+
+      // 3. Record the real transaction hash + Voided status in the database
+      setStage('recording');
+      await blockchainApi.voidRecord({
+        caseId: row.caseId,
+        voidReason: reason.trim(),
+        walletAddress,
+        transactionHash: txHash,
+      });
+
+      notify({ type: 'success', title: 'Record voided on-chain', message: `Record ${row.caseId} voided · Tx ${fmtTx(txHash)}` });
       setReason('');
       setFollowUp('');
-      setTimeout(() => { onClose(); onDone(); }, 1200);
+      onClose();
+      onDone();
     } catch (e: any) {
+      console.error('[blockchain] void failed:', e);
       notify({ type: 'error', title: 'Void failed', message: e.message });
     } finally {
       setLoading(false);
@@ -305,7 +375,16 @@ export const VoidModal: React.FC<{ row: LedgerRow | null; onClose: () => void; o
           ) : (
             <div className="flex items-center gap-2 text-sm bg-md-success/10 border border-md-success/30 rounded-xl px-4 py-3 text-md-on-success">
               <Lock size={14} />
-              Wallet authorised · {walletAddress.slice(0, 6)}…{walletAddress.slice(-4)}
+              Wallet authorised · {walletAddress.slice(0, 6)}…{walletAddress.slice(-4)} — MetaMask will ask you to approve the void transaction.
+            </div>
+          )}
+
+          {loading && (
+            <div className="flex items-center gap-2 text-sm bg-md-primary/10 border border-md-primary/30 rounded-xl px-4 py-3 text-md-on-surface">
+              <Loader2 size={16} className="animate-spin shrink-0" />
+              {stage === 'wallet' && 'Waiting for approval in MetaMask…'}
+              {stage === 'mining' && <>Transaction sent — waiting for on-chain confirmation ({fmtTx(resultTx)})…</>}
+              {stage === 'recording' && 'Confirmed on-chain — recording in the ledger database…'}
             </div>
           )}
         </div>

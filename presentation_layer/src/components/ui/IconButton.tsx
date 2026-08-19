@@ -25,7 +25,7 @@ export const IconButton: React.FC<IconButtonProps> = ({
   const variantClasses = {
     neutral: 'text-md-on-surface-variant hover:bg-md-on-surface/8 hover:text-md-on-surface',
     primary: 'text-md-primary hover:bg-md-primary/10',
-    danger: 'text-md-error hover:bg-md-error/10',
+    danger: 'text-red-600 dark:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-400/10 focus-visible:ring-red-500',
   }[variant];
 
   return (

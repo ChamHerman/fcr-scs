@@ -1,79 +1,126 @@
 /**
  * Status → badge maps for the payment + blockchain admin modules.
- * PLAN_HM_1308 §6 — one map per domain; the UI displays the backend status
- * names exactly as written (seed alias `Failed` normalises to `Transfer Failed`).
- *
- * Badge classes are payment/blockchain-specific (`.payment-badge …` defined in
- * payment.css) — deliberately NOT the case-management badge classes.
+ * PLAN_HM_1308 §6 & DESIGN.md — 15 Unique high-contrast status mappings.
+ * Canonical Title Case: 'Cancelled' replaces old 'CANCELLED'.
  */
 
 export const PAYMENT_STATUSES = [
   'All',
-  'Approved',
+  'Offer Accepted',
   'Bank Details Submitted',
   'Transfer Initiated',
   'Authorised',
+  'Waiting Bank Approval',
   'Paid',
   'Transfer Failed',
   'Transfer Rejected',
-  'Pending New Bank Details',
-  'Scheduled',
+  'Cancelled',
   'Payment Disputed',
-  'CANCELLED',
+  'Scheduled',
+  'Pending New Bank Details',
 ];
 
 /** Normalise any backend/seed variant to the canonical display name. */
 export function normalizePaymentStatus(status: string): string {
-  if (status === 'Failed') return 'Transfer Failed';
-  if (status === 'CANCEL') return 'CANCELLED';
-  return status || 'Approved';
+  if (!status) return 'Offer Accepted';
+  if (status === 'Failed' || status === 'FAILED' || status === 'TRANSFER_FAILED') return 'Transfer Failed';
+  if (status === 'CANCEL' || status === 'CANCELLED' || status === 'Cancelled' || status === 'cancelled') return 'Cancelled';
+  if (status === 'offer_accepted' || status === 'OFFER_ACCEPTED') return 'Offer Accepted';
+  if (status === 'BANK_DETAILS_SUBMITTED') return 'Bank Details Submitted';
+  if (status === 'TRANSFER_INITIATED') return 'Transfer Initiated';
+  if (status === 'AUTHORISED') return 'Authorised';
+  if (status === 'WAITING_BANK_APPROVAL' || status === 'waiting_bank_approval') return 'Waiting Bank Approval';
+  if (status === 'PAID' || status === 'Confirmed') return 'Paid';
+  if (status === 'TRANSFER_REJECTED') return 'Transfer Rejected';
+  if (status === 'PAYMENT_DISPUTED') return 'Payment Disputed';
+  if (status === 'SCHEDULED') return 'Scheduled';
+  if (status === 'PENDING_NEW_BANK_DETAILS') return 'Pending New Bank Details';
+  if (status === 'Approved') return 'Offer Accepted';
+  return status;
 }
 
 export const paymentStatusLabelMap: Record<string, string> = {
-  'Approved': 'Approved',
+  'Offer Accepted': 'Offer Accepted',
+  'offer_accepted': 'Offer Accepted',
+  'OFFER_ACCEPTED': 'Offer Accepted',
   'Bank Details Submitted': 'Bank Details Submitted',
+  'BANK_DETAILS_SUBMITTED': 'Bank Details Submitted',
   'Transfer Initiated': 'Transfer Initiated',
+  'TRANSFER_INITIATED': 'Transfer Initiated',
   'Authorised': 'Authorised',
+  'AUTHORISED': 'Authorised',
+  'Waiting Bank Approval': 'Waiting Bank Approval',
+  'WAITING_BANK_APPROVAL': 'Waiting Bank Approval',
   'Paid': 'Paid',
+  'PAID': 'Paid',
   'Confirmed': 'Paid',
   'Transfer Failed': 'Transfer Failed',
+  'TRANSFER_FAILED': 'Transfer Failed',
   'Failed': 'Transfer Failed',
   'Transfer Rejected': 'Transfer Rejected',
-  'Pending New Bank Details': 'Pending New Bank Details',
-  'Scheduled': 'Scheduled',
+  'TRANSFER_REJECTED': 'Transfer Rejected',
+  'Cancelled': 'Cancelled',
+  'CANCELLED': 'Cancelled',
   'Payment Disputed': 'Payment Disputed',
-  'CANCELLED': 'CANCELLED',
+  'PAYMENT_DISPUTED': 'Payment Disputed',
+  'Scheduled': 'Scheduled',
+  'SCHEDULED': 'Scheduled',
+  'Pending New Bank Details': 'Pending New Bank Details',
+  'PENDING_NEW_BANK_DETAILS': 'Pending New Bank Details',
+  'Approved': 'Offer Accepted',
 };
 
 export const paymentStatusClassMap: Record<string, string> = {
-  'Paid': 'approved',
-  'Confirmed': 'approved',
-  'Transfer Failed': 'rejected',
-  'Failed': 'rejected',
-  'Transfer Rejected': 'rejected',
-  'CANCELLED': 'cancelled',
-  'Payment Disputed': 'error',
-  'Approved': 'pending',
-  'Bank Details Submitted': 'pending',
-  'Transfer Initiated': 'pending',
-  'Authorised': 'pending',
-  'Scheduled': 'pending',
-  'Pending New Bank Details': 'pending',
+  'Offer Accepted': 'status-offer-accepted',
+  'offer_accepted': 'status-offer-accepted',
+  'OFFER_ACCEPTED': 'status-offer-accepted',
+  'Approved': 'status-offer-accepted',
+  'Bank Details Submitted': 'status-bank-submitted',
+  'BANK_DETAILS_SUBMITTED': 'status-bank-submitted',
+  'Transfer Initiated': 'status-transfer-initiated',
+  'TRANSFER_INITIATED': 'status-transfer-initiated',
+  'Authorised': 'status-authorised',
+  'AUTHORISED': 'status-authorised',
+  'Waiting Bank Approval': 'status-waiting-bank',
+  'WAITING_BANK_APPROVAL': 'status-waiting-bank',
+  'Paid': 'status-paid',
+  'PAID': 'status-paid',
+  'Confirmed': 'status-paid',
+  'Transfer Failed': 'status-transfer-failed',
+  'TRANSFER_FAILED': 'status-transfer-failed',
+  'Failed': 'status-transfer-failed',
+  'Transfer Rejected': 'status-transfer-rejected',
+  'TRANSFER_REJECTED': 'status-transfer-rejected',
+  'Cancelled': 'status-cancelled',
+  'CANCELLED': 'status-cancelled',
+  'Payment Disputed': 'status-payment-disputed',
+  'PAYMENT_DISPUTED': 'status-payment-disputed',
+  'Scheduled': 'status-scheduled',
+  'SCHEDULED': 'status-scheduled',
+  'Pending New Bank Details': 'status-pending-details',
+  'PENDING_NEW_BANK_DETAILS': 'status-pending-details',
 };
 
-export const BLOCKCHAIN_STATUSES = ['All', 'Ready to Publish', 'Published', 'Voided'];
+export const BLOCKCHAIN_STATUSES = ['All', 'Ready to Publish', 'Published', 'Voided', 'Replacement'];
 
 export const blockchainStatusLabelMap: Record<string, string> = {
   'Ready to Publish': 'Ready to Publish',
-  'Replacement': 'Replacement',
+  'READY_TO_PUBLISH': 'Ready to Publish',
   'Published': 'Published',
+  'PUBLISHED': 'Published',
   'Voided': 'Voided',
-  'FAILED': 'Failed',
+  'VOIDED': 'Voided',
+  'Replacement': 'Replacement',
+  'REPLACEMENT': 'Replacement',
 };
 
 export const blockchainStatusClassMap: Record<string, string> = {
-  'Published': 'approved',
-  'Voided': 'rejected',
-  'Ready to Publish': 'info',
-  'Replacement': 'pending',
+  'Ready to Publish': 'status-ready-publish',
+  'READY_TO_PUBLISH': 'status-ready-publish',
+  'Published': 'status-published',
+  'PUBLISHED': 'status-published',
+  'Voided': 'status-voided',
+  'VOIDED': 'status-voided',
+  'Replacement': 'status-replacement',
+  'REPLACEMENT': 'status-replacement',
 };

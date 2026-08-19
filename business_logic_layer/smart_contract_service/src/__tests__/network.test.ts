@@ -25,17 +25,16 @@ describe("POST /api/smart-contract/network — runtime network switch", () => {
     await request(app).post("/api/smart-contract/network").send({ network: original });
   });
 
-  it("GET /network returns the active network with label, chainId and isLocal", async () => {
+  it("GET /network returns the active network with label and chainId", async () => {
     const r = await request(app).get("/api/smart-contract/network");
     expect(r.status).toBe(200);
     expect(r.body).toHaveProperty("name");
     expect(r.body).toHaveProperty("label");
     expect(typeof r.body.chainId).toBe("number");
-    expect(typeof r.body.isLocal).toBe("boolean");
   });
 
   it("POST /network switches to a valid network", async () => {
-    const target = original === "local" ? "sepolia" : "local";
+    const target = original === "mainnet" ? "sepolia" : "mainnet";
     const r = await request(app).post("/api/smart-contract/network").send({ network: target });
     expect(r.status).toBe(200);
     expect(r.body.key).toBe(target);

@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 
 /**
- * Dev-only identity switcher (PLAN_HM_1308 §4). Two simulated admins so
+ * Dev-only identity switcher (PLAN_HM_1308 §4). Three simulated admins so
  * segregation of duties (initiator ≠ signer) and audit `created_by` are
- * observable in the demo. The active identity is persisted in localStorage,
- * shared via context so every mounted page reacts to a switch immediately.
+ * observable in the demo, including RM 1M+ transfers that need 3 signatures.
+ * The active identity is persisted in localStorage, shared via context so
+ * every mounted page reacts to a switch immediately.
  */
 export interface AdminIdentity {
   id: string;
@@ -14,6 +15,7 @@ export interface AdminIdentity {
 export const ADMIN_IDENTITIES: AdminIdentity[] = [
   { id: 'admin-01', label: 'Admin A' },
   { id: 'admin-02', label: 'Admin B' },
+  { id: 'admin-03', label: 'Admin C' },
 ];
 
 const STORAGE_KEY = 'fcr_admin_identity';

@@ -292,7 +292,7 @@ export const Select: React.FC<SelectProps> = ({
               top: coords.top,
               left: coords.left,
               width: coords.width,
-              zIndex: 9999,
+              zIndex: 100005,
               transform: dropUp ? 'translateY(-100%)' : undefined,
             }}
           >

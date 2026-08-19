@@ -20,4 +20,10 @@ router.get("/failed", ctrl.getFailedTransactions);
 router.get("/cases/:caseId/receipt", ctrl.downloadReceipt);
 router.post("/dispute", upload.single("file"), ctrl.dispute);
 
+// Bank clearance simulation portal routes
+router.get("/bank/pending", ctrl.getBankPending);
+router.post("/bank/approve", ctrl.approveBank);
+router.post("/bank/reject", ctrl.rejectBank);
+router.get("/bank/history", ctrl.getBankHistory);
+
 export default router;

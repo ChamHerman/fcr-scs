@@ -3,6 +3,7 @@ import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { AdminLayout } from './components/layout/AdminLayout';
 import { MemberLayout } from './components/layout/MemberLayout';
 import { AdminIdentityProvider } from './context/AdminIdentityContext';
+import { WalletGate } from './components/admin/WalletGate';
 
 import { Layout } from './components/layout/Layout';
 import { Home } from './pages/Home';
@@ -22,6 +23,7 @@ import { AlertMonitoring } from './pages/Audit/AlertMonitoring';
 import { SystemReports } from './pages/Audit/SystemReports';
 import PaymentSubmitBankDetails from './pages/Payment/SubmitBankDetails';
 import TrackPaymentStatus from './pages/Payment/TrackPaymentStatus';
+import BankPortal from './pages/Bank/BankPortal';
 
 // Import Smart Contract & Blockchain Pages
 import { BlockchainDashboard } from './pages/SmartContract/BlockchainDashboard';
@@ -82,6 +84,7 @@ function App() {
           <Route path="/submit-bank-details" element={<PaymentSubmitBankDetails />} />
           <Route path="/verify-audit-trail" element={<SmartContractVerifyAuditTrail />} />
           <Route path="/track-payment" element={<TrackPaymentStatus />} />
+          <Route path="/bank-portal" element={<BankPortal />} />
         </Route>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
@@ -154,11 +157,11 @@ function App() {
               <Route path="failed" element={<FailedTransactions />} />
             </Route>
 
-            {/* Blockchain Routes */}
+            {/* Blockchain Routes — gated on the authorised admin wallet being connected in MetaMask */}
             <Route path="blockchain">
-              <Route index element={<BlockchainDashboard />} />
-              <Route path="publish" element={<PublishLedger />} />
-              <Route path="void" element={<VoidLedger />} />
+              <Route index element={<WalletGate><BlockchainDashboard /></WalletGate>} />
+              <Route path="publish" element={<WalletGate><PublishLedger /></WalletGate>} />
+              <Route path="void" element={<WalletGate><VoidLedger /></WalletGate>} />
             </Route>
           </Route>
         </Route>

@@ -85,6 +85,7 @@ Defined in `tailwind.config.js`. Standard card, input, and modal radius is **`xl
   - `danger`: Destructive/reject button (`bg-md-error text-md-on-error`).
   - `text`: Ghost button (`bg-transparent text-md-primary`).
   - `fab`: Floating Action Button (`rounded-2xl`).
+- **Icon & Text Spacing**: The inner flex content container of `<Button />` includes `gap-2` (8px) spacing by default, guaranteeing clean visual breathing room between leading/trailing `.svg` icons and button text labels across all action buttons and CTAs.
 - **Universal GSAP Shimmer**: Absolutely-positioned gradient sweep bar using `--md-shimmer` animated continuously via GSAP (`duration: 2.4s`, `ease: power1.inOut`). Skipped when disabled or loading.
 - **Disabled State**: The variant keeps its own skin — fill, border, elevation and ghosting all survive — and the colour is simply drained out of it with `grayscale opacity-60 cursor-not-allowed`. A disabled `outlined` button therefore stays outlined, and a disabled `text` button stays a ghost instead of growing a grey box. Hover classes live in a separate `hoverClasses` map and are withheld when disabled, because CSS `:hover` still matches a disabled element. `pointer-events-none` is deliberately **not** used: it would suppress `cursor-not-allowed`, the only feedback a dead button offers. Shimmer and all four GSAP handlers are skipped.
 
@@ -133,20 +134,63 @@ Dropdowns are the one deliberate exception to the all-4-corners rule: **the bott
 - `<Logo />`: Original SVG mark combining isometric land hex boundary with central lightning bolt, using `fill="currentColor"` for automatic purple/lilac adaptation.
 - `<Navbar />`: Sticky auto-hiding header featuring `<Logo />` and wordmark "Smart Contract Resettlement".
 
+### 8. Pagination (`Pagination.tsx`)
+Standard Material Design 3 responsive pagination bar for all data tables:
+- **Smart Sequence with Ellipsis**: Renders full page boundaries and context with pattern `< [1], 2, 3, ... , <latest page> >`:
+  - When `totalPages <= 7`: Displays all page buttons (`1, 2, ..., totalPages`).
+  - When `currentPage <= 4` (near start): Displays `1, 2, 3, 4, 5, ..., totalPages`.
+  - When `currentPage >= totalPages - 3` (near end): Displays `1, ..., totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages`.
+  - When `currentPage` is in the middle: Displays `1, ..., currentPage - 1, currentPage, currentPage + 1, ..., totalPages`.
+- **Navigation Controls**: Left `<ChevronLeft />` and right `<ChevronRight />` arrow buttons with proper disabled states on boundaries (`currentPage === 1` and `currentPage === totalPages`).
+- **Visual Styling**: Active page button rendered in `bg-md-primary text-md-on-primary` with subtle shadow (`shadow-sm`); hover state on inactive numbers uses `hover:bg-md-primary/8` with smooth bouncy scale (`scale-105`); ellipsis rendered as non-interactive muted dots `…`.
+- **Record Summary**: Left section displays `Showing {start}–{end} of {totalCount} {itemLabel}`.
+
 ## Admin List & Row-Action Patterns
 
 Admin list pages (Payments Overview, Initiate, Pending Authorisations, Failed Transactions, Blockchain Overview, Publish, Void) follow these interaction standards.
 
-### Row actions are inline icons, not 3-dots menus
-- Each row action renders as its own `IconButton` inside a `.row-actions` cell — one click, no menu hop.
-- Use `ActionMenuPortal` only when a row carries more than four actions or needs grouped choices; otherwise inline icons win.
-- Every icon-only button carries a `title` tooltip and an `aria-label`.
-- Destructive actions (reject, void, cancel) use the `danger` tint; primary actions (initiate, authorise, publish) use the `primary` tint; view and neutral actions use `neutral`.
-- Canonical action icons: Eye = view details, Send = initiate, PenLine = authorise/sign, XCircle = reject, Ban = cancel/void, RotateCcw = retry, PencilLine = request details update, CalendarClock = schedule, Download = receipt, BadgeCheck = resolve, Upload = publish to blockchain, FilePlus2 = create corrected certificate, Undo2 = reopen payment.
+### Table Row Actions: Main Action Button + View Icon + 3-Dots Menu
+- **Main Action Button**: Every record row on an admin table/queue must render its primary page action as an explicit button with an `.svg` icon on the left and the action label on the right (e.g., `[ <Send> Initiate ]`, `[ <PenLine> Authorise ]`, `[ <RotateCcw> Retry ]`, `[ <Upload> Publish ]`, `[ <Ban> Void ]`).
+- **Icon & Button Spacing**:
+  - Always maintain `gap-2` (8px) between the `.svg` icon (`shrink-0`) and the button label text within action buttons.
+  - Maintain `gap-2` (8px) spacing between sibling action buttons/icons in `.row-actions`.
+- **View Details Button**: The main action button is followed immediately by an inline `IconButton` (`<Eye />`) for inspecting full case/record details.
+- **3-Dots Overflow Menu (`ActionMenuPortal`)**: When a row carries more than 2 secondary actions after the main action (e.g. Failed Transactions carrying Request Details Update & Schedule Tomorrow; or Payments Overview carrying Cancel Payment & Dispute Resolution), group the remaining secondary actions into a clean 3-dots overflow menu.
+- **Segregation of Duties (SoD) Disabled Button**: When an admin is blocked by Segregation of Duties from authorising a transfer they initiated or already signed, render a compact disabled button `[ <Lock> Self-Signed ]` (`variant="tonal"`, `disabled`) with hover tooltip `title="You cannot authorise a transfer you initiated or previously signed (Segregation of Duties)"` rather than wide multi-line text wrapping across the table row.
+- **Color & Contrast Standards**:
+  - Primary actions (Initiate, Authorise, Publish, Retry) use filled `md-primary` button skin (`animated-primary`).
+  - Destructive actions (Reject, Void, Cancel) use high-contrast red (`text-red-600 dark:text-red-400` / `bg-red-600 hover:bg-red-700 text-white`).
+  - Neutral / View actions use `neutral` (`text-md-on-surface-variant`).
+- Canonical action icons: Eye = view details, Send = initiate, PenLine = authorise/sign, XCircle = reject, Ban = cancel/void, RotateCcw = retry, PencilLine = request details update, CalendarClock = schedule, Download = receipt, BadgeCheck = resolve, Upload = publish to blockchain, FilePlus2 = create corrected certificate, Undo2 = reopen payment, Lock = self-signed / SoD restricted.
 
-### Case ID cells are clickable and copyable
-- The case ID renders as a link-styled span (`cursor: pointer`, underline on hover) that opens the row's detail modal directly — no separate menu step.
-- A copy icon sits beside every case ID (`CaseIdCell`), writing the ID to the clipboard with a success toast.
+### Payment & Blockchain Identifier Columns
+- **Dedicated PAYMENT ID Column**: Every payment module table (`/admin/payment`, `/admin/payment/initiate`, `/admin/payment/pending`, `/admin/payment/failed`, `/bank-portal`) renders a dedicated `PAYMENT ID` column displaying `PMT-${caseId}` (e.g. `PMT-LAC-2026-08-0001`) with monospace bold styling alongside the `CASE ID` column.
+- **Case ID cells are clickable and copyable**:
+  - The case ID renders as a link-styled span (`cursor: pointer`, underline on hover) that opens the row's detail modal directly — no separate menu step.
+  - A copy icon sits beside every case ID (`CaseIdCell`), writing the ID to the clipboard with a success toast.
+
+### 15 Unique Status Color Matrix (11 Payment + 4 Blockchain)
+Every status in the Payment and Blockchain modules is mapped to a dedicated CSS badge class (`.payment-badge .status-*`) with unique light and dark mode colors:
+
+| # | Status | Domain | CSS Class | Light Mode (Bg / Text / Dot) | Dark Mode (Bg / Text / Dot) |
+|---|--------|--------|-----------|------------------------------|-----------------------------|
+| 1 | **Offer Accepted** | Payment | `.status-offer-accepted` | `#E0F2F1` / `#00695C` / `#00897B` (Teal) | `rgba(0,137,123,0.22)` / `#80CBC4` / `#4DB6AC` |
+| 2 | **Bank Details Submitted** | Payment | `.status-bank-submitted` | `#E0F7FA` / `#006064` / `#00ACC1` (Cyan) | `rgba(0,172,193,0.22)` / `#80DEEA` / `#4DD0E1` |
+| 3 | **Transfer Initiated** | Payment | `.status-transfer-initiated` | `#FFF8E1` / `#8D6E00` / `#FFA000` (Amber) | `rgba(255,160,0,0.20)` / `#FFE082` / `#FFD54F` |
+| 4 | **Authorised** | Payment | `.status-authorised` | `#EDE7F6` / `#4527A0` / `#6750A4` (Indigo) | `rgba(103,80,164,0.25)` / `#D0BCFF` / `#B39DDB` |
+| 5 | **Paid** | Payment | `.status-paid` | `#E8F5E9` / `#1B5E20` / `#2E7D32` (Emerald) | `rgba(46,125,50,0.22)` / `#A5D6A7` / `#81C784` |
+| 6 | **Transfer Failed** | Payment | `.status-transfer-failed` | `#FFEBEE` / `#B71C1C` / `#C62828` (Bright Red) | `rgba(198,40,40,0.25)` / `#FFCDD2` / `#E57373` |
+| 7 | **Transfer Rejected** | Payment | `.status-transfer-rejected` | `#FCE4EC` / `#880E4F` / `#AD1457` (Rose Wine) | `rgba(173,20,87,0.25)` / `#F8BBD0` / `#F06292` |
+| 8 | **Cancelled** | Payment | `.status-cancelled` | `#F1F5F9` / `#475569` / `#64748B` (Slate) | `rgba(100,116,139,0.25)` / `#CBD5E1` / `#94A3B8` |
+| 9 | **Payment Disputed** | Payment | `.status-payment-disputed` | `#FFF3E0` / `#BF360C` / `#E65100` (Warm Orange) | `rgba(230,81,0,0.25)` / `#FFE0B2` / `#FFB74D` |
+| 10 | **Scheduled** | Payment | `.status-scheduled` | `#ECEFF1` / `#37474F` / `#546E7A` (Blue-Grey) | `rgba(84,110,122,0.25)` / `#CFD8DC` / `#90A4AE` |
+| 11 | **Pending New Bank Details** | Payment | `.status-pending-details` | `#FEF9C3` / `#854D0E` / `#CA8A04` (Warm Honey) | `rgba(202,138,4,0.22)` / `#FEF08A` / `#FACC15` |
+| 12 | **Ready to Publish** | Blockchain | `.status-ready-publish` | `#E0F2FE` / `#075985` / `#0284C7` (Electric Sky) | `rgba(2,132,199,0.22)` / `#7DD3FC` / `#38BDF8` |
+| 13 | **Published** | Blockchain | `.status-published` | `#DCFCE7` / `#166534` / `#16A34A` (Mint Green) | `rgba(22,163,74,0.22)` / `#86EFAC` / `#4ADE80` |
+| 14 | **Voided** | Blockchain | `.status-voided` | `#FFE4E6` / `#9F1239` / `#E11D48` (Deep Crimson) | `rgba(225,29,72,0.25)` / `#FECDD3` / `#FB7185` |
+| 15 | **Replacement** | Blockchain | `.status-replacement` | `#F3E8FF` / `#6B21A8` / `#9333EA` (Purple Lilac) | `rgba(147,51,234,0.25)` / `#E9D5FF` / `#C084FC` |
+
+*Note: All statuses use canonical Title Case strings (e.g. `Cancelled`, `Paid`, `Offer Accepted`).*
 
 ### Filters apply immediately
 - Selecting a status (or bank) applies the filter instantly — no Apply button, no draft/applied state. Clear resets the filter.
@@ -166,7 +210,9 @@ Admin list pages (Payments Overview, Initiate, Pending Authorisations, Failed Tr
 4. **Action Button Alignment**: Place the confirm/accept button at the right side of the container, preceded by the cancel/reject button to its left (`| Cancel   Confirm |`).
 5. **Disabled means drained, not replaced**: never swap a component's variant classes out for a grey block. Keep the skin and apply `grayscale opacity-60 cursor-not-allowed`, withholding hover classes rather than overriding them.
 6. **Scrollable regions**: any container that can overflow uses `.md-scroll-thin` for the scrollbar, and pins its own header/footer rather than letting the whole panel scroll.
-7. **Row actions are inline icons**: replace 3-dots menus with one `IconButton` per action unless a row has more than four actions. Always provide `title` + `aria-label`.
-8. **Case IDs are interactive**: clicking the case ID opens its detail modal, and a copy icon sits beside every case ID.
-9. **Filters apply on selection**: no Apply button — changing the dropdown value filters immediately.
-10. **Distinct sidebar icons**: sibling nav items within a module never share an icon.
+7. **Row actions standard**: Main action is a button `[ <svg> Action Label ]` with `gap-2` internal icon-label spacing, followed by `<Eye />` view icon, and 3-dots `ActionMenuPortal` if more than 2 secondary actions exist. Always provide high-contrast `danger` colors for reject/void/cancel actions in both light & dark modes.
+8. **Segregation of Duties UX**: When an action is restricted by Segregation of Duties, display a disabled `[ <Lock> Self-Signed ]` button with tooltip rather than expanding cell text.
+9. **Dedicated Payment ID column**: Always display `PAYMENT ID` (`PMT-${caseId}`) alongside `CASE ID` across payment views.
+10. **Case IDs are interactive**: clicking the case ID opens its detail modal, and a copy icon sits beside every case ID.
+11. **Filters apply on selection**: no Apply button — changing the dropdown value filters immediately.
+12. **Distinct sidebar icons**: sibling nav items within a module never share an icon.

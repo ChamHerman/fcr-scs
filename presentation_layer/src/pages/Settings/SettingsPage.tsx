@@ -11,22 +11,19 @@ import '../LandAcquisition/case_management.css';
 import '../Payment/payment.css';
 
 const NETWORK_OPTIONS = [
-  { value: 'sepolia', label: 'Sepolia Testnet' },
-  { value: 'local', label: 'Hardhat Local Node' },
-  { value: 'mainnet', label: 'Ethereum Mainnet' },
+  { value: 'sepolia', label: 'Sepolia Testnet (Default)' },
+  { value: 'mainnet', label: 'Ethereum Mainnet (Simulation)' },
 ];
 
 const NETWORK_DESCRIPTIONS: Record<string, string> = {
-  sepolia: 'Public Ethereum testnet (chainId 11155111). Uses SEPOLIA_RPC_URL and the deployed Sepolia contract.',
-  local: 'Local Hardhat node (chainId 31337, http://127.0.0.1:8545). Fastest loop for testing .sol changes and ledger flows.',
-  mainnet: 'Real Ethereum mainnet (chainId 1). Requires MAINNET_RPC_URL and a deployed mainnet contract — real funds.',
+  sepolia: 'Active Default Network: Public Ethereum Sepolia Testnet (chainId 11155111). Uses deployed contract 0x5539d016e1A4Bd1e51d17D976D1ff05cb452B428 and Infura RPC.',
+  mainnet: 'Real Ethereum mainnet (chainId 1). Requires MAINNET_RPC_URL and real funds.',
 };
 
 interface NetworkInfo {
   name: string;
   label?: string;
   chainId: number;
-  isLocal: boolean;
 }
 
 export const SettingsPage: React.FC = () => {
@@ -62,7 +59,7 @@ export const SettingsPage: React.FC = () => {
     setSwitching(true);
     try {
       const active = await blockchainApi.setNetwork(network);
-      setInfo({ name: active.key, label: active.label, chainId: active.chainId, isLocal: active.isLocal });
+      setInfo({ name: active.key, label: active.label, chainId: active.chainId });
       notify({ type: 'success', title: 'Network switched', message: `Blockchain service now writes to ${active.label}.` });
     } catch (e: any) {
       notify({ type: 'error', title: 'Switch failed', message: e.message });
@@ -112,10 +109,10 @@ export const SettingsPage: React.FC = () => {
                 <div className="payment-detail-item">
                   <div className="label">Current Network</div>
                   <div className="value">
-                    {info.label ?? (info.isLocal ? 'Hardhat Local' : 'Sepolia Testnet')} ({info.name})
+                    {info.label ?? 'Sepolia Testnet'} ({info.name})
                   </div>
                   <div className="text-xs text-md-on-surface-variant mt-1">
-                    Chain ID {info.chainId} · {info.isLocal ? 'Local node' : 'Remote RPC'}
+                    Chain ID {info.chainId} · Remote RPC
                   </div>
                 </div>
               )}
@@ -137,10 +134,8 @@ export const SettingsPage: React.FC = () => {
                 <Info size={16} className="shrink-0 mt-0.5 text-md-primary" />
                 <span>
                   The blockchain service publishes and voids records on the selected network at runtime
-                  (in-memory switch — it resets when the service restarts). Connect your wallet to the
-                  matching chain before publishing. For local development, run a Hardhat node and set
-                  <span className="font-mono text-xs"> LOCAL_RPC_URL</span> /{' '}
-                  <span className="font-mono text-xs">LOCAL_CONTRACT_ADDRESS</span> in the service env.
+                  (in-memory switch — it resets when the service restarts). Publishing requires the
+                  authorised admin wallet to be connected in MetaMask on the blockchain pages.
                 </span>
               </div>
 
