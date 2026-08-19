@@ -1,64 +1,82 @@
-import React from 'react';
-import { CheckCircle2, Mail, Repeat } from 'lucide-react';
-import '../../style.css';
-import '../LandAcquisition/case_management.css';
-import './reports.css';
+import React, { useState } from 'react';
+import { CalendarRange, Mail, Repeat } from 'lucide-react';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
+import { Select } from '../../components/ui/Select';
 
 export const ScheduleReportsGeneration: React.FC = () => {
+  const [template, setTemplate] = useState('Compensation summary');
+  const [frequency, setFrequency] = useState('Weekly');
+  const [email, setEmail] = useState('operations@agency.gov');
+
   return (
-    <div className="main">
-      <div className="topbar">
-        <div className="topbar-left">
-          <h1>Schedule Reports Generation</h1>
-          <div className="sub">Define automatic report delivery for your team and stakeholders.</div>
+    <div className="space-y-6">
+      {/* Topbar */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold">Schedule Reports Generation</h1>
+          <p className="text-md-on-surface-variant mt-1 max-w-2xl">
+            Define automatic report delivery for your team and stakeholders.
+          </p>
         </div>
-        <div className="topbar-right">
-          <div className="date-badge">
-            <Repeat size={16} className="inline mr-1" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> Automation
-          </div>
-          <div className="avatar">
-            <Mail size={20} />
-          </div>
-        </div>
+        <span className="inline-flex items-center gap-2 text-sm text-md-on-surface-variant px-3.5 py-2 rounded-full bg-md-surface-container shadow-sm">
+          <Repeat size={16} />
+          Automation
+        </span>
       </div>
 
-      <div className="filter-bar report-form-panel">
-        <div className="report-form-grid">
-          <label>
-            <span className="meta-text">Report template</span>
-            <select className="filter-bar select" style={{ width: '100%', marginTop: 8 }}>
-              <option>Compensation summary</option>
-              <option>Valuation performance</option>
-              <option>Executive overview</option>
-            </select>
-          </label>
-          <label>
-            <span className="meta-text">Frequency</span>
-            <select className="filter-bar select" style={{ width: '100%', marginTop: 8 }}>
-              <option>Daily</option>
-              <option>Weekly</option>
-              <option>Monthly</option>
-            </select>
-          </label>
-          <label>
-            <span className="meta-text">Recipient email</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-              <Mail size={16} color="var(--md-primary)" />
-              <input className="report-input" defaultValue="operations@agency.gov" />
-            </div>
-            <div className="status-badge approved" style={{ marginTop: 10 }}><span className="dot" />Validated</div>
-          </label>
+      <div className="bg-md-surface-container rounded-xl p-6 shadow-sm">
+        <h2 className="text-base font-semibold mb-4">Delivery Configuration</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Select
+            label="Report template"
+            value={template}
+            onChange={setTemplate}
+            options={[
+              { value: 'Compensation summary', label: 'Compensation summary' },
+              { value: 'Valuation performance', label: 'Valuation performance' },
+              { value: 'Executive overview', label: 'Executive overview' },
+            ]}
+          />
+          <Select
+            label="Frequency"
+            value={frequency}
+            onChange={setFrequency}
+            options={[
+              { value: 'Daily', label: 'Daily' },
+              { value: 'Weekly', label: 'Weekly' },
+              { value: 'Monthly', label: 'Monthly' },
+            ]}
+          />
+          <div className="md:col-span-2">
+            <Input
+              label="Recipient email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
         </div>
-      </div>
 
-      <div className="action-bar">
-        <div className="left">
-          <span className="count">Delivery is ready to save</span>
-        </div>
-        <div className="right">
-          <button className="btn-primary">Save Schedule</button>
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+          <span className="inline-flex items-center gap-1.5 rounded-full py-1 pl-2.5 pr-3.5 text-xs font-semibold bg-[#e6f4ea] text-[#1e7b4a]">
+            <span className="w-2 h-2 rounded-full bg-[#1e7b4a]" />
+            Validated
+          </span>
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center gap-2 text-sm text-md-on-surface-variant">
+              <CalendarRange size={16} />
+              {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+            </span>
+            <Button variant="filled">
+              <Mail size={14} />
+              Save Schedule
+            </Button>
+          </div>
         </div>
       </div>
     </div>
   );
 };
+
+export default ScheduleReportsGeneration;
