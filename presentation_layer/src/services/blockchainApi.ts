@@ -8,9 +8,9 @@ export const blockchainApi = {
     blockchainFetch("/api/smart-contract/records" + (status ? "?status=" + encodeURIComponent(status) : "")),
   getRecord: (caseId: string) =>
     blockchainFetch("/api/smart-contract/records/" + encodeURIComponent(caseId)),
-  publish: (p: { caseId: string; documentHash: string; walletAddress: string }) =>
+  publish: (p: { caseId: string; documentHash: string; walletAddress: string; transactionHash: string }) =>
     blockchainFetch("/api/smart-contract/publish", { method: "POST", body: JSON.stringify(p) }),
-  voidRecord: (p: { caseId: string; voidReason: string; walletAddress: string }) =>
+  voidRecord: (p: { caseId: string; voidReason: string; walletAddress: string; transactionHash: string }) =>
     blockchainFetch("/api/smart-contract/void", { method: "POST", body: JSON.stringify(p) }),
   /**
    * Void follow-ups (PLAN_HM_1308 §5.7 / §8). Backend endpoints are a flagged

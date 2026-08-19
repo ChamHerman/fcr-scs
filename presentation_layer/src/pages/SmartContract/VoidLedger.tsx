@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, Wallet, Loader2, Ban, RefreshCw, Eye } from 'lucide-react';
+import { Clock, User, Wallet, Loader2, Ban, RefreshCw } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { blockchainApi } from '../../services/blockchainApi';
 import { useWallet } from '../../hooks/useWallet';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
-import { IconButton } from '../../components/ui/IconButton';
 import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Button } from '../../components/ui/Button';
 import { WalletButton } from '../../components/ui/WalletButton';
+import { NetworkSelector } from './NetworkSelector';
+import type { NetworkInfo } from './NetworkSelector';
 import '../LandAcquisition/case_management.css';
 import '../Payment/payment.css';
 import {
@@ -27,44 +28,38 @@ type ModalState = { type: 'view'; row: LedgerRow } | { type: 'void'; row: Ledger
 export const VoidLedger: React.FC = () => {
   const [searchParams] = useSearchParams();
   const deepLink = searchParams.get('caseId');
-  const { walletConnected, walletAddress, error: walletError, connectWallet } = useWallet();
-  const { identityId } = useAdminIdentity();
   const [records, setRecords] = useState<LedgerRow[]>([]);
-  const [networkInfo, setNetworkInfo] = useState<{ name: string; label?: string; isLocal: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState(deepLink || '');
   const [modal, setModal] = useState<ModalState>(null);
+  const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
   const pageRef = useRef<HTMLDivElement>(null);
 
+  const { identityId } = useAdminIdentity();
+  const { walletAddress, walletConnected, error: walletError, connectWallet } = useWallet();
+
   useGSAP(() => {
-    gsap.fromTo('.void-header', { opacity: 0, y: -24 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out' });
-    gsap.fromTo('.filter-bar, .table-wrap', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: 'back.out(1.2)', delay: 0.2 });
+    gsap.fromTo('.void-header', { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.45, ease: 'power2.out' });
+    gsap.fromTo('.filter-bar, .action-bar, .table-wrap', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, stagger: 0.08, ease: 'back.out(1.2)', delay: 0.2 });
   }, { scope: pageRef });
 
   const loadData = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const [res, netData] = await Promise.all([
-        blockchainApi.getRecords('Published'),
+      const [netData, recData] = await Promise.all([
         blockchainApi.getNetworkInfo().catch(() => null),
+        blockchainApi.getRecords(),
       ]);
-      const mapped: LedgerRow[] = (res.records || []).map((r: any) => ({
-        id: r.id,
-        caseId: r.caseId,
-        publicId: `FCR-${String(r.id).slice(0, 8).toUpperCase()}`,
-        transactionHash: r.transactionHash,
-        documentHash: r.documentHash,
-        status: 'Published',
-        publishedAt: r.publishedAt ?? r.createdAt,
-        createdAt: r.createdAt,
-        recordType: 'Original',
-      }));
-      setRecords(mapped);
       setNetworkInfo(netData);
+      // The stored record id is the short FCR-XXXXXXXX ledger id
+      const list: LedgerRow[] = (recData.records || [])
+        .filter((r: any) => r.status === 'Published' || r.status === 'PUBLISHED')
+        .map((r: any) => ({ ...r, publicId: r.id }));
+      setRecords(list);
     } catch (err: any) {
-      setError(err.message || 'Failed to load published records');
+      setError(err.message || 'Failed to load records');
     } finally {
       setLoading(false);
     }
@@ -76,7 +71,9 @@ export const VoidLedger: React.FC = () => {
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return records.filter((r) => !q || r.caseId.toLowerCase().includes(q) || (r.transactionHash ?? '').toLowerCase().includes(q));
+    return records.filter(
+      (r) => !q || r.caseId.toLowerCase().includes(q) || (r.transactionHash ?? '').toLowerCase().includes(q)
+    );
   }, [records, searchQuery]);
 
   const closeModal = () => setModal(null);
@@ -88,14 +85,10 @@ export const VoidLedger: React.FC = () => {
           <h1>Void Ledger Record</h1>
           <div className="sub">
             Void published records — edge cases only. Published records are immutable by design.
-            {networkInfo && (
-              <span className="text-sm font-semibold text-gray-600 ml-2">
-                Network: {networkInfo.label ?? (networkInfo.isLocal ? 'Hardhat Local' : 'Sepolia Testnet')} ({networkInfo.name})
-              </span>
-            )}
           </div>
         </div>
-        <div className="topbar-right">
+        <div className="topbar-right flex items-center gap-3">
+          <NetworkSelector networkInfo={networkInfo} onNetworkChange={(net) => setNetworkInfo(net)} />
           {walletConnected ? (
             <WalletButton walletAddress={walletAddress || undefined} adminId={identityId} />
           ) : (
@@ -162,20 +155,31 @@ export const VoidLedger: React.FC = () => {
                 </tr>
               ) : (
                 filtered.map((row) => (
-                  <tr key={row.id} className={deepLink === row.caseId ? 'bg-md-secondary-container/40' : ''}>
-                    <td><span className="meta-text">{row.publicId ?? row.caseId}</span></td>
-                    <td><CaseIdCell caseId={row.caseId} onView={() => setModal({ type: 'view', row })} /></td>
+                  <tr
+                    key={row.id}
+                    className={`row-clickable${deepLink === row.caseId ? ' bg-md-secondary-container/40' : ''}`}
+                    onClick={() => setModal({ type: 'view', row })}
+                  >
+                    <td>
+                      <span className="font-mono font-bold text-xs text-md-primary">
+                        {row.publicId ?? row.caseId}
+                      </span>
+                    </td>
+                    <td><CaseIdCell caseId={row.caseId} /></td>
                     <td style={{ fontFamily: 'monospace', color: 'var(--md-on-surface-variant)' }}>{fmtTx(row.transactionHash)}</td>
                     <td><span className="meta-text">{fmtDate(row.publishedAt)}</span></td>
                     <td>{ledgerBadge(row.status)}</td>
-                    <td>
+                    <td onClick={(e) => e.stopPropagation()}>
                       <div className="row-actions">
-                        <IconButton title="View Details" onClick={() => setModal({ type: 'view', row })}>
-                          <Eye size={16} />
-                        </IconButton>
-                        <IconButton title="Void Ledger Record" variant="danger" onClick={() => setModal({ type: 'void', row })}>
-                          <Ban size={16} />
-                        </IconButton>
+                        <Button
+                          size="sm"
+                          variant="filled"
+                          className="h-8 px-3.5 text-xs inline-flex items-center gap-2 rounded-full font-medium bg-red-600 hover:bg-red-700 text-white shadow-sm"
+                          onClick={() => setModal({ type: 'void', row })}
+                        >
+                          <Ban size={13} className="shrink-0" />
+                          <span>Void</span>
+                        </Button>
                       </div>
                     </td>
                   </tr>

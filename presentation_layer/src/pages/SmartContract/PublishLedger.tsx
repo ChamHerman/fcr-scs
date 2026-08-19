@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, Wallet, Loader2, UploadCloud, RefreshCw, Eye, Upload } from 'lucide-react';
+import { Clock, User, Wallet, Loader2, UploadCloud, RefreshCw, Upload } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
@@ -7,13 +7,15 @@ import { blockchainApi } from '../../services/blockchainApi';
 import { paymentApi } from '../../services/paymentApi';
 import { useWallet } from '../../hooks/useWallet';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
-import { IconButton } from '../../components/ui/IconButton';
 import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Button } from '../../components/ui/Button';
 import { WalletButton } from '../../components/ui/WalletButton';
+import { NetworkSelector } from './NetworkSelector';
+import type { NetworkInfo } from './NetworkSelector';
 import '../LandAcquisition/case_management.css';
 import '../Payment/payment.css';
+import { normalizePaymentStatus } from '../Payment/statusMaps';
 import {
   ViewLedgerModal,
   PublishModal,
@@ -29,52 +31,58 @@ type ModalState = { type: 'view'; row: LedgerRow } | { type: 'publish'; row: Led
 export const PublishLedger: React.FC = () => {
   const [searchParams] = useSearchParams();
   const deepLink = searchParams.get('caseId');
-  const { walletConnected, walletAddress, error: walletError, connectWallet } = useWallet();
-  const { identityId } = useAdminIdentity();
   const [rows, setRows] = useState<LedgerRow[]>([]);
-  const [networkInfo, setNetworkInfo] = useState<{ name: string; label?: string; isLocal: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState(deepLink || '');
   const [modal, setModal] = useState<ModalState>(null);
+  const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
   const pageRef = useRef<HTMLDivElement>(null);
 
+  const { identityId } = useAdminIdentity();
+  const { walletAddress, walletConnected, error: walletError, connectWallet } = useWallet();
+
   useGSAP(() => {
-    gsap.fromTo('.publish-header', { opacity: 0, y: -24 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out' });
-    gsap.fromTo('.filter-bar, .table-wrap', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: 'back.out(1.2)', delay: 0.2 });
+    gsap.fromTo('.publish-header', { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.45, ease: 'power2.out' });
+    gsap.fromTo('.filter-bar, .action-bar, .table-wrap', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, stagger: 0.08, ease: 'back.out(1.2)', delay: 0.2 });
   }, { scope: pageRef });
 
   const loadData = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      // Ready to publish = payment Paid (or confirmed) + certificate exists +
-      // no active ledger record. Certificate state is derived client-side (no
-      // certificate table in the legacy backend — flagged PLAN_HM_1308 §8).
-      const [paidRes, recData, netData] = await Promise.all([
+      const [netData, allCases, recordsRes] = await Promise.all([
+        blockchainApi.getNetworkInfo().catch(() => null),
         paymentApi.getAllCases().catch(() => ({ cases: [] })),
         blockchainApi.getRecords().catch(() => ({ records: [] })),
-        blockchainApi.getNetworkInfo().catch(() => null),
       ]);
-      const existing = new Set((recData.records || []).map((r: any) => r.caseId));
-      const paid = (paidRes.cases || []).filter(
-        (c: any) => c.status === 'Paid' && !existing.has(c.caseId)
-      );
-      const derived: LedgerRow[] = await Promise.all(
-        paid.map(async (c: any) => ({
-          id: `ready-${c.caseId}`,
-          caseId: c.caseId,
-          publicId: `FCR-${String(c.caseId).replace(/[^A-Z0-9]/gi, '').slice(-8).toUpperCase()}`,
-          status: 'Ready to Publish',
-          beneficiary: c.accountHolderName || c.beneficiaryId,
-          amount: c.amount,
-          documentHash: await computeSettlementHash(c.caseId, c.amount),
-          recordType: 'Original',
-          certificateVersion: 1,
-        }))
-      );
-      setRows(derived);
+
       setNetworkInfo(netData);
+
+      const publishedMap = new Map<string, any>();
+      (recordsRes.records || []).forEach((r: any) => publishedMap.set(r.caseId, r));
+
+      const readyList: LedgerRow[] = [];
+      for (const pc of (allCases.cases || [])) {
+        if (normalizePaymentStatus(pc.status) === 'Paid') {
+          const rec = publishedMap.get(pc.caseId);
+          if (!rec) {
+            const docHash = await computeSettlementHash(pc.caseId, pc.amount);
+            readyList.push({
+              id: pc.id,
+              caseId: pc.caseId,
+              // No FCR record exists yet — show the payment's PMT-XXXXXXXX id
+              publicId: pc.paymentId || pc.id,
+              beneficiary: pc.accountHolderName || pc.beneficiaryId,
+              amount: pc.amount,
+              status: 'Ready to Publish',
+              documentHash: docHash,
+              certificateVersion: 1,
+            });
+          }
+        }
+      }
+      setRows(readyList);
     } catch (err: any) {
       setError(err.message || 'Failed to load publish queue');
     } finally {
@@ -100,14 +108,10 @@ export const PublishLedger: React.FC = () => {
           <h1>Publish to Ledger</h1>
           <div className="sub">
             Records ready to be published on-chain — derived from payment + certificate state.
-            {networkInfo && (
-              <span className="text-sm font-semibold text-gray-600 ml-2">
-                Network: {networkInfo.label ?? (networkInfo.isLocal ? 'Hardhat Local' : 'Sepolia Testnet')} ({networkInfo.name})
-              </span>
-            )}
           </div>
         </div>
-        <div className="topbar-right">
+        <div className="topbar-right flex items-center gap-3">
+          <NetworkSelector networkInfo={networkInfo} onNetworkChange={(net) => setNetworkInfo(net)} />
           {walletConnected ? (
             <WalletButton walletAddress={walletAddress || undefined} adminId={identityId} />
           ) : (
@@ -175,21 +179,32 @@ export const PublishLedger: React.FC = () => {
                 </tr>
               ) : (
                 filtered.map((row) => (
-                  <tr key={row.id} className={deepLink === row.caseId ? 'bg-md-secondary-container/40' : ''}>
-                    <td><span className="meta-text">{row.publicId ?? row.caseId}</span></td>
-                    <td><CaseIdCell caseId={row.caseId} onView={() => setModal({ type: 'view', row })} /></td>
+                  <tr
+                    key={row.id}
+                    className={`row-clickable${deepLink === row.caseId ? ' bg-md-secondary-container/40' : ''}`}
+                    onClick={() => setModal({ type: 'view', row })}
+                  >
+                    <td>
+                      <span className="font-mono font-bold text-xs text-md-primary">
+                        {row.publicId ?? row.caseId}
+                      </span>
+                    </td>
+                    <td><CaseIdCell caseId={row.caseId} /></td>
                     <td>{row.beneficiary || '—'}</td>
                     <td style={{ fontWeight: 600 }}>{fmtAmount(row.amount)}</td>
                     <td><span className="meta-text">v{row.certificateVersion ?? 1}</span></td>
                     <td>{ledgerBadge(row.status)}</td>
-                    <td>
+                    <td onClick={(e) => e.stopPropagation()}>
                       <div className="row-actions">
-                        <IconButton title="View Details" onClick={() => setModal({ type: 'view', row })}>
-                          <Eye size={16} />
-                        </IconButton>
-                        <IconButton title="Publish to Blockchain" variant="primary" onClick={() => setModal({ type: 'publish', row })}>
-                          <Upload size={16} />
-                        </IconButton>
+                        <Button
+                          size="sm"
+                          variant="filled"
+                          className="h-8 px-3.5 text-xs inline-flex items-center gap-2 rounded-full font-medium"
+                          onClick={() => setModal({ type: 'publish', row })}
+                        >
+                          <Upload size={13} className="shrink-0" />
+                          <span>Publish</span>
+                        </Button>
                       </div>
                     </td>
                   </tr>

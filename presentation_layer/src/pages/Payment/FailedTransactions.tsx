@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, AlertOctagon, Loader2, FileWarning, Eye, RotateCcw, PencilLine, CalendarClock } from 'lucide-react';
+import { Clock, User, AlertOctagon, Loader2, FileWarning } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { paymentApi } from '../../services/paymentApi';
-import { IconButton } from '../../components/ui/IconButton';
 import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
+import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import '../LandAcquisition/case_management.css';
 import './payment.css';
 import {
@@ -16,10 +16,12 @@ import {
   RetryPaymentModal,
   RequestDetailsUpdateModal,
   ScheduleTomorrowModal,
+  CancelPaymentModal,
   paymentBadge,
   fmtAmount,
   fmtDate,
 } from './paymentModals';
+import { PaymentRowActions } from './PaymentRowActions';
 import type { PaymentRow } from './paymentModals';
 import { normalizePaymentStatus } from './statusMaps';
 
@@ -29,6 +31,7 @@ type ModalState =
   | { type: 'retry'; pc: PaymentRow }
   | { type: 'request-update'; pc: PaymentRow }
   | { type: 'schedule'; pc: PaymentRow }
+  | { type: 'cancel'; pc: PaymentRow }
   | null;
 
 export default function FailedTransactions() {
@@ -38,7 +41,9 @@ export default function FailedTransactions() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState(deepLink || '');
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
+  const { identityId } = useAdminIdentity();
   const pageRef = useRef<HTMLDivElement>(null);
 
   useGSAP(() => {
@@ -136,6 +141,7 @@ export default function FailedTransactions() {
           <table>
             <thead>
               <tr>
+                <th>Payment ID</th>
                 <th>Case ID</th>
                 <th>Beneficiary</th>
                 <th>Error</th>
@@ -148,24 +154,33 @@ export default function FailedTransactions() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="text-center text-gray-500 py-8">
+                  <td colSpan={8} className="text-center text-gray-500 py-8">
                     <Loader2 size={22} className="inline animate-spin" /><span className="ml-2">Loading failed transactions…</span>
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center text-gray-500 py-8">No failed transactions requiring resolution.</td>
+                  <td colSpan={8} className="text-center text-gray-500 py-8">No failed transactions requiring resolution.</td>
                 </tr>
               ) : (
                 filtered.map((pc) => {
                   const ft = pc.failedTransactions ?? [];
-                  // BUG FIX (PLAN_HM_1308 §3): read errorLog, not the non-existent `.reason`.
                   const latest = ft[ft.length - 1];
                   const errorLog = latest?.errorLog || 'No error log available.';
                   const unresolved = !latest?.resolution;
+                  const paymentId = pc.paymentId || `PMT-${pc.caseId}`;
                   return (
-                    <tr key={pc.caseId} className={deepLink === pc.caseId ? 'bg-md-secondary-container/40' : ''}>
-                      <td><CaseIdCell caseId={pc.caseId} onView={() => setModal({ type: 'view', pc })} /></td>
+                    <tr
+                      key={pc.caseId}
+                      className={`row-clickable${deepLink === pc.caseId ? ' bg-md-secondary-container/40' : ''}`}
+                      onClick={() => setModal({ type: 'view', pc })}
+                    >
+                      <td>
+                        <span className="font-mono font-bold text-xs text-md-primary">
+                          {paymentId}
+                        </span>
+                      </td>
+                      <td><CaseIdCell caseId={pc.caseId} /></td>
                       <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
                       <td>
                         <span className="meta-text" style={{ display: 'block', maxWidth: 280 }}>
@@ -175,30 +190,23 @@ export default function FailedTransactions() {
                       <td><span className="meta-text">{latest ? fmtDate(latest.createdAt) : fmtDate(pc.updatedAt)}</span></td>
                       <td>
                         {unresolved ? (
-                          <span className="payment-badge pending"><span className="dot" />Pending resolution</span>
+                          <span className="payment-badge status-transfer-failed"><span className="dot" />Pending resolution</span>
                         ) : (
-                          <span className="payment-badge approved"><span className="dot" />Resolved</span>
+                          <span className="payment-badge status-paid"><span className="dot" />Resolved</span>
                         )}
                       </td>
                       <td>{paymentBadge(pc.status)}</td>
-                      <td>
-                        <div className="row-actions">
-                          <IconButton title="View Details" onClick={() => setModal({ type: 'view', pc })}>
-                            <Eye size={16} />
-                          </IconButton>
-                          <IconButton title="View Error Logs" onClick={() => setModal({ type: 'error-log', pc })}>
-                            <FileWarning size={16} />
-                          </IconButton>
-                          <IconButton title="Retry Payment" variant="primary" onClick={() => setModal({ type: 'retry', pc })}>
-                            <RotateCcw size={16} />
-                          </IconButton>
-                          <IconButton title="Request Details Update" onClick={() => setModal({ type: 'request-update', pc })}>
-                            <PencilLine size={16} />
-                          </IconButton>
-                          <IconButton title="Schedule Tomorrow" onClick={() => setModal({ type: 'schedule', pc })}>
-                            <CalendarClock size={16} />
-                          </IconButton>
-                        </div>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <PaymentRowActions
+                          pc={pc}
+                          identityId={identityId}
+                          onAction={(type, target) => setModal({ type, pc: target } as ModalState)}
+                          activeMenu={activeMenu}
+                          setActiveMenu={setActiveMenu}
+                          extraMenuActions={[
+                            { label: 'View Error Logs', onClick: () => setModal({ type: 'error-log', pc }) },
+                          ]}
+                        />
                       </td>
                     </tr>
                   );
@@ -261,6 +269,11 @@ export default function FailedTransactions() {
       />
       <ScheduleTomorrowModal
         pc={modal?.type === 'schedule' ? modal.pc : null}
+        onClose={closeModal}
+        onDone={() => { closeModal(); loadData(); }}
+      />
+      <CancelPaymentModal
+        pc={modal?.type === 'cancel' ? modal.pc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />

@@ -3,35 +3,16 @@ import { CopyButton } from '../ui/CopyButton';
 
 export interface CaseIdCellProps {
   caseId: string;
-  /** Opens the row's detail modal directly. */
-  onView: () => void;
 }
 
 /**
- * Case ID cell shared by every payment/blockchain list (DESIGN.md — Case ID
- * cells are clickable and copyable): clicking the ID opens the detail modal,
- * and a copy icon sits beside it.
+ * Case ID cell shared by every payment/blockchain list: the ID is displayed as
+ * plain text with a copy icon beside it — clicking anywhere on the row opens
+ * the detail modal (row-level onClick).
  */
-export const CaseIdCell: React.FC<CaseIdCellProps> = ({ caseId, onView }) => {
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLSpanElement>) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      onView();
-    }
-  };
-
-  return (
-    <span className="case-id-wrap">
-      <span
-        className="case-id"
-        role="button"
-        tabIndex={0}
-        onClick={onView}
-        onKeyDown={handleKeyDown}
-      >
-        {caseId}
-      </span>
-      <CopyButton value={caseId} />
-    </span>
-  );
-};
+export const CaseIdCell: React.FC<CaseIdCellProps> = ({ caseId }) => (
+  <span className="case-id-wrap">
+    <span className="case-id">{caseId}</span>
+    <CopyButton value={caseId} />
+  </span>
+);

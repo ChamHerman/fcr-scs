@@ -18,6 +18,7 @@ import { normalizePaymentStatus, paymentStatusClassMap } from './statusMaps';
 export interface PaymentRow {
   id: string;
   caseId: string;
+  paymentId?: string;
   beneficiaryId: string;
   amount: string | number;
   bankName?: string | null;
@@ -35,13 +36,26 @@ export interface PaymentRow {
   failedTransactions?: Array<{ errorLog: string; resolution?: string | null; resolvedAt?: string | null; createdAt: string }>;
 }
 
-export const PRE_TRANSFER_STATUSES = ['Approved', 'Bank Details Submitted', 'Transfer Initiated', 'Authorised', 'Scheduled'];
+export const PRE_TRANSFER_STATUSES = [
+  'Offer Accepted',
+  'offer_accepted',
+  'Approved',
+  'Bank Details Submitted',
+  'Transfer Initiated',
+  'Authorised',
+  'Scheduled',
+];
 
 export const hasBankDetails = (pc: PaymentRow) =>
   Boolean(pc.bankName && pc.accountNumber && pc.accountHolderName);
 
-export const isReadyToInitiate = (pc: PaymentRow) =>
-  (pc.status === 'Approved' || pc.status === 'Bank Details Submitted') && hasBankDetails(pc);
+export const isReadyToInitiate = (pc: PaymentRow) => {
+  const norm = normalizePaymentStatus(pc.status);
+  return (
+    (norm === 'Offer Accepted' || norm === 'Approved' || norm === 'Bank Details Submitted') &&
+    hasBankDetails(pc)
+  );
+};
 
 export const initiatorOf = (pc: PaymentRow) =>
   pc.authorisations?.find((a) => a.action === 'initiate')?.adminId ?? null;
@@ -60,11 +74,15 @@ export const signaturesLeft = (pc: PaymentRow) =>
   Math.max(0, (pc.requiredSignatures ?? 1) - (pc.currentSignatures ?? 0));
 
 /** Authorise/sign is offered only while signatures are outstanding — once the
- *  total is met the transfer is already in process (DESIGN.md). */
-export const isAuthoriseable = (pc: PaymentRow, adminId: string) =>
-  (pc.status === 'Transfer Initiated' || pc.status === 'Authorised') &&
-  signaturesLeft(pc) > 0 &&
-  !hasSignedOrInitiated(pc, adminId);
+ *  total is met the transfer is submitted to the bank (DESIGN.md). */
+export const isAuthoriseable = (pc: PaymentRow, adminId: string) => {
+  const norm = normalizePaymentStatus(pc.status);
+  return (
+    (norm === 'Transfer Initiated' || norm === 'Authorised') &&
+    signaturesLeft(pc) > 0 &&
+    !hasSignedOrInitiated(pc, adminId)
+  );
+};
 
 export const fmtAmount = (v: string | number) => `RM ${Number(v || 0).toLocaleString('en-MY')}`;
 
@@ -96,6 +114,14 @@ export const ViewDetailsModal: React.FC<{ pc: PaymentRow | null; onClose: () => 
       <div className="space-y-5">
         <div className="payment-detail-grid">
           <div className="payment-detail-item">
+            <div className="label">Payment ID</div>
+            <div className="value mono text-md-primary font-bold">{pc.paymentId || `PMT-${pc.caseId}`}</div>
+          </div>
+          <div className="payment-detail-item">
+            <div className="label">Case ID</div>
+            <div className="value mono">{pc.caseId}</div>
+          </div>
+          <div className="payment-detail-item">
             <div className="label">Beneficiary</div>
             <div className="value">{pc.accountHolderName || pc.beneficiaryId || '—'}</div>
           </div>
@@ -117,7 +143,7 @@ export const ViewDetailsModal: React.FC<{ pc: PaymentRow | null; onClose: () => 
           </div>
           <div className="payment-detail-item">
             <div className="label">Amount</div>
-            <div className="value">{fmtAmount(pc.amount)}</div>
+            <div className="value font-bold text-md-primary">{fmtAmount(pc.amount)}</div>
           </div>
         </div>
 
@@ -286,11 +312,12 @@ export const AuthoriseTransferModal: React.FC<MutatingModalProps> = ({ pc, onClo
     setLoading(true);
     try {
       const res = await paymentApi.authorise({ caseId: pc.caseId, adminId: identityId });
-      const status = res.paymentCase?.status;
       notify({
         type: 'success',
-        title: status === 'Paid' ? 'Transfer executed' : 'Authorisation recorded',
-        message: status === 'Paid' ? 'Threshold met — transfer executed (Paid).' : `Signatures now ${(res.paymentCase?.currentSignatures ?? current)}/${required}.`,
+        title: reachesThreshold ? 'Transfer Authorised' : 'Authorisation Recorded',
+        message: reachesThreshold
+          ? `Case ${pc.caseId} fully authorised (${current + 1}/${required}). It will be submitted to the bank (Waiting Bank Approval) in a few seconds.`
+          : `Authorisation recorded. Signatures now ${(res.paymentCase?.currentSignatures ?? current + 1)}/${required}.`,
       });
       onClose();
       onDone();
@@ -308,8 +335,8 @@ export const AuthoriseTransferModal: React.FC<MutatingModalProps> = ({ pc, onClo
       title="Authorise Transfer"
       subtitle={pc ? `Case ${pc.caseId} · ${fmtAmount(pc.amount)}` : ''}
       cancelText="Cancel"
-      confirmText={reachesThreshold ? 'Authorise & Execute' : 'Authorise'}
-      confirmVariant={reachesThreshold ? 'danger' : 'filled'}
+      confirmText="Authorise Transfer"
+      confirmVariant="filled"
       confirmLoading={loading}
       onConfirm={confirm}
     >
@@ -347,9 +374,13 @@ export const AuthoriseTransferModal: React.FC<MutatingModalProps> = ({ pc, onClo
           )}
 
           {reachesThreshold && (
-            <div className="flex items-start gap-2 text-sm bg-md-error/10 border border-md-error/30 rounded-xl px-4 py-3 text-md-on-error">
-              <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-              The signature threshold will be met — the transfer executes immediately (status → Paid).
+            <div className="flex items-start gap-2 text-sm bg-md-primary/10 border border-md-primary/30 rounded-xl px-4 py-3 text-md-on-surface">
+              <ShieldCheck size={16} className="shrink-0 mt-0.5 text-md-primary" />
+              <span>
+                Meeting the multi-signature threshold will mark this transfer <strong>Authorised</strong>,
+                then automatically submit it to the commercial bank (<strong>Waiting Bank Approval</strong>) —
+                from that point only the bank portal can approve or reject it.
+              </span>
             </div>
           )}
         </div>
@@ -423,7 +454,7 @@ export const CancelPaymentModal: React.FC<MutatingModalProps> = ({ pc, onClose, 
     setLoading(true);
     try {
       await paymentApi.cancelPayment({ caseId: pc.caseId, adminId: identityId, reason: reason.trim() });
-      notify({ type: 'success', title: 'Payment cancelled', message: `Case ${pc.caseId} → CANCELLED.` });
+      notify({ type: 'success', title: 'Payment cancelled', message: `Case ${pc.caseId} → Cancelled.` });
       setReason('');
       onClose();
       onDone();

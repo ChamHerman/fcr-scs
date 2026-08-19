@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, Activity, Wallet, Loader2, RefreshCw, FilePlus2, Undo2, Lock, Eye, Upload, Ban, CheckCircle2 } from 'lucide-react';
+import { Clock, User, Activity, Wallet, Loader2, RefreshCw, FilePlus2, Undo2, Lock, Upload, Ban, CheckCircle2 } from 'lucide-react';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { blockchainApi } from '../../services/blockchainApi';
@@ -7,12 +7,14 @@ import { paymentApi } from '../../services/paymentApi';
 import { useWallet } from '../../hooks/useWallet';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
-import { IconButton } from '../../components/ui/IconButton';
 import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
 import { WalletButton } from '../../components/ui/WalletButton';
+import { ActionMenuPortal } from '../../components/ui/ActionMenuPortal';
+import { NetworkSelector } from './NetworkSelector';
+import type { NetworkInfo } from './NetworkSelector';
 import '../LandAcquisition/case_management.css';
 import '../Payment/payment.css';
 import { BLOCKCHAIN_STATUSES } from '../Payment/statusMaps';
@@ -35,16 +37,17 @@ type ModalState =
   | null;
 
 export const BlockchainDashboard: React.FC = () => {
-  const { walletConnected, walletAddress, error: walletError, setError: setWalletError, connectWallet: handleConnectWallet } = useWallet();
+  const { walletAddress, walletConnected, error: walletError, setError: setWalletError, connectWallet: handleConnectWallet } = useWallet();
   const { identityId } = useAdminIdentity();
   const { notify } = useNotification();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [records, setRecords] = useState<LedgerRow[]>([]);
   const [readyRows, setReadyRows] = useState<LedgerRow[]>([]);
-  const [networkInfo, setNetworkInfo] = useState<{ name: string; label?: string; chainId: number; isLocal: boolean } | null>(null);
+  const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
   const [followUps, setFollowUps] = useState<Record<string, string>>({});
   const containerRef = useRef<HTMLDivElement>(null);
@@ -65,10 +68,11 @@ export const BlockchainDashboard: React.FC = () => {
       const ledger: LedgerRow[] = (recData.records || []).map((r: any) => ({
         id: r.id,
         caseId: r.caseId,
-        publicId: `FCR-${String(r.id).slice(0, 8).toUpperCase()}`,
+        // The record id is the short FCR-XXXXXXXX id stored on publish
+        publicId: r.id,
         transactionHash: r.transactionHash,
         documentHash: r.documentHash,
-        status: r.status === 'Published' ? 'Published' : 'Voided',
+        status: r.status === 'Published' || r.status === 'PUBLISHED' ? 'Published' : 'Voided',
         voidReason: r.voidReason,
         voidTransactionHash: r.voidTransactionHash,
         publishedAt: r.publishedAt ?? r.createdAt,
@@ -79,7 +83,7 @@ export const BlockchainDashboard: React.FC = () => {
 
       // Derive "Ready to Publish" — payment Paid + no active ledger record (PLAN_HM_1308 §5.6).
       const paidRes = await paymentApi.getAllCases().catch(() => ({ cases: [] }));
-      const paid = (paidRes.cases || []).filter((c: any) => c.status === 'Paid');
+      const paid = (paidRes.cases || []).filter((c: any) => c.status === 'Paid' || c.status === 'PAID');
       const existing = new Set(ledger.map((r) => r.caseId));
       const derived: LedgerRow[] = await Promise.all(
         paid
@@ -87,7 +91,8 @@ export const BlockchainDashboard: React.FC = () => {
           .map(async (c: any) => ({
             id: `ready-${c.caseId}`,
             caseId: c.caseId,
-            publicId: `FCR-${String(c.caseId).replace(/[^A-Z0-9]/gi, '').slice(-8).toUpperCase()}`,
+            // No FCR record exists yet — show the payment's PMT-XXXXXXXX id
+            publicId: c.paymentId || c.id,
             status: 'Ready to Publish',
             beneficiary: c.accountHolderName || c.beneficiaryId,
             amount: c.amount,
@@ -170,14 +175,10 @@ export const BlockchainDashboard: React.FC = () => {
           <h1>Blockchain Overview</h1>
           <div className="sub">
             Full view of the ledger — publish, void and reconcile records.
-            {networkInfo && (
-              <span className="text-sm font-semibold text-gray-600 ml-2">
-                Network: {networkInfo.label ?? (networkInfo.isLocal ? 'Hardhat Local' : 'Sepolia Testnet')} ({networkInfo.name})
-              </span>
-            )}
           </div>
         </div>
-        <div className="topbar-right">
+        <div className="topbar-right flex items-center gap-3">
+          <NetworkSelector networkInfo={networkInfo} onNetworkChange={(net) => setNetworkInfo(net)} />
           {walletConnected ? (
             <WalletButton walletAddress={walletAddress || undefined} adminId={identityId} />
           ) : (
@@ -269,9 +270,13 @@ export const BlockchainDashboard: React.FC = () => {
                 </tr>
               ) : (
                 filtered.map((row) => (
-                  <tr key={row.id}>
-                    <td><span className="meta-text">{row.publicId ?? row.caseId}</span></td>
-                    <td><CaseIdCell caseId={row.caseId} onView={() => setModal({ type: 'view', row })} /></td>
+                  <tr key={row.id} className="row-clickable" onClick={() => setModal({ type: 'view', row })}>
+                    <td>
+                      <span className="font-mono font-bold text-xs text-md-primary">
+                        {row.publicId ?? row.caseId}
+                      </span>
+                    </td>
+                    <td><CaseIdCell caseId={row.caseId} /></td>
                     <td>
                       <span className="meta-text">{row.recordType ?? 'Original'}</span>
                       {followUps[row.caseId] && (
@@ -281,30 +286,41 @@ export const BlockchainDashboard: React.FC = () => {
                     <td style={{ fontFamily: 'monospace', color: 'var(--md-on-surface-variant)' }}>{fmtTx(row.transactionHash)}</td>
                     <td><span className="meta-text">{fmtDate(row.publishedAt ?? row.createdAt)}</span></td>
                     <td>{ledgerBadge(row.status)}</td>
-                    <td>
+                    <td onClick={(e) => e.stopPropagation()}>
                       <div className="row-actions">
-                        <IconButton title="View Details" onClick={() => setModal({ type: 'view', row })}>
-                          <Eye size={16} />
-                        </IconButton>
-                        {row.status === 'Ready to Publish' && (
-                          <IconButton title="Publish to Blockchain" variant="primary" onClick={() => setModal({ type: 'publish', row })}>
-                            <Upload size={16} />
-                          </IconButton>
+                        {(row.status === 'Ready to Publish' || row.status === 'READY_TO_PUBLISH') && (
+                          <Button
+                            size="sm"
+                            variant="filled"
+                            className="h-8 px-3.5 text-xs inline-flex items-center gap-2 rounded-full font-medium"
+                            onClick={() => setModal({ type: 'publish', row })}
+                          >
+                            <Upload size={13} className="shrink-0" />
+                            <span>Publish</span>
+                          </Button>
                         )}
-                        {row.status === 'Published' && (
-                          <IconButton title="Void Ledger Record" variant="danger" onClick={() => setModal({ type: 'void', row })}>
-                            <Ban size={16} />
-                          </IconButton>
+                        {(row.status === 'Published' || row.status === 'PUBLISHED') && (
+                          <Button
+                            size="sm"
+                            variant="filled"
+                            className="h-8 px-3.5 text-xs inline-flex items-center gap-2 rounded-full font-medium bg-red-600 hover:bg-red-700 text-white shadow-sm"
+                            onClick={() => setModal({ type: 'void', row })}
+                          >
+                            <Ban size={13} className="shrink-0" />
+                            <span>Void</span>
+                          </Button>
                         )}
-                        {row.status === 'Voided' &&
-                          FOLLOW_UP_CHOICES.map((c) => {
-                            const Icon = followUpIcons[c.key as keyof typeof followUpIcons];
-                            return (
-                              <IconButton key={c.key} title={c.label} variant="primary" onClick={() => handleFollowUp(row, c.key)}>
-                                <Icon size={16} />
-                              </IconButton>
-                            );
-                          })}
+                        {row.status === 'Voided' && (
+                          <ActionMenuPortal
+                            isOpen={activeMenu === row.caseId}
+                            onToggle={() => setActiveMenu(activeMenu === row.caseId ? null : row.caseId)}
+                            onClose={() => setActiveMenu(null)}
+                            actions={FOLLOW_UP_CHOICES.map((c) => ({
+                              label: c.label,
+                              onClick: () => handleFollowUp(row, c.key),
+                            }))}
+                          />
+                        )}
                       </div>
                     </td>
                   </tr>

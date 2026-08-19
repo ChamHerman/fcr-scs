@@ -160,7 +160,7 @@ export async function acceptOffer(offerId: string, signedDocument?: string, forc
 
     await tx.acquisitionCase.update({
       where: { caseId: offer.caseId },
-      data: { status: CaseStatus.PAYMENT_IN_PROGRESS },
+      data: { status: CaseStatus.OFFER_ACCEPTED },
     });
 
     return updatedOffer;

@@ -38,4 +38,11 @@ export const paymentApi = {
     if (!res.ok) throw new Error(d.error ?? "HTTP " + res.status);
     return d;
   },
+  // Bank Clearance Portal APIs
+  getBankPending: () => paymentFetch("/api/payments/bank/pending"),
+  approveBank: (d: { caseId: string; bankReferenceNumber?: string }) =>
+    paymentFetch("/api/payments/bank/approve", { method: "POST", body: JSON.stringify(d) }),
+  rejectBank: (d: { caseId: string; errorReason: string }) =>
+    paymentFetch("/api/payments/bank/reject", { method: "POST", body: JSON.stringify(d) }),
+  getBankHistory: () => paymentFetch("/api/payments/bank/history"),
 };

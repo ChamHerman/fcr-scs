@@ -8,6 +8,7 @@ import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { useSearchParams } from 'react-router-dom';
+import { normalizePaymentStatus } from './statusMaps';
 
 export default function TrackPaymentStatus() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -31,10 +32,11 @@ export default function TrackPaymentStatus() {
   }, { scope: pageRef });
 
   const statuses = [
-    'Approved',
+    'Offer Accepted',
     'Bank Details Submitted',
     'Transfer Initiated',
     'Authorised',
+    'Waiting Bank Approval',
     'Paid',
   ];
 
@@ -49,8 +51,7 @@ export default function TrackPaymentStatus() {
     
     try {
       const res = await paymentApi.getStatus(caseId);
-      // Assuming getStatus returns paymentCase with status
-      const fetchedStatus = res.paymentCase?.status || 'Approved';
+      const fetchedStatus = normalizePaymentStatus(res.paymentCase?.status || 'Offer Accepted');
       setStatus(isDisputed ? 'Payment Disputed' : fetchedStatus);
       notify({ type: 'success', title: 'Status retrieved successfully' });
     } catch (err: any) {

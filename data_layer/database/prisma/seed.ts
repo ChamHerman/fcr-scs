@@ -1,13 +1,14 @@
 import { PrismaPg } from '@prisma/adapter-pg'
-import { PrismaClient, CaseStatus, ReportStatus, OfferStatus, ObjectionStatus, AreaUnit, UserRole } from '@prisma/client'
+import { PrismaClient, CaseStatus, ReportStatus, OfferStatus, ObjectionStatus, AreaUnit, UserRole, PaymentStatus } from '@prisma/client'
 import { Pool } from 'pg'
+import * as crypto from 'crypto'
 
 /**
  * NOTE: this seed targets the CURRENT module schema (pre-integrated-redesign).
- * The integrated redesign plan (PLAN_HM_1308.MD) replaces the payment/blockchain
- * tables and discards these scaffold rows; a fresh settlement seed from accepted
- * offers is a Phase-1 follow-up. For now the seed stays compatible with the
- * existing PaymentCase / BlockchainRecord models so the admin demo has data.
+ * The payment/blockchain rows are a flow-test baseline: every payment case
+ * starts at OFFER_ACCEPTED with zero signatures so the full settlement flow
+ * (initiate → multi-sign → bank approval → paid → blockchain publish) must be
+ * exercised live — no fake approved/failed states are seeded.
  */
 
 const connectionString = 'postgresql://fcr_app:postgres@127.0.0.1:5432/fcr_scs?schema=public'
@@ -18,15 +19,14 @@ const prisma = new PrismaClient({ adapter })
 
 const generateCaseId = (idx: number) => `LAC-2026-08-${String(idx).padStart(4, '0')}`;
 
-const statuses = [
-  'Approved', 
-  'Bank Details Submitted', 
-  'Transfer Initiated', 
-  'Authorised', 
-  'Paid', 
-  'Failed', 
-  'Transfer Rejected'
-];
+// Crockford-style alphabet: no I, O, 0, 1 to avoid look-alikes
+const SHORT_ID_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const shortId = () => {
+  const bytes = crypto.randomBytes(8);
+  let out = '';
+  for (let i = 0; i < 8; i++) out += SHORT_ID_ALPHABET[bytes[i] % SHORT_ID_ALPHABET.length];
+  return out;
+};
 
 async function main() {
   console.log('Seeding dummy data...');
@@ -100,7 +100,7 @@ async function main() {
           caseId,
           caseTitle,
           projectId: dbProj.projectId,
-          status: i === 0 ? CaseStatus.CASE_REGISTERED : i === 1 ? CaseStatus.VALUER_ASSIGNED : CaseStatus.VALUATION_APPROVED,
+          status: i === 0 ? CaseStatus.CASE_REGISTERED : i === 1 ? CaseStatus.VALUER_ASSIGNED : CaseStatus.OFFER_ACCEPTED,
           registrationDate: new Date(),
           remarks: 'Initial acquisition case for land parcel',
           createdById: defaultAdmin.userId,
@@ -209,50 +209,48 @@ async function main() {
     }
   }
 
-  // 3. Seed Payment Cases
+  // ---------------------------------------------------------------------------
+  // 3. Seed Payment Cases — flow-test baseline (25 records)
+  //
+  // Every record starts at OFFER_ACCEPTED with zero signatures so the whole
+  // payment flow is exercised live: initiate → multi-sign (Authorised) →
+  // Waiting Bank Approval → bank approve/reject → Paid / Transfer Failed →
+  // blockchain publish. No authorisations, receipts, failed transactions or
+  // blockchain records are seeded — those states must be reached through the
+  // real flow.
+  // ---------------------------------------------------------------------------
+
+  // Reset payment + blockchain state (children first) so old scaffold rows,
+  // artifacts and uuid-format ids never leak into the flow-test baseline.
+  await prisma.failedTransaction.deleteMany({});
+  await prisma.paymentReceipt.deleteMany({});
+  await prisma.paymentAuthorisation.deleteMany({});
+  await prisma.receiverBankDetails.deleteMany({});
+  await prisma.paymentCase.deleteMany({});
+  await prisma.blockchainRecord.deleteMany({});
+
   const users = [
     { name: 'Ahmad bin Abu', bank: 'Maybank', account: '1234567890' },
     { name: 'Lee Chong Wei', bank: 'CIMB', account: '0987654321' },
     { name: 'Siti Nurhaliza', bank: 'Public Bank', account: '1122334455' },
     { name: 'Ravi Kumar', bank: 'RHB', account: '5566778899' },
-    { name: 'Wong Choong Hann', bank: 'Hong Leong', account: '6677889900' }
+    { name: 'Wong Choong Hann', bank: 'Hong Leong', account: '6677889900' },
   ];
 
   for (let i = 1; i <= 25; i++) {
     const caseId = generateCaseId(i);
     const user = users[i % users.length];
-    const status = statuses[i % statuses.length];
-    // Every 5th case is a large settlement (>= RM1M) so the multi-signature
-    // model (bank 1 + N approvals, e.g. "1/3", "2 left") is visible in the demo.
-    const amount = i % 5 === 0
-      ? (Math.floor(Math.random() * 3) + 1) * 1000000
-      : (Math.floor(Math.random() * 50) + 1) * 10000;
+    const paymentId = `PMT-${shortId()}`;
 
-    // Signature model: bank initiator always contributes 1 signature + admin
-    // approvals, where approvals = 1 + floor(amount / 1_000_000).
+    // Every 4th record is RM 1M → 3 signatures required (admin-01/02/03 can
+    // complete it in the UI); the rest need 2.
+    const amount = i % 4 === 0 ? 1000000 : (Math.floor(Math.random() * 50) + 1) * 10000;
+
     const requiredSignatures = 2 + Math.floor(amount / 1000000);
 
-    let currentSignatures = 0;
-
-    if (status === 'Transfer Initiated' || status === 'Failed') {
-      currentSignatures = 1; // bank signature only
-    }
-    if (status === 'Authorised') {
-      currentSignatures = Math.max(1, requiredSignatures - 1); // one approval left
-    }
-    if (status === 'Paid') {
-      currentSignatures = requiredSignatures; // quota met, transfer executed
-    }
-
-    const pc = await prisma.paymentCase.upsert({
-      where: { caseId },
-      update: {
-        status,
-        currentSignatures,
-        requiredSignatures,
-        amount
-      },
-      create: {
+    await prisma.paymentCase.create({
+      data: {
+        id: paymentId,
         caseId,
         beneficiaryId: `BEN-${String(i).padStart(3, '0')}`,
         amount,
@@ -261,72 +259,13 @@ async function main() {
         accountHolderName: user.name,
         phoneNumber: '012-3456789',
         myKadNumber: '900101-14-1234',
-        status,
+        status: PaymentStatus.OFFER_ACCEPTED,
         requiredSignatures,
-        currentSignatures,
+        currentSignatures: 0,
       },
     });
 
-    if (status === 'Transfer Initiated' || status === 'Authorised' || status === 'Paid') {
-      const existingAuth = await prisma.paymentAuthorisation.findFirst({
-        where: { paymentCaseId: pc.id, action: "initiate" }
-      });
-      if (!existingAuth) {
-        await prisma.paymentAuthorisation.create({
-          data: {
-            paymentCaseId: pc.id,
-            adminId: "admin-01",
-            action: "initiate",
-          }
-        });
-      }
-
-      // Authorised / Paid rows carry one recorded approval (Admin B) so the
-      // signature list and SoD display look real.
-      if (status === 'Authorised' || status === 'Paid') {
-        const existingApprove = await prisma.paymentAuthorisation.findFirst({
-          where: { paymentCaseId: pc.id, action: "authorise" }
-        });
-        if (!existingApprove) {
-          await prisma.paymentAuthorisation.create({
-            data: {
-              paymentCaseId: pc.id,
-              adminId: "admin-02",
-              action: "authorise",
-            }
-          });
-        }
-      }
-    }
-
-    if (status === 'Failed') {
-      const existingFail = await prisma.failedTransaction.findFirst({
-        where: { paymentCaseId: pc.id }
-      });
-      if (!existingFail) {
-        await prisma.failedTransaction.create({
-          data: {
-            paymentCaseId: pc.id,
-            errorLog: 'Insufficient funds in the master holding account or connection timeout.',
-          }
-        });
-      }
-    }
-
-    if (status === 'Paid' || i % 5 === 0) {
-      await prisma.blockchainRecord.upsert({
-        where: { caseId },
-        update: {},
-        create: {
-          caseId,
-          documentHash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-          transactionHash: `0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890${String(i).padStart(4, '0')}`,
-          status: i % 10 === 0 ? 'Voided' : 'Published'
-        },
-      });
-    }
-
-    console.log(`Created/Updated Payment Case: ${caseId} (${status})`);
+    console.log(`Created Payment Case: ${caseId} · ${paymentId} · Offer Accepted · ${requiredSignatures} signatures required`);
   }
 
   console.log('Seeding completed successfully!');

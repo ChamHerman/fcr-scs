@@ -159,7 +159,7 @@ export const Button: React.FC<ButtonProps> = ({
           className="pointer-events-none absolute inset-0 -skew-x-12 bg-gradient-to-r from-transparent via-[var(--md-shimmer,rgba(255,255,255,0.25))] to-transparent w-full h-full -translate-x-full"
         />
       )}
-      <span className={classNames("relative z-10 flex items-center justify-center transition-opacity duration-300", isLoading ? "opacity-0" : "opacity-100")}>
+      <span className={classNames("relative z-10 flex items-center justify-center gap-2 transition-opacity duration-300", isLoading ? "opacity-0" : "opacity-100")}>
         {children}
       </span>
       {isLoading && (
