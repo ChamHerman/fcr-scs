@@ -136,12 +136,17 @@ function App() {
               {/* System Audit & Monitoring */}
               <Route path="audit-logs" element={<AuditLogs />} />
               <Route path="alerts" element={<AlertMonitoring />} />
-              <Route path="reports" element={<SystemReports />} />
+              <Route path="system-reports" element={<SystemReports />} />
 
               {/* Placeholder Admin Routes */}
               <Route path="valuers" element={<Placeholder title="Valuers Management" />} />
               <Route path="forms" element={<Placeholder title="Forms & Templates" />} />
+              
+              {/* Reporting Routes */}
               <Route path="reports" element={<ReportsDashboard />} />
+              <Route path="reports/case-status" element={<ReportsDashboard reportCategory="Case Status" />} />
+              <Route path="reports/payment" element={<ReportsDashboard reportCategory="Payment" />} />
+              <Route path="reports/blockchain-audit" element={<ReportsDashboard reportCategory="Blockchain Audit" />} />
               <Route path="reports/generate" element={<GenerateReports />} />
               <Route path="reports/view/:reportId" element={<ViewReports />} />
               <Route path="reports/schedule" element={<ScheduleReportsGeneration />} />
