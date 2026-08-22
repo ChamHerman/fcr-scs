@@ -1,4 +1,5 @@
 import { prisma } from "../prisma";
+import { PaymentStatus, BlockchainStatus } from "@prisma/client";
 
 export interface ReportFilterParams {
   startDate?: string;
@@ -35,7 +36,7 @@ export const getDashboardOverviewStats = async () => {
     }),
     prisma.paymentCase.aggregate({
       _sum: { amount: true },
-      where: { status: "Paid", deletedAt: null },
+      where: { status: PaymentStatus.PAID, deletedAt: null },
     }),
     prisma.blockchainRecord.count({ where: { deletedAt: null } }),
     prisma.blockchainRecord.groupBy({
@@ -83,8 +84,8 @@ export const getDashboardOverviewStats = async () => {
       totalCompensationAmount: sumTotal,
       totalPaidAmount: sumPaid,
       totalBlockchainRecords: blockchainTotal,
-      publishedBlockchainRecords: blockchainStatusDistribution["Published"] || 0,
-      voidedBlockchainRecords: blockchainStatusDistribution["Voided"] || 0,
+      publishedBlockchainRecords: blockchainStatusDistribution[BlockchainStatus.PUBLISHED] || blockchainStatusDistribution["Published"] || 0,
+      voidedBlockchainRecords: blockchainStatusDistribution[BlockchainStatus.VOIDED] || blockchainStatusDistribution["Voided"] || 0,
       completedCases: caseStatusDistribution["CASE_CLOSED"] || caseStatusDistribution["PAYMENT_COMPLETED"] || 0,
       pendingValuation: (caseStatusDistribution["CASE_REGISTERED"] || 0) + (caseStatusDistribution["VALUATION_IN_PROGRESS"] || 0),
       pendingCompensation: caseStatusDistribution["VALUATION_APPROVED"] || 0,
@@ -218,7 +219,7 @@ export const generatePaymentData = async (filters: ReportFilterParams) => {
   });
 
   const totalDisbursementNum = payments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
-  const successfulPayments = payments.filter((p) => p.status === "Paid").length;
+  const successfulPayments = payments.filter((p) => p.status === PaymentStatus.PAID || (p.status as any) === "Paid").length;
   const successRate = payments.length > 0 ? Math.round((successfulPayments / payments.length) * 100) : 100;
 
   return {
@@ -265,8 +266,8 @@ export const generateBlockchainAuditData = async (filters: ReportFilterParams) =
     take: 100,
   });
 
-  const publishedRecords = records.filter((r) => r.status === "Published").length;
-  const voidedRecords = records.filter((r) => r.status === "Voided").length;
+  const publishedRecords = records.filter((r) => r.status === BlockchainStatus.PUBLISHED || (r.status as any) === "Published").length;
+  const voidedRecords = records.filter((r) => r.status === BlockchainStatus.VOIDED || (r.status as any) === "Voided").length;
 
   return {
     reportType: "Blockchain Audit Report",

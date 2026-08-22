@@ -1,7 +1,20 @@
 import { ethers } from "ethers";
 import * as path from "path";
 import * as fs from "fs";
-import * as dotenv from "dotenv";
+const envPaths = [
+  path.resolve(__dirname, "../../../../../.env"),
+  path.resolve(__dirname, "../../../../.env"),
+  path.resolve(__dirname, "../../../.env"),
+  path.resolve(__dirname, "../../.env"),
+  path.resolve(process.cwd(), ".env"),
+  path.resolve(process.cwd(), "../.env"),
+];
+for (const p of envPaths) {
+  if (fs.existsSync(p)) {
+    dotenv.config({ path: p });
+    break;
+  }
+}
 dotenv.config();
 
 function loadAbi() {
