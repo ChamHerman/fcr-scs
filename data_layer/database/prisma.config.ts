@@ -1,4 +1,13 @@
-import "dotenv/config";
+import path from "path";
+import fs from "fs";
+import * as dotenv from "dotenv";
+
+const rootEnv = path.resolve(__dirname, "../../.env");
+if (fs.existsSync(rootEnv)) {
+  dotenv.config({ path: rootEnv });
+}
+dotenv.config();
+
 import { defineConfig, env } from "prisma/config";
 
 export default defineConfig({

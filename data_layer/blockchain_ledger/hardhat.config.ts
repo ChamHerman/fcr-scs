@@ -1,6 +1,13 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
+import * as path from "path";
+import * as fs from "fs";
 import * as dotenv from "dotenv";
+
+const rootEnv = path.resolve(__dirname, "../../.env");
+if (fs.existsSync(rootEnv)) {
+  dotenv.config({ path: rootEnv });
+}
 dotenv.config();
 
 const config: HardhatUserConfig = {

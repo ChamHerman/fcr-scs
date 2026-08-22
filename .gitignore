@@ -19,6 +19,7 @@ dist/
 !**/*.env.template
 /.reasonix
 /.ua
-package-lock.json
+/package-lock.json
 /.zcode
 /.playwright-mcp
+package-lock.json
