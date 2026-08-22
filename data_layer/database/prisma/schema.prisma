@@ -58,6 +58,18 @@ enum UserRole {
   DISPLACED_COMMUNITY_MEMBER
 }
 
+model RolePermission {
+  id        String   @id @default(uuid())
+  role      UserRole
+  pagePath  String   @map("page_path")
+  canAccess Boolean  @default(true) @map("can_access")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([role, pagePath])
+  @@map("role_permission")
+}
+
 enum AreaUnit {
   SQUARE_METER
   ACRE

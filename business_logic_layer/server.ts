@@ -47,10 +47,15 @@ import reportRoutes from "./reporting_service/src/routes/report.routes";
 import userRoutes from "./user_management_service/src/routes/user.routes";
 import emailTemplateRoutes from "./user_management_service/src/routes/email-template.routes";
 
+import { enforcePageAccess } from "./user_management_service/src/middleware/auth.middleware";
+
 export const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+// Global RBAC enforcement for page access
+app.use(enforcePageAccess);
 
 // Health Check
 app.get("/health", (req, res) => {

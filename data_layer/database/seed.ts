@@ -1,4 +1,6 @@
-import 'dotenv/config';
+import * as dotenv from 'dotenv';
+import path from 'path';
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 import { PrismaClient, UserRole } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
@@ -12,28 +14,37 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   console.log('Seeding database...');
 
-  // 1. Seed Admin User
-  const adminEmail = 'admin@fcrscs.gov.my';
+  // 1. Seed 3 Admin Users
   const plainPassword = 'password123';
   const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
-  const admin = await prisma.user.upsert({
-    where: { email: adminEmail },
-    update: {
-      passwordHash: hashedPassword,
-    },
-    create: {
-      name: 'System Administrator',
-      email: adminEmail,
-      contactNumber: '0123456789',
-      identificationNumber: '900101-14-1234',
-      role: UserRole.SYSTEM_ADMINISTRATOR,
-      passwordHash: hashedPassword,
-      isActive: true,
-    },
-  });
+  const adminsToCreate = [
+    { email: 'admin@fcrscs.gov.my', name: 'System Administrator 1', id: '900101-14-1234', contact: '0123456789' },
+    { email: 'admin2@fcrscs.gov.my', name: 'System Administrator 2', id: '900101-14-1235', contact: '0123456788' },
+    { email: 'admin3@fcrscs.gov.my', name: 'System Administrator 3', id: '900101-14-1236', contact: '0123456787' },
+  ];
 
-  console.log(`✅ Upserted Admin User: ${admin.email}`);
+  let firstAdminId = '';
+
+  for (const adminData of adminsToCreate) {
+    const admin = await prisma.user.upsert({
+      where: { email: adminData.email },
+      update: {
+        passwordHash: hashedPassword,
+      },
+      create: {
+        name: adminData.name,
+        email: adminData.email,
+        contactNumber: adminData.contact,
+        identificationNumber: adminData.id,
+        role: UserRole.SYSTEM_ADMINISTRATOR,
+        passwordHash: hashedPassword,
+        isActive: true,
+      },
+    });
+    console.log(`✅ Upserted Admin User: ${admin.email}`);
+    if (!firstAdminId) firstAdminId = admin.userId;
+  }
 
   // 2. Seed Email Templates
   const templateName = 'PASSWORD_RESET';
@@ -54,7 +65,7 @@ async function main() {
           <p>Thanks,<br>The FCR-SCS Team</p>
         </div>
       `,
-      createdById: admin.userId, // Link template to admin
+      createdById: firstAdminId, // Link template to first admin
     },
   });
 
