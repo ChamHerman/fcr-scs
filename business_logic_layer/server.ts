@@ -2,32 +2,20 @@ import path from "path";
 import fs from "fs";
 import * as dotenv from "dotenv";
 
-// Compute an env base directory that works in both source (business_logic_layer/) and built (business_logic_layer/dist/) layouts
-const baseDir =
-  fs.existsSync(path.resolve(__dirname, "smart_contract_service/.env")) ||
-  fs.existsSync(path.resolve(__dirname, "payment_service/.env")) ||
-  fs.existsSync(path.resolve(__dirname, "package.json"))
-    ? __dirname
-    : path.resolve(__dirname, "..");
-
-// Capture explicit SERVER_PORT or PORT before sub-service .env files override it
-const explicitPort = process.env.SERVER_PORT || (process.env.PORT && !["3001", "3002"].includes(process.env.PORT) ? process.env.PORT : undefined);
-
-// Load environment variables from sub-service .env files BEFORE importing service routes
-const envFiles = [
-  path.resolve(baseDir, "smart_contract_service/.env"),
-  path.resolve(baseDir, "payment_service/.env"),
-  path.resolve(baseDir, ".env"),
+// Load environment variables from single root .env or fallback
+const candidateEnvPaths = [
+  path.resolve(__dirname, "../.env"),
+  path.resolve(__dirname, ".env"),
+  path.resolve(process.cwd(), ".env"),
+  path.resolve(process.cwd(), "../.env"),
 ];
 
-for (const envPath of envFiles) {
+for (const envPath of candidateEnvPaths) {
   if (fs.existsSync(envPath)) {
     dotenv.config({ path: envPath });
-  } else if (process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test") {
-    console.warn(`[WARN] [server] Environment file not found at: ${envPath}`);
+    break;
   }
 }
-
 dotenv.config();
 
 if (!process.env.DATABASE_URL) {
@@ -38,13 +26,13 @@ if (!process.env.DATABASE_URL) {
     process.env.DATABASE_URL = "postgresql://fcr_app:postgres@127.0.0.1:5432/fcr_scs?schema=public";
   } else if (process.env.NODE_ENV !== "test") {
     throw new Error(
-      "DATABASE_URL environment variable is missing! Please configure DATABASE_URL in your environment or .env file (or set ALLOW_DEV_DB_FALLBACK=true for local dev)."
+      "DATABASE_URL environment variable is missing! Please configure DATABASE_URL in your root .env file."
     );
   }
 }
 
 // Unified server port default is 3030
-const PORT = explicitPort || 3030;
+const PORT = process.env.SERVER_PORT || process.env.PORT || 3030;
 
 // Import Express & service routes AFTER env configuration is loaded
 import express from "express";
@@ -55,6 +43,7 @@ import bankDetailsRoutes from "./payment_service/src/routes/bank-details.routes"
 import blockchainRoutes from "./smart_contract_service/src/routes/blockchain.routes";
 import landAcquisitionRoutes from "./land_acquisition_service/src/routes/land-acquisition.routes";
 import compensationRoutes from "./compensation_management_service/src/routes/compensation.routes";
+import reportRoutes from "./reporting_service/src/routes/report.routes";
 import userRoutes from "./user_management_service/src/routes/user.routes";
 import emailTemplateRoutes from "./user_management_service/src/routes/email-template.routes";
 
@@ -78,6 +67,7 @@ app.use("/api/bank-details", bankDetailsRoutes);
 app.use("/api/smart-contract", blockchainRoutes);
 app.use("/api/land-acquisition", landAcquisitionRoutes);
 app.use("/api/compensation", compensationRoutes);
+app.use("/api/reports", reportRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/email-templates", emailTemplateRoutes);
 

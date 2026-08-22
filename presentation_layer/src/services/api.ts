@@ -3,7 +3,7 @@ import axios from 'axios';
 // --- Legacy Exports (Kept for compatibility with other modules) ---
 export const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3030";
 export const BLOCKCHAIN_BASE = BASE_URL;
-export const PAYMENT_BASE = import.meta.env.VITE_PAYMENT_API_URL ?? BASE_URL;
+export const PAYMENT_BASE = BASE_URL;
 
 export async function fetchJSON(url: string, options?: RequestInit) {
   let res: Response;

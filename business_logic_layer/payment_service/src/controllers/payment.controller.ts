@@ -249,3 +249,59 @@ export async function dispute(req: Request, res: Response): Promise<void> {
     }
   }
 }
+
+export async function getBankPending(_req: Request, res: Response): Promise<void> {
+  try {
+    const cases = await paymentService.getBankPendingTransfers();
+    res.json({ cases });
+  } catch (e: unknown) {
+    res.status(500).json({ error: (e as Error).message });
+  }
+}
+
+export async function approveBank(req: Request, res: Response): Promise<void> {
+  const { caseId, bankReferenceNumber } = req.body;
+  if (!caseId) {
+    res.status(400).json({ error: "caseId is required" });
+    return;
+  }
+  try {
+    const paymentCase = await paymentService.approveBankTransfer(caseId, bankReferenceNumber);
+    res.json({ paymentCase, message: "Bank transfer successfully approved and processed." });
+  } catch (e: unknown) {
+    const msg = (e as Error).message;
+    if (msg.toLowerCase().includes("not found")) {
+      res.status(404).json({ error: msg });
+    } else {
+      res.status(400).json({ error: msg });
+    }
+  }
+}
+
+export async function rejectBank(req: Request, res: Response): Promise<void> {
+  const { caseId, errorReason } = req.body;
+  if (!caseId) {
+    res.status(400).json({ error: "caseId is required" });
+    return;
+  }
+  try {
+    const paymentCase = await paymentService.rejectBankTransfer(caseId, errorReason);
+    res.json({ paymentCase, message: "Bank transfer rejected and recorded in failed logs." });
+  } catch (e: unknown) {
+    const msg = (e as Error).message;
+    if (msg.toLowerCase().includes("not found")) {
+      res.status(404).json({ error: msg });
+    } else {
+      res.status(400).json({ error: msg });
+    }
+  }
+}
+
+export async function getBankHistory(_req: Request, res: Response): Promise<void> {
+  try {
+    const cases = await paymentService.getBankHistory();
+    res.json({ cases });
+  } catch (e: unknown) {
+    res.status(500).json({ error: (e as Error).message });
+  }
+}

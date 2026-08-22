@@ -43,6 +43,7 @@ export const AdminLayout: React.FC = () => {
   const [financeExpanded, setFinanceExpanded] = useState(false);
   const [landAcquisitionExpanded, setLandAcquisitionExpanded] = useState(false);
   const [compensationExpanded, setCompensationExpanded] = useState(false);
+  const [reportsExpanded, setReportsExpanded] = useState(false);
   const [isDark, setIsDark] = useState<boolean>(() => {
     return localStorage.getItem('admin_theme') === 'dark';
   });
@@ -61,6 +62,12 @@ export const AdminLayout: React.FC = () => {
       setLandAcquisitionExpanded(false);
       setCompensationExpanded(false);
       setFinanceExpanded(true);
+      setReportsExpanded(false);
+    } else if (path.startsWith('/admin/reports')) {
+      setLandAcquisitionExpanded(false);
+      setCompensationExpanded(false);
+      setFinanceExpanded(false);
+      setReportsExpanded(true);
     }
   }, [location.pathname]);
 
@@ -414,15 +421,41 @@ export const AdminLayout: React.FC = () => {
             </div>
 
             <div className="nav-section">
-              {!isCollapsed && <span className="nav-label">AI & Reports</span>}
+              {!isCollapsed && <span className="nav-label">AI Features</span>}
               <NavLink to="/admin/prediction" className="nav-item" title={isCollapsed ? "AI Valuation" : ""}>
                 <BrainCircuit size={22} className="nav-icon" />
                 {!isCollapsed && <span>AI Valuation</span>}
               </NavLink>
-              <NavLink to="/admin/reports" className="nav-item" title={isCollapsed ? "Reports" : ""}>
-                <PieChart size={22} className="nav-icon" />
-                {!isCollapsed && <span>Reports</span>}
-              </NavLink>
+            </div>
+
+            <div className="nav-section">
+              {!isCollapsed && (
+                <div className="nav-label" onClick={() => setReportsExpanded(!reportsExpanded)} style={{ cursor: 'pointer' }}>
+                  <span>Reporting</span>
+                  {reportsExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </div>
+              )}
+              {isCollapsed && <div style={{ height: 16 }} />}
+              {(reportsExpanded || isCollapsed) && (
+                <>
+                  <NavLink to="/admin/reports" end className="nav-item" title={isCollapsed ? "Overview" : ""}>
+                    <PieChart size={22} className="nav-icon" />
+                    {!isCollapsed && <span>Overview</span>}
+                  </NavLink>
+                  <NavLink to="/admin/reports/case-status" className="nav-item" title={isCollapsed ? "Case Status" : ""}>
+                    <FileText size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                    {!isCollapsed && <span>Case Status</span>}
+                  </NavLink>
+                  <NavLink to="/admin/reports/payment" className="nav-item" title={isCollapsed ? "Payment" : ""}>
+                    <FileText size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                    {!isCollapsed && <span>Payment</span>}
+                  </NavLink>
+                  <NavLink to="/admin/reports/blockchain-audit" className="nav-item" title={isCollapsed ? "Blockchain Audit" : ""}>
+                    <FileText size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                    {!isCollapsed && <span>Blockchain Audit</span>}
+                  </NavLink>
+                </>
+              )}
             </div>
 
             <div className="nav-section">

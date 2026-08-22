@@ -1,4 +1,5 @@
 import { prisma } from "../prisma";
+import { PaymentStatus } from "@prisma/client";
 import PDFDocument from "pdfkit";
 
 export async function generateReceipt(caseId: string): Promise<Buffer> {
@@ -8,7 +9,7 @@ export async function generateReceipt(caseId: string): Promise<Buffer> {
   });
 
   if (!pc) throw new Error("Case not found");
-  if (pc.status !== "Paid" || !pc.receipt) {
+  if (pc.status !== PaymentStatus.PAID || !pc.receipt) {
     throw new Error("No receipt available for this case");
   }
 

@@ -1,28 +1,35 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, CheckCircle2, Loader2, Eye, Send } from 'lucide-react';
+import { Clock, User, CheckCircle2, Loader2, Eye } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { paymentApi } from '../../services/paymentApi';
-import { IconButton } from '../../components/ui/IconButton';
 import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
+import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import '../LandAcquisition/case_management.css';
 import './payment.css';
 import {
   ViewDetailsModal,
   InitiateTransferModal,
+  CancelPaymentModal,
   paymentBadge,
   fmtAmount,
   maskAccount,
   hasBankDetails,
   isReadyToInitiate,
 } from './paymentModals';
+import { PaymentRowActions } from './PaymentRowActions';
+import { normalizePaymentStatus } from './statusMaps';
 import type { PaymentRow } from './paymentModals';
 
-type ModalState = { type: 'view'; pc: PaymentRow } | { type: 'initiate'; pc: PaymentRow } | null;
+type ModalState =
+  | { type: 'view'; pc: PaymentRow }
+  | { type: 'initiate'; pc: PaymentRow }
+  | { type: 'cancel'; pc: PaymentRow }
+  | null;
 
 export default function InitiateTransfer() {
   const [searchParams] = useSearchParams();
@@ -32,7 +39,9 @@ export default function InitiateTransfer() {
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState(deepLink || '');
   const [bankFilter, setBankFilter] = useState('All banks');
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
+  const { identityId } = useAdminIdentity();
   const pageRef = useRef<HTMLDivElement>(null);
 
   useGSAP(() => {
@@ -59,7 +68,10 @@ export default function InitiateTransfer() {
 
   const eligible = useMemo(() => cases.filter(isReadyToInitiate), [cases]);
   const awaitingBank = useMemo(
-    () => cases.filter((c) => (c.status === 'Approved' || c.status === 'Bank Details Submitted') && !hasBankDetails(c)),
+    () =>
+      cases.filter(
+        (c) => ['Offer Accepted', 'Bank Details Submitted'].includes(normalizePaymentStatus(c.status)) && !hasBankDetails(c)
+      ),
     [cases]
   );
 
@@ -91,7 +103,7 @@ export default function InitiateTransfer() {
       <div className="topbar initiate-header">
         <div className="topbar-left">
           <h1>Initiate Transfer</h1>
-          <div className="sub">Queue of eligible cases ready for initiation — eligible = status Approved/Bank Details Submitted with verified bank details.</div>
+          <div className="sub">Queue of eligible cases ready for initiation — eligible = status Offer Accepted / Bank Details Submitted with valid bank details.</div>
         </div>
         <div className="topbar-right">
           <div className="date-badge">
@@ -145,47 +157,57 @@ export default function InitiateTransfer() {
           <table>
             <thead>
               <tr>
+                <th>Payment ID</th>
                 <th>Case ID</th>
                 <th>Beneficiary</th>
                 <th>Bank</th>
                 <th>Amount</th>
-                <th>Bank Status</th>
+                <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="text-center text-gray-500 py-8">
+                  <td colSpan={7} className="text-center text-gray-500 py-8">
                     <Loader2 size={22} className="inline animate-spin" /><span className="ml-2">Loading eligible cases…</span>
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center text-gray-500 py-8">No cases eligible to initiate right now.</td>
+                  <td colSpan={7} className="text-center text-gray-500 py-8">No cases eligible to initiate right now.</td>
                 </tr>
               ) : (
-                filtered.map((pc) => (
-                  <tr key={pc.caseId} className={deepLink === pc.caseId ? 'bg-md-secondary-container/40' : ''}>
-                    <td><CaseIdCell caseId={pc.caseId} onView={() => setModal({ type: 'view', pc })} /></td>
-                    <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
-                    <td>{pc.bankName ? `${pc.bankName} ${maskAccount(pc.accountNumber)}` : '—'}</td>
-                    <td style={{ fontWeight: 600 }}>{fmtAmount(pc.amount)}</td>
-                    <td>
-                      <span className="payment-badge approved"><span className="dot" />Verified</span>
-                    </td>
-                    <td>
-                      <div className="row-actions">
-                        <IconButton title="View Details" onClick={() => setModal({ type: 'view', pc })}>
-                          <Eye size={16} />
-                        </IconButton>
-                        <IconButton title="Initiate Transfer" variant="primary" onClick={() => setModal({ type: 'initiate', pc })}>
-                          <Send size={16} />
-                        </IconButton>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                filtered.map((pc) => {
+                  const paymentId = pc.paymentId || `PMT-${pc.caseId}`;
+                  return (
+                    <tr
+                      key={pc.caseId}
+                      className={`row-clickable${deepLink === pc.caseId ? ' bg-md-secondary-container/40' : ''}`}
+                      onClick={() => setModal({ type: 'view', pc })}
+                    >
+                      <td>
+                        <span className="font-mono font-bold text-xs text-md-primary">
+                          {paymentId}
+                        </span>
+                      </td>
+                      <td><CaseIdCell caseId={pc.caseId} /></td>
+                      <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
+                      <td>{pc.bankName ? `${pc.bankName} ${maskAccount(pc.accountNumber)}` : '—'}</td>
+                      <td style={{ fontWeight: 600 }}>{fmtAmount(pc.amount)}</td>
+                      <td>{paymentBadge(pc.status)}</td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <PaymentRowActions
+                          pc={pc}
+                          identityId={identityId}
+                          onAction={(type, target) => setModal({ type, pc: target } as ModalState)}
+                          activeMenu={activeMenu}
+                          setActiveMenu={setActiveMenu}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -199,6 +221,11 @@ export default function InitiateTransfer() {
       <ViewDetailsModal pc={modal?.type === 'view' ? modal.pc : null} onClose={closeModal} />
       <InitiateTransferModal
         pc={modal?.type === 'initiate' ? modal.pc : null}
+        onClose={closeModal}
+        onDone={() => { closeModal(); loadData(); }}
+      />
+      <CancelPaymentModal
+        pc={modal?.type === 'cancel' ? modal.pc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />

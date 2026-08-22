@@ -63,7 +63,7 @@ export const ActionMenuPortal: React.FC<ActionMenuPortalProps> = ({ actions, isO
             backgroundColor: 'var(--md-surface-container, #F3EDF7)',
             boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
             borderRadius: '16px',
-            zIndex: 9999,
+            zIndex: 100005,
             minWidth: '160px',
             overflow: 'hidden',
             border: '1px solid rgba(121, 116, 126, 0.3)'

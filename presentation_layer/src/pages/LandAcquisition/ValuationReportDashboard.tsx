@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
+import { Pagination } from "../../components/ui/Pagination";
 import "../../style.css";
 import "./valuation_report.css";
 
@@ -221,22 +222,14 @@ export const ValuationReportList: React.FC = () => {
           </table>
         </div>
 
-        {totalCount > itemsPerPage && (
-          <div className="pagination">
-            <div className="info">
-              Showing {(currentPage - 1) * itemsPerPage + 1}–{Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount}
-            </div>
-            <div className="pages">
-              <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}>
-                <ChevronLeft size={16} />
-              </button>
-              <button className="active">{currentPage}</button>
-              <button onClick={() => setCurrentPage((p) => p + 1)} disabled={currentPage * itemsPerPage >= totalCount}>
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
-        )}
+        <Pagination
+          currentPage={currentPage}
+          totalPages={Math.max(1, Math.ceil(totalCount / itemsPerPage))}
+          totalCount={totalCount}
+          pageSize={itemsPerPage}
+          onPageChange={setCurrentPage}
+          itemLabel="reports"
+        />
       </div>
 
       <div

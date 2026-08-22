@@ -9,17 +9,23 @@ import { app } from "../index";
 describe("POST /api/smart-contract/publish — input validation", () => {
   it("400 when caseId is missing", async () => {
     const r = await request(app).post("/api/smart-contract/publish")
-      .send({ documentHash: "0xabc", walletAddress: "0xAdminWallet123" });
+      .send({ documentHash: "0xabc", transactionHash: "0xtx", walletAddress: "0xAdminWallet123" });
     expect(r.status).toBe(400);
   });
   it("400 when documentHash is missing", async () => {
     const r = await request(app).post("/api/smart-contract/publish")
-      .send({ caseId: "CASE-001", walletAddress: "0xAdminWallet123" });
+      .send({ caseId: "CASE-001", transactionHash: "0xtx", walletAddress: "0xAdminWallet123" });
     expect(r.status).toBe(400);
+  });
+  it("400 when transactionHash is missing (tx must be sent from MetaMask first)", async () => {
+    const r = await request(app).post("/api/smart-contract/publish")
+      .send({ caseId: "CASE-001", documentHash: "0xabc", walletAddress: "0xAdminWallet123" });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/transactionHash/i);
   });
   it("403 when wallet address does not match", async () => {
     const r = await request(app).post("/api/smart-contract/publish")
-      .send({ caseId: "CASE-001", documentHash: "0xabc", walletAddress: "0xWRONG" });
+      .send({ caseId: "CASE-001", documentHash: "0xabc", transactionHash: "0xtx", walletAddress: "0xWRONG" });
     expect(r.status).toBe(403);
     expect(r.body.error).toMatch(/unauthorised/i);
   });
@@ -28,8 +34,14 @@ describe("POST /api/smart-contract/publish — input validation", () => {
 describe("POST /api/smart-contract/void — input validation", () => {
   it("400 when voidReason is missing", async () => {
     const r = await request(app).post("/api/smart-contract/void")
-      .send({ caseId: "CASE-001", walletAddress: "0xAdminWallet123" });
+      .send({ caseId: "CASE-001", transactionHash: "0xtx", walletAddress: "0xAdminWallet123" });
     expect(r.status).toBe(400);
+  });
+  it("400 when transactionHash is missing", async () => {
+    const r = await request(app).post("/api/smart-contract/void")
+      .send({ caseId: "CASE-001", voidReason: "wrong case", walletAddress: "0xAdminWallet123" });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/transactionHash/i);
   });
 });
 

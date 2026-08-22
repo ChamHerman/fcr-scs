@@ -5,6 +5,7 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
+import { Pagination } from "../../components/ui/Pagination";
 import "../../style.css";
 import "./case_management.css";
 
@@ -391,22 +392,14 @@ export const CaseManagementDashboard: React.FC = () => {
           </div>
 
           {/* Pagination */}
-          {totalCount > itemsPerPage && (
-            <div className="pagination">
-              <div className="info">
-                Showing <strong>{(currentPage - 1) * itemsPerPage + 1}–{Math.min(currentPage * itemsPerPage, totalCount)}</strong> of <strong>{totalCount}</strong> cases
-              </div>
-              <div className="pages">
-                <button disabled={currentPage === 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>
-                  ‹
-                </button>
-                <button className="active">{currentPage}</button>
-                <button disabled={currentPage * itemsPerPage >= totalCount} onClick={() => setCurrentPage((p) => p + 1)}>
-                  ›
-                </button>
-              </div>
-            </div>
-          )}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={Math.max(1, Math.ceil(totalCount / itemsPerPage))}
+            totalCount={totalCount}
+            pageSize={itemsPerPage}
+            onPageChange={setCurrentPage}
+            itemLabel="cases"
+          />
         </div>
 
         {/* Footer note */}

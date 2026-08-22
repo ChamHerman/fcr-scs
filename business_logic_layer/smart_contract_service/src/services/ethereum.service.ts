@@ -2,6 +2,21 @@ import { ethers } from "ethers";
 import * as path from "path";
 import * as fs from "fs";
 import * as dotenv from "dotenv";
+
+const envPaths = [
+  path.resolve(__dirname, "../../../../../.env"),
+  path.resolve(__dirname, "../../../../.env"),
+  path.resolve(__dirname, "../../../.env"),
+  path.resolve(__dirname, "../../.env"),
+  path.resolve(process.cwd(), ".env"),
+  path.resolve(process.cwd(), "../.env"),
+];
+for (const p of envPaths) {
+  if (fs.existsSync(p)) {
+    dotenv.config({ path: p });
+    break;
+  }
+}
 dotenv.config();
 
 function loadAbi() {
@@ -23,7 +38,7 @@ function loadAbi() {
 
 const ABI = loadAbi();
 
-export type NetworkKey = "sepolia" | "local" | "mainnet";
+export type NetworkKey = "sepolia" | "mainnet";
 
 export interface NetworkConfig {
   key: NetworkKey;
@@ -31,7 +46,6 @@ export interface NetworkConfig {
   rpcUrl: string;
   contractAddress: string | undefined;
   chainId: number;
-  isLocal: boolean;
 }
 
 /**
@@ -44,26 +58,16 @@ function readNetworkConfig(): Record<NetworkKey, NetworkConfig> {
     sepolia: {
       key: "sepolia",
       label: "Sepolia Testnet",
-      rpcUrl: process.env.SEPOLIA_RPC_URL ?? "",
-      contractAddress: process.env.CONTRACT_ADDRESS,
+      rpcUrl: process.env.SEPOLIA_RPC_URL ?? "https://sepolia.infura.io/v3/b4aa988d9c9b443987922954de0f7de9",
+      contractAddress: process.env.SEPOLIA_CONTRACT_ADDRESS || process.env.CONTRACT_ADDRESS || "0x5539d016e1A4Bd1e51d17D976D1ff05cb452B428",
       chainId: 11155111,
-      isLocal: false,
-    },
-    local: {
-      key: "local",
-      label: "Hardhat Local Node",
-      rpcUrl: process.env.LOCAL_RPC_URL ?? "http://127.0.0.1:8545",
-      contractAddress: process.env.LOCAL_CONTRACT_ADDRESS,
-      chainId: 31337,
-      isLocal: true,
     },
     mainnet: {
       key: "mainnet",
-      label: "Ethereum Mainnet",
+      label: "Ethereum Mainnet (Simulation)",
       rpcUrl: process.env.MAINNET_RPC_URL ?? "",
-      contractAddress: process.env.MAINNET_CONTRACT_ADDRESS,
+      contractAddress: process.env.MAINNET_CONTRACT_ADDRESS || process.env.CONTRACT_ADDRESS,
       chainId: 1,
-      isLocal: false,
     },
   };
 }
@@ -102,11 +106,11 @@ function getContract(): ethers.Contract {
   if (!_contract) {
     const net = getActiveNetwork();
     _provider = new ethers.JsonRpcProvider(net.rpcUrl);
-    const walletKey = process.env.DEPLOYER_PRIVATE_KEY || "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
-    const wallet = new ethers.Wallet(walletKey, _provider);
     const contractAddress = net.contractAddress;
     if (!contractAddress) throw new Error(`CONTRACT_ADDRESS not set for network "${activeNetworkKey}"`);
-    _contract = new ethers.Contract(contractAddress, ABI.abi, wallet);
+    // Read-only connection — write transactions come from the admin wallet in
+    // MetaMask; the backend never holds a signing key.
+    _contract = new ethers.Contract(contractAddress, ABI.abi, _provider);
 
     console.log(`[${new Date().toISOString()}] [INFO] [ethereum-service] Connected to ${net.label} at ${net.rpcUrl}`);
   }
@@ -118,7 +122,41 @@ export function resetContractCache(): void {
   _contract = null;
 }
 
-export async function getNetworkInfo(): Promise<{ name: string; label: string; chainId: number; isLocal: boolean }> {
+export function getActiveContractAddress(): string | undefined {
+  return getActiveNetwork().contractAddress;
+}
+
+export interface ReceiptVerification {
+  found: boolean;
+  success: boolean;
+  to?: string;
+}
+
+/**
+ * Verifies a transaction the ADMIN WALLET sent via MetaMask: it must be mined
+ * on the active network, must not have reverted, and must have targeted the
+ * CompensationLedger contract. Retries briefly — a just-mined tx can take a
+ * moment to appear on the read RPC.
+ */
+export async function verifyTransactionReceipt(
+  transactionHash: string,
+  attempts = 3,
+  delayMs = 2_000
+): Promise<ReceiptVerification> {
+  const provider = new ethers.JsonRpcProvider(getRpcUrl());
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const receipt = await provider.getTransactionReceipt(transactionHash);
+    if (receipt) {
+      return { found: true, success: receipt.status === 1, to: receipt.to?.toLowerCase() };
+    }
+    if (attempt < attempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  return { found: false, success: false };
+}
+
+export async function getNetworkInfo(): Promise<{ name: string; label: string; chainId: number; contractAddress?: string }> {
   const net = getActiveNetwork();
   // Best-effort chain id from the provider; fall back to the configured id so
   // the switch UI never hard-fails when an RPC/contract isn't reachable yet.
@@ -130,19 +168,7 @@ export async function getNetworkInfo(): Promise<{ name: string; label: string; c
   } catch {
     // provider or contract not reachable — configured chain id stands
   }
-  return { name: net.key, label: net.label, chainId, isLocal: net.isLocal };
-}
-
-export async function publishToBlockchain(caseId: string, documentHash: string) {
-  const tx = await getContract().publishRecord(caseId, documentHash);
-  const receipt = await tx.wait();
-  return { transactionHash: receipt.hash as string };
-}
-
-export async function voidOnBlockchain(caseId: string, reason: string) {
-  const tx = await getContract().voidRecord(caseId, reason);
-  const receipt = await tx.wait();
-  return { transactionHash: receipt.hash as string };
+  return { name: net.key, label: net.label, chainId, contractAddress: net.contractAddress };
 }
 
 export async function getRecordFromBlockchain(caseId: string) {

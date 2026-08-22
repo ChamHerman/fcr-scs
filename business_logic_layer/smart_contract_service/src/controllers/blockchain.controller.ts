@@ -26,21 +26,33 @@ export async function setNetwork(req: Request, res: Response): Promise<void> {
 }
 
 export async function publish(req: Request, res: Response): Promise<void> {
-  const { caseId, documentHash } = req.body as { caseId?: string; documentHash?: string };
+  const { caseId, documentHash, transactionHash } = req.body as {
+    caseId?: string;
+    documentHash?: string;
+    transactionHash?: string;
+  };
   if (!caseId || !documentHash) {
     res.status(400).json({ error: "caseId and documentHash are required" });
     return;
   }
+  if (!transactionHash) {
+    res.status(400).json({ error: "transactionHash is required — send the publish transaction from the admin wallet in MetaMask first" });
+    return;
+  }
   try {
-    const r = await svc.publishRecord(caseId, documentHash);
+    const r = await svc.publishRecord({ caseId, documentHash, transactionHash });
     res.status(201).json({ transactionHash: r.transactionHash, record: r });
   } catch (e: unknown) {
-    res.status(500).json({ error: (e as Error).message });
+    res.status(400).json({ error: (e as Error).message });
   }
 }
 
 export async function voidLedger(req: Request, res: Response): Promise<void> {
-  const { caseId, voidReason } = req.body as { caseId?: string; voidReason?: string };
+  const { caseId, voidReason, transactionHash } = req.body as {
+    caseId?: string;
+    voidReason?: string;
+    transactionHash?: string;
+  };
   if (!caseId) {
     res.status(400).json({ error: "caseId is required" });
     return;
@@ -49,11 +61,15 @@ export async function voidLedger(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: "Void reason is required" });
     return;
   }
+  if (!transactionHash) {
+    res.status(400).json({ error: "transactionHash is required — send the void transaction from the admin wallet in MetaMask first" });
+    return;
+  }
   try {
-    const r = await svc.voidRecord(caseId, voidReason);
+    const r = await svc.voidRecord({ caseId, voidReason, transactionHash });
     res.json({ transactionHash: r.voidTransactionHash, record: r });
   } catch (e: unknown) {
-    res.status(500).json({ error: (e as Error).message });
+    res.status(400).json({ error: (e as Error).message });
   }
 }
 

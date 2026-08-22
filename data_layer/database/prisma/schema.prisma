@@ -18,6 +18,7 @@ enum CaseStatus {
   COMPENSATION_REJECTED
   OFFER_ISSUED
   OFFER_REJECTED
+  OFFER_ACCEPTED
   PAYMENT_IN_PROGRESS
   PAYMENT_COMPLETED
   CASE_CLOSED
@@ -63,13 +64,6 @@ enum AreaUnit {
   HECTARE
 }
 
-enum PaymentStatus {
-  PENDING
-  APPROVED
-  SUCCESSFUL
-  FAILED
-  CANCELLED
-}
 
 enum AlertChannel {
   IN_APP
@@ -96,25 +90,49 @@ enum LogType {
   BACKUP
 }
 
+enum PaymentStatus {
+  OFFER_ACCEPTED
+  BANK_DETAILS_SUBMITTED
+  TRANSFER_INITIATED
+  AUTHORISED
+  WAITING_BANK_APPROVAL
+  PAID
+  TRANSFER_FAILED
+  TRANSFER_REJECTED
+  CANCELLED
+  PAYMENT_DISPUTED
+  SCHEDULED
+  PENDING_NEW_BANK_DETAILS
+}
+
+enum BlockchainStatus {
+  READY_TO_PUBLISH
+  PUBLISHED
+  VOIDED
+  REPLACEMENT
+}
+
+// id is a short human-readable record id (FCR-XXXXXXXX), assigned by the application
 model BlockchainRecord {
-  id                  String    @id @default(uuid())
-  caseId              String    @unique
+  id                  String           @id
+  caseId              String           @unique
   transactionHash     String?
   documentHash        String
-  status              String    @default("Published")
+  status              BlockchainStatus @default(PUBLISHED)
   voidReason          String?
   voidTransactionHash String?
-  publishedAt         DateTime  @default(now())
+  publishedAt         DateTime         @default(now())
   voidedAt            DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  deletedAt           DateTime? @map("deleted_at")
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  deletedAt           DateTime?        @map("deleted_at")
 
   @@map("blockchain_record")
 }
 
+// id is a short human-readable payment id (PMT-XXXXXXXX), assigned by the application
 model PaymentCase {
-  id                   String                 @id @default(uuid())
+  id                   String                 @id
   caseId               String                 @unique
   beneficiaryId        String
   amount               Decimal
@@ -124,7 +142,7 @@ model PaymentCase {
   phoneNumber          String?
   encryptedBankDetails String?
   myKadNumber          String?
-  status               String                 @default("Approved")
+  status               PaymentStatus          @default(OFFER_ACCEPTED)
   requiredSignatures   Int                    @default(1)
   currentSignatures     Int                    @default(0)
   createdAt            DateTime               @default(now())

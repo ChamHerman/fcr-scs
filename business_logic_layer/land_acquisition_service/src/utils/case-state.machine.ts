@@ -18,6 +18,7 @@ export class CaseStateMachine {
     CaseStatus.PENDING_COMPENSATION_APPROVAL,
     CaseStatus.COMPENSATION_APPROVED,
     CaseStatus.OFFER_ISSUED,
+    CaseStatus.OFFER_ACCEPTED,
     CaseStatus.PAYMENT_IN_PROGRESS,
   ];
 

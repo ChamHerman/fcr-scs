@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, Hourglass, Fingerprint, Loader2, Eye, PenLine, XCircle } from 'lucide-react';
+import { Clock, User, Hourglass, Fingerprint, Loader2 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { paymentApi } from '../../services/paymentApi';
-import { IconButton } from '../../components/ui/IconButton';
 import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Button } from '../../components/ui/Button';
@@ -15,20 +14,21 @@ import {
   ViewDetailsModal,
   AuthoriseTransferModal,
   RejectTransferModal,
+  CancelPaymentModal,
   paymentBadge,
   fmtAmount,
-  fmtDate,
   initiatorOf,
   hasSignedOrInitiated,
-  isAuthoriseable,
   signaturesLeft,
 } from './paymentModals';
+import { PaymentRowActions } from './PaymentRowActions';
 import type { PaymentRow } from './paymentModals';
 
 type ModalState =
   | { type: 'view'; pc: PaymentRow }
   | { type: 'authorise'; pc: PaymentRow }
   | { type: 'reject'; pc: PaymentRow }
+  | { type: 'cancel'; pc: PaymentRow }
   | null;
 
 export default function PendingAuthorisations() {
@@ -38,6 +38,7 @@ export default function PendingAuthorisations() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState(deepLink || '');
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
   const { identityId } = useAdminIdentity();
   const pageRef = useRef<HTMLDivElement>(null);
@@ -47,8 +48,8 @@ export default function PendingAuthorisations() {
     gsap.fromTo('.stats-grid, .filter-bar, .table-wrap', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.08, ease: 'back.out(1.2)', delay: 0.2 });
   }, { scope: pageRef });
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError('');
     try {
       const res = await paymentApi.getPendingAuthorisations();
@@ -56,7 +57,7 @@ export default function PendingAuthorisations() {
     } catch (err: any) {
       setError(err.message || 'Failed to load pending authorisations');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -74,8 +75,28 @@ export default function PendingAuthorisations() {
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return cases.filter((c) => !q || c.caseId.toLowerCase().includes(q) || (c.accountHolderName ?? '').toLowerCase().includes(q));
-  }, [cases, searchQuery]);
+    const result = cases.filter(
+      (c) =>
+        !q ||
+        c.caseId.toLowerCase().includes(q) ||
+        (c.accountHolderName ?? '').toLowerCase().includes(q)
+    );
+
+    return result.sort((a, b) => {
+      const aBlocked = hasSignedOrInitiated(a, identityId);
+      const bBlocked = hasSignedOrInitiated(b, identityId);
+
+      // Unblocked (actionable / can be authorised) on top, followed by self-signed
+      if (aBlocked !== bBlocked) {
+        return aBlocked ? 1 : -1;
+      }
+
+      // Within each group, sort latest first (updatedAt or createdAt descending)
+      const dateA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const dateB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      return dateB - dateA;
+    });
+  }, [cases, searchQuery, identityId]);
 
   const closeModal = () => setModal(null);
 
@@ -131,6 +152,7 @@ export default function PendingAuthorisations() {
           <table>
             <thead>
               <tr>
+                <th>Payment ID</th>
                 <th>Case ID</th>
                 <th>Beneficiary</th>
                 <th>Amount</th>
@@ -143,45 +165,43 @@ export default function PendingAuthorisations() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="text-center text-gray-500 py-8">
+                  <td colSpan={8} className="text-center text-gray-500 py-8">
                     <Loader2 size={22} className="inline animate-spin" /><span className="ml-2">Loading pending authorisations…</span>
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center text-gray-500 py-8">No pending authorisations in queue.</td>
+                  <td colSpan={8} className="text-center text-gray-500 py-8">No pending authorisations in queue.</td>
                 </tr>
               ) : (
                 filtered.map((pc) => {
                   const initiator = initiatorOf(pc);
-                  const blocked = hasSignedOrInitiated(pc, identityId);
+                  const paymentId = pc.paymentId || `PMT-${pc.caseId}`;
                   return (
-                    <tr key={pc.caseId} className={deepLink === pc.caseId ? 'bg-md-secondary-container/40' : ''}>
-                      <td><CaseIdCell caseId={pc.caseId} onView={() => setModal({ type: 'view', pc })} /></td>
+                    <tr
+                      key={pc.caseId}
+                      className={`row-clickable${deepLink === pc.caseId ? ' bg-md-secondary-container/40' : ''}`}
+                      onClick={() => setModal({ type: 'view', pc })}
+                    >
+                      <td>
+                        <span className="font-mono font-bold text-xs text-md-primary">
+                          {paymentId}
+                        </span>
+                      </td>
+                      <td><CaseIdCell caseId={pc.caseId} /></td>
                       <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
                       <td style={{ fontWeight: 600 }}>{fmtAmount(pc.amount)}</td>
                       <td><span className="meta-text">{pc.currentSignatures}/{pc.requiredSignatures || 1}</span></td>
                       <td><span className="meta-text">{initiator || '—'}</span></td>
                       <td>{paymentBadge(pc.status)}</td>
-                      <td>
-                        <div className="row-actions">
-                          <IconButton title="View Details" onClick={() => setModal({ type: 'view', pc })}>
-                            <Eye size={16} />
-                          </IconButton>
-                          {isAuthoriseable(pc, identityId) && (
-                            <IconButton title="Authorise Transfer" variant="primary" onClick={() => setModal({ type: 'authorise', pc })}>
-                              <PenLine size={16} />
-                            </IconButton>
-                          )}
-                          <IconButton title="Reject Transfer" variant="danger" onClick={() => setModal({ type: 'reject', pc })}>
-                            <XCircle size={16} />
-                          </IconButton>
-                        </div>
-                        {blocked && (
-                          <div className="payment-hint mt-1">
-                            <Fingerprint size={12} /> You cannot authorise a transfer you initiated or previously signed.
-                          </div>
-                        )}
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <PaymentRowActions
+                          pc={pc}
+                          identityId={identityId}
+                          onAction={(type, target) => setModal({ type, pc: target } as ModalState)}
+                          activeMenu={activeMenu}
+                          setActiveMenu={setActiveMenu}
+                        />
                       </td>
                     </tr>
                   );
@@ -200,10 +220,22 @@ export default function PendingAuthorisations() {
       <AuthoriseTransferModal
         pc={modal?.type === 'authorise' ? modal.pc : null}
         onClose={closeModal}
-        onDone={() => { closeModal(); loadData(); }}
+        onDone={() => {
+          closeModal();
+          loadData();
+          // The backend auto-submits AUTHORISED → WAITING_BANK_APPROVAL after
+          // 5s, which removes the case from this queue — refresh so the row
+          // disappears without a manual reload.
+          setTimeout(() => loadData(true), 5500);
+        }}
       />
       <RejectTransferModal
         pc={modal?.type === 'reject' ? modal.pc : null}
+        onClose={closeModal}
+        onDone={() => { closeModal(); loadData(); }}
+      />
+      <CancelPaymentModal
+        pc={modal?.type === 'cancel' ? modal.pc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />

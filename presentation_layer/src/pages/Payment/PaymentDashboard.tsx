@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, DollarSign, User, XCircle, Hourglass, Loader2, Eye, Send, PenLine, RotateCcw, PencilLine, CalendarClock, Download, Ban, BadgeCheck } from 'lucide-react';
+import { Clock, DollarSign, User, XCircle, Hourglass, Loader2, Eye } from 'lucide-react';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { paymentApi } from '../../services/paymentApi';
-import { IconButton } from '../../components/ui/IconButton';
 import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
-import { useNotification } from '../../components/ui/NotificationSystem';
+import { Pagination } from '../../components/ui/Pagination';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import '../LandAcquisition/case_management.css';
 import './payment.css';
@@ -26,15 +25,13 @@ import {
   RequestDetailsUpdateModal,
   ScheduleTomorrowModal,
   ResolveDisputeModal,
-  downloadReceipt,
   paymentBadge,
   fmtAmount,
   fmtDate,
   maskAccount,
   hasBankDetails,
-  isAuthoriseable,
-  PRE_TRANSFER_STATUSES,
 } from './paymentModals';
+import { PaymentRowActions } from './PaymentRowActions';
 import type { PaymentRow } from './paymentModals';
 
 type ModalState =
@@ -57,10 +54,10 @@ export default function PaymentDashboard() {
   const [allCases, setAllCases] = useState<PaymentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const { identityId } = useAdminIdentity();
-  const { notify } = useNotification();
   const containerRef = useRef<HTMLDivElement>(null);
 
   useGSAP(() => {
@@ -68,8 +65,8 @@ export default function PaymentDashboard() {
     gsap.fromTo('.filter-bar, .action-bar, .table-wrap', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, stagger: 0.07, ease: 'power2.out', delay: 0.45 });
   }, { scope: containerRef });
 
-  const loadData = useCallback(async (preservePage = true) => {
-    setLoading(true);
+  const loadData = useCallback(async (preservePage = true, silent = false) => {
+    if (!silent) setLoading(true);
     setError('');
     try {
       const allRes = await paymentApi.getAllCases();
@@ -78,7 +75,7 @@ export default function PaymentDashboard() {
     } catch (err: any) {
       setError(err.message || 'Failed to load payment data');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -87,9 +84,13 @@ export default function PaymentDashboard() {
   }, [loadData]);
 
   const stats = useMemo(() => {
-    const pending = allCases.filter((c) => (c.status === 'Transfer Initiated' || c.status === 'Authorised') && (c.currentSignatures ?? 0) < (c.requiredSignatures ?? 1)).length;
+    const pending = allCases.filter(
+      (c) =>
+        ['Transfer Initiated', 'Authorised'].includes(normalizePaymentStatus(c.status)) &&
+        (c.currentSignatures ?? 0) < (c.requiredSignatures ?? 1)
+    ).length;
     const failed = allCases.filter((c) => normalizePaymentStatus(c.status) === 'Transfer Failed').length;
-    const paid = allCases.filter((c) => c.status === 'Paid').length;
+    const paid = allCases.filter((c) => normalizePaymentStatus(c.status) === 'Paid').length;
     return [
       { label: 'Total Payment Cases', value: allCases.length, change: 'All records', icon: DollarSign },
       { label: 'Pending Authorisations', value: pending, change: 'Requires Action', icon: Hourglass },
@@ -101,7 +102,7 @@ export default function PaymentDashboard() {
   const filteredCases = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return allCases.filter((c) => {
-      const matchesStatus = statusFilter === 'All' || c.status === statusFilter;
+      const matchesStatus = statusFilter === 'All' || normalizePaymentStatus(c.status) === statusFilter;
       const matchesSearch =
         !q ||
         c.caseId.toLowerCase().includes(q) ||
@@ -195,6 +196,7 @@ export default function PaymentDashboard() {
           <table>
             <thead>
               <tr>
+                <th>Payment ID</th>
                 <th>Case ID</th>
                 <th>Beneficiary</th>
                 <th>Bank</th>
@@ -208,14 +210,14 @@ export default function PaymentDashboard() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="text-center text-gray-500 py-8">
+                  <td colSpan={9} className="text-center text-gray-500 py-8">
                     <Loader2 size={22} className="inline animate-spin" />
                     <span className="ml-2">Loading payment records…</span>
                   </td>
                 </tr>
               ) : pageRows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center text-gray-500 py-8">
+                  <td colSpan={9} className="text-center text-gray-500 py-8">
                     {error ? 'Failed to load data.' : 'No payment records match your filters.'}
                   </td>
                 </tr>
@@ -223,13 +225,19 @@ export default function PaymentDashboard() {
                 pageRows.map((pc) => {
                   const needsBank = !hasBankDetails(pc);
                   const openView = () => setModal({ type: 'view', pc });
+                  const paymentId = pc.paymentId || `PMT-${pc.caseId}`;
                   return (
-                    <tr key={pc.caseId}>
-                      <td><CaseIdCell caseId={pc.caseId} onView={openView} /></td>
+                    <tr key={pc.caseId} className="row-clickable" onClick={openView}>
+                      <td>
+                        <span className="font-mono font-bold text-xs text-md-primary">
+                          {paymentId}
+                        </span>
+                      </td>
+                      <td><CaseIdCell caseId={pc.caseId} /></td>
                       <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
                       <td>
                         {pc.bankName ? `${pc.bankName} ${maskAccount(pc.accountNumber)}` : '—'}
-                        {needsBank && (pc.status === 'Approved' || pc.status === 'Bank Details Submitted') && (
+                        {needsBank && ['Offer Accepted', 'Bank Details Submitted'].includes(normalizePaymentStatus(pc.status)) && (
                           <div className="payment-hint mt-1">
                             <Eye size={12} /> Awaiting beneficiary bank details
                           </div>
@@ -239,55 +247,14 @@ export default function PaymentDashboard() {
                       <td><span className="meta-text">{fmtDate(pc.updatedAt || pc.createdAt)}</span></td>
                       <td><span className="meta-text">{pc.currentSignatures}/{pc.requiredSignatures || 1}</span></td>
                       <td>{paymentBadge(pc.status)}</td>
-                      <td>
-                        <div className="row-actions">
-                          <IconButton title="View Details" onClick={openView}>
-                            <Eye size={16} />
-                          </IconButton>
-                          {(pc.status === 'Approved' || pc.status === 'Bank Details Submitted') && hasBankDetails(pc) && (
-                            <IconButton title="Initiate Transfer" variant="primary" onClick={() => setModal({ type: 'initiate', pc })}>
-                              <Send size={16} />
-                            </IconButton>
-                          )}
-                          {isAuthoriseable(pc, identityId) && (
-                            <IconButton title="Authorise Transfer" variant="primary" onClick={() => setModal({ type: 'authorise', pc })}>
-                              <PenLine size={16} />
-                            </IconButton>
-                          )}
-                          {(pc.status === 'Transfer Initiated' || pc.status === 'Authorised') && (
-                            <IconButton title="Reject Transfer" variant="danger" onClick={() => setModal({ type: 'reject', pc })}>
-                              <XCircle size={16} />
-                            </IconButton>
-                          )}
-                          {normalizePaymentStatus(pc.status) === 'Transfer Failed' && (
-                            <>
-                              <IconButton title="Retry Payment" variant="primary" onClick={() => setModal({ type: 'retry', pc })}>
-                                <RotateCcw size={16} />
-                              </IconButton>
-                              <IconButton title="Request Details Update" onClick={() => setModal({ type: 'request-update', pc })}>
-                                <PencilLine size={16} />
-                              </IconButton>
-                              <IconButton title="Schedule Tomorrow" onClick={() => setModal({ type: 'schedule', pc })}>
-                                <CalendarClock size={16} />
-                              </IconButton>
-                            </>
-                          )}
-                          {pc.status === 'Paid' && (
-                            <IconButton title="Download Receipt" variant="primary" onClick={() => downloadReceipt(pc, notify)}>
-                              <Download size={16} />
-                            </IconButton>
-                          )}
-                          {PRE_TRANSFER_STATUSES.includes(pc.status) && (
-                            <IconButton title="Cancel Payment" variant="danger" onClick={() => setModal({ type: 'cancel', pc })}>
-                              <Ban size={16} />
-                            </IconButton>
-                          )}
-                          {pc.status === 'Payment Disputed' && (
-                            <IconButton title="Mark Resolved" variant="primary" onClick={() => setModal({ type: 'resolve-dispute', pc })}>
-                              <BadgeCheck size={16} />
-                            </IconButton>
-                          )}
-                        </div>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <PaymentRowActions
+                          pc={pc}
+                          identityId={identityId}
+                          onAction={(type, target) => setModal({ type, pc: target } as ModalState)}
+                          activeMenu={activeMenu}
+                          setActiveMenu={setActiveMenu}
+                        />
                       </td>
                     </tr>
                   );
@@ -297,17 +264,15 @@ export default function PaymentDashboard() {
           </table>
         </div>
 
-        {!loading && totalCount > ITEMS_PER_PAGE && (
-          <div className="pagination">
-            <div className="info">
-              Showing <strong>{(safePage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(safePage * ITEMS_PER_PAGE, totalCount)}</strong> of <strong>{totalCount}</strong> records
-            </div>
-            <div className="pages">
-              <button disabled={safePage === 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>‹</button>
-              <button className="active">{safePage}</button>
-              <button disabled={safePage * ITEMS_PER_PAGE >= totalCount} onClick={() => setCurrentPage((p) => p + 1)}>›</button>
-            </div>
-          </div>
+        {!loading && (
+          <Pagination
+            currentPage={safePage}
+            totalPages={pageCount}
+            totalCount={totalCount}
+            pageSize={ITEMS_PER_PAGE}
+            onPageChange={setCurrentPage}
+            itemLabel="records"
+          />
         )}
       </div>
 
@@ -325,7 +290,13 @@ export default function PaymentDashboard() {
       <AuthoriseTransferModal
         pc={modal?.type === 'authorise' ? modal.pc : null}
         onClose={closeModal}
-        onDone={() => { closeModal(); loadData(); }}
+        onDone={() => {
+          closeModal();
+          loadData();
+          // The backend auto-submits AUTHORISED → WAITING_BANK_APPROVAL after
+          // 5s; refresh once more so the status flip is visible in the list.
+          setTimeout(() => loadData(true, true), 5500);
+        }}
       />
       <RejectTransferModal
         pc={modal?.type === 'reject' ? modal.pc : null}

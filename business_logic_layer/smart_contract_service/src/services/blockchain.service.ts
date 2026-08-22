@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, BlockchainStatus } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import * as crypto from "crypto";
@@ -21,26 +21,110 @@ const pool = new Pool({ connectionString });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
-export async function publishRecord(caseId: string, documentHash: string) {
-  if (await prisma.blockchainRecord.findUnique({ where: { caseId } }))
-    throw new Error("Record already published for this case");
-  const { transactionHash } = await ethereum.publishToBlockchain(caseId, documentHash);
-  return prisma.blockchainRecord.create({ data: { caseId, documentHash, transactionHash, status: "Published" } });
+// Crockford-style alphabet: no I, O, 0, 1 to avoid look-alikes
+const SHORT_ID_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+/** Short human-readable ledger record id (FCR-XXXXXXXX), stored as the primary key. */
+export function newRecordId(): string {
+  const bytes = crypto.randomBytes(8);
+  let out = "";
+  for (let i = 0; i < 8; i++) {
+    out += SHORT_ID_ALPHABET[bytes[i] % SHORT_ID_ALPHABET.length];
+  }
+  return `FCR-${out}`;
 }
 
-export async function voidRecord(caseId: string, voidReason: string) {
+/**
+ * Publish/void transactions are signed by the ADMIN WALLET in MetaMask (the
+ * frontend sends them via eth_sendTransaction). The backend never signs: it
+ * verifies the supplied transaction hash on the active network (mined,
+ * successful, targeted the CompensationLedger contract) and only then records
+ * it in the database.
+ */
+async function assertRecordedOnChain(transactionHash: string) {
+  const contractAddress = ethereum.getActiveContractAddress();
+  if (!contractAddress) {
+    throw new Error("CONTRACT_ADDRESS not set for the active network — cannot verify the transaction");
+  }
+  const verification = await ethereum.verifyTransactionReceipt(transactionHash);
+  if (!verification.found) {
+    throw new Error("Transaction receipt not found on the active network — it may not be mined yet");
+  }
+  if (!verification.success) {
+    throw new Error("Transaction reverted on chain — nothing was recorded");
+  }
+  if (verification.to !== contractAddress.toLowerCase()) {
+    throw new Error("Transaction did not target the CompensationLedger contract");
+  }
+}
+
+export async function publishRecord(params: {
+  caseId: string;
+  documentHash: string;
+  transactionHash: string;
+}) {
+  const { caseId, documentHash, transactionHash } = params;
+
+  const existing = await prisma.blockchainRecord.findUnique({ where: { caseId } });
+  if (existing) {
+    // Idempotent: re-submitting the same mined transaction (e.g. after a
+    // network blip between on-chain confirmation and this call) returns the
+    // stored record instead of failing.
+    if (existing.transactionHash?.toLowerCase() === transactionHash.toLowerCase()) {
+      return existing;
+    }
+    throw new Error("Record already published for this case");
+  }
+
+  await assertRecordedOnChain(transactionHash);
+
+  return prisma.blockchainRecord.create({
+    data: {
+      id: newRecordId(),
+      caseId,
+      documentHash,
+      transactionHash,
+      status: BlockchainStatus.PUBLISHED,
+    },
+  });
+}
+
+export async function voidRecord(params: {
+  caseId: string;
+  voidReason: string;
+  transactionHash: string;
+}) {
+  const { caseId, voidReason, transactionHash } = params;
+
   const r = await prisma.blockchainRecord.findUnique({ where: { caseId } });
   if (!r) throw new Error("Record not found");
-  if (r.status === "Voided") throw new Error("Record already voided");
-  const { transactionHash } = await ethereum.voidOnBlockchain(caseId, voidReason);
+  if (r.status === BlockchainStatus.VOIDED) throw new Error("Record already voided");
+
+  await assertRecordedOnChain(transactionHash);
+
   return prisma.blockchainRecord.update({
     where: { caseId },
-    data: { status: "Voided", voidReason, voidTransactionHash: transactionHash, voidedAt: new Date() },
+    data: {
+      status: BlockchainStatus.VOIDED,
+      voidReason,
+      voidTransactionHash: transactionHash,
+      voidedAt: new Date(),
+    },
   });
 }
 
 export async function getRecords(status?: string) {
-  return prisma.blockchainRecord.findMany({ where: status ? { status } : {}, orderBy: { createdAt: "desc" } });
+  let enumStatus: BlockchainStatus | undefined;
+  if (status) {
+    const s = status.toUpperCase().replace(/\s+/g, "_");
+    if (s in BlockchainStatus) {
+      enumStatus = s as BlockchainStatus;
+    }
+  }
+  return prisma.blockchainRecord.findMany({
+    where: enumStatus ? { status: enumStatus } : {},
+    orderBy: { createdAt: "desc" },
+  });
 }
 
 export async function getRecord(caseId: string) {

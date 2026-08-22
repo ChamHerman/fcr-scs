@@ -1,8 +1,6 @@
 /* ============================================================
    FCR-SCS · Payments & Blockchain module styles
-   PLAN_HM_1308 §4 — status badges are payment/blockchain-specific.
-   Deliberately does NOT reuse case-management badge classes.
-   Import this file from every redesigned payment/blockchain page.
+   PLAN_HM_1308 §4 & DESIGN.md — 15 Unique High-Contrast Status Palettes
    ============================================================ */
 
 /* ---- Status badges (payment + blockchain) ---- */
@@ -15,6 +13,7 @@
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
+  letter-spacing: 0.2px;
 }
 .payment-badge .dot {
   width: 8px;
@@ -22,55 +21,280 @@
   border-radius: 50%;
   flex-shrink: 0;
 }
-/* Paid / Published / Confirmed */
-.payment-badge.approved {
-  background: #e6f4ea;
-  color: #1e7b4a;
+
+/* 1. Offer Accepted (Payment Starting State - Teal) */
+.payment-badge.status-offer-accepted {
+  background: #E0F2F1;
+  color: #00695C;
 }
-.payment-badge.approved .dot {
-  background: #1e7b4a;
+.payment-badge.status-offer-accepted .dot {
+  background: #00897B;
 }
-/* Pre-transfer / in-flight states */
-.payment-badge.pending {
-  background: #fef7e0;
-  color: #8d6e00;
+.dark .payment-badge.status-offer-accepted {
+  background: rgba(0, 137, 123, 0.22);
+  color: #80CBC4;
 }
-.payment-badge.pending .dot {
-  background: #8d6e00;
+.dark .payment-badge.status-offer-accepted .dot {
+  background: #4DB6AC;
 }
-/* Transfer Failed / Transfer Rejected / Voided */
-.payment-badge.rejected {
-  background: #fce8e6;
-  color: #b3261e;
+
+/* 2. Bank Details Submitted (Cyan / Azure) */
+.payment-badge.status-bank-submitted {
+  background: #E0F7FA;
+  color: #006064;
 }
-.payment-badge.rejected .dot {
-  background: #b3261e;
+.payment-badge.status-bank-submitted .dot {
+  background: #00ACC1;
 }
-/* Payment Disputed */
-.payment-badge.error {
-  background: #fdecea;
-  color: #b3261e;
-  box-shadow: inset 0 0 0 1px rgba(179, 38, 30, 0.35);
+.dark .payment-badge.status-bank-submitted {
+  background: rgba(0, 172, 193, 0.22);
+  color: #80DEEA;
 }
-.payment-badge.error .dot {
-  background: #b3261e;
+.dark .payment-badge.status-bank-submitted .dot {
+  background: #4DD0E1;
 }
-/* CANCELLED */
-.payment-badge.cancelled {
-  background: #f1f5f9;
+
+/* 3. Transfer Initiated (In-flight Multi-sig - Amber) */
+.payment-badge.status-transfer-initiated {
+  background: #FFF8E1;
+  color: #8D6E00;
+}
+.payment-badge.status-transfer-initiated .dot {
+  background: #FFA000;
+}
+.dark .payment-badge.status-transfer-initiated {
+  background: rgba(255, 160, 0, 0.20);
+  color: #FFE082;
+}
+.dark .payment-badge.status-transfer-initiated .dot {
+  background: #FFD54F;
+}
+
+/* 4. Authorised (Fully Signed / Cleared for Disbursal - Indigo) */
+.payment-badge.status-authorised {
+  background: #EDE7F6;
+  color: #4527A0;
+}
+.payment-badge.status-authorised .dot {
+  background: #6750A4;
+}
+.dark .payment-badge.status-authorised {
+  background: rgba(103, 80, 164, 0.25);
+  color: #D0BCFF;
+}
+.dark .payment-badge.status-authorised .dot {
+  background: #B39DDB;
+}
+
+/* 4b. Waiting Bank Approval (Submitted to the Bank Queue - Blue) */
+.payment-badge.status-waiting-bank {
+  background: #E3F2FD;
+  color: #0D47A1;
+}
+.payment-badge.status-waiting-bank .dot {
+  background: #1976D2;
+}
+.dark .payment-badge.status-waiting-bank {
+  background: rgba(25, 118, 210, 0.22);
+  color: #90CAF9;
+}
+.dark .payment-badge.status-waiting-bank .dot {
+  background: #64B5F6;
+}
+
+/* 5. Paid (Successfully Disbursed with Receipt - Emerald) */
+.payment-badge.status-paid {
+  background: #E8F5E9;
+  color: #1B5E20;
+}
+.payment-badge.status-paid .dot {
+  background: #2E7D32;
+}
+.dark .payment-badge.status-paid {
+  background: rgba(46, 125, 50, 0.22);
+  color: #A5D6A7;
+}
+.dark .payment-badge.status-paid .dot {
+  background: #81C784;
+}
+
+/* 6. Transfer Failed (Bank Rejection / Error - Bright Red) */
+.payment-badge.status-transfer-failed {
+  background: #FFEBEE;
+  color: #B71C1C;
+}
+.payment-badge.status-transfer-failed .dot {
+  background: #C62828;
+}
+.dark .payment-badge.status-transfer-failed {
+  background: rgba(198, 40, 40, 0.25);
+  color: #FFCDD2;
+}
+.dark .payment-badge.status-transfer-failed .dot {
+  background: #E57373;
+}
+
+/* 7. Transfer Rejected (Admin Rejected during Authorisation - Rose Wine) */
+.payment-badge.status-transfer-rejected {
+  background: #FCE4EC;
+  color: #880E4F;
+  box-shadow: inset 0 0 0 1px rgba(173, 20, 87, 0.25);
+}
+.payment-badge.status-transfer-rejected .dot {
+  background: #AD1457;
+}
+.dark .payment-badge.status-transfer-rejected {
+  background: rgba(173, 20, 87, 0.25);
+  color: #F8BBD0;
+  box-shadow: inset 0 0 0 1px rgba(240, 98, 146, 0.35);
+}
+.dark .payment-badge.status-transfer-rejected .dot {
+  background: #F06292;
+}
+
+/* 8. Cancelled (Pre-transfer Cancellation - Slate) */
+.payment-badge.status-cancelled {
+  background: #F1F5F9;
   color: #475569;
 }
-.payment-badge.cancelled .dot {
-  background: #475569;
+.payment-badge.status-cancelled .dot {
+  background: #64748B;
 }
-/* Ready to Publish (blockchain) */
-.payment-badge.info {
-  background: #e0f2fe;
+.dark .payment-badge.status-cancelled {
+  background: rgba(100, 116, 139, 0.25);
+  color: #CBD5E1;
+}
+.dark .payment-badge.status-cancelled .dot {
+  background: #94A3B8;
+}
+
+/* 9. Payment Disputed (Formal Dispute - Warm Orange) */
+.payment-badge.status-payment-disputed {
+  background: #FFF3E0;
+  color: #BF360C;
+  box-shadow: inset 0 0 0 1px rgba(230, 81, 0, 0.3);
+}
+.payment-badge.status-payment-disputed .dot {
+  background: #E65100;
+}
+.dark .payment-badge.status-payment-disputed {
+  background: rgba(230, 81, 0, 0.25);
+  color: #FFE0B2;
+  box-shadow: inset 0 0 0 1px rgba(255, 183, 77, 0.4);
+}
+.dark .payment-badge.status-payment-disputed .dot {
+  background: #FFB74D;
+}
+
+/* 10. Scheduled (Future Batch Clearing - Blue-Grey) */
+.payment-badge.status-scheduled {
+  background: #ECEFF1;
+  color: #37474F;
+}
+.payment-badge.status-scheduled .dot {
+  background: #546E7A;
+}
+.dark .payment-badge.status-scheduled {
+  background: rgba(84, 110, 122, 0.25);
+  color: #CFD8DC;
+}
+.dark .payment-badge.status-scheduled .dot {
+  background: #90A4AE;
+}
+
+/* 11. Pending New Bank Details (Warm Honey) */
+.payment-badge.status-pending-details {
+  background: #FEF9C3;
+  color: #854D0E;
+}
+.payment-badge.status-pending-details .dot {
+  background: #CA8A04;
+}
+.dark .payment-badge.status-pending-details {
+  background: rgba(202, 138, 4, 0.22);
+  color: #FEF08A;
+}
+.dark .payment-badge.status-pending-details .dot {
+  background: #FACC15;
+}
+
+/* 12. Ready to Publish (Blockchain Queue - Electric Sky) */
+.payment-badge.status-ready-publish {
+  background: #E0F2FE;
   color: #075985;
 }
-.payment-badge.info .dot {
-  background: #075985;
+.payment-badge.status-ready-publish .dot {
+  background: #0284C7;
 }
+.dark .payment-badge.status-ready-publish {
+  background: rgba(2, 132, 199, 0.22);
+  color: #7DD3FC;
+}
+.dark .payment-badge.status-ready-publish .dot {
+  background: #38BDF8;
+}
+
+/* 13. Published (On-Chain Confirmed - Mint Green) */
+.payment-badge.status-published {
+  background: #DCFCE7;
+  color: #166534;
+}
+.payment-badge.status-published .dot {
+  background: #16A34A;
+}
+.dark .payment-badge.status-published {
+  background: rgba(22, 163, 74, 0.22);
+  color: #86EFAC;
+}
+.dark .payment-badge.status-published .dot {
+  background: #4ADE80;
+}
+
+/* 14. Voided (On-Chain Revoked - Deep Crimson) */
+.payment-badge.status-voided {
+  background: #FFE4E6;
+  color: #9F1239;
+}
+.payment-badge.status-voided .dot {
+  background: #E11D48;
+}
+.dark .payment-badge.status-voided {
+  background: rgba(225, 29, 72, 0.25);
+  color: #FECDD3;
+}
+.dark .payment-badge.status-voided .dot {
+  background: #FB7185;
+}
+
+/* 15. Replacement (Successor Certificate - Purple Lilac) */
+.payment-badge.status-replacement {
+  background: #F3E8FF;
+  color: #6B21A8;
+}
+.payment-badge.status-replacement .dot {
+  background: #9333EA;
+}
+.dark .payment-badge.status-replacement {
+  background: rgba(147, 51, 234, 0.25);
+  color: #E9D5FF;
+}
+.dark .payment-badge.status-replacement .dot {
+  background: #C084FC;
+}
+
+/* Backward-compatible aliases */
+.payment-badge.approved { background: #E8F5E9; color: #1B5E20; }
+.payment-badge.approved .dot { background: #2E7D32; }
+.payment-badge.pending { background: #FFF8E1; color: #8D6E00; }
+.payment-badge.pending .dot { background: #FFA000; }
+.payment-badge.rejected { background: #FFEBEE; color: #B71C1C; }
+.payment-badge.rejected .dot { background: #C62828; }
+.payment-badge.error { background: #FFF3E0; color: #BF360C; }
+.payment-badge.error .dot { background: #E65100; }
+.payment-badge.cancelled { background: #F1F5F9; color: #475569; }
+.payment-badge.cancelled .dot { background: #64748B; }
+.payment-badge.info { background: #E0F2FE; color: #075985; }
+.payment-badge.info .dot { background: #0284C7; }
 
 /* ---- Queue hint under a row ---- */
 .payment-hint {
@@ -134,7 +358,7 @@
 .row-actions {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 8px;
   white-space: nowrap;
 }
 
