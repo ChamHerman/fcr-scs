@@ -44,11 +44,18 @@ import blockchainRoutes from "./smart_contract_service/src/routes/blockchain.rou
 import landAcquisitionRoutes from "./land_acquisition_service/src/routes/land-acquisition.routes";
 import compensationRoutes from "./compensation_management_service/src/routes/compensation.routes";
 import reportRoutes from "./reporting_service/src/routes/report.routes";
+import userRoutes from "./user_management_service/src/routes/user.routes";
+import emailTemplateRoutes from "./user_management_service/src/routes/email-template.routes";
+
+import { enforcePageAccess } from "./user_management_service/src/middleware/auth.middleware";
 
 export const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+// Global RBAC enforcement for page access
+app.use(enforcePageAccess);
 
 // Health Check
 app.get("/health", (req, res) => {
@@ -66,6 +73,8 @@ app.use("/api/smart-contract", blockchainRoutes);
 app.use("/api/land-acquisition", landAcquisitionRoutes);
 app.use("/api/compensation", compensationRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/email-templates", emailTemplateRoutes);
 
 if (process.env.NODE_ENV !== "test") {
   app.listen(PORT, () => {

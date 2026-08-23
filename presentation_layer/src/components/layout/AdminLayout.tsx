@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import {
@@ -13,6 +13,7 @@ import {
   ChevronDown,
   ChevronUp,
   Users,
+  Shield,
   FileText,
   PieChart,
   Settings,
@@ -28,13 +29,16 @@ import {
   PenLine,
   AlertTriangle,
   Upload,
-  Ban
+  Ban,
+  LogOut
 } from 'lucide-react';
-import { IdentitySwitcher } from '../admin/IdentitySwitcher';
+import { useAuth } from '../../context/AuthContext';
 
 export const AdminLayout: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { logout, allowedPages } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [financeExpanded, setFinanceExpanded] = useState(false);
   const [landAcquisitionExpanded, setLandAcquisitionExpanded] = useState(false);
@@ -308,18 +312,24 @@ export const AdminLayout: React.FC = () => {
           <nav className="admin-sidebar-nav">
             <div className="nav-section">
               {!isCollapsed && <span className="nav-label">Main</span>}
-              <NavLink to="/admin" end className="nav-item" title={isCollapsed ? "Dashboard" : ""}>
-                <LayoutDashboard size={22} className="nav-icon" />
-                {!isCollapsed && <span>Dashboard</span>}
-              </NavLink>
-              <NavLink to="/admin/valuers" className="nav-item" title={isCollapsed ? "Valuers" : ""}>
-                <Users size={22} className="nav-icon" />
-                {!isCollapsed && <span>Valuers</span>}
-              </NavLink>
-              <NavLink to="/admin/forms" className="nav-item" title={isCollapsed ? "Forms" : ""}>
-                <FileText size={22} className="nav-icon" />
-                {!isCollapsed && <span>Forms</span>}
-              </NavLink>
+              {(allowedPages.includes('*') || allowedPages.includes('/admin')) && (
+                <NavLink to="/admin" end className="nav-item" title={isCollapsed ? "Dashboard" : ""}>
+                  <LayoutDashboard size={22} className="nav-icon" />
+                  {!isCollapsed && <span>Dashboard</span>}
+                </NavLink>
+              )}
+              {(allowedPages.includes('*') || allowedPages.includes('/admin/valuers')) && (
+                <NavLink to="/admin/valuers" className="nav-item" title={isCollapsed ? "Valuers" : ""}>
+                  <Users size={22} className="nav-icon" />
+                  {!isCollapsed && <span>Valuers</span>}
+                </NavLink>
+              )}
+              {(allowedPages.includes('*') || allowedPages.includes('/admin/forms')) && (
+                <NavLink to="/admin/forms" className="nav-item" title={isCollapsed ? "Forms" : ""}>
+                  <FileText size={22} className="nav-icon" />
+                  {!isCollapsed && <span>Forms</span>}
+                </NavLink>
+              )}
             </div>
 
             <div className="nav-section">
@@ -332,14 +342,18 @@ export const AdminLayout: React.FC = () => {
               {isCollapsed && <div style={{ height: 16 }} />}
               {(landAcquisitionExpanded || isCollapsed) && (
                 <>
-                  <NavLink to="/admin/case" end className="nav-item" title={isCollapsed ? "Cases" : ""}>
-                    <Map size={22} className="nav-icon" />
-                    {!isCollapsed && <span>Cases Dashboard</span>}
-                  </NavLink>
-                  <NavLink to="/admin/case/valuation" className="nav-item" title={isCollapsed ? "Valuation" : ""}>
-                    <BarChart2 size={22} className="nav-icon" />
-                    {!isCollapsed && <span>Valuation</span>}
-                  </NavLink>
+                  {(allowedPages.includes('*') || allowedPages.includes('/admin/case')) && (
+                    <NavLink to="/admin/case" end className="nav-item" title={isCollapsed ? "Cases" : ""}>
+                      <Map size={22} className="nav-icon" />
+                      {!isCollapsed && <span>Cases Dashboard</span>}
+                    </NavLink>
+                  )}
+                  {(allowedPages.includes('*') || allowedPages.includes('/admin/case/valuation')) && (
+                    <NavLink to="/admin/case/valuation" className="nav-item" title={isCollapsed ? "Valuation" : ""}>
+                      <BarChart2 size={22} className="nav-icon" />
+                      {!isCollapsed && <span>Valuation</span>}
+                    </NavLink>
+                  )}
                 </>
               )}
             </div>
@@ -354,22 +368,30 @@ export const AdminLayout: React.FC = () => {
               {isCollapsed && <div style={{ height: 16 }} />}
               {(compensationExpanded || isCollapsed) && (
                 <>
-                  <NavLink to="/admin/compensation/report" className="nav-item" title={isCollapsed ? "Report" : ""}>
-                    <ClipboardList size={22} className="nav-icon" />
-                    {!isCollapsed && <span>Report</span>}
-                  </NavLink>
-                  <NavLink to="/admin/compensation/compare" className="nav-item" title={isCollapsed ? "Compare" : ""}>
-                    <Scale size={22} className="nav-icon" />
-                    {!isCollapsed && <span>Compare</span>}
-                  </NavLink>
-                  <NavLink to="/admin/compensation/offer" className="nav-item" title={isCollapsed ? "Offer" : ""}>
-                    <Mail size={22} className="nav-icon" />
-                    {!isCollapsed && <span>Offer</span>}
-                  </NavLink>
-                  <NavLink to="/admin/compensation/objection" className="nav-item" title={isCollapsed ? "Objection" : ""}>
-                    <FolderOpen size={22} className="nav-icon" />
-                    {!isCollapsed && <span>Objection</span>}
-                  </NavLink>
+                  {(allowedPages.includes('*') || allowedPages.includes('/admin/compensation/report')) && (
+                    <NavLink to="/admin/compensation/report" className="nav-item" title={isCollapsed ? "Report" : ""}>
+                      <ClipboardList size={22} className="nav-icon" />
+                      {!isCollapsed && <span>Report</span>}
+                    </NavLink>
+                  )}
+                  {(allowedPages.includes('*') || allowedPages.includes('/admin/compensation/compare')) && (
+                    <NavLink to="/admin/compensation/compare" className="nav-item" title={isCollapsed ? "Compare" : ""}>
+                      <Scale size={22} className="nav-icon" />
+                      {!isCollapsed && <span>Compare</span>}
+                    </NavLink>
+                  )}
+                  {(allowedPages.includes('*') || allowedPages.includes('/admin/compensation/offer')) && (
+                    <NavLink to="/admin/compensation/offer" className="nav-item" title={isCollapsed ? "Offer" : ""}>
+                      <Mail size={22} className="nav-icon" />
+                      {!isCollapsed && <span>Offer</span>}
+                    </NavLink>
+                  )}
+                  {(allowedPages.includes('*') || allowedPages.includes('/admin/compensation/objection')) && (
+                    <NavLink to="/admin/compensation/objection" className="nav-item" title={isCollapsed ? "Objection" : ""}>
+                      <FolderOpen size={22} className="nav-icon" />
+                      {!isCollapsed && <span>Objection</span>}
+                    </NavLink>
+                  )}
                 </>
               )}
             </div>
@@ -384,44 +406,60 @@ export const AdminLayout: React.FC = () => {
               {isCollapsed && <div style={{ height: 16 }} />}
               {(financeExpanded || isCollapsed) && (
                 <>
-                  <NavLink to="/admin/payment" end className="nav-item" title={isCollapsed ? "Payments Overview" : ""}>
-                    <CreditCard size={22} className="nav-icon" />
-                    {!isCollapsed && <span>Payments Overview</span>}
-                  </NavLink>
-                  <NavLink to="/admin/payment/initiate" className="nav-item" title={isCollapsed ? "Initiate" : ""}>
-                    <Send size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
-                    {!isCollapsed && <span>Initiate</span>}
-                  </NavLink>
-                  <NavLink to="/admin/payment/pending" className="nav-item" title={isCollapsed ? "Pending Authorisations" : ""}>
-                    <PenLine size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
-                    {!isCollapsed && <span>Pending Authorisations</span>}
-                  </NavLink>
-                  <NavLink to="/admin/payment/failed" className="nav-item" title={isCollapsed ? "Failed Transactions" : ""}>
-                    <AlertTriangle size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
-                    {!isCollapsed && <span>Failed Transactions</span>}
-                  </NavLink>
-                  <NavLink to="/admin/blockchain" end className="nav-item" title={isCollapsed ? "Blockchain Overview" : ""}>
-                    <LinkIcon size={22} className="nav-icon" />
-                    {!isCollapsed && <span>Blockchain Overview</span>}
-                  </NavLink>
-                  <NavLink to="/admin/blockchain/publish" className="nav-item" title={isCollapsed ? "Publish" : ""}>
-                    <Upload size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
-                    {!isCollapsed && <span>Publish</span>}
-                  </NavLink>
-                  <NavLink to="/admin/blockchain/void" className="nav-item" title={isCollapsed ? "Void" : ""}>
-                    <Ban size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
-                    {!isCollapsed && <span>Void</span>}
-                  </NavLink>
+                  {(allowedPages.includes('*') || allowedPages.includes('/admin/payment')) && (
+                    <NavLink to="/admin/payment" end className="nav-item" title={isCollapsed ? "Payments Overview" : ""}>
+                      <CreditCard size={22} className="nav-icon" />
+                      {!isCollapsed && <span>Payments Overview</span>}
+                    </NavLink>
+                  )}
+                  {(allowedPages.includes('*') || allowedPages.includes('/admin/payment/initiate')) && (
+                    <NavLink to="/admin/payment/initiate" className="nav-item" title={isCollapsed ? "Initiate" : ""}>
+                      <Send size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                      {!isCollapsed && <span>Initiate</span>}
+                    </NavLink>
+                  )}
+                  {(allowedPages.includes('*') || allowedPages.includes('/admin/payment/pending')) && (
+                    <NavLink to="/admin/payment/pending" className="nav-item" title={isCollapsed ? "Pending Authorisations" : ""}>
+                      <PenLine size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                      {!isCollapsed && <span>Pending Authorisations</span>}
+                    </NavLink>
+                  )}
+                  {(allowedPages.includes('*') || allowedPages.includes('/admin/payment/failed')) && (
+                    <NavLink to="/admin/payment/failed" className="nav-item" title={isCollapsed ? "Failed Transactions" : ""}>
+                      <AlertTriangle size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                      {!isCollapsed && <span>Failed Transactions</span>}
+                    </NavLink>
+                  )}
+                  {(allowedPages.includes('*') || allowedPages.includes('/admin/blockchain')) && (
+                    <NavLink to="/admin/blockchain" end className="nav-item" title={isCollapsed ? "Blockchain Overview" : ""}>
+                      <LinkIcon size={22} className="nav-icon" />
+                      {!isCollapsed && <span>Blockchain Overview</span>}
+                    </NavLink>
+                  )}
+                  {(allowedPages.includes('*') || allowedPages.includes('/admin/blockchain/publish')) && (
+                    <NavLink to="/admin/blockchain/publish" className="nav-item" title={isCollapsed ? "Publish" : ""}>
+                      <Upload size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                      {!isCollapsed && <span>Publish</span>}
+                    </NavLink>
+                  )}
+                  {(allowedPages.includes('*') || allowedPages.includes('/admin/blockchain/void')) && (
+                    <NavLink to="/admin/blockchain/void" className="nav-item" title={isCollapsed ? "Void" : ""}>
+                      <Ban size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                      {!isCollapsed && <span>Void</span>}
+                    </NavLink>
+                  )}
                 </>
               )}
             </div>
 
             <div className="nav-section">
               {!isCollapsed && <span className="nav-label">AI Features</span>}
-              <NavLink to="/admin/prediction" className="nav-item" title={isCollapsed ? "AI Valuation" : ""}>
-                <BrainCircuit size={22} className="nav-icon" />
-                {!isCollapsed && <span>AI Valuation</span>}
-              </NavLink>
+              {(allowedPages.includes('*') || allowedPages.includes('/admin/prediction')) && (
+                <NavLink to="/admin/prediction" className="nav-item" title={isCollapsed ? "AI Valuation" : ""}>
+                  <BrainCircuit size={22} className="nav-icon" />
+                  {!isCollapsed && <span>AI Valuation</span>}
+                </NavLink>
+              )}
             </div>
 
             <div className="nav-section">
@@ -434,48 +472,72 @@ export const AdminLayout: React.FC = () => {
               {isCollapsed && <div style={{ height: 16 }} />}
               {(reportsExpanded || isCollapsed) && (
                 <>
-                  <NavLink to="/admin/reports" end className="nav-item" title={isCollapsed ? "Overview" : ""}>
-                    <PieChart size={22} className="nav-icon" />
-                    {!isCollapsed && <span>Overview</span>}
-                  </NavLink>
-                  <NavLink to="/admin/reports/case-status" className="nav-item" title={isCollapsed ? "Case Status" : ""}>
-                    <FileText size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
-                    {!isCollapsed && <span>Case Status</span>}
-                  </NavLink>
-                  <NavLink to="/admin/reports/payment" className="nav-item" title={isCollapsed ? "Payment" : ""}>
-                    <FileText size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
-                    {!isCollapsed && <span>Payment</span>}
-                  </NavLink>
-                  <NavLink to="/admin/reports/blockchain-audit" className="nav-item" title={isCollapsed ? "Blockchain Audit" : ""}>
-                    <FileText size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
-                    {!isCollapsed && <span>Blockchain Audit</span>}
-                  </NavLink>
+                  {(allowedPages.includes('*') || allowedPages.includes('/admin/reports')) && (
+                    <NavLink to="/admin/reports" end className="nav-item" title={isCollapsed ? "Overview" : ""}>
+                      <PieChart size={22} className="nav-icon" />
+                      {!isCollapsed && <span>Overview</span>}
+                    </NavLink>
+                  )}
+                  {(allowedPages.includes('*') || allowedPages.includes('/admin/reports/case-status')) && (
+                    <NavLink to="/admin/reports/case-status" className="nav-item" title={isCollapsed ? "Case Status" : ""}>
+                      <FileText size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                      {!isCollapsed && <span>Case Status</span>}
+                    </NavLink>
+                  )}
+                  {(allowedPages.includes('*') || allowedPages.includes('/admin/reports/payment')) && (
+                    <NavLink to="/admin/reports/payment" className="nav-item" title={isCollapsed ? "Payment" : ""}>
+                      <FileText size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                      {!isCollapsed && <span>Payment</span>}
+                    </NavLink>
+                  )}
+                  {(allowedPages.includes('*') || allowedPages.includes('/admin/reports/blockchain-audit')) && (
+                    <NavLink to="/admin/reports/blockchain-audit" className="nav-item" title={isCollapsed ? "Blockchain Audit" : ""}>
+                      <FileText size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                      {!isCollapsed && <span>Blockchain Audit</span>}
+                    </NavLink>
+                  )}
                 </>
               )}
             </div>
 
             <div className="nav-section">
               {!isCollapsed && <span className="nav-label">System</span>}
-              <NavLink to="/admin/profile" className="nav-item" title={isCollapsed ? "Profile" : ""}>
-                <Users size={22} className="nav-icon" />
-                {!isCollapsed && <span>My Profile</span>}
-              </NavLink>
-              <NavLink to="/admin/users" className="nav-item" title={isCollapsed ? "User Admin" : ""}>
-                <Users size={22} className="nav-icon" />
-                {!isCollapsed && <span>User Admin</span>}
-              </NavLink>
-              <NavLink to="/admin/audit-logs" className="nav-item" title={isCollapsed ? "Audit Logs" : ""}>
-                <ClipboardList size={22} className="nav-icon" />
-                {!isCollapsed && <span>Audit Logs</span>}
-              </NavLink>
-              <NavLink to="/admin/alerts" className="nav-item" title={isCollapsed ? "Alerts" : ""}>
-                <Sparkles size={22} className="nav-icon" />
-                {!isCollapsed && <span>Alerts</span>}
-              </NavLink>
-              <NavLink to="/admin/settings" className="nav-item" title={isCollapsed ? "Settings" : ""}>
-                <Settings size={22} className="nav-icon" />
-                {!isCollapsed && <span>Settings</span>}
-              </NavLink>
+              {(allowedPages.includes('*') || allowedPages.includes('/admin/profile')) && (
+                <NavLink to="/admin/profile" className="nav-item" title={isCollapsed ? "Profile" : ""}>
+                  <Users size={22} className="nav-icon" />
+                  {!isCollapsed && <span>My Profile</span>}
+                </NavLink>
+              )}
+              {(allowedPages.includes('*') || allowedPages.includes('/admin/users')) && (
+                <NavLink to="/admin/users" className="nav-item" title={isCollapsed ? "User Admin" : ""}>
+                  <Users size={22} className="nav-icon" />
+                  {!isCollapsed && <span>User Admin</span>}
+                </NavLink>
+              )}
+              {(allowedPages.includes('*') || allowedPages.includes('/admin/role-management')) && (
+                <NavLink to="/admin/role-management" className="nav-item" title={isCollapsed ? "Role Management" : ""}>
+                  <Shield size={22} className="nav-icon" />
+                  {!isCollapsed && <span>Role Management</span>}
+                </NavLink>
+              )}
+              {(allowedPages.includes('*') || allowedPages.includes('/admin/audit-logs')) && (
+                <NavLink to="/admin/audit-logs" className="nav-item" title={isCollapsed ? "Audit Logs" : ""}>
+                  <ClipboardList size={22} className="nav-icon" />
+                  {!isCollapsed && <span>Audit Logs</span>}
+                </NavLink>
+              )}
+              {(allowedPages.includes('*') || allowedPages.includes('/admin/alerts')) && (
+                <NavLink to="/admin/alerts" className="nav-item" title={isCollapsed ? "Alerts" : ""}>
+                  <Sparkles size={22} className="nav-icon" />
+                  {!isCollapsed && <span>Alerts</span>}
+                </NavLink>
+              )}
+              {(allowedPages.includes('*') || allowedPages.includes('/admin/settings')) && (
+                <NavLink to="/admin/settings" className="nav-item" title={isCollapsed ? "Settings" : ""}>
+                  <Settings size={22} className="nav-icon" />
+                  {!isCollapsed && <span>Settings</span>}
+                </NavLink>
+              )}
             </div>
 
             <div style={{ flex: 1 }} />
@@ -497,38 +559,33 @@ export const AdminLayout: React.FC = () => {
                 {isDark ? <Sun size={22} className="nav-icon" /> : <Moon size={22} className="nav-icon" />}
                 {!isCollapsed && <span>{isDark ? 'Light Mode' : 'Dark Mode'}</span>}
               </button>
+
+              <button
+                type="button"
+                className="nav-item"
+                onClick={() => {
+                  logout();
+                  navigate('/login');
+                }}
+                style={{
+                  cursor: 'pointer',
+                  justifyContent: isCollapsed ? 'center' : 'flex-start',
+                  width: '100%',
+                  background: 'transparent',
+                  border: 'none',
+                  textAlign: 'left',
+                  marginTop: '8px',
+                  color: '#ef4444'
+                }}
+              >
+                <LogOut size={22} className="nav-icon" style={{ opacity: 1 }} />
+                {!isCollapsed && <span>Logout</span>}
+              </button>
             </div>
           </nav>
         </aside>
 
         <main className="admin-main">
-          <div
-            className="admin-identity-bar"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              padding: '10px 32px',
-              borderBottom: '1px solid rgba(121,116,126,0.1)',
-              background: 'var(--md-surface-container)',
-            }}
-          >
-            <span
-              className="dev-tag"
-              style={{
-                fontSize: '10px',
-                fontWeight: 700,
-                letterSpacing: '0.6px',
-                textTransform: 'uppercase',
-                color: 'var(--md-on-surface-variant)',
-                opacity: 0.6,
-                marginRight: '10px',
-              }}
-            >
-              Dev Simulation
-            </span>
-            <IdentitySwitcher />
-          </div>
           <div className="admin-content">
             <Outlet />
           </div>

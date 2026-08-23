@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import classNames from 'classnames';
+import { Eye, EyeOff } from 'lucide-react';
 
 // --- MD3 Button ---
 export interface MD3ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -50,17 +51,22 @@ export interface MD3InputProps extends React.InputHTMLAttributes<HTMLInputElemen
   error?: string;
 }
 
-export const MD3Input: React.FC<MD3InputProps> = ({ label, error, className, id, ...props }) => {
+export const MD3Input: React.FC<MD3InputProps> = ({ label, error, className, id, type, ...props }) => {
   const inputId = id || label.replace(/\s+/g, '-').toLowerCase();
+  const [showPassword, setShowPassword] = useState(false);
+  const isPasswordType = type === 'password';
+  const currentType = isPasswordType ? (showPassword ? 'text' : 'password') : type;
   
   return (
     <div className={classNames("relative flex flex-col", className)}>
       <div className="relative group">
         <input
           id={inputId}
+          type={currentType}
           className={classNames(
             "peer w-full h-14 px-4 pt-4 pb-1 text-md-on-surface bg-md-surface-container-low rounded-t-xl rounded-b-none border-b-2 outline-none transition-colors duration-200 focus:border-md-primary placeholder-transparent",
-            error ? "border-md-error focus:border-md-error" : "border-md-outline"
+            error ? "border-md-error focus:border-md-error" : "border-md-outline",
+            isPasswordType ? "pr-12" : ""
           )}
           placeholder={label}
           {...props}
@@ -74,6 +80,15 @@ export const MD3Input: React.FC<MD3InputProps> = ({ label, error, className, id,
         >
           {label}
         </label>
+        {isPasswordType && (
+          <button
+            type="button"
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-md-on-surface-variant hover:text-md-primary transition-colors focus:outline-none"
+            onClick={() => setShowPassword(!showPassword)}
+          >
+            {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+          </button>
+        )}
       </div>
       {error && <span className="text-xs text-md-error mt-1 px-4">{error}</span>}
     </div>

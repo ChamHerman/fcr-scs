@@ -1,29 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MD3Button, MD3Input, MD3Card, MD3BlurBackground } from '../MD3Components';
-import { Mail, ArrowLeft, AlertCircle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Lock, ArrowLeft, AlertCircle, CheckCircle } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { authService } from '../../services/auth.service';
 
-export const ForgotPassword: React.FC = () => {
-  const [email, setEmail] = useState('');
+export const ResetPassword: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
+  useEffect(() => {
+    if (!token) {
+      setError('Invalid or missing reset token.');
+    }
+  }, [token]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    if (!token) {
+      setError('Invalid or missing reset token.');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      await authService.forgotPassword(email);
+      await authService.resetPassword(token, newPassword);
       setSubmitted(true);
     } catch (err: any) {
       if (err.response && err.response.data && err.response.data.error) {
         setError(err.response.data.error);
       } else {
-        setError('Failed to request password reset. Please try again later.');
+        setError('Failed to reset password. The link might be expired.');
       }
     } finally {
       setIsLoading(false);
@@ -42,8 +62,8 @@ export const ForgotPassword: React.FC = () => {
         {!submitted ? (
           <>
             <div className="mb-8">
-              <h1 className="text-3xl font-medium text-md-on-surface mb-2">Reset Password</h1>
-              <p className="text-md-on-surface-variant">Enter your registered email address and we'll send you a secure reset link.</p>
+              <h1 className="text-3xl font-medium text-md-on-surface mb-2">Create New Password</h1>
+              <p className="text-md-on-surface-variant">Your new password must be different from previously used passwords.</p>
             </div>
 
             {error && (
@@ -55,28 +75,35 @@ export const ForgotPassword: React.FC = () => {
 
             <form onSubmit={handleSubmit} className="space-y-6">
               <MD3Input 
-                type="email" 
-                label="Registered Email Address" 
-                value={email}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+                type="password" 
+                label="New Password" 
+                value={newPassword}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPassword(e.target.value)}
                 required 
               />
-              <MD3Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? 'Sending...' : 'Request Reset Link'}
+              <MD3Input 
+                type="password" 
+                label="Confirm Password" 
+                value={confirmPassword}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
+                required 
+              />
+              <MD3Button type="submit" className="w-full" disabled={isLoading || !token}>
+                {isLoading ? 'Resetting...' : 'Reset Password'}
               </MD3Button>
             </form>
           </>
         ) : (
           <div className="text-center py-6">
             <div className="w-16 h-16 bg-md-success/10 text-md-success rounded-full flex items-center justify-center mx-auto mb-4">
-              <Mail size={32} />
+              <CheckCircle size={32} />
             </div>
-            <h2 className="text-2xl font-medium text-md-on-surface mb-2">Check your inbox</h2>
+            <h2 className="text-2xl font-medium text-md-on-surface mb-2">Password Reset Successful</h2>
             <p className="text-md-on-surface-variant mb-8">
-              If the email matches a registered account, a password reset link has been dispatched.
+              Your password has been successfully reset. You can now use your new password to sign in.
             </p>
             <MD3Button variant="tonal" onClick={() => navigate('/login')} className="w-full">
-              Return to Sign In
+              Proceed to Sign In
             </MD3Button>
           </div>
         )}
@@ -85,4 +112,4 @@ export const ForgotPassword: React.FC = () => {
   );
 };
 
-export default ForgotPassword;
+export default ResetPassword;

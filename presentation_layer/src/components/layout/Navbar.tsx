@@ -3,9 +3,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../ui/Button';
 import { Logo } from '../ui/Logo';
 import classNames from 'classnames';
+import { useAuth } from '../../context/AuthContext';
 
 export const Navbar: React.FC = () => {
   const navigate = useNavigate();
+  const { isAuthenticated, logout } = useAuth();
   const [isVisible, setIsVisible] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
 
@@ -44,8 +46,15 @@ export const Navbar: React.FC = () => {
           <Link to="/verify-audit-trail" className="text-md-on-surface hover:text-md-primary transition-colors text-sm">Verify Certificate</Link>
           <Link to="/admin" className="text-md-on-surface hover:text-md-primary transition-colors font-medium text-sm">Admin Portal</Link>
           <Link to="/member" className="text-md-on-surface hover:text-md-primary transition-colors font-medium text-sm">Member Portal</Link>
-          <Button variant="outlined" size="sm" onClick={() => navigate('/login')}>Login</Button>
-          <Button variant="filled" size="sm" onClick={() => navigate('/register')}>Register</Button>
+          
+          {isAuthenticated ? (
+            <Button variant="outlined" size="sm" onClick={() => { logout(); navigate('/login'); }}>Logout</Button>
+          ) : (
+            <>
+              <Button variant="outlined" size="sm" onClick={() => navigate('/login')}>Login</Button>
+              <Button variant="filled" size="sm" onClick={() => navigate('/register')}>Register</Button>
+            </>
+          )}
         </div>
       </div>
     </nav>
