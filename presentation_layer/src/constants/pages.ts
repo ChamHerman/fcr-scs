@@ -35,6 +35,7 @@ export const ADMIN_PAGES: AdminPageInfo[] = [
 
   { path: '/admin/profile', name: 'My Profile', category: 'System' },
   { path: '/admin/users', name: 'User Admin', category: 'System' },
+  { path: '/admin/role-management', name: 'Role Management', category: 'System' },
   { path: '/admin/audit-logs', name: 'Audit Logs', category: 'System' },
   { path: '/admin/alerts', name: 'Alerts', category: 'System' },
   { path: '/admin/settings', name: 'Settings', category: 'System' },

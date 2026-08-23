@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { MD3Card, MD3Button, MD3Input } from '../MD3Components';
 import { Search, Filter, Shield, Eye, EyeOff, MoreVertical } from 'lucide-react';
-import { RoleManagement } from './RoleManagement';
 
 export const UserAdministration: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
@@ -87,9 +86,6 @@ export const UserAdministration: React.FC = () => {
           </table>
         </div>
       </MD3Card>
-
-      {/* Role-Based Access Control Section */}
-      <RoleManagement />
     </div>
   );
 };

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MD3Card, MD3Button } from '../MD3Components';
 import { ADMIN_PAGES, type AdminPageInfo } from '../../constants/pages';
+import { Select } from '../../components/ui/Select';
 import { Check, Save } from 'lucide-react';
 
 const ROLES = [
@@ -92,22 +93,28 @@ export const RoleManagement: React.FC = () => {
   const isSysAdmin = selectedRole === 'SYSTEM_ADMINISTRATOR';
 
   return (
-    <MD3Card elevation={1} className="mt-8">
+    <div className="p-6 md:p-8 max-w-7xl mx-auto">
+      <div className="mb-8">
+        <h1 className="text-3xl font-medium text-md-on-surface mb-2">Role Management</h1>
+        <p className="text-md-on-surface-variant">Configure access control for different system roles.</p>
+      </div>
+
+      <MD3Card elevation={1}>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
         <div>
           <h2 className="text-xl font-medium text-md-on-surface">Role Permissions</h2>
           <p className="text-md-on-surface-variant text-sm mt-1">Manage page-level access for each system role.</p>
         </div>
-        <div className="mt-4 md:mt-0 flex gap-4">
-          <select 
-            className="h-10 px-4 rounded-xl border border-md-outline/30 bg-md-surface focus:outline-none focus:border-md-primary"
-            value={selectedRole}
-            onChange={(e) => setSelectedRole(e.target.value)}
-          >
-            {ROLES.map(r => (
-              <option key={r} value={r}>{r.replace(/_/g, ' ')}</option>
-            ))}
-          </select>
+        <div className="mt-4 md:mt-0 flex gap-4 items-center">
+          <div className="w-64">
+            <Select 
+              label="Role"
+              options={ROLES.map(r => ({ value: r, label: r.replace(/_/g, ' ') }))}
+              value={selectedRole}
+              onChange={setSelectedRole}
+              placeholder="Select Role"
+            />
+          </div>
           <MD3Button 
             onClick={handleSave} 
             disabled={isSysAdmin || loading}
@@ -155,8 +162,8 @@ export const RoleManagement: React.FC = () => {
                     </div>
 
                     <div className="flex-shrink-0">
-                      <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 ease-in-out ${checked ? 'bg-md-primary' : 'bg-md-surface-variant/50'}`}>
-                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition duration-300 ease-in-out shadow-sm ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+                      <div className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border-2 transition-colors duration-200 ease-in-out ${checked ? 'bg-md-primary border-md-primary' : 'bg-transparent border-md-outline/50 group-hover:border-md-outline'}`}>
+                        <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full transition duration-200 ease-in-out shadow-sm ${checked ? 'translate-x-[22px] bg-white' : 'translate-x-0.5 bg-md-outline/60 group-hover:bg-md-outline'}`} />
                       </div>
                     </div>
                     
@@ -174,6 +181,7 @@ export const RoleManagement: React.FC = () => {
           </div>
         ))}
       </div>
-    </MD3Card>
+      </MD3Card>
+    </div>
   );
 };

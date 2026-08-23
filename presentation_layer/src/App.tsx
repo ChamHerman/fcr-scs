@@ -19,6 +19,7 @@ import { ResetPassword } from './pages/Login/ResetPassword';
 import { DashboardOverview } from './pages/Dashboard/DashboardOverview';
 import { UserProfile } from './pages/Dashboard/UserProfile';
 import { UserAdministration } from './pages/Dashboard/UserAdministration';
+import { RoleManagement } from './pages/Dashboard/RoleManagement';
 
 import { AuditLogs } from './pages/Audit/AuditLogs';
 import { AlertMonitoring } from './pages/Audit/AlertMonitoring';
@@ -132,6 +133,7 @@ function App() {
               {/* Dashboard & User Management */}
               <Route path="profile" element={<UserProfile />} />
               <Route path="users" element={<UserAdministration />} />
+              <Route path="role-management" element={<RoleManagement />} />
 
               {/* System Audit & Monitoring */}
               <Route path="audit-logs" element={<AuditLogs />} />

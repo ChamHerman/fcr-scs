@@ -5,9 +5,9 @@
   "scripts": {
     "postinstall": "prisma generate --schema=data_layer/database/prisma/schema.prisma",
     "prisma:generate": "prisma generate --schema=data_layer/database/prisma/schema.prisma",
-    "dev:backend": "npm run dev --workspace=business_logic_layer",
-    "dev:frontend": "npm run dev --workspace=presentation_layer",
-    "dev": "npm run dev --workspace=presentation_layer",
+    "dev:backend": "cd business_logic_layer && npm run dev",
+    "dev:frontend": "cd presentation_layer && npm run dev",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "build": "npm run build --workspace=presentation_layer"
   },
   "workspaces": [
@@ -15,5 +15,8 @@
     "business_logic_layer",
     "business_logic_layer/*",
     "data_layer/*"
-  ]
+  ],
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
 }

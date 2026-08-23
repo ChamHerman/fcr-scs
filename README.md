@@ -146,6 +146,18 @@ npm run build
 npm start
 ```
 
+### 6. Concurrent Development Mode (Recommended)
+
+To run both the frontend and backend simultaneously with a single command from the project root:
+
+```bash
+# In the root fcr-scs directory
+npm install
+npm run dev
+```
+
+This uses `concurrently` to launch the frontend at `http://localhost:5173` and the backend at `http://localhost:3030` automatically.
+
 ## Design system
 
 The frontend follows **Material You (Material Design 3)** principles. Full details are documented in [DESIGN.md](file:///c:/repository/fcr-scs/DESIGN.md).

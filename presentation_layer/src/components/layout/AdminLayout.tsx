@@ -13,6 +13,7 @@ import {
   ChevronDown,
   ChevronUp,
   Users,
+  Shield,
   FileText,
   PieChart,
   Settings,
@@ -512,6 +513,12 @@ export const AdminLayout: React.FC = () => {
                 <NavLink to="/admin/users" className="nav-item" title={isCollapsed ? "User Admin" : ""}>
                   <Users size={22} className="nav-icon" />
                   {!isCollapsed && <span>User Admin</span>}
+                </NavLink>
+              )}
+              {(allowedPages.includes('*') || allowedPages.includes('/admin/role-management')) && (
+                <NavLink to="/admin/role-management" className="nav-item" title={isCollapsed ? "Role Management" : ""}>
+                  <Shield size={22} className="nav-icon" />
+                  {!isCollapsed && <span>Role Management</span>}
                 </NavLink>
               )}
               {(allowedPages.includes('*') || allowedPages.includes('/admin/audit-logs')) && (
