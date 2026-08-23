@@ -119,7 +119,15 @@
 }
 .objection-dashboard .table-scroll {
   overflow-x: auto;
+  overflow-y: auto;
 }
+.objection-dashboard .table-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.objection-dashboard .table-scroll::-webkit-scrollbar-track { background: transparent; }
+.objection-dashboard .table-scroll::-webkit-scrollbar-thumb {
+  background: var(--md-scrollbar-thumb, rgba(121, 116, 126, 0.4));
+  border-radius: 10px;
+}
+.objection-dashboard .table-scroll::-webkit-scrollbar-thumb:hover { background: rgba(121, 116, 126, 0.6); }
 .objection-dashboard table {
   width: 100%;
   border-collapse: collapse;
@@ -169,33 +177,39 @@
   border-radius: 50%;
   flex-shrink: 0;
 }
-.objection-dashboard .status-badge.submitted {
-  background: #e3f2fd;
-  color: #0b5b8c;
-}
-.objection-dashboard .status-badge.submitted .dot {
-  background: #0b5b8c;
-}
-.objection-dashboard .status-badge.review {
-  background: #fef7e0;
-  color: #8d6e00;
-}
-.objection-dashboard .status-badge.review .dot {
-  background: #8d6e00;
-}
-.objection-dashboard .status-badge.approved {
-  background: #e6f4ea;
-  color: #1e7b4a;
-}
-.objection-dashboard .status-badge.approved .dot {
-  background: #1e7b4a;
-}
-.objection-dashboard .status-badge.rejected {
-  background: #fce8e6;
-  color: #b3261e;
-}
-.objection-dashboard .status-badge.rejected .dot {
-  background: #b3261e;
+.objection-dashboard .status-badge.submitted,
+.objection-dashboard .status-badge.status-submitted { background: #E0F2FE; color: #075985; }
+.objection-dashboard .status-badge.submitted .dot,
+.objection-dashboard .status-badge.status-submitted .dot { background: #0284C7; }
+.objection-dashboard .status-badge.review,
+.objection-dashboard .status-badge.status-review { background: #FEF9C3; color: #854D0E; }
+.objection-dashboard .status-badge.review .dot,
+.objection-dashboard .status-badge.status-review .dot { background: #CA8A04; }
+.objection-dashboard .status-badge.approved,
+.objection-dashboard .status-badge.status-approved { background: #E8F5E9; color: #1B5E20; }
+.objection-dashboard .status-badge.approved .dot,
+.objection-dashboard .status-badge.status-approved .dot { background: #2E7D32; }
+.objection-dashboard .status-badge.rejected,
+.objection-dashboard .status-badge.status-rejected { background: #FFEBEE; color: #B71C1C; }
+.objection-dashboard .status-badge.rejected .dot,
+.objection-dashboard .status-badge.status-rejected .dot { background: #C62828; }
+@media (prefers-color-scheme: dark) {
+  .objection-dashboard .status-badge.submitted,
+  .objection-dashboard .status-badge.status-submitted { background: rgba(2,132,199,0.22); color: #7DD3FC; }
+  .objection-dashboard .status-badge.submitted .dot,
+  .objection-dashboard .status-badge.status-submitted .dot { background: #38BDF8; }
+  .objection-dashboard .status-badge.review,
+  .objection-dashboard .status-badge.status-review { background: rgba(202,138,4,0.22); color: #FEF08A; }
+  .objection-dashboard .status-badge.review .dot,
+  .objection-dashboard .status-badge.status-review .dot { background: #FACC15; }
+  .objection-dashboard .status-badge.approved,
+  .objection-dashboard .status-badge.status-approved { background: rgba(46,125,50,0.22); color: #A5D6A7; }
+  .objection-dashboard .status-badge.approved .dot,
+  .objection-dashboard .status-badge.status-approved .dot { background: #81C784; }
+  .objection-dashboard .status-badge.rejected,
+  .objection-dashboard .status-badge.status-rejected { background: rgba(198,40,40,0.25); color: #FFCDD2; }
+  .objection-dashboard .status-badge.rejected .dot,
+  .objection-dashboard .status-badge.status-rejected .dot { background: #E57373; }
 }
 .objection-dashboard .pagination {
   display: flex;

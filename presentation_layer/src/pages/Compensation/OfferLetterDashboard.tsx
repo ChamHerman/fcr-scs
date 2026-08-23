@@ -1,8 +1,12 @@
 import * as Lucide from "lucide-react";
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Eye, Loader2 } from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
+import { Button } from "../../components/ui/Button";
+import { Select, type SelectOption } from "../../components/ui/Select";
+import { SearchInput } from "../../components/ui/SearchInput";
+import { CopyButton } from "../../components/ui/CopyButton";
 import { Pagination } from "../../components/ui/Pagination";
 import "../../style.css";
 import "./compensation.css";
@@ -21,10 +25,10 @@ type OfferItem = {
 };
 
 const statusClassMap: Record<string, string> = {
-  PENDING: "pending",
-  ACCEPTED: "approved",
-  REJECTED: "rejected",
-  EXPIRED: "closed",
+  PENDING: "status-offer-pending",
+  ACCEPTED: "status-offer-accepted",
+  REJECTED: "status-offer-rejected",
+  EXPIRED: "status-expired",
 };
 
 const statusLabelMap: Record<string, string> = {
@@ -33,6 +37,14 @@ const statusLabelMap: Record<string, string> = {
   REJECTED: "Rejected",
   EXPIRED: "Expired",
 };
+
+const STATUS_OPTIONS: SelectOption[] = [
+  { value: "", label: "All Status" },
+  { value: "PENDING", label: "Pending Response" },
+  { value: "ACCEPTED", label: "Accepted" },
+  { value: "REJECTED", label: "Rejected" },
+  { value: "EXPIRED", label: "Expired" },
+];
 
 export const OfferLetterDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -68,7 +80,7 @@ export const OfferLetterDashboard: React.FC = () => {
           ? new Date(o.expiryDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
           : "—",
         status: statusLabelMap[o.status] || o.status,
-        statusClass: statusClassMap[o.status] || "pending",
+        statusClass: statusClassMap[o.status] || "status-offer-pending",
       }));
 
       setOfferLetters(formatted);
@@ -139,31 +151,33 @@ export const OfferLetterDashboard: React.FC = () => {
         ))}
       </div>
 
-      <div className="filter-bar">
-        <div className="search-wrap">
-          <span className="search-icon">
-            <Lucide.Search size={16} />
-          </span>
-          <input
-            type="text"
+      <div className="filter-bar flex items-center justify-between gap-4">
+        <div className="search-wrap min-w-[280px]">
+          <SearchInput
             placeholder="Search by offer ref, case title, or owner..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
           />
         </div>
         <div className="filter-group">
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="">All Status</option>
-            <option value="PENDING">Pending Response</option>
-            <option value="ACCEPTED">Accepted</option>
-            <option value="REJECTED">Rejected</option>
-            <option value="EXPIRED">Expired</option>
-          </select>
+          <Select
+            label="Status"
+            value={statusFilter}
+            options={STATUS_OPTIONS}
+            onChange={(val) => {
+              setStatusFilter(val);
+              setCurrentPage(1);
+            }}
+            placeholder="All Status"
+          />
         </div>
       </div>
 
       <div className="table-wrap">
-        <div className="table-scroll">
+        <div className="table-scroll md-scroll-thin">
           <table>
             <thead>
               <tr>
@@ -192,7 +206,12 @@ export const OfferLetterDashboard: React.FC = () => {
               ) : (
                 offerLetters.map((o) => (
                   <tr key={o.id}>
-                    <td><span className="case-id" style={{ fontSize: "11px" }}>{o.offerReferenceNo}</span></td>
+                    <td>
+                      <div className="flex items-center gap-1.5">
+                        <span className="case-id font-mono text-xs">{o.offerReferenceNo}</span>
+                        <CopyButton value={o.offerReferenceNo} />
+                      </div>
+                    </td>
                     <td className="case-title">{o.caseTitle}</td>
                     <td>{o.ownerName}</td>
                     <td><strong>{formatCurrency(o.offerAmount)}</strong></td>
@@ -203,9 +222,9 @@ export const OfferLetterDashboard: React.FC = () => {
                       </span>
                     </td>
                     <td style={{ textAlign: "center" }}>
-                      <button className="btn-view" onClick={() => handleView(o.id)}>  
-                        <Eye size={14} style={{ display: "inline", marginRight: "4px" }} /> View
-                      </button>
+                      <Button variant="tonal" size="sm" onClick={() => handleView(o.id)}>  
+                        <Eye size={14} /> View
+                      </Button>
                     </td>
                   </tr>
                 ))

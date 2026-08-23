@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText, Eye, ChevronLeft, ChevronRight, Loader2, Plus } from "lucide-react";
+import { FileText, Eye, Loader2, Plus } from "lucide-react";
 import * as Lucide from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
 import { CaseSelectionModal } from "../LandAcquisition/CaseSelectionModal";
 import { Pagination } from "../../components/ui/Pagination";
+import { Button } from "../../components/ui/Button";
+import { Select, type SelectOption } from "../../components/ui/Select";
+import { SearchInput } from "../../components/ui/SearchInput";
+import { CopyButton } from "../../components/ui/CopyButton";
 import "../../style.css";
 import "./compensation.css";
 
@@ -21,9 +25,9 @@ type ReportItem = {
 };
 
 const statusClassMap: Record<string, string> = {
-  PENDING: "pending",
-  APPROVED: "approved",
-  REJECTED: "rejected",
+  PENDING: "status-pending-comp",
+  APPROVED: "status-comp-approved",
+  REJECTED: "status-comp-rejected",
 };
 
 const statusLabelMap: Record<string, string> = {
@@ -31,6 +35,13 @@ const statusLabelMap: Record<string, string> = {
   APPROVED: "Approved",
   REJECTED: "Rejected",
 };
+
+const STATUS_OPTIONS: SelectOption[] = [
+  { value: "", label: "All Status" },
+  { value: "PENDING", label: "Pending Approval" },
+  { value: "APPROVED", label: "Approved" },
+  { value: "REJECTED", label: "Rejected" },
+];
 
 export const CompensationReportList: React.FC = () => {
   const navigate = useNavigate();
@@ -60,7 +71,7 @@ export const CompensationReportList: React.FC = () => {
         owner: r.acquisitionCase?.landParcel?.ownerships?.[0]?.landOwner?.name || "—",
         totalAmount: Number(r.totalCompensation || 0),
         status: statusLabelMap[r.status] || r.status,
-        statusClass: statusClassMap[r.status] || "pending",
+        statusClass: statusClassMap[r.status] || "status-pending-comp",
         generatedDate: r.createdAt
           ? new Date(r.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
           : "—",
@@ -138,9 +149,9 @@ export const CompensationReportList: React.FC = () => {
             </div>
           </div>
           <div className="topbar-right" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <button className="btn-primary" onClick={handleCreateReport}>
-              <Plus size={16} className="inline mr-1" /> Create Compensation Report
-            </button>
+            <Button variant="filled" onClick={handleCreateReport}>
+              <Plus size={16} /> Create Compensation Report
+            </Button>
             <div className="avatar">AO</div>
           </div>
         </div>
@@ -155,30 +166,33 @@ export const CompensationReportList: React.FC = () => {
           ))}
         </div>
 
-        <div className="filter-bar">
-          <div className="search-wrap">
-            <span className="search-icon">
-              <Lucide.Search size={16} />
-            </span>
-            <input
-              type="text"
+        <div className="filter-bar flex items-center justify-between gap-4">
+          <div className="search-wrap min-w-[280px]">
+            <SearchInput
               placeholder="Search by case title or report ID..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
             />
           </div>
           <div className="filter-group">
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="">All Status</option>
-              <option value="PENDING">Pending Approval</option>
-              <option value="APPROVED">Approved</option>
-              <option value="REJECTED">Rejected</option>
-            </select>
+            <Select
+              label="Status"
+              value={statusFilter}
+              options={STATUS_OPTIONS}
+              onChange={(val) => {
+                setStatusFilter(val);
+                setCurrentPage(1);
+              }}
+              placeholder="All Status"
+            />
           </div>
         </div>
 
         <div className="table-wrap">
-          <div className="table-scroll">
+          <div className="table-scroll md-scroll-thin">
             <table>
               <thead>
                 <tr>
@@ -208,7 +222,10 @@ export const CompensationReportList: React.FC = () => {
                   reports.map((r) => (
                     <tr key={r.id}>
                       <td>
-                        <span className="case-id" style={{ fontSize: "11px" }}>{r.id.slice(0, 8)}...</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="case-id font-mono text-xs">{r.id}</span>
+                          <CopyButton value={r.id} />
+                        </div>
                       </td>
                       <td className="case-title">{r.caseTitle}</td>
                       <td>{r.owner}</td>
@@ -220,9 +237,9 @@ export const CompensationReportList: React.FC = () => {
                       </td>
                       <td>{r.generatedDate}</td>
                       <td style={{ textAlign: "center" }}>
-                        <button className="btn-view" onClick={() => handleView(r.id)}>
-                          <Eye size={14} style={{ display: "inline", marginRight: "4px" }} /> View
-                        </button>
+                        <Button variant="tonal" size="sm" onClick={() => handleView(r.id)}>
+                          <Eye size={14} /> View
+                        </Button>
                       </td>
                     </tr>
                   ))

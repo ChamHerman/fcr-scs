@@ -1,9 +1,13 @@
 import * as Lucide from "lucide-react";
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Eye, Loader2 } from "lucide-react";
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
 import { Pagination } from "../../components/ui/Pagination";
+import { Button } from "../../components/ui/Button";
+import { Select, type SelectOption } from "../../components/ui/Select";
+import { SearchInput } from "../../components/ui/SearchInput";
+import { CopyButton } from "../../components/ui/CopyButton";
 import "../../style.css";
 import "./valuation_report.css";
 
@@ -22,9 +26,9 @@ type Report = {
 };
 
 const statusClassMap: Record<string, string> = {
-  PENDING: "pending",
-  APPROVED: "approved",
-  REJECTED: "rejected",
+  PENDING: "status-pending-valuation",
+  APPROVED: "status-valuation-approved",
+  REJECTED: "status-valuation-rejected",
 };
 
 const statusLabelMap: Record<string, string> = {
@@ -32,6 +36,13 @@ const statusLabelMap: Record<string, string> = {
   APPROVED: "Approved",
   REJECTED: "Rejected",
 };
+
+const STATUS_OPTIONS: SelectOption[] = [
+  { value: "", label: "All Status" },
+  { value: "PENDING", label: "Pending Review" },
+  { value: "APPROVED", label: "Approved" },
+  { value: "REJECTED", label: "Rejected" },
+];
 
 export const ValuationReportList: React.FC = () => {
   const navigate = useNavigate();
@@ -67,7 +78,7 @@ export const ValuationReportList: React.FC = () => {
           ? `RM ${Number(r.recommendedCompensation).toLocaleString()}`
           : "—",
         status: statusLabelMap[r.reportStatus] || r.reportStatus || "Pending",
-        statusClass: statusClassMap[r.reportStatus] || "pending",
+        statusClass: statusClassMap[r.reportStatus] || "status-pending-valuation",
       }));
 
       setReports(formatted);
@@ -129,9 +140,9 @@ export const ValuationReportList: React.FC = () => {
             <Lucide.Calendar size={16} className="inline mr-1" />
             {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
           </span>
-          <button className="btn-primary" onClick={handleCreate}>
-            <Lucide.Plus size={16} className="inline mr-1" /> Create Report
-          </button>
+          <Button variant="filled" onClick={handleCreate}>
+            <Lucide.Plus size={16} /> Create Report
+          </Button>
           <div className="avatar">AO</div>
         </div>
       </div>
@@ -146,30 +157,33 @@ export const ValuationReportList: React.FC = () => {
         ))}
       </div>
 
-      <div className="filter-bar">
-        <div className="search-wrap">
-          <span className="search-icon">
-            <Lucide.Search size={16} />
-          </span>
-          <input
-            type="text"
+      <div className="filter-bar flex items-center justify-between gap-4">
+        <div className="search-wrap min-w-[280px]">
+          <SearchInput
             placeholder="Search by case ID, title, or valuer..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
           />
         </div>
         <div className="filter-group">
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="">All Status</option>
-            <option value="PENDING">Pending Review</option>
-            <option value="APPROVED">Approved</option>
-            <option value="REJECTED">Rejected</option>
-          </select>
+          <Select
+            label="Status"
+            value={statusFilter}
+            options={STATUS_OPTIONS}
+            onChange={(val) => {
+              setStatusFilter(val);
+              setCurrentPage(1);
+            }}
+            placeholder="All Status"
+          />
         </div>
       </div>
 
       <div className="table-wrap">
-        <div className="table-scroll">
+        <div className="table-scroll md-scroll-thin">
           <table>
             <thead>
               <tr>
@@ -199,9 +213,17 @@ export const ValuationReportList: React.FC = () => {
                 reports.map((r) => (
                   <tr key={r.id}>
                     <td>
-                      <span className="case-id" style={{ fontSize: "11px" }}>{r.id.slice(0, 8)}...</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="case-id font-mono text-xs">{r.id}</span>
+                        <CopyButton value={r.id} />
+                      </div>
                     </td>
-                    <td><span style={{ fontSize: "11px" }}>{r.caseId.slice(0, 8)}...</span></td>
+                    <td>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-xs text-md-on-surface-variant">{r.caseId}</span>
+                        <CopyButton value={r.caseId} />
+                      </div>
+                    </td>
                     <td className="case-title">{r.caseTitle}</td>
                     <td>{r.valuer}</td>
                     <td>{r.valuationDate}</td>
@@ -211,9 +233,9 @@ export const ValuationReportList: React.FC = () => {
                       </span>
                     </td>
                     <td style={{ textAlign: "center" }}>
-                      <button className="btn-view" onClick={() => handleView(r.id)}>
-                        <Eye size={14} style={{ display: "inline", marginRight: "4px" }} /> View
-                      </button>
+                      <Button variant="tonal" size="sm" onClick={() => handleView(r.id)}>
+                        <Eye size={14} /> View
+                      </Button>
                     </td>
                   </tr>
                 ))

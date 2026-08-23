@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams, useSearchParams } from "react-rout
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
 import { CaseForm } from "../../components/CaseForm";
 import type { CaseFormData, Owner, Document } from "../../components/CaseForm";
+import { Button } from "../../components/ui/Button";
 
 /**
  * CaseEdit – Handles both:
@@ -231,8 +232,8 @@ export const CaseEdit: React.FC = () => {
   // ── Render: Loading ───────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-md-surface-container">
-        <div className="text-center p-8 bg-white rounded-2xl shadow-sm border border-md-outline/10">
+      <div className="flex min-h-screen items-center justify-center bg-md-background">
+        <div className="text-center p-8 bg-md-surface-container rounded-2xl shadow-sm border border-md-outline/10">
           <div className="animate-spin w-8 h-8 border-4 border-md-primary border-t-transparent rounded-full mx-auto mb-4" />
           <div className="text-lg font-semibold text-md-on-surface mb-2">Loading Case Details…</div>
           <div className="text-sm text-md-on-surface-variant">Please wait while we fetch the record.</div>
@@ -244,18 +245,18 @@ export const CaseEdit: React.FC = () => {
   // ── Render: Load Error ────────────────────────────────────────────────────
   if (loadError || !initialValues) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-md-surface-container">
-        <div className="text-center p-8 bg-white rounded-2xl shadow-sm border border-md-outline/10 max-w-md">
-          <div className="text-lg font-semibold text-red-600 mb-2">Error Loading Case</div>
+      <div className="flex min-h-screen items-center justify-center bg-md-background">
+        <div className="text-center p-8 bg-md-surface-container rounded-2xl shadow-sm border border-md-outline/10 max-w-md">
+          <div className="text-lg font-semibold text-md-error mb-2">Error Loading Case</div>
           <div className="text-sm text-md-on-surface-variant mb-6">
             {loadError || "Case details could not be loaded."}
           </div>
-          <button
+          <Button
             onClick={() => navigate("/admin/case")}
-            className="px-6 py-2 bg-md-primary text-white rounded-full text-sm font-semibold hover:shadow-md transition"
+            variant="filled"
           >
             Return to Case List
-          </button>
+          </Button>
         </div>
       </div>
     );

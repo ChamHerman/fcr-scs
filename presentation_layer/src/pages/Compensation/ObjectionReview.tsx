@@ -1,13 +1,15 @@
 import * as Lucide from "lucide-react";
 import React, { useState, useEffect } from "react";
-import { createPortal } from "react-dom";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { CheckCircle, XCircle, ArrowLeft, Loader2, Edit2, Trash2, X, FileText, ExternalLink } from "lucide-react";
+import { CheckCircle, XCircle, ArrowLeft, Loader2, Edit2, Trash2, FileText, ExternalLink } from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
-import { useModalPopIn } from "../../hooks/useModalPopIn";
+import { Modal } from "../../components/ui/Modal";
+import { Button } from "../../components/ui/Button";
+import { Input } from "../../components/ui/Input";
+import { Textarea } from "../../components/ui/Textarea";
+import { CopyButton } from "../../components/ui/CopyButton";
 import "../../style.css";
 import "./objection.css";
-
 
 type ObjectionDetail = {
   id: string;
@@ -31,10 +33,10 @@ type ObjectionDetail = {
 };
 
 const statusClassMap: Record<string, string> = {
-  SUBMITTED: "review",
-  UNDER_REVIEW: "review",
-  APPROVED: "approved",
-  REJECTED: "rejected",
+  SUBMITTED: "status-objection-review",
+  UNDER_REVIEW: "status-objection-review",
+  APPROVED: "status-obj-approved",
+  REJECTED: "status-obj-rejected",
 };
 
 const statusLabelMap: Record<string, string> = {
@@ -67,8 +69,6 @@ export const ObjectionReview: React.FC = () => {
   // Delete Modal State
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const editModalRef = useModalPopIn(showEditModal);
-  const deleteModalRef = useModalPopIn(showDeleteModal);
 
   useEffect(() => {
     async function fetchObjection() {
@@ -94,7 +94,7 @@ export const ObjectionReview: React.FC = () => {
           type: "Form N",
           status: statusLabelMap[obj.status] || obj.status,
           rawStatus: obj.status,
-          statusClass: statusClassMap[obj.status] || "review",
+          statusClass: statusClassMap[obj.status] || "status-objection-review",
           objectionText: obj.objectionReason || "—",
           requestedAmount: Number(obj.requestedAmount || 0),
           revisedCompensation: obj.revisedCompensation ? Number(obj.revisedCompensation) : undefined,
@@ -138,7 +138,7 @@ export const ObjectionReview: React.FC = () => {
               ...prev,
               status: "Approved / Revised",
               rawStatus: "APPROVED",
-              statusClass: "approved",
+              statusClass: "status-obj-approved",
               revisedCompensation: revised,
               response: responseText,
               responseDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
@@ -146,7 +146,6 @@ export const ObjectionReview: React.FC = () => {
             }
           : null
       );
-      alert("Objection approved successfully! Status updated to APPROVED.");
     } catch (err: any) {
       console.error("Approve failed:", err);
       alert(`Approve failed: ${err.message}`);
@@ -171,14 +170,13 @@ export const ObjectionReview: React.FC = () => {
               ...prev,
               status: "Rejected",
               rawStatus: "REJECTED",
-              statusClass: "rejected",
+              statusClass: "status-obj-rejected",
               response: responseText,
               responseDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
               respondedBy: "Government Officer",
             }
           : null
       );
-      alert("Objection rejected. Status updated to REJECTED.");
     } catch (err: any) {
       console.error("Reject failed:", err);
       alert(`Reject failed: ${err.message}`);
@@ -216,7 +214,6 @@ export const ObjectionReview: React.FC = () => {
           : null
       );
       setShowEditModal(false);
-      alert("Objection updated successfully!");
     } catch (err: any) {
       console.error("Update failed:", err);
       alert(`Update failed: ${err.message}`);
@@ -230,7 +227,6 @@ export const ObjectionReview: React.FC = () => {
     setDeleting(true);
     try {
       await compensationApi.deleteObjection(objection.id);
-      alert("Objection deleted successfully.");
       navigate("/admin/compensation/objection");
     } catch (err: any) {
       console.error("Delete failed:", err);
@@ -244,13 +240,10 @@ export const ObjectionReview: React.FC = () => {
   if (loading) {
     return (
       <div
-        className="flex min-h-screen"
+        className="flex min-h-screen items-center justify-center p-10"
         style={{
           background: "var(--md-background)",
           color: "var(--md-on-surface)",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "40px",
         }}
       >
         <div style={{ textAlign: "center", color: "var(--md-on-surface-variant)" }}>
@@ -264,21 +257,18 @@ export const ObjectionReview: React.FC = () => {
   if (!objection) {
     return (
       <div
-        className="flex min-h-screen"
+        className="flex min-h-screen items-center justify-center p-10"
         style={{
           background: "var(--md-background)",
           color: "var(--md-on-surface)",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "40px",
         }}
       >
         <div style={{ textAlign: "center", color: "var(--md-on-surface-variant)" }}>
           <h3 style={{ fontSize: "18px", marginBottom: "8px" }}>Objection Not Found</h3>
           <p style={{ marginBottom: "16px" }}>The requested objection record does not exist or has been removed.</p>
-          <button className="btn-primary" onClick={() => navigate("/admin/compensation/objection")}>
+          <Button variant="filled" onClick={() => navigate("/admin/compensation/objection")}>
             Back to Dashboard
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -290,176 +280,172 @@ export const ObjectionReview: React.FC = () => {
   return (
     <div className="flex min-h-screen" style={{ background: "var(--md-background)", color: "var(--md-on-surface)" }}>
       {/* Edit Modal */}
-      {showEditModal &&
-        createPortal(
-          <div className="reject-modal-overlay" onClick={() => setShowEditModal(false)}>
-            <div ref={editModalRef} className="reject-modal" style={{ borderRadius: "28px" }} onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <h3>Edit Objection Details</h3>
-                <button className="close-btn" onClick={() => setShowEditModal(false)}>
-                  <X size={20} />
-                </button>
-              </div>
-              <div className="form-group" style={{ marginBottom: "12px" }}>
-                <label>Requested Amount (RM) *</label>
-                <input
-                  type="number"
-                  value={editAmount}
-                  onChange={(e) => setEditAmount(e.target.value === "" ? "" : Number(e.target.value))}
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: "16px" }}>
-                <label>Objection Statement *</label>
-                <textarea
-                  rows={5}
-                  value={editReason}
-                  onChange={(e) => setEditReason(e.target.value)}
-                />
-              </div>
-              <div className="modal-actions">
-                <button className="btn-cancel" onClick={() => setShowEditModal(false)}>Cancel</button>
-                <button className="btn-submit" onClick={handleSaveEdit} disabled={updating}>
-                  {updating ? "Saving..." : "Save Changes"}
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
+      <Modal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        title="Edit Objection Details"
+        subtitle={`Update statement and amount for ${objection.caseTitle}`}
+        footer={
+          <>
+            <Button variant="text" onClick={() => setShowEditModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="filled"
+              onClick={handleSaveEdit}
+              isLoading={updating}
+            >
+              Save Changes
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <Input
+            label="Requested Amount (RM) *"
+            type="number"
+            value={editAmount === "" ? "" : String(editAmount)}
+            onChange={(e) => setEditAmount(e.target.value === "" ? "" : Number(e.target.value))}
+          />
+          <Textarea
+            label="Objection Statement *"
+            rows={5}
+            value={editReason}
+            onChange={(e) => setEditReason(e.target.value)}
+          />
+        </div>
+      </Modal>
 
       {/* Delete Confirmation Modal */}
-      {showDeleteModal &&
-        createPortal(
-          <div className="reject-modal-overlay" onClick={() => setShowDeleteModal(false)}>
-            <div ref={deleteModalRef} className="reject-modal" style={{ borderRadius: "28px" }} onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <h3 style={{ color: "#d32f2f" }}>Confirm Deletion</h3>
-                <button className="close-btn" onClick={() => setShowDeleteModal(false)}>
-                  <X size={20} />
-                </button>
-              </div>
-              <p style={{ margin: "16px 0", color: "var(--md-on-surface-variant)" }}>
-                Are you sure you want to permanently delete objection <strong>{objection.id.slice(0, 8)}...</strong>? This operation cannot be reverted.
-              </p>
-              <div className="modal-actions">
-                <button className="btn-cancel" onClick={() => setShowDeleteModal(false)}>Cancel</button>
-                <button
-                  className="btn-submit"
-                  style={{ background: "#d32f2f" }}
-                  onClick={handleDelete}
-                  disabled={deleting}
-                >
-                  {deleting ? "Deleting..." : "Delete Permanently"}
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        title="Confirm Deletion"
+        subtitle="This operation cannot be reverted."
+        footer={
+          <>
+            <Button variant="text" onClick={() => setShowDeleteModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleDelete}
+              isLoading={deleting}
+            >
+              Delete Permanently
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-md-on-surface-variant">
+          Are you sure you want to permanently delete objection <span className="font-mono">{objection.id}</span>?
+        </p>
+      </Modal>
 
-
-      <main className="main blur-shape-bg">
+      <main className="main blur-shape-bg w-full p-6">
         <div className="objection-review">
-          <div className="header-card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="header-card flex justify-between items-center p-6 rounded-2xl mb-6 bg-md-surface-container">
             <div className="left">
-              <div className="objection-id">{objection.id}</div>
-              <div className="title">{objection.caseTitle}</div>
-              <div className="meta">
-                <span><Lucide.FolderOpen size={16} className="inline mr-1" /> {objection.caseId}</span>
-                <span><Lucide.User size={16} className="inline mr-1" /> {objection.submittedBy}</span>
-                <span><Lucide.Calendar size={16} className="inline mr-1" /> {objection.submittedDate}</span>
-                <span><Lucide.FileText size={16} className="inline mr-1" /> {objection.type}</span>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="objection-id font-mono text-sm">{objection.id}</span>
+                <CopyButton value={objection.id} />
+              </div>
+              <div className="title text-xl font-bold mb-2">{objection.caseTitle}</div>
+              <div className="meta flex gap-4 text-xs text-md-on-surface-variant">
+                <span><Lucide.FolderOpen size={14} className="inline mr-1" /> {objection.caseId}</span>
+                <span><Lucide.User size={14} className="inline mr-1" /> {objection.submittedBy}</span>
+                <span><Lucide.Calendar size={14} className="inline mr-1" /> {objection.submittedDate}</span>
+                <span><Lucide.FileText size={14} className="inline mr-1" /> {objection.type}</span>
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <button className="btn-outline" onClick={() => navigate("/admin/compensation/objection")}>
-                <ArrowLeft size={16} className="inline mr-1" /> Back
-              </button>
+              <Button variant="outlined" size="sm" onClick={() => navigate("/admin/compensation/objection")}>
+                <ArrowLeft size={16} /> Back
+              </Button>
               <span className={`status-badge-lg ${objection.statusClass}`}>
-                {objection.status === "Under Review" ? <Lucide.Hourglass size={16} className="inline mr-1" /> : ""}
-                {objection.status}
+                <span className="dot"></span> {objection.status}
               </span>
             </div>
           </div>
 
-          <div className="content-card">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <div className="section-title" style={{ margin: 0 }}>
-                <Lucide.ClipboardList size={16} className="inline mr-1" /> Objection Details
+          <div className="content-card bg-md-surface-container p-6 rounded-2xl mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <div className="section-title text-base font-bold flex items-center gap-2 m-0">
+                <Lucide.ClipboardList size={18} /> Objection Details
               </div>
-              <div style={{ display: "flex", gap: "8px" }}>
-                <button
-                  className="btn-view"
-                  style={{ background: "rgba(99,102,241,0.12)", color: "#818cf8", padding: "6px 14px", borderRadius: "100px" }}
+              <div className="flex gap-2">
+                <Button
+                  variant="outlined"
+                  size="sm"
                   onClick={handleOpenEdit}
                 >
-                  <Edit2 size={14} className="inline mr-1" /> Edit
-                </button>
-                <button
-                  className="btn-view"
-                  style={{ background: "rgba(239,68,68,0.12)", color: "#f87171", padding: "6px 14px", borderRadius: "100px" }}
+                  <Edit2 size={14} /> Edit
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
                   onClick={() => setShowDeleteModal(true)}
                 >
-                  <Trash2 size={14} className="inline mr-1" /> Delete
-                </button>
+                  <Trash2 size={14} /> Delete
+                </Button>
               </div>
             </div>
 
-            <div className="detail-grid">
-              <div className="detail-item">
-                <span className="label">Submitted By</span>
-                <span className="value">{objection.submittedBy}</span>
+            <div className="detail-grid grid grid-cols-1 md:grid-cols-4 gap-4 p-4 rounded-xl bg-md-surface-container-low mb-6">
+              <div className="detail-item flex flex-col gap-1">
+                <span className="label text-xs text-md-on-surface-variant">Submitted By</span>
+                <span className="value text-sm font-semibold">{objection.submittedBy}</span>
               </div>
-              <div className="detail-item">
-                <span className="label">Requested Amount</span>
-                <span className="value" style={{ color: "var(--md-primary)", fontWeight: "bold" }}>
+              <div className="detail-item flex flex-col gap-1">
+                <span className="label text-xs text-md-on-surface-variant">Requested Amount</span>
+                <span className="value text-sm font-bold text-md-primary">
                   {formatCurrency(objection.requestedAmount)}
                 </span>
               </div>
-              <div className="detail-item">
-                <span className="label">Submission Date</span>
-                <span className="value">{objection.submittedDate}</span>
+              <div className="detail-item flex flex-col gap-1">
+                <span className="label text-xs text-md-on-surface-variant">Submission Date</span>
+                <span className="value text-sm">{objection.submittedDate}</span>
               </div>
-              <div className="detail-item">
-                <span className="label">Form Type</span>
-                <span className="value">{objection.type}</span>
+              <div className="detail-item flex flex-col gap-1">
+                <span className="label text-xs text-md-on-surface-variant">Form Type</span>
+                <span className="value text-sm">{objection.type}</span>
               </div>
             </div>
 
-            <div className="objection-text">
-              <div className="label">Objection Statement</div>
-              <div className="text">{objection.objectionText}</div>
+            <div className="objection-text mb-6">
+              <div className="label text-xs text-md-on-surface-variant font-semibold uppercase mb-2">Objection Statement</div>
+              <div className="text text-sm p-4 rounded-xl bg-md-surface-container-low leading-relaxed">{objection.objectionText}</div>
             </div>
 
             {/* Link references */}
-            <div style={{ display: "flex", gap: "12px", marginTop: "16px" }}>
-              <button
-                className="btn-outline"
-                style={{ fontSize: "13px", padding: "6px 16px" }}
+            <div className="flex flex-wrap gap-3 mt-4">
+              <Button
+                variant="outlined"
+                size="sm"
                 onClick={() => navigate(`/admin/case/details/${objection.caseId}`)}
               >
-                <ExternalLink size={14} className="inline mr-1" /> View Case Details
-              </button>
-              <button
-                className="btn-outline"
-                style={{ fontSize: "13px", padding: "6px 16px" }}
+                <ExternalLink size={14} /> View Case Details
+              </Button>
+              <Button
+                variant="outlined"
+                size="sm"
                 onClick={() => navigate("/admin/compensation/offer/review", { state: { offerId: objection.offerId } })}
               >
-                <FileText size={14} className="inline mr-1" /> View Associated Offer Letter
-              </button>
+                <FileText size={14} /> View Associated Offer Letter
+              </Button>
             </div>
 
             {objection.attachments.length > 0 && (
               <>
-                <div className="section-title" style={{ marginTop: "24px", marginBottom: "8px" }}>
-                  <Lucide.Paperclip size={16} className="inline mr-1" /> Attachments
+                <div className="section-title text-base font-bold flex items-center gap-2 mt-6 mb-3">
+                  <Lucide.Paperclip size={18} /> Attachments
                 </div>
-                <div className="file-list">
+                <div className="file-list flex flex-col gap-2">
                   {objection.attachments.map((a, i) => (
-                    <div key={i} className="file-item">
-                      <span className="file-icon"><Lucide.FileText size={14} /></span>
-                      {a.name || a.fileName || "Document"}{" "}
-                      <span style={{ fontSize: "12px", color: "var(--md-on-surface-variant)", opacity: 0.6, marginLeft: "8px" }}>
+                    <div key={i} className="file-item flex items-center gap-2 p-2.5 rounded-xl bg-md-surface-container-low">
+                      <Lucide.FileText size={14} className="text-md-primary" />
+                      <span className="text-sm font-medium">{a.name || a.fileName || "Document"}</span>
+                      <span className="text-xs text-md-on-surface-variant opacity-60 ml-2">
                         ({a.size || a.fileSize || "1.2 MB"})
                       </span>
                     </div>
@@ -469,20 +455,22 @@ export const ObjectionReview: React.FC = () => {
             )}
 
             {isResolved && objection.response && (
-              <div className="response-section" style={{ marginTop: "24px" }}>
-                <div className="section-title"><Lucide.Pin size={16} className="inline mr-1" /> Review Decision</div>
-                <div className="response-text">
-                  <div className="label">
+              <div className="response-section mt-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <div className="section-title font-bold text-sm text-emerald-800 dark:text-emerald-300 mb-2 flex items-center gap-1.5">
+                  <Lucide.Pin size={16} /> Review Decision
+                </div>
+                <div className="response-text text-sm">
+                  <div className="label text-xs opacity-75 mb-1">
                     Reviewed by {objection.respondedBy || "Government Officer"}
                   </div>
                   {objection.revisedCompensation && (
-                    <div style={{ marginBottom: "8px", fontWeight: "600", color: "#4caf50" }}>
+                    <div className="mb-2 font-bold text-emerald-700 dark:text-emerald-400">
                       Approved Revised Amount: {formatCurrency(objection.revisedCompensation)}
                     </div>
                   )}
-                  <div className="text">{objection.response}</div>
+                  <div className="text leading-relaxed">{objection.response}</div>
                   {objection.responseDate && (
-                    <div style={{ fontSize: "12px", color: "var(--md-on-surface-variant)", opacity: 0.6, marginTop: "8px" }}>
+                    <div className="text-xs opacity-60 mt-2">
                       Decision Date: {objection.responseDate}
                     </div>
                   )}
@@ -491,65 +479,44 @@ export const ObjectionReview: React.FC = () => {
             )}
 
             {isActionable && (
-              <div style={{ marginTop: "24px" }}>
-                <div className="section-title"><Lucide.MessageSquare size={16} className="inline mr-1" /> Officer Review & Decision</div>
-
-                <div className="form-group" style={{ marginBottom: "12px" }}>
-                  <label htmlFor="revisedAmount" style={{ display: "block", fontSize: "13px", fontWeight: "500", marginBottom: "4px" }}>
-                    Revised Compensation Amount (RM)
-                  </label>
-                  <input
-                    id="revisedAmount"
-                    type="number"
-                    value={revisedAmount}
-                    onChange={(e) => setRevisedAmount(e.target.value === "" ? "" : Number(e.target.value))}
-                    placeholder="Enter revised compensation if approving with revision"
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      borderRadius: "var(--radius-md)",
-                      border: "1.5px solid rgba(121,116,126,0.25)",
-                      background: "var(--md-surface-container-low)",
-                      fontSize: "14px",
-                      color: "var(--md-on-surface)",
-                    }}
-                  />
+              <div className="mt-6 pt-6 border-t border-md-outline/10">
+                <div className="section-title text-base font-bold flex items-center gap-2 mb-4">
+                  <Lucide.MessageSquare size={18} /> Officer Review & Decision
                 </div>
 
-                <div className="form-group" style={{ marginBottom: "16px" }}>
-                  <label htmlFor="responseText" style={{ display: "block", fontSize: "13px", fontWeight: "500", marginBottom: "4px" }}>
-                    Review Remarks & Justification <span className="required">*</span>
-                  </label>
-                  <textarea
-                    id="responseText"
-                    rows={4}
-                    placeholder="Provide detailed justification for your decision..."
-                    value={responseText}
-                    onChange={(e) => setResponseText(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      borderRadius: "var(--radius-md)",
-                      border: "1.5px solid rgba(121,116,126,0.25)",
-                      background: "var(--md-surface-container-low)",
-                      fontSize: "14px",
-                      color: "var(--md-on-surface)",
-                      resize: "vertical",
-                      minHeight: "80px",
-                    }}
-                  />
-                  {responseError && <div className="error-text" style={{ fontSize: "12px", color: "var(--md-error-text)", marginTop: "4px" }}>{responseError}</div>}
-                </div>
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <Input
+                      label="Revised Compensation Amount (RM)"
+                      id="revisedAmount"
+                      type="number"
+                      value={revisedAmount === "" ? "" : String(revisedAmount)}
+                      onChange={(e) => setRevisedAmount(e.target.value === "" ? "" : Number(e.target.value))}
+                      placeholder="Enter revised compensation if approving with revision"
+                    />
+                  </div>
 
-                <div className="action-bar">
-                  <button className="btn-reject" onClick={handleReject} disabled={submitting}>
-                    <XCircle size={18} /> {submitting ? "Processing..." : "Reject Objection"}
-                  </button>
-                  <button className="btn-approve" onClick={handleApprove} disabled={submitting}>
-                    <CheckCircle size={18} /> {submitting ? "Processing..." : "Approve Objection"}
-                  </button>
-                </div>
+                  <div>
+                    <Textarea
+                      label="Review Remarks & Justification *"
+                      id="responseText"
+                      rows={4}
+                      placeholder="Provide detailed justification for your decision..."
+                      value={responseText}
+                      onChange={(e) => setResponseText(e.target.value)}
+                    />
+                    {responseError && <div className="text-xs text-md-error pl-2 mt-1">{responseError}</div>}
+                  </div>
 
+                  <div className="action-bar flex justify-end gap-3 pt-4">
+                    <Button variant="danger" onClick={handleReject} isLoading={submitting}>
+                      <XCircle size={18} /> Reject Objection
+                    </Button>
+                    <Button variant="filled" onClick={handleApprove} isLoading={submitting}>
+                      <CheckCircle size={18} /> Approve Objection
+                    </Button>
+                  </div>
+                </div>
               </div>
             )}
           </div>

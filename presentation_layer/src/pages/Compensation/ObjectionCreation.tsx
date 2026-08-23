@@ -3,6 +3,12 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Send, X, File, Upload, ArrowLeft, Loader2 } from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
+import { Button } from "../../components/ui/Button";
+import { Select, type SelectOption } from "../../components/ui/Select";
+import { Input } from "../../components/ui/Input";
+import { Textarea } from "../../components/ui/Textarea";
+import { CopyButton } from "../../components/ui/CopyButton";
+import { IconButton } from "../../components/ui/IconButton";
 import "../../style.css";
 import "./objection.css";
 
@@ -20,6 +26,11 @@ type FileAttachment = {
   size: string;
   file: File;
 };
+
+const OBJECTION_TYPE_OPTIONS: SelectOption[] = [
+  { value: "Form N", label: "Form N – Formal Objection" },
+  { value: "Additional Evidence", label: "Additional Supporting Evidence" },
+];
 
 export const CreateObjection: React.FC = () => {
   const navigate = useNavigate();
@@ -72,8 +83,14 @@ export const CreateObjection: React.FC = () => {
     setSelectedOfferId(offerId);
     const chosen = offers.find((o) => o.offerId === offerId);
     if (chosen) {
-      // Suggest default requested amount (15% higher than offer amount)
       setRequestedAmount(Math.round(chosen.offerAmount * 1.15));
+    }
+    if (errors.offer) {
+      setErrors((prev) => {
+        const n = { ...prev };
+        delete n.offer;
+        return n;
+      });
     }
   };
 
@@ -140,121 +157,57 @@ export const CreateObjection: React.FC = () => {
       setSubmitting(false);
       setSubmitted(true);
     } catch (err: any) {
-      console.error("Submission failed:", err);
-      alert(`Submission failed: ${err.message || err}`);
+      console.error("Objection creation failed:", err);
+      alert(`Submission failed: ${err.message}`);
       setSubmitting(false);
     }
   };
 
-  const handleReset = () => {
-    setSelectedOfferId("");
-    setObjectionType("Form N");
-    setRequestedAmount("");
-    setObjectionText("");
-    setFiles([]);
-    setErrors({});
-    setSubmitted(false);
-    setCreatedId(null);
-  };
+  const offerOptions: SelectOption[] = [
+    { value: "", label: "— Choose an offer letter —" },
+    ...offers.map((o) => ({
+      value: o.offerId,
+      label: `${o.caseTitle} — ${o.ownerName} (Offered: RM ${o.offerAmount.toLocaleString("en-MY")})`,
+    })),
+  ];
 
   if (submitted) {
     return (
-      <div>
-        <div className="main blur-shape-bg">
+      <div className="flex min-h-screen" style={{ background: "var(--md-background)", color: "var(--md-on-surface)" }}>
+        <div className="main blur-shape-bg w-full p-6">
           <div className="objection-create">
-            <div className="topbar" style={{ marginBottom: "20px" }}>
-              <div className="topbar-left">
-                <h1 style={{ marginBottom: 0 }}>Submit Objection</h1>
-                <div className="sub">Form N – Formal Objection</div>
+            <div className="form-card text-center py-12">
+              <div className="w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center mx-auto mb-4">
+                <Lucide.CheckCircle size={36} />
               </div>
-              <div className="topbar-right">
-                <span className="date-badge"><Lucide.Calendar size={16} className="inline" /> {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
-                <div className="avatar">AO</div>
-              </div>
-            </div>
-            <div className="form-card">
-              <div className="success-banner">
-                <span className="check-icon"><Lucide.CheckCircle size={16} className="inline" /></span>
-                <div>
-                  <strong>Objection submitted successfully!</strong>
-                  <span style={{ marginLeft: "12px", fontWeight: 400 }}>
-                    The objection record has been saved to the database.
-                  </span>
+              <h2 className="text-2xl font-bold mb-2">Objection Submitted Successfully</h2>
+              <p className="text-sm text-md-on-surface-variant max-w-md mx-auto mb-6">
+                Your objection (Form N) has been officially recorded and queued for review by the compensation committee.
+              </p>
+
+              {createdId && (
+                <div className="inline-flex items-center gap-2 p-3 bg-md-surface-container-high rounded-xl mb-6 font-mono text-sm">
+                  <span className="text-md-on-surface-variant">Objection ID:</span>
+                  <strong>{createdId}</strong>
+                  <CopyButton value={createdId} />
                 </div>
-              </div>
-              <div style={{ textAlign: "center", padding: "20px 0" }}>
-                <p
-                  style={{
-                    fontSize: "14px",
-                    color: "var(--md-on-surface-variant)",
-                  }}
-                >
-                  Your objection (Form N) has been submitted for review.
-                  <br />
-                  You will be notified once a decision is made by the Government Officer.
-                </p>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "12px",
-                    justifyContent: "center",
-                    marginTop: "16px",
-                  }}
-                >
-                  {createdId && (
-                    <button
-                      className="btn-submit"
-                      onClick={() => navigate(`/admin/compensation/objection/review/${createdId}`)}
-                      style={{
-                        padding: "10px 24px",
-                        borderRadius: "var(--radius-full)",
-                        border: "none",
-                        background: "var(--md-primary)",
-                        color: "white",
-                        fontWeight: "600",
-                        fontSize: "14px",
-                        fontFamily: "inherit",
-                        cursor: "pointer",
-                      }}
-                    >
-                      View Submission
-                    </button>
-                  )}
-                  <button
-                    className="btn-cancel"
-                    onClick={handleReset}
-                    style={{
-                      padding: "10px 24px",
-                      borderRadius: "var(--radius-full)",
-                      border: "1.5px solid rgba(121,116,126,0.25)",
-                      background: "transparent",
-                      fontWeight: "500",
-                      fontSize: "14px",
-                      fontFamily: "inherit",
-                      color: "var(--md-on-surface-variant)",
-                      cursor: "pointer",
-                    }}
+              )}
+
+              <div className="flex justify-center gap-3">
+                {createdId && (
+                  <Button
+                    variant="tonal"
+                    onClick={() => navigate(`/admin/compensation/objection/review/${createdId}`, { state: { objectionId: createdId } })}
                   >
-                    Submit Another
-                  </button>
-                  <button
-                    className="btn-submit"
-                    onClick={() => navigate('/admin/compensation/objection')}
-                    style={{
-                      padding: "10px 24px",
-                      borderRadius: "var(--radius-full)",
-                      border: "none",
-                      background: "rgba(121,116,126,0.2)",
-                      color: "var(--md-on-surface)",
-                      fontWeight: "600",
-                      fontSize: "14px",
-                      fontFamily: "inherit",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Go to Dashboard
-                  </button>
-                </div>
+                    View Submitted Objection
+                  </Button>
+                )}
+                <Button
+                  variant="filled"
+                  onClick={() => navigate("/admin/compensation/objection")}
+                >
+                  Go to Dashboard
+                </Button>
               </div>
             </div>
           </div>
@@ -264,8 +217,8 @@ export const CreateObjection: React.FC = () => {
   }
 
   return (
-    <div>
-      <div className="main blur-shape-bg">
+    <div className="flex min-h-screen" style={{ background: "var(--md-background)", color: "var(--md-on-surface)" }}>
+      <div className="main blur-shape-bg w-full p-6">
         <div className="objection-create">
           <div className="topbar" style={{ marginBottom: "20px" }}>
             <div className="topbar-left">
@@ -274,165 +227,144 @@ export const CreateObjection: React.FC = () => {
                 Form N – Formal Objection under Land Acquisition Act 1960
               </div>
             </div>
-            <div className="topbar-right" style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-              <button className="btn-outline" onClick={() => navigate('/admin/compensation/objection')}>
-                <ArrowLeft size={16} className="inline mr-1" /> Back
-              </button>
+            <div className="topbar-right flex items-center gap-3">
+              <Button variant="outlined" size="sm" onClick={() => navigate("/admin/compensation/objection")}>
+                <ArrowLeft size={16} /> Back
+              </Button>
               <div className="avatar">AO</div>
             </div>
           </div>
 
-          <div className="form-card">
-            <div className="form-title">Form N – Objection Submission</div>
-            <div className="form-subtitle">
+          <div className="form-card" style={{ background: "var(--md-surface-container)", padding: "24px", borderRadius: "16px" }}>
+            <div className="form-title text-lg font-bold">Form N – Objection Submission</div>
+            <div className="form-subtitle text-sm text-md-on-surface-variant mb-6">
               Submit your formal objection or additional evidence for review against a compensation award.
             </div>
 
-            <div className="case-selector">
-              <label htmlFor="offerSelect">
-                Select Compensation Offer / Case <span className="required">*</span>
-              </label>
-              {loadingOffers ? (
-                <div style={{ padding: "10px", color: "var(--md-on-surface-variant)", fontSize: "14px" }}>
-                  <Loader2 size={16} className="inline animate-spin mr-2" /> Loading offer letters...
-                </div>
-              ) : (
-                <select
-                  id="offerSelect"
-                  value={selectedOfferId}
-                  onChange={(e) => handleOfferSelect(e.target.value)}
-                  className={errors.offer ? "error" : ""}
-                >
-                  <option value="">— Choose an offer letter —</option>
-                  {offers.map((o) => (
-                    <option key={o.offerId} value={o.offerId}>
-                      {o.caseTitle} — {o.ownerName} (Offered: RM {o.offerAmount.toLocaleString("en-MY")})
-                    </option>
-                  ))}
-                </select>
-              )}
-              {errors.offer && <div className="error-text">{errors.offer}</div>}
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="requestedAmount">
-                Requested Compensation Amount (RM) <span className="required">*</span>
-              </label>
-              <input
-                id="requestedAmount"
-                type="number"
-                placeholder="e.g. 550000"
-                value={requestedAmount}
-                onChange={(e) => setRequestedAmount(e.target.value === "" ? "" : Number(e.target.value))}
-                className={errors.amount ? "error" : ""}
-                style={{
-                  width: "100%",
-                  padding: "10px 14px",
-                  borderRadius: "var(--radius-md)",
-                  border: "1.5px solid rgba(121,116,126,0.25)",
-                  background: "var(--md-surface-container-low)",
-                  fontSize: "14px",
-                  fontFamily: "inherit",
-                  color: "var(--md-on-surface)",
-                }}
-              />
-              {errors.amount && <div className="error-text">{errors.amount}</div>}
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="objectionType">Objection Type</label>
-              <select
-                id="objectionType"
-                value={objectionType}
-                onChange={(e) => setObjectionType(e.target.value)}
-              >
-                <option value="Form N">Form N – Formal Objection</option>
-                <option value="Additional Evidence">
-                  Additional Supporting Evidence
-                </option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="objectionText">
-                Objection Details & Justification <span className="required">*</span>
-              </label>
-              <textarea
-                id="objectionText"
-                rows={6}
-                placeholder="Please provide detailed reasons for your objection. Include specific references to your case, valuation, or compensation offered..."
-                value={objectionText}
-                onChange={(e) => setObjectionText(e.target.value)}
-                className={errors.text ? "error" : ""}
-              />
-              {errors.text && <div className="error-text">{errors.text}</div>}
-              <div className="helper-text">
-                Minimum 20 characters. Be specific about your concerns.
+            <div className="flex flex-col gap-5">
+              <div>
+                {loadingOffers ? (
+                  <div style={{ padding: "10px", color: "var(--md-on-surface-variant)", fontSize: "14px" }}>
+                    <Loader2 size={16} className="inline animate-spin mr-2" /> Loading offer letters...
+                  </div>
+                ) : (
+                  <Select
+                    label="Select Compensation Offer / Case *"
+                    value={selectedOfferId}
+                    options={offerOptions}
+                    onChange={handleOfferSelect}
+                    placeholder="— Choose an offer letter —"
+                  />
+                )}
+                {errors.offer && <div className="text-xs text-md-error pl-2 mt-1">{errors.offer}</div>}
               </div>
-            </div>
 
-            <div className="file-upload-section">
-              <div className="file-title">
-                <File size={18} /> Supporting Documents
-              </div>
-              {files.map((f) => (
-                <div key={f.id} className="file-item">
-                  <span className="file-name">{f.name}</span>
-                  <span className="file-size">{f.size}</span>
-                  <button
-                    className="btn-remove"
-                    onClick={() => removeFile(f.id)}
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              ))}
-              <label
-                className="upload-btn"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  padding: "8px 16px",
-                  borderRadius: "var(--radius-full)",
-                  border: "1.5px solid rgba(121,116,126,0.25)",
-                  background: "transparent",
-                  fontSize: "13px",
-                  fontWeight: "500",
-                  fontFamily: "inherit",
-                  color: "var(--md-on-surface-variant)",
-                  cursor: "pointer",
-                }}
-              >
-                <Upload size={16} /> Upload Document
-                <input
-                  type="file"
-                  multiple
-                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                  onChange={handleFileUpload}
-                  style={{ display: "none" }}
+              <div>
+                <Input
+                  label="Requested Compensation Amount (RM) *"
+                  id="requestedAmount"
+                  type="number"
+                  placeholder="e.g. 550000"
+                  value={requestedAmount === "" ? "" : String(requestedAmount)}
+                  onChange={(e) => {
+                    setRequestedAmount(e.target.value === "" ? "" : Number(e.target.value));
+                    if (errors.amount) {
+                      setErrors((prev) => {
+                        const n = { ...prev };
+                        delete n.amount;
+                        return n;
+                      });
+                    }
+                  }}
                 />
-              </label>
-              <div className="helper-text" style={{ marginTop: "8px" }}>
-                Supported: PDF, JPEG, PNG, DOC, DOCX. Max 10MB each.
+                {errors.amount && <div className="text-xs text-md-error pl-2 mt-1">{errors.amount}</div>}
               </div>
-            </div>
 
-            <div className="actions">
-              <button
-                className="btn-cancel"
-                onClick={() => navigate('/admin/compensation/objection')}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn-submit"
-                onClick={handleSubmit}
-                disabled={submitting}
-              >
-                <Send size={18} />{" "}
-                {submitting ? "Submitting..." : "Submit Objection"}
-              </button>
+              <div>
+                <Select
+                  label="Objection Type"
+                  value={objectionType}
+                  options={OBJECTION_TYPE_OPTIONS}
+                  onChange={(val) => setObjectionType(val)}
+                />
+              </div>
+
+              <div>
+                <Textarea
+                  label="Objection Details & Justification *"
+                  id="objectionText"
+                  rows={6}
+                  placeholder="Please provide detailed reasons for your objection. Include specific references to your case, valuation, or compensation offered..."
+                  value={objectionText}
+                  onChange={(e) => {
+                    setObjectionText(e.target.value);
+                    if (errors.text) {
+                      setErrors((prev) => {
+                        const n = { ...prev };
+                        delete n.text;
+                        return n;
+                      });
+                    }
+                  }}
+                />
+                {errors.text && <div className="text-xs text-md-error pl-2 mt-1">{errors.text}</div>}
+                <div className="text-xs text-md-on-surface-variant opacity-70 pl-2 mt-1">
+                  Minimum 20 characters. Be specific about your concerns.
+                </div>
+              </div>
+
+              <div className="file-upload-section">
+                <div className="file-title flex items-center gap-2 font-semibold text-sm mb-3">
+                  <File size={18} /> Supporting Documents
+                </div>
+                {files.map((f) => (
+                  <div key={f.id} className="file-item flex items-center justify-between p-2.5 rounded-xl bg-md-surface-container-low mb-2">
+                    <span className="file-name text-sm font-medium">{f.name}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="file-size text-xs text-md-on-surface-variant">{f.size}</span>
+                      <IconButton
+                        title="Remove file"
+                        size="sm"
+                        variant="danger"
+                        onClick={() => removeFile(f.id)}
+                      >
+                        <X size={16} />
+                      </IconButton>
+                    </div>
+                  </div>
+                ))}
+                <label
+                  className="upload-btn inline-flex items-center gap-2 px-4 py-2 rounded-full border border-md-outline/30 text-sm font-medium text-md-on-surface cursor-pointer hover:bg-md-primary/5 transition-colors"
+                >
+                  <Upload size={16} /> Upload Document
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                    onChange={handleFileUpload}
+                    style={{ display: "none" }}
+                  />
+                </label>
+                <div className="text-xs text-md-on-surface-variant opacity-70 mt-2">
+                  Supported: PDF, JPEG, PNG, DOC, DOCX. Max 10MB each.
+                </div>
+              </div>
+
+              <div className="actions flex items-center justify-end gap-3 pt-4 border-t border-md-outline/10">
+                <Button
+                  variant="text"
+                  onClick={() => navigate("/admin/compensation/objection")}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="filled"
+                  onClick={handleSubmit}
+                  isLoading={submitting}
+                >
+                  <Send size={18} /> Submit Objection
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -454,4 +386,3 @@ export const CreateObjection: React.FC = () => {
     </div>
   );
 };
-
