@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "postinstall": "prisma generate --schema=data_layer/database/prisma/schema.prisma",
+    "prisma:generate": "prisma generate --schema=data_layer/database/prisma/schema.prisma",
     "dev:backend": "npm run dev --workspace=business_logic_layer",
     "dev:frontend": "npm run dev --workspace=presentation_layer",
     "dev": "npm run dev --workspace=presentation_layer",

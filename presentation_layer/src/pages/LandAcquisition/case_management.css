@@ -262,46 +262,7 @@
   border-color: var(--md-primary);
   box-shadow: 0 0 0 3px rgba(103, 80, 164, 0.12);
 }
-.filter-bar .filter-group .btn-filter {
-  padding: 9px 20px;
-  border-radius: var(--radius-full);
-  border: none;
-  background: var(--md-primary);
-  color: white;
-  font-weight: 600;
-  font-size: 13px;
-  font-family: inherit;
-  cursor: pointer;
-  transition:
-    transform 0.15s var(--ease-bouncy),
-    box-shadow 0.2s;
-  box-shadow: var(--shadow-sm);
-}
-.filter-bar .filter-group .btn-filter:hover {
-  transform: scale(1.03);
-  box-shadow: var(--shadow-md);
-}
-.filter-bar .filter-group .btn-filter:active {
-  transform: scale(0.95);
-}
-.filter-bar .filter-group .btn-clear {
-  padding: 9px 16px;
-  border-radius: var(--radius-full);
-  border: 1.5px solid rgba(121, 116, 126, 0.25);
-  background: transparent;
-  color: var(--md-on-surface-variant);
-  font-weight: 500;
-  font-size: 13px;
-  font-family: inherit;
-  cursor: pointer;
-  transition:
-    background 0.2s,
-    transform 0.15s var(--ease-bouncy);
-}
-.filter-bar .filter-group .btn-clear:hover {
-  background: rgba(0, 0, 0, 0.04);
-  transform: scale(1.02);
-}
+/* .btn-filter and .btn-clear removed — use <Button variant="filled"> and <Button variant="outlined"> */
 
 .action-bar {
   display: flex;
@@ -348,31 +309,7 @@
   background: rgba(0, 0, 0, 0.04);
   transform: scale(1.02);
 }
-.action-bar .right .btn-primary {
-  padding: 8px 22px;
-  border-radius: var(--radius-full);
-  border: none;
-  background: var(--md-primary);
-  color: white;
-  font-weight: 600;
-  font-size: 13px;
-  font-family: inherit;
-  cursor: pointer;
-  transition:
-    transform 0.15s var(--ease-bouncy),
-    box-shadow 0.2s;
-  box-shadow: var(--shadow-sm);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.action-bar .right .btn-primary:hover {
-  transform: scale(1.03);
-  box-shadow: var(--shadow-md);
-}
-.action-bar .right .btn-primary:active {
-  transform: scale(0.95);
-}
+/* .action-bar .right .btn-primary removed — use <Button variant="filled"> */
 
 .table-wrap {
   background: var(--md-surface-container);
@@ -386,6 +323,23 @@
 }
 .table-scroll {
   overflow-x: auto;
+  overflow-y: auto;
+}
+
+/* md-scroll-thin — matches .md-scroll-thin in index.css */
+.table-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.table-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.table-scroll::-webkit-scrollbar-thumb {
+  background: var(--md-scrollbar-thumb, rgba(121, 116, 126, 0.4));
+  border-radius: 10px;
+}
+.table-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(121, 116, 126, 0.6);
 }
 table {
   width: 100%;
@@ -467,61 +421,106 @@ table tbody tr.row-clickable:hover {
   border-radius: 50%;
   flex-shrink: 0;
 }
-.status-badge.registered {
-  background: #e3f2fd;
-  color: #0b5b8c;
-}
-.status-badge.registered .dot {
-  background: #0b5b8c;
-}
-.status-badge.valuation {
-  background: #fff3e0;
-  color: #a8600b;
-}
-.status-badge.valuation .dot {
-  background: #a8600b;
-}
-.status-badge.approved {
-  background: #e6f4ea;
-  color: #1e7b4a;
-}
-.status-badge.approved .dot {
-  background: #1e7b4a;
-}
-.status-badge.rejected {
-  background: #fce8e6;
-  color: #b3261e;
-}
-.status-badge.rejected .dot {
-  background: #b3261e;
-}
-.status-badge.pending {
-  background: #fef7e0;
-  color: #8d6e00;
-}
-.status-badge.pending .dot {
-  background: #8d6e00;
-}
-.status-badge.closed {
-  background: #f1f5f9;
-  color: #475569;
-}
-.status-badge.closed .dot {
-  background: #475569;
-}
-.status-badge.offer {
-  background: #e0f2fe;
-  color: #075985;
-}
-.status-badge.offer .dot {
-  background: #075985;
-}
-.status-badge.payment {
-  background: #d9f0fc;
-  color: #0b5b8c;
-}
-.status-badge.payment .dot {
-  background: #0b5b8c;
+/* ============================================================
+   14 CaseStatus colour matrix — light mode
+   (follows same pattern as DESIGN.md 15-status payment matrix)
+   ============================================================ */
+
+/* Case Registered — Electric Sky (blue) */
+.status-badge.status-case-registered { background: #E0F2FE; color: #075985; }
+.status-badge.status-case-registered .dot { background: #0284C7; }
+
+/* Valuer Assigned — Amber */
+.status-badge.status-valuer-assigned { background: #FFF8E1; color: #8D6E00; }
+.status-badge.status-valuer-assigned .dot { background: #FFA000; }
+
+/* Valuation In Progress — Amber */
+.status-badge.status-valuation-progress { background: #FFF8E1; color: #8D6E00; }
+.status-badge.status-valuation-progress .dot { background: #FFA000; }
+
+/* Pending Valuation Approval — Warm Honey */
+.status-badge.status-pending-valuation { background: #FEF9C3; color: #854D0E; }
+.status-badge.status-pending-valuation .dot { background: #CA8A04; }
+
+/* Valuation Approved — Emerald Green */
+.status-badge.status-valuation-approved { background: #E8F5E9; color: #1B5E20; }
+.status-badge.status-valuation-approved .dot { background: #2E7D32; }
+
+/* Valuation Rejected — Bright Red */
+.status-badge.status-valuation-rejected { background: #FFEBEE; color: #B71C1C; }
+.status-badge.status-valuation-rejected .dot { background: #C62828; }
+
+/* Pending Compensation Approval — Warm Honey */
+.status-badge.status-pending-comp { background: #FEF9C3; color: #854D0E; }
+.status-badge.status-pending-comp .dot { background: #CA8A04; }
+
+/* Compensation Approved — Emerald Green */
+.status-badge.status-comp-approved { background: #E8F5E9; color: #1B5E20; }
+.status-badge.status-comp-approved .dot { background: #2E7D32; }
+
+/* Compensation Rejected — Bright Red */
+.status-badge.status-comp-rejected { background: #FFEBEE; color: #B71C1C; }
+.status-badge.status-comp-rejected .dot { background: #C62828; }
+
+/* Offer Issued — Indigo */
+.status-badge.status-offer-issued { background: #EDE7F6; color: #4527A0; }
+.status-badge.status-offer-issued .dot { background: #6750A4; }
+
+/* Offer Rejected — Rose Wine */
+.status-badge.status-offer-rejected { background: #FCE4EC; color: #880E4F; }
+.status-badge.status-offer-rejected .dot { background: #AD1457; }
+
+/* Payment In Progress — Amber */
+.status-badge.status-payment-progress { background: #FFF8E1; color: #8D6E00; }
+.status-badge.status-payment-progress .dot { background: #FFA000; }
+
+/* Payment Completed — Emerald Green */
+.status-badge.status-payment-completed { background: #E8F5E9; color: #1B5E20; }
+.status-badge.status-payment-completed .dot { background: #2E7D32; }
+
+/* Case Closed — Slate */
+.status-badge.status-case-closed { background: #F1F5F9; color: #475569; }
+.status-badge.status-case-closed .dot { background: #64748B; }
+
+/* ============================================================
+   Dark mode overrides
+   ============================================================ */
+@media (prefers-color-scheme: dark) {
+  .status-badge.status-case-registered { background: rgba(2,132,199,0.22); color: #7DD3FC; }
+  .status-badge.status-case-registered .dot { background: #38BDF8; }
+
+  .status-badge.status-valuer-assigned,
+  .status-badge.status-valuation-progress,
+  .status-badge.status-payment-progress { background: rgba(255,160,0,0.20); color: #FFE082; }
+  .status-badge.status-valuer-assigned .dot,
+  .status-badge.status-valuation-progress .dot,
+  .status-badge.status-payment-progress .dot { background: #FFD54F; }
+
+  .status-badge.status-pending-valuation,
+  .status-badge.status-pending-comp { background: rgba(202,138,4,0.22); color: #FEF08A; }
+  .status-badge.status-pending-valuation .dot,
+  .status-badge.status-pending-comp .dot { background: #FACC15; }
+
+  .status-badge.status-valuation-approved,
+  .status-badge.status-comp-approved,
+  .status-badge.status-payment-completed { background: rgba(46,125,50,0.22); color: #A5D6A7; }
+  .status-badge.status-valuation-approved .dot,
+  .status-badge.status-comp-approved .dot,
+  .status-badge.status-payment-completed .dot { background: #81C784; }
+
+  .status-badge.status-valuation-rejected,
+  .status-badge.status-comp-rejected { background: rgba(198,40,40,0.25); color: #FFCDD2; }
+  .status-badge.status-valuation-rejected .dot,
+  .status-badge.status-comp-rejected .dot { background: #E57373; }
+
+  .status-badge.status-offer-issued { background: rgba(103,80,164,0.25); color: #D0BCFF; }
+  .status-badge.status-offer-issued .dot { background: #B39DDB; }
+
+  .status-badge.status-offer-rejected { background: rgba(173,20,87,0.25); color: #F8BBD0; }
+  .status-badge.status-offer-rejected .dot { background: #F06292; }
+
+  .status-badge.status-case-closed { background: rgba(100,116,139,0.25); color: #CBD5E1; }
+  .status-badge.status-case-closed .dot { background: #94A3B8; }
 }
 
 .meta-text {
@@ -833,52 +832,7 @@ table tbody tr.row-clickable:hover {
   flex-shrink: 0;
 }
 
-.case-header-actions .btn-edit {
-  padding: 8px 20px;
-  border-radius: var(--radius-full);
-  border: none;
-  background: var(--md-primary);
-  color: white;
-  font-weight: 600;
-  font-size: 13px;
-  font-family: inherit;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition:
-    transform 0.15s var(--ease-bouncy),
-    box-shadow 0.2s;
-  box-shadow: var(--shadow-sm);
-}
-
-.case-header-actions .btn-edit:hover {
-  transform: scale(1.03);
-  box-shadow: var(--shadow-md);
-}
-
-.case-header-actions .btn-delete {
-  padding: 8px 20px;
-  border-radius: var(--radius-full);
-  border: 1.5px solid rgba(179, 38, 30, 0.3);
-  background: transparent;
-  color: var(--md-error-text, #b3261e);
-  font-weight: 600;
-  font-size: 13px;
-  font-family: inherit;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition:
-    background 0.2s,
-    transform 0.15s var(--ease-bouncy);
-}
-
-.case-header-actions .btn-delete:hover {
-  background: rgba(179, 38, 30, 0.08);
-  transform: scale(1.02);
-}
+/* .btn-edit and .btn-delete removed — use <Button variant="filled"> and <Button variant="danger"> */
 
 .case-section {
   background: var(--md-surface-container);
@@ -1105,62 +1059,65 @@ table tbody tr.row-clickable:hover {
   border-radius: 50%;
 }
 
-.status-badge-lg.registered {
-  background: #e3f2fd;
-  color: #0b5b8c;
-}
-.status-badge-lg.registered .dot {
-  background: #0b5b8c;
-}
-.status-badge-lg.valuation {
-  background: #fff3e0;
-  color: #a8600b;
-}
-.status-badge-lg.valuation .dot {
-  background: #a8600b;
-}
-.status-badge-lg.approved {
-  background: #e6f4ea;
-  color: #1e7b4a;
-}
-.status-badge-lg.approved .dot {
-  background: #1e7b4a;
-}
-.status-badge-lg.rejected {
-  background: #fce8e6;
-  color: #b3261e;
-}
-.status-badge-lg.rejected .dot {
-  background: #b3261e;
-}
-.status-badge-lg.pending {
-  background: #fef7e0;
-  color: #8d6e00;
-}
-.status-badge-lg.pending .dot {
-  background: #8d6e00;
-}
-.status-badge-lg.closed {
-  background: #f1f5f9;
-  color: #475569;
-}
-.status-badge-lg.closed .dot {
-  background: #475569;
-}
-.status-badge-lg.offer {
-  background: #e0f2fe;
-  color: #075985;
-}
-.status-badge-lg.offer .dot {
-  background: #075985;
-}
+/* .status-badge-lg colour variants — use same domain-specific classes as .status-badge */
+.status-badge-lg.status-case-registered { background: #E0F2FE; color: #075985; }
+.status-badge-lg.status-case-registered .dot { background: #0284C7; }
+.status-badge-lg.status-valuer-assigned,
+.status-badge-lg.status-valuation-progress,
+.status-badge-lg.status-payment-progress { background: #FFF8E1; color: #8D6E00; }
+.status-badge-lg.status-valuer-assigned .dot,
+.status-badge-lg.status-valuation-progress .dot,
+.status-badge-lg.status-payment-progress .dot { background: #FFA000; }
+.status-badge-lg.status-pending-valuation,
+.status-badge-lg.status-pending-comp { background: #FEF9C3; color: #854D0E; }
+.status-badge-lg.status-pending-valuation .dot,
+.status-badge-lg.status-pending-comp .dot { background: #CA8A04; }
+.status-badge-lg.status-valuation-approved,
+.status-badge-lg.status-comp-approved,
+.status-badge-lg.status-payment-completed { background: #E8F5E9; color: #1B5E20; }
+.status-badge-lg.status-valuation-approved .dot,
+.status-badge-lg.status-comp-approved .dot,
+.status-badge-lg.status-payment-completed .dot { background: #2E7D32; }
+.status-badge-lg.status-valuation-rejected,
+.status-badge-lg.status-comp-rejected { background: #FFEBEE; color: #B71C1C; }
+.status-badge-lg.status-valuation-rejected .dot,
+.status-badge-lg.status-comp-rejected .dot { background: #C62828; }
+.status-badge-lg.status-offer-issued { background: #EDE7F6; color: #4527A0; }
+.status-badge-lg.status-offer-issued .dot { background: #6750A4; }
+.status-badge-lg.status-offer-rejected { background: #FCE4EC; color: #880E4F; }
+.status-badge-lg.status-offer-rejected .dot { background: #AD1457; }
+.status-badge-lg.status-case-closed { background: #F1F5F9; color: #475569; }
+.status-badge-lg.status-case-closed .dot { background: #64748B; }
 
-.status-badge-lg.payment {
-  background: #d9f0fc;
-  color: #0b5b8c;
-}
-.status-badge-lg.payment .dot {
-  background: #0b5b8c;
+@media (prefers-color-scheme: dark) {
+  .status-badge-lg.status-case-registered { background: rgba(2,132,199,0.22); color: #7DD3FC; }
+  .status-badge-lg.status-case-registered .dot { background: #38BDF8; }
+  .status-badge-lg.status-valuer-assigned,
+  .status-badge-lg.status-valuation-progress,
+  .status-badge-lg.status-payment-progress { background: rgba(255,160,0,0.20); color: #FFE082; }
+  .status-badge-lg.status-valuer-assigned .dot,
+  .status-badge-lg.status-valuation-progress .dot,
+  .status-badge-lg.status-payment-progress .dot { background: #FFD54F; }
+  .status-badge-lg.status-pending-valuation,
+  .status-badge-lg.status-pending-comp { background: rgba(202,138,4,0.22); color: #FEF08A; }
+  .status-badge-lg.status-pending-valuation .dot,
+  .status-badge-lg.status-pending-comp .dot { background: #FACC15; }
+  .status-badge-lg.status-valuation-approved,
+  .status-badge-lg.status-comp-approved,
+  .status-badge-lg.status-payment-completed { background: rgba(46,125,50,0.22); color: #A5D6A7; }
+  .status-badge-lg.status-valuation-approved .dot,
+  .status-badge-lg.status-comp-approved .dot,
+  .status-badge-lg.status-payment-completed .dot { background: #81C784; }
+  .status-badge-lg.status-valuation-rejected,
+  .status-badge-lg.status-comp-rejected { background: rgba(198,40,40,0.25); color: #FFCDD2; }
+  .status-badge-lg.status-valuation-rejected .dot,
+  .status-badge-lg.status-comp-rejected .dot { background: #E57373; }
+  .status-badge-lg.status-offer-issued { background: rgba(103,80,164,0.25); color: #D0BCFF; }
+  .status-badge-lg.status-offer-issued .dot { background: #B39DDB; }
+  .status-badge-lg.status-offer-rejected { background: rgba(173,20,87,0.25); color: #F8BBD0; }
+  .status-badge-lg.status-offer-rejected .dot { background: #F06292; }
+  .status-badge-lg.status-case-closed { background: rgba(100,116,139,0.25); color: #CBD5E1; }
+  .status-badge-lg.status-case-closed .dot { background: #94A3B8; }
 }
 
 @media (max-width: 768px) {
@@ -1396,38 +1353,7 @@ table tbody tr.row-clickable:hover {
   margin-top: 4px;
 }
 
-.assignment-panel .btn-assign {
-  width: 100%;
-  padding: 12px;
-  border-radius: var(--radius-full);
-  border: none;
-  background: var(--md-primary);
-  color: white;
-  font-weight: 600;
-  font-size: 15px;
-  font-family: inherit;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition:
-    transform 0.15s var(--ease-bouncy),
-    box-shadow 0.2s;
-  box-shadow: var(--shadow-sm);
-  margin-top: 8px;
-}
-
-.assignment-panel .btn-assign:hover:not(:disabled) {
-  transform: scale(1.02);
-  box-shadow: var(--shadow-md);
-}
-
-.assignment-panel .btn-assign:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
-}
+/* .btn-assign and .btn-reset removed — use <Button variant="filled" className="w-full"> and <Button variant="outlined"> */
 
 .assignment-success {
   text-align: center;
@@ -1465,27 +1391,6 @@ table tbody tr.row-clickable:hover {
   font-size: 14px;
   color: var(--md-on-surface-variant);
   margin-top: 8px;
-}
-
-.assignment-success .btn-reset {
-  margin-top: 20px;
-  padding: 10px 32px;
-  border-radius: var(--radius-full);
-  border: 1.5px solid rgba(121, 116, 126, 0.25);
-  background: transparent;
-  font-weight: 500;
-  font-size: 14px;
-  font-family: inherit;
-  color: var(--md-on-surface-variant);
-  cursor: pointer;
-  transition:
-    background 0.2s,
-    transform 0.15s var(--ease-bouncy);
-}
-
-.assignment-success .btn-reset:hover {
-  background: rgba(0, 0, 0, 0.04);
-  transform: scale(1.02);
 }
 
 .empty-state {

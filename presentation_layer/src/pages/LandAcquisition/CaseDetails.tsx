@@ -13,6 +13,9 @@ import {
   Loader2,
 } from "lucide-react";
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
+import { Button } from "../../components/ui/Button";
+import { Modal } from "../../components/ui/Modal";
+import { CopyButton } from "../../components/ui/CopyButton";
 import "../../style.css";
 import "./case_management.css";
 
@@ -62,20 +65,20 @@ type CaseData = {
 };
 
 const statusClassMap: Record<string, string> = {
-  CASE_REGISTERED: "registered",
-  VALUER_ASSIGNED: "valuation",
-  VALUATION_IN_PROGRESS: "valuation",
-  PENDING_VALUATION_APPROVAL: "pending",
-  VALUATION_APPROVED: "approved",
-  VALUATION_REJECTED: "rejected",
-  PENDING_COMPENSATION_APPROVAL: "pending",
-  COMPENSATION_APPROVED: "approved",
-  COMPENSATION_REJECTED: "rejected",
-  OFFER_ISSUED: "offer",
-  OFFER_REJECTED: "rejected",
-  PAYMENT_IN_PROGRESS: "payment",
-  PAYMENT_COMPLETED: "approved",
-  CASE_CLOSED: "closed",
+  CASE_REGISTERED: "status-case-registered",
+  VALUER_ASSIGNED: "status-valuer-assigned",
+  VALUATION_IN_PROGRESS: "status-valuation-progress",
+  PENDING_VALUATION_APPROVAL: "status-pending-valuation",
+  VALUATION_APPROVED: "status-valuation-approved",
+  VALUATION_REJECTED: "status-valuation-rejected",
+  PENDING_COMPENSATION_APPROVAL: "status-pending-comp",
+  COMPENSATION_APPROVED: "status-comp-approved",
+  COMPENSATION_REJECTED: "status-comp-rejected",
+  OFFER_ISSUED: "status-offer-issued",
+  OFFER_REJECTED: "status-offer-rejected",
+  PAYMENT_IN_PROGRESS: "status-payment-progress",
+  PAYMENT_COMPLETED: "status-payment-completed",
+  CASE_CLOSED: "status-case-closed",
 };
 
 const statusLabelMap: Record<string, string> = {
@@ -204,6 +207,9 @@ export const CaseView: React.FC = () => {
     }
   }, [location.state]);
 
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   const toggleSection = (section: string) => {
     setExpandedSections((prev) => ({
       ...prev,
@@ -221,21 +227,18 @@ export const CaseView: React.FC = () => {
     });
   };
 
-  const handleDelete = async () => {
+  const confirmDelete = async () => {
     if (!caseData) return;
-    if (
-      window.confirm(
-        "Are you sure you want to delete this case? This action will remove it from the backend database."
-      )
-    ) {
-      try {
-        await landAcquisitionApi.deleteCase(caseData.id);
-        alert("Case deleted successfully from database!");
-        navigate("/admin/case");
-      } catch (err: any) {
-        console.error("Failed to delete case:", err);
-        alert(`Delete Failed: ${err.message}`);
-      }
+    setDeleting(true);
+    try {
+      await landAcquisitionApi.deleteCase(caseData.id);
+      setShowDeleteModal(false);
+      navigate("/admin/case");
+    } catch (err: any) {
+      console.error("Failed to delete case:", err);
+      alert(`Delete Failed: ${err.message}`);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -266,9 +269,9 @@ export const CaseView: React.FC = () => {
           <p style={{ color: "var(--md-on-surface-variant)", marginBottom: "20px" }}>
             {error || "No case selected or case ID was not provided in navigation state."}
           </p>
-          <button className="btn-primary" onClick={() => navigate("/admin/case")}>
+          <Button variant="filled" onClick={() => navigate("/admin/case")}>
             Back to Case Dashboard
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -420,15 +423,18 @@ export const CaseView: React.FC = () => {
               </div>
             </div>
             <div className="topbar-right">
-              <button className="btn-outline" onClick={() => navigate("/admin/case")}>
-                <Lucide.ArrowLeft size={16} className="inline mr-1" /> Back to List
-              </button>
+              <Button variant="outlined" size="sm" onClick={() => navigate("/admin/case")}>
+                <Lucide.ArrowLeft size={16} /> Back to List
+              </Button>
             </div>
           </div>
 
           <div className="case-header">
             <div className="case-header-left">
-              <span className="case-id" style={{ fontSize: "13px" }}>{caseData.id}</span>
+              <div className="flex items-center gap-2">
+                <span className="case-id font-mono text-sm">{caseData.id}</span>
+                <CopyButton value={caseData.id} />
+              </div>
               <h2 className="case-title">{caseData.title}</h2>
               <div className="case-meta">
                 <span className="meta-item">
@@ -439,13 +445,13 @@ export const CaseView: React.FC = () => {
                 </span>
               </div>
             </div>
-            <div className="case-header-actions">
-              <button className="btn-edit" onClick={() => handleEdit()}>
+            <div className="case-header-actions flex items-center gap-3">
+              <Button variant="filled" onClick={() => handleEdit()}>
                 <Edit size={16} /> Edit Case
-              </button>
-              <button className="btn-delete" onClick={handleDelete}>
+              </Button>
+              <Button variant="danger" onClick={() => setShowDeleteModal(true)}>
                 <Trash2 size={16} /> Delete Case
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -468,16 +474,17 @@ export const CaseView: React.FC = () => {
                       {section.icon}
                       {section.title}
                     </div>
-                    <div className="section-actions">
-                      <button
-                        className="edit-btn-sm"
+                    <div className="section-actions flex items-center gap-2">
+                      <Button
+                        variant="outlined"
+                        size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleEdit(section.key);
                         }}
                       >
                         <Edit size={14} /> Edit
-                      </button>
+                      </Button>
                       <ChevronDown
                         size={20}
                         className={`toggle-icon ${expandedSections[section.key] ? "open" : ""}`}
@@ -493,6 +500,28 @@ export const CaseView: React.FC = () => {
               );
             })}
           </div>
+
+          {/* Delete Confirmation Modal */}
+          <Modal
+            isOpen={showDeleteModal}
+            onClose={() => setShowDeleteModal(false)}
+            title="Delete Case"
+            subtitle={`Are you sure you want to delete case "${caseData.title}"?`}
+            footer={
+              <>
+                <Button variant="text" onClick={() => setShowDeleteModal(false)}>
+                  Cancel
+                </Button>
+                <Button variant="danger" isLoading={deleting} onClick={confirmDelete}>
+                  <Trash2 size={16} /> Confirm Delete
+                </Button>
+              </>
+            }
+          >
+            <p className="text-sm text-md-on-surface-variant">
+              This action will permanently remove the case, associated land parcels, owner data, and documents from the backend database. This action cannot be undone.
+            </p>
+          </Modal>
 
           <div
             style={{

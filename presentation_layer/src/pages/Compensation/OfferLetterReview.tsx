@@ -1,13 +1,14 @@
 import * as Lucide from "lucide-react";
 import React, { useState, useEffect } from "react";
-import { createPortal } from "react-dom";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { CheckCircle, XCircle, X, ArrowLeft, Loader2 } from "lucide-react";
+import { CheckCircle, XCircle, ArrowLeft, Loader2 } from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
-import { useModalPopIn } from "../../hooks/useModalPopIn";
+import { Modal } from "../../components/ui/Modal";
+import { Button } from "../../components/ui/Button";
+import { Textarea } from "../../components/ui/Textarea";
+import { CopyButton } from "../../components/ui/CopyButton";
 import "../../style.css";
 import "./compensation.css";
-
 
 type OfferDetail = {
   id: string;
@@ -28,10 +29,10 @@ type OfferDetail = {
 };
 
 const statusClassMap: Record<string, string> = {
-  PENDING: "pending",
-  ACCEPTED: "approved",
-  REJECTED: "rejected",
-  EXPIRED: "closed",
+  PENDING: "status-offer-pending",
+  ACCEPTED: "status-offer-accepted",
+  REJECTED: "status-offer-rejected",
+  EXPIRED: "status-expired",
 };
 
 const statusLabelMap: Record<string, string> = {
@@ -59,8 +60,6 @@ export const OfferLetterDetail: React.FC = () => {
   const [activeObjection, setActiveObjection] = useState<any | null>(null);
   const [showObjectionPrompt, setShowObjectionPrompt] = useState(false);
   const [withdrawingObjection, setWithdrawingObjection] = useState(false);
-  const promptModalRef = useModalPopIn(showObjectionPrompt);
-  const rejectModalRef = useModalPopIn(showRejectModal);
 
   useEffect(() => {
     async function fetchOffer() {
@@ -90,7 +89,7 @@ export const OfferLetterDetail: React.FC = () => {
             ? new Date(o.expiryDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
             : "—",
           status: statusLabelMap[o.status] || o.status,
-          statusClass: statusClassMap[o.status] || "pending",
+          statusClass: statusClassMap[o.status] || "status-offer-pending",
           totalCompensation: Number(o.offerAmount || 0),
           paymentConditions:
             "Payment will be initiated upon formal acceptance. Funds will be transferred directly to the registered beneficiary bank account.",
@@ -111,7 +110,6 @@ export const OfferLetterDetail: React.FC = () => {
     if (!offer) return;
 
     if (!force) {
-      // Check if there are any active (unresolved) objections for this offer/case
       try {
         const objRes = await compensationApi.getAllObjections({ search: offer.id });
         const list = objRes.objections || [];
@@ -130,9 +128,8 @@ export const OfferLetterDetail: React.FC = () => {
     setSubmitting(true);
     try {
       await compensationApi.acceptOffer(offer.id, undefined, force);
-      setOffer((prev) => (prev ? { ...prev, status: "Accepted", statusClass: "approved" } : null));
+      setOffer((prev) => (prev ? { ...prev, status: "Accepted", statusClass: "status-offer-accepted" } : null));
       setShowObjectionPrompt(false);
-      alert("Offer Letter Accepted Successfully!\n\nCase status updated to 'PAYMENT_IN_PROGRESS'.");
       navigate("/admin/compensation/offer");
     } catch (err: any) {
       console.error("Accept failed:", err);
@@ -164,7 +161,6 @@ export const OfferLetterDetail: React.FC = () => {
     }
   };
 
-
   const handleRejectSubmit = async () => {
     if (!reason.trim()) {
       setReasonError("Reason is required.");
@@ -175,8 +171,7 @@ export const OfferLetterDetail: React.FC = () => {
     setSubmitting(true);
     try {
       await compensationApi.rejectOffer(offer.id, reason);
-      setOffer((prev) => (prev ? { ...prev, status: "Rejected", statusClass: "rejected" } : null));
-      alert("Offer Letter Rejected.\n\nCase status updated to 'OFFER_REJECTED'.");
+      setOffer((prev) => (prev ? { ...prev, status: "Rejected", statusClass: "status-offer-rejected" } : null));
       setShowRejectModal(false);
       navigate("/admin/compensation/offer");
     } catch (err: any) {
@@ -191,7 +186,7 @@ export const OfferLetterDetail: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="main blur-shape-bg" style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "80vh" }}>
+      <div className="main blur-shape-bg flex justify-center items-center min-h-[80vh]">
         <div style={{ textAlign: "center", color: "var(--md-on-surface-variant)" }}>
           <Loader2 size={32} className="inline animate-spin mb-2" />
           <div>Fetching offer letter details from backend...</div>
@@ -202,15 +197,15 @@ export const OfferLetterDetail: React.FC = () => {
 
   if (!offer) {
     return (
-      <div className="main blur-shape-bg">
+      <div className="main blur-shape-bg p-8">
         <div style={{ padding: "40px 0", textAlign: "center" }}>
-          <h2>Offer Letter Not Found</h2>
+          <h2 className="text-xl font-bold mb-2">Offer Letter Not Found</h2>
           <p style={{ color: "var(--md-on-surface-variant)", marginBottom: "20px" }}>
             No offer letter selected or valid ID provided.
           </p>
-          <button className="btn-primary" onClick={() => navigate("/admin/compensation/offer")}>
+          <Button variant="filled" onClick={() => navigate("/admin/compensation/offer")}>
             Back to Offer Letters
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -218,99 +213,96 @@ export const OfferLetterDetail: React.FC = () => {
 
   return (
     <>
-      {/* Active Objection Warning Modal */}      {showObjectionPrompt && activeObjection &&
-        createPortal(
-          <div className="reject-modal-overlay" onClick={() => setShowObjectionPrompt(false)}>
-            <div ref={promptModalRef} className="reject-modal" style={{ maxWidth: "580px", borderRadius: "28px" }} onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <h3 style={{ color: "#d32f2f", display: "flex", alignItems: "center", gap: "8px" }}>
-                  <Lucide.AlertTriangle size={22} /> Active Objection Detected
-                </h3>
-                <button className="close-btn" onClick={() => setShowObjectionPrompt(false)}>
-                  <X size={22} />
-                </button>
-              </div>
-              <div style={{ padding: "12px 0", color: "var(--md-on-surface)" }}>
-                <p style={{ marginBottom: "12px", fontSize: "14px", lineHeight: "1.5" }}>
-                  An active formal objection (Form N) is currently linked to this case/offer letter. You must review or withdraw the objection before accepting this offer.
-                </p>
-                <div style={{ background: "var(--md-surface-container-low)", padding: "14px", borderRadius: "12px", fontSize: "13px" }}>
-                  <div style={{ fontWeight: "600", marginBottom: "4px" }}>
-                    Objection ID: <span style={{ color: "var(--md-primary)" }}>{(activeObjection.objectionId || activeObjection.id || "").slice(0, 8)}...</span>
-                  </div>
-                  <div style={{ marginBottom: "4px" }}>
-                    Reason: <em>"{activeObjection.objectionReason || activeObjection.reason || "Disagreement on valuation component"}"</em>
-                  </div>
-                  {activeObjection.requestedAmount && (
-                    <div>
-                      Requested Amount: <strong style={{ color: "var(--md-primary)" }}>RM {Number(activeObjection.requestedAmount).toLocaleString("en-MY")}</strong>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="modal-actions" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-                <button
-                  className="btn-cancel"
-                  style={{ background: "#d32f2f", color: "#ffffff", border: "none" }}
-                  onClick={handleWithdrawObjectionAndAccept}
-                  disabled={withdrawingObjection}
-                >
-                  {withdrawingObjection ? "Withdrawing..." : "Withdraw Objection & Accept"}
-                </button>
-                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                  <button
-                    className="btn-cancel"
-                    onClick={() => navigate(`/admin/compensation/objection/review/${activeObjection.objectionId || activeObjection.id}`)}
-                  >
-                    Review Objection
-                  </button>
-                  <button className="btn-submit" onClick={() => setShowObjectionPrompt(false)}>
-                    Close
-                  </button>
-                </div>
-              </div>
+      {/* Active Objection Warning Modal */}
+      <Modal
+        isOpen={Boolean(showObjectionPrompt && activeObjection)}
+        onClose={() => setShowObjectionPrompt(false)}
+        title="Active Objection Detected"
+        subtitle="Form N pending review"
+        footer={
+          <div className="flex justify-between items-center w-full flex-wrap gap-2">
+            <Button
+              variant="danger"
+              onClick={handleWithdrawObjectionAndAccept}
+              isLoading={withdrawingObjection}
+            >
+              Withdraw Objection & Accept
+            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outlined"
+                onClick={() => navigate(`/admin/compensation/objection/review/${activeObjection.objectionId || activeObjection.id}`)}
+              >
+                Review Objection
+              </Button>
+              <Button variant="text" onClick={() => setShowObjectionPrompt(false)}>
+                Close
+              </Button>
             </div>
-          </div>,
-          document.body
-        )}
-
-      {showRejectModal &&
-        createPortal(
-          <div className="reject-modal-overlay" onClick={() => setShowRejectModal(false)}>
-            <div ref={rejectModalRef} className="reject-modal" style={{ borderRadius: "28px" }} onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <h3>Reject Offer</h3>
-                <button className="close-btn" onClick={() => setShowRejectModal(false)}>
-                  <X size={22} />
-                </button>
-              </div>
-              <div className="form-group">
-                <label htmlFor="reason">Reason for Rejection *</label>
-                <textarea
-                  id="reason"
-                  rows={3}
-                  placeholder="State the reason for rejecting this offer..."
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                />
-                {reasonError && <div className="error-text">{reasonError}</div>}
-              </div>
-              <div className="modal-actions">
-                <button className="btn-cancel" onClick={() => setShowRejectModal(false)}>
-                  Cancel
-                </button>
-                <button className="btn-submit" onClick={handleRejectSubmit} disabled={submitting}>
-                  {submitting ? "Submitting..." : "Confirm Reject"}
-                </button>
-              </div>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-md-on-surface-variant">
+            An active formal objection (Form N) is currently linked to this case/offer letter. You must review or withdraw the objection before accepting this offer.
+          </p>
+          <div className="p-3 bg-md-surface-container-low rounded-xl text-xs space-y-1">
+            <div>
+              <span className="text-md-on-surface-variant">Objection ID: </span>
+              <strong className="font-mono text-md-primary">{activeObjection?.objectionId || activeObjection?.id}</strong>
             </div>
-          </div>,
-          document.body
-        )}
+            <div>
+              <span className="text-md-on-surface-variant">Reason: </span>
+              <em>"{activeObjection?.objectionReason || activeObjection?.reason || "Disagreement on valuation component"}"</em>
+            </div>
+            {activeObjection?.requestedAmount && (
+              <div>
+                <span className="text-md-on-surface-variant">Requested Amount: </span>
+                <strong className="text-md-primary">RM {Number(activeObjection.requestedAmount).toLocaleString("en-MY")}</strong>
+              </div>
+            )}
+          </div>
+        </div>
+      </Modal>
 
+      {/* Reject Modal */}
+      <Modal
+        isOpen={showRejectModal}
+        onClose={() => setShowRejectModal(false)}
+        title="Reject Offer"
+        subtitle="Formal rejection recording"
+        footer={
+          <>
+            <Button variant="text" onClick={() => setShowRejectModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleRejectSubmit}
+              isLoading={submitting}
+            >
+              Confirm Reject
+            </Button>
+          </>
+        }
+      >
+        <div>
+          <Textarea
+            label="Reason for Rejection *"
+            id="reason"
+            rows={3}
+            placeholder="State the reason for rejecting this offer..."
+            value={reason}
+            onChange={(e) => {
+              setReason(e.target.value);
+              if (reasonError) setReasonError("");
+            }}
+          />
+          {reasonError && <div className="text-xs text-md-error pl-2 mt-1">{reasonError}</div>}
+        </div>
+      </Modal>
 
-
-      <div className="main blur-shape-bg">
+      <div className="main blur-shape-bg w-full p-6">
         <div className="topbar" style={{ marginBottom: "20px" }}>
           <div className="topbar-left">
             <h1 style={{ marginBottom: 0 }}>Form H — Notice of Award & Offer</h1>
@@ -319,17 +311,20 @@ export const OfferLetterDetail: React.FC = () => {
             </div>
           </div>
           <div className="topbar-right">
-            <button className="btn-outline" onClick={() => navigate("/admin/compensation/offer")}>
-              <ArrowLeft size={16} className="inline mr-1" /> Back
-            </button>
+            <Button variant="outlined" size="sm" onClick={() => navigate("/admin/compensation/offer")}>
+              <ArrowLeft size={16} /> Back
+            </Button>
           </div>
         </div>
 
-        <div className="case-summary" style={{ background: "var(--md-surface-container)", padding: "20px", borderRadius: "16px", marginBottom: "24px" }}>
+        <div className="case-summary bg-md-surface-container p-5 rounded-2xl mb-6 flex justify-between items-center">
           <div>
-            <span className="case-id" style={{ fontSize: "12px" }}>Ref No: {offer.offerReferenceNo}</span>
-            <h2 className="case-title" style={{ fontSize: "20px", margin: "4px 0" }}>{offer.caseTitle}</h2>
-            <div style={{ fontSize: "13px", color: "var(--md-on-surface-variant)" }}>
+            <div className="flex items-center gap-2">
+              <span className="case-id font-mono text-xs">Ref No: {offer.offerReferenceNo}</span>
+              <CopyButton value={offer.offerReferenceNo} />
+            </div>
+            <h2 className="case-title text-lg font-bold my-1">{offer.caseTitle}</h2>
+            <div className="text-xs text-md-on-surface-variant">
               Land Owner: <strong>{offer.ownerName}</strong> ({offer.ownerIc}) · Land Title: <strong>{offer.landTitle}</strong>
             </div>
           </div>
@@ -338,47 +333,43 @@ export const OfferLetterDetail: React.FC = () => {
           </span>
         </div>
 
-        <div className="report-card" style={{ background: "var(--md-surface-container)", padding: "24px", borderRadius: "16px", marginBottom: "24px" }}>
-          <h3 style={{ fontSize: "18px", marginBottom: "16px" }}>Award Details</h3>
+        <div className="report-card bg-md-surface-container p-6 rounded-2xl mb-6">
+          <h3 className="text-base font-bold mb-4">Award Details</h3>
 
-          <div style={{ padding: "20px", background: "rgba(99,102,241,0.08)", borderRadius: "12px", marginBottom: "24px" }}>
-            <span className="label">Total Award Amount:</span>
-            <div style={{ fontSize: "28px", fontWeight: "bold", color: "var(--md-primary)" }}>
+          <div className="p-5 bg-md-primary/5 rounded-xl mb-6">
+            <span className="label text-xs text-md-on-surface-variant font-semibold">Total Award Amount:</span>
+            <div className="text-2xl font-bold text-md-primary mt-1">
               {formatCurrency(offer.totalCompensation)}
             </div>
-            <div style={{ fontSize: "13px", color: "var(--md-on-surface-variant)", marginTop: "4px" }}>
+            <div className="text-xs text-md-on-surface-variant mt-1">
               Issued: {offer.issueDate} · Expires: {offer.expiryDate}
             </div>
           </div>
 
-          <div style={{ marginBottom: "24px" }}>
-            <span className="label">Terms & Payment Conditions:</span>
-            <p style={{ marginTop: "4px", fontSize: "14px", color: "var(--md-on-surface)" }}>{offer.paymentConditions}</p>
+          <div className="mb-6">
+            <span className="label text-xs text-md-on-surface-variant font-semibold">Terms & Payment Conditions:</span>
+            <p className="mt-1 text-sm text-md-on-surface leading-relaxed">{offer.paymentConditions}</p>
           </div>
 
-          <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", flexWrap: "wrap" }}>
-            <button
-              className="btn-outline"
+          <div className="flex gap-3 justify-end flex-wrap items-center pt-4 border-t border-md-outline/10">
+            <Button
+              variant="outlined"
               onClick={() => navigate(`/admin/compensation/objection/create?offerId=${offer.id}`)}
-              style={{ padding: "8px 20px" }}
             >
-              <Lucide.AlertCircle size={18} className="inline mr-1" /> Submit Objection (Form N)
-            </button>
+              <Lucide.AlertCircle size={18} /> Submit Objection (Form N)
+            </Button>
             {offer.status === "Pending" && (
               <>
-                <button className="btn-reject" onClick={() => setShowRejectModal(true)} disabled={submitting}>
-                  <XCircle size={18} className="inline mr-1" /> Reject Offer
-                </button>
-                <button className="btn-accept" onClick={() => handleAccept()} disabled={submitting}>
-                  <CheckCircle size={18} className="inline mr-1" /> Accept Offer
-                </button>
-
-
+                <Button variant="danger" onClick={() => setShowRejectModal(true)} isLoading={submitting}>
+                  <XCircle size={18} /> Reject Offer
+                </Button>
+                <Button variant="filled" onClick={() => handleAccept()} isLoading={submitting}>
+                  <CheckCircle size={18} /> Accept Offer
+                </Button>
               </>
             )}
           </div>
         </div>
-
 
         <div
           style={{
