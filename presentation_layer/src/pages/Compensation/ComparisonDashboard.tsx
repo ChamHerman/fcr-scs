@@ -1,14 +1,15 @@
 import * as Lucide from "lucide-react";
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { Plus, GitCompare, Loader2 } from "lucide-react";
+import { GitCompare, Loader2 } from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
+import { Button } from "../../components/ui/Button";
+import { Select, type SelectOption } from "../../components/ui/Select";
+import { CopyButton } from "../../components/ui/CopyButton";
 import "../../style.css";
 import "./comparison.css";
 
 export const CompensationComparisonList: React.FC = () => {
-  const navigate = useNavigate();
   const [cases, setCases] = useState<any[]>([]);
   const [selectedCase1, setSelectedCase1] = useState<string>("");
   const [selectedCase2, setSelectedCase2] = useState<string>("");
@@ -20,7 +21,7 @@ export const CompensationComparisonList: React.FC = () => {
     async function loadCases() {
       setLoading(true);
       try {
-        const res = await landAcquisitionApi.getAllCases({ limit: 20 });
+        const res = await landAcquisitionApi.getAllCases({ limit: 50 });
         const list = res.cases || [];
         setCases(list);
         if (list.length >= 2) {
@@ -63,10 +64,15 @@ export const CompensationComparisonList: React.FC = () => {
     return "RM " + val.toLocaleString("en-MY", { minimumFractionDigits: 2 });
   };
 
+  const caseOptions: SelectOption[] = cases.map((c) => ({
+    value: c.caseId,
+    label: `${c.caseTitle} (${c.caseId.slice(0, 10)})`,
+  }));
+
   return (
     <div>
       <div className="main blur-shape-bg">
-        <div className="comparison-dashboard">
+        <div className="compensation-dashboard">
           <div className="topbar" style={{ marginBottom: "20px" }}>
             <div className="topbar-left">
               <h1 style={{ marginBottom: 0 }}>Compensation Comparison</h1>
@@ -93,39 +99,34 @@ export const CompensationComparisonList: React.FC = () => {
             ) : cases.length < 2 ? (
               <p style={{ opacity: 0.6 }}>At least 2 cases are required in the database to perform comparison.</p>
             ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: "16px", alignItems: "end" }}>
+              <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-4 items-end">
                 <div>
-                  <label className="label">Case 1 *</label>
-                  <select
+                  <Select
+                    label="Case 1 *"
                     value={selectedCase1}
-                    onChange={(e) => setSelectedCase1(e.target.value)}
-                    style={{ width: "100%", padding: "10px", borderRadius: "8px", background: "var(--md-surface-container-low)" }}
-                  >
-                    {cases.map((c) => (
-                      <option key={c.caseId} value={c.caseId}>
-                        {c.caseTitle} ({c.caseId.slice(0, 8)})
-                      </option>
-                    ))}
-                  </select>
+                    options={caseOptions}
+                    onChange={(val) => setSelectedCase1(val)}
+                    placeholder="Select Case 1"
+                  />
                 </div>
                 <div>
-                  <label className="label">Case 2 *</label>
-                  <select
+                  <Select
+                    label="Case 2 *"
                     value={selectedCase2}
-                    onChange={(e) => setSelectedCase2(e.target.value)}
-                    style={{ width: "100%", padding: "10px", borderRadius: "8px", background: "var(--md-surface-container-low)" }}
-                  >
-                    {cases.map((c) => (
-                      <option key={c.caseId} value={c.caseId}>
-                        {c.caseTitle} ({c.caseId.slice(0, 8)})
-                      </option>
-                    ))}
-                  </select>
+                    options={caseOptions}
+                    onChange={(val) => setSelectedCase2(val)}
+                    placeholder="Select Case 2"
+                  />
                 </div>
-                <button className="btn-primary" onClick={handleRunComparison} disabled={comparing}>
-                  {comparing ? <Loader2 size={16} className="inline animate-spin mr-1" /> : <GitCompare size={16} className="inline mr-1" />}
-                  Compare Now
-                </button>
+                <div className="pb-0.5">
+                  <Button
+                    variant="filled"
+                    onClick={handleRunComparison}
+                    isLoading={comparing}
+                  >
+                    <GitCompare size={16} /> Compare Now
+                  </Button>
+                </div>
               </div>
             )}
           </div>
@@ -133,11 +134,11 @@ export const CompensationComparisonList: React.FC = () => {
           {comparisonResult && comparisonResult.length >= 2 && (
             <div className="table-wrap" style={{ marginTop: "24px" }}>
               <h3 style={{ padding: "16px 20px 0 20px", fontSize: "18px" }}>Comparison Results</h3>
-              <div className="table-scroll" style={{ padding: "20px" }}>
+              <div className="table-scroll md-scroll-thin" style={{ padding: "20px" }}>
                 <table>
                   <thead>
                     <tr>
-                      <th style={{ width: "200px" }}>Metric</th>
+                      <th style={{ width: "220px" }}>Metric</th>
                       <th>Case #1 ({comparisonResult[0].caseTitle})</th>
                       <th>Case #2 ({comparisonResult[1].caseTitle})</th>
                     </tr>
@@ -145,8 +146,18 @@ export const CompensationComparisonList: React.FC = () => {
                   <tbody>
                     <tr>
                       <td><strong>Case ID</strong></td>
-                      <td>{comparisonResult[0].caseId}</td>
-                      <td>{comparisonResult[1].caseId}</td>
+                      <td>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-xs">{comparisonResult[0].caseId}</span>
+                          <CopyButton value={comparisonResult[0].caseId} />
+                        </div>
+                      </td>
+                      <td>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-xs">{comparisonResult[1].caseId}</span>
+                          <CopyButton value={comparisonResult[1].caseId} />
+                        </div>
+                      </td>
                     </tr>
                     <tr>
                       <td><strong>Project Name</strong></td>

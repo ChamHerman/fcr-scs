@@ -1,11 +1,15 @@
 import * as Lucide from "lucide-react";
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { createPortal } from "react-dom";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Eye, Edit, X, File } from "lucide-react";
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
 import { CaseSelectionModal } from "./CaseSelectionModal";
-import { useModalPopIn } from "../../hooks/useModalPopIn";
+import { Modal } from "../../components/ui/Modal";
+import { Button } from "../../components/ui/Button";
+import { Select, type SelectOption } from "../../components/ui/Select";
+import { Input } from "../../components/ui/Input";
+import { Textarea } from "../../components/ui/Textarea";
+import { CopyButton } from "../../components/ui/CopyButton";
 import "../../style.css";
 import "./valuation_report.css";
 
@@ -53,6 +57,16 @@ const mockValuer = {
   id: "V1",
   name: "Ahmad Faizal",
 };
+
+const VALUATION_METHOD_OPTIONS: SelectOption[] = [
+  { value: "", label: "Select method" },
+  { value: "Comparison Method", label: "Comparison Method" },
+  { value: "Income Capitalization", label: "Income Capitalization" },
+  { value: "Cost Approach", label: "Cost Approach" },
+  { value: "Residual Method", label: "Residual Method" },
+  { value: "Profit Method", label: "Profit Method" },
+  { value: "Other", label: "Other" },
+];
 
 export const ValuationReportGenerator: React.FC = () => {
   const navigate = useNavigate();
@@ -106,7 +120,7 @@ export const ValuationReportGenerator: React.FC = () => {
             ? new Date(c.updatedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
             : "—",
           status: c.status,
-          statusClass: "valuation",
+          statusClass: "status-valuation-progress",
           landTitleNumber: c.landParcel?.landTitleNo || "—",
           owner: c.landParcel?.ownerships?.[0]?.landOwner?.name || "—",
           ownerIc: c.landParcel?.ownerships?.[0]?.landOwner?.icNumber || "—",
@@ -278,143 +292,95 @@ export const ValuationReportGenerator: React.FC = () => {
     navigate("/admin/case/valuation");
   };
 
-  // --- Render ---
-  const previewModalRef = useModalPopIn(showPreview);
-  const cancelModalRef = useModalPopIn(showCancelConfirm);
-
   const renderPreviewModal = () => {
-    if (!showPreview || !caseData) return null;
+    if (!caseData) return null;
 
-    return createPortal(
-      <div
-        className="preview-modal-overlay"
-        onClick={() => setShowPreview(false)}
-      >
-        <div ref={previewModalRef} className="preview-modal" style={{ borderRadius: "28px" }} onClick={(e) => e.stopPropagation()}>
-          <div className="modal-header">
-            <h2><Lucide.FileText size={20} className="inline mr-1" /> Valuation Report</h2>
-            <button className="close-btn" onClick={() => setShowPreview(false)}>
-              <X size={24} />
-            </button>
-          </div>
-
-          <div className="preview-grid">
-            <div className="preview-item">
-              <div className="label">Report ID</div>
-              <div className="value">REP-{Date.now().toString().slice(-6)}</div>
-            </div>
-            <div className="preview-item">
-              <div className="label">Case ID</div>
-              <div className="value">{caseData.id}</div>
-            </div>
-            <div className="preview-item">
-              <div className="label">Case Title</div>
-              <div className="value">{caseData.title}</div>
-            </div>
-            <div className="preview-item">
-              <div className="label">Valuer</div>
-              <div className="value">{mockValuer.name}</div>
-            </div>
-            <div className="preview-item">
-              <div className="label">Valuation Date</div>
-              <div className="value">
-                {new Date().toLocaleDateString("en-GB", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                })}
-              </div>
-            </div>
-            <div className="preview-item">
-              <div className="label">Valuation Method</div>
-              <div className="value">{formData.valuationMethod}</div>
-            </div>
-            <div className="preview-item">
-              <div className="label">Market Value</div>
-              <div className="value">RM {formData.marketValue}</div>
-            </div>
-            <div className="preview-item">
-              <div className="label">Recommended Compensation</div>
-              <div className="value">RM {formData.recommendedCompensation}</div>
-            </div>
-            <div className="preview-item full-width">
-              <div className="label">Remarks</div>
-              <div className="value">{formData.remarks}</div>
-            </div>
-            <div className="preview-item">
-              <div className="label">Building Assessment</div>
-              <div className="value">
-                {formData.buildingAssessment
-                  ? formData.buildingAssessment.name
-                  : "— Not uploaded"}
-              </div>
-            </div>
-            <div className="preview-item">
-              <div className="label">Site Inspection</div>
-              <div className="value">
-                {formData.siteInspection
-                  ? formData.siteInspection.name
-                  : "— Not uploaded"}
-              </div>
-            </div>
-            <div className="preview-item full-width">
-              <div className="label">Status</div>
-              <div className="status-preview">
-                <Lucide.Hourglass size={16} className="inline mr-1" /> Pending Valuation Approval
-              </div>
-            </div>
-          </div>
-
-          <div className="modal-actions">
-            <button className="btn-edit" onClick={handleEditFromPreview}>
+    return (
+      <Modal
+        isOpen={showPreview}
+        onClose={() => setShowPreview(false)}
+        title="Valuation Report Preview"
+        subtitle="Review the valuation report details before submitting"
+        maxWidth="max-w-2xl"
+        footer={
+          <>
+            <Button variant="text" onClick={handleEditFromPreview}>
               <Edit size={16} /> Edit
-            </button>
-            <button
-              className="btn-confirm"
+            </Button>
+            <Button
+              variant="filled"
               onClick={handleConfirmSave}
-              disabled={isSaving}
+              isLoading={isSaving}
             >
-              {isSaving ? "Saving..." : <><Lucide.Check size={16} className="inline mr-1" /> Confirm & Save</>}
-            </button>
+              <Lucide.Check size={16} /> Confirm & Save
+            </Button>
+          </>
+        }
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-2">
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">Report ID</span>
+            <span className="text-sm font-mono text-md-on-surface">REP-{Date.now().toString().slice(-6)}</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">Case ID</span>
+            <span className="text-sm font-mono text-md-on-surface">{caseData.id}</span>
+          </div>
+          <div className="flex flex-col gap-1 md:col-span-2">
+            <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">Case Title</span>
+            <span className="text-sm font-semibold text-md-on-surface">{caseData.title}</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">Valuer</span>
+            <span className="text-sm text-md-on-surface">{mockValuer.name}</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">Valuation Date</span>
+            <span className="text-sm text-md-on-surface">{new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">Valuation Method</span>
+            <span className="text-sm text-md-on-surface">{formData.valuationMethod}</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">Market Value</span>
+            <span className="text-sm font-semibold text-md-primary">RM {formData.marketValue}</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">Recommended Compensation</span>
+            <span className="text-sm font-semibold text-md-primary">RM {formData.recommendedCompensation}</span>
+          </div>
+          <div className="flex flex-col gap-1 md:col-span-2">
+            <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">Remarks</span>
+            <span className="text-sm text-md-on-surface">{formData.remarks}</span>
           </div>
         </div>
-      </div>,
-      document.body
+      </Modal>
     );
   };
 
   const renderCancelModal = () => {
-    if (!showCancelConfirm) return null;
-    return createPortal(
-      <div
-        className="cancel-confirm-overlay"
-        onClick={() => setShowCancelConfirm(false)}
-      >
-        <div
-          ref={cancelModalRef}
-          className="cancel-confirm-modal"
-          style={{ borderRadius: "28px" }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <h3>Cancel without saving?</h3>
-          <p>
-            You have unsaved changes. Any entered information will be lost. Are
-            you sure you want to cancel?
-          </p>
-          <div className="modal-actions">
-            <button
-              className="btn-modal-cancel"
-              onClick={() => setShowCancelConfirm(false)}
-            >
+    return (
+      <Modal
+        isOpen={showCancelConfirm}
+        onClose={() => setShowCancelConfirm(false)}
+        title="Cancel without saving?"
+        subtitle="You have unsaved changes. Any entered information will be lost."
+        footer={
+          <>
+            <Button variant="text" onClick={() => setShowCancelConfirm(false)}>
               Continue Editing
-            </button>
-            <button className="btn-modal-confirm" onClick={confirmCancel}>
+            </Button>
+            <Button variant="danger" onClick={confirmCancel}>
               Yes, Cancel
-            </button>
-          </div>
-        </div>
-      </div>,
-      document.body
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-md-on-surface-variant">
+          Are you sure you want to discard your draft valuation report and return to the dashboard?
+        </p>
+      </Modal>
     );
   };
 
@@ -441,13 +407,14 @@ export const ValuationReportGenerator: React.FC = () => {
             {savedReport?.recommendedCompensation}
           </div>
         </div>
-        <button
-          className="btn-generate"
-          onClick={handleBackToDashboard}
-          style={{ margin: "20px auto 0" }}
-        >
-          Back to Dashboard
-        </button>
+        <div className="mt-6 flex justify-center">
+          <Button
+            variant="filled"
+            onClick={handleBackToDashboard}
+          >
+            Back to Dashboard
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -477,11 +444,14 @@ export const ValuationReportGenerator: React.FC = () => {
                   Create a valuation report for the selected case
                 </div>
               </div>
-              <div className="topbar-right">
+              <div className="topbar-right flex items-center gap-3">
                 <span className="date-badge">
                   <Lucide.Calendar size={16} className="inline mr-1" />
                   {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
                 </span>
+                <Button variant="outlined" size="sm" onClick={() => navigate("/admin/case/valuation")}>
+                  <Lucide.ArrowLeft size={16} /> Back to List
+                </Button>
                 <div className="avatar">AF</div>
               </div>
             </div>
@@ -495,7 +465,10 @@ export const ValuationReportGenerator: React.FC = () => {
               ) : caseData ? (
                 <div className="case-summary-card">
                   <div className="case-info">
-                    <span className="case-id">{caseData.id}</span>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="case-id font-mono text-sm">{caseData.id}</span>
+                      <CopyButton value={caseData.id} />
+                    </div>
                     <span className="case-title">{caseData.title}</span>
                     <div className="case-meta">
                       <span><Lucide.Folder size={16} className="inline mr-1" /> {caseData.project}</span>
@@ -505,16 +478,16 @@ export const ValuationReportGenerator: React.FC = () => {
                     </div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px" }}>
-                    <span className="status-badge-lg">
-                      <Lucide.Hourglass size={16} className="inline mr-1" /> {caseData.status}
+                    <span className={`status-badge-lg ${caseData.statusClass}`}>
+                      <span className="dot"></span> {caseData.status}
                     </span>
-                    <button
-                      className="btn-filter"
-                      style={{ fontSize: "12px", padding: "4px 10px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                    <Button
+                      variant="outlined"
+                      size="sm"
                       onClick={() => setIsCaseModalOpen(true)}
                     >
                       <Lucide.RefreshCw size={12} /> Change Case
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ) : (
@@ -523,13 +496,13 @@ export const ValuationReportGenerator: React.FC = () => {
                     <Lucide.AlertCircle size={20} className="inline mr-2 text-amber-500" />
                     No case selected yet. Please select a case to generate a report.
                   </div>
-                  <button
-                    className="btn-primary"
-                    style={{ padding: "6px 16px", fontSize: "13px" }}
+                  <Button
+                    variant="filled"
+                    size="sm"
                     onClick={() => setIsCaseModalOpen(true)}
                   >
                     Select Case
-                  </button>
+                  </Button>
                 </div>
               ))}
 
@@ -566,101 +539,78 @@ export const ValuationReportGenerator: React.FC = () => {
                     : "Fill in the valuation information below. All fields marked with * are required."}
                 </div>
 
-                <div className="form-grid">
+                <div className="flex flex-col gap-5 mt-4">
                   {/* Valuation Method */}
-                  <div className="form-group">
-                    <label htmlFor="valuationMethod">
-                      Valuation Method <span className="required">*</span>
-                    </label>
-                    <select
-                      id="valuationMethod"
-                      name="valuationMethod"
+                  <div>
+                    <Select
+                      label="Valuation Method *"
                       value={formData.valuationMethod}
-                      onChange={handleInputChange}
-                      className={
-                        validationErrors.valuationMethod ? "error" : ""
-                      }
-                    >
-                      <option value="">Select method</option>
-                      <option value="Comparison Method">
-                        Comparison Method
-                      </option>
-                      <option value="Income Capitalization">
-                        Income Capitalization
-                      </option>
-                      <option value="Cost Approach">Cost Approach</option>
-                      <option value="Residual Method">Residual Method</option>
-                      <option value="Profit Method">Profit Method</option>
-                      <option value="Other">Other</option>
-                    </select>
+                      options={VALUATION_METHOD_OPTIONS}
+                      onChange={(val) => {
+                        setFormData((prev) => ({ ...prev, valuationMethod: val }));
+                        if (validationErrors.valuationMethod) {
+                          setValidationErrors((prev) => {
+                            const newErrors = { ...prev };
+                            delete newErrors.valuationMethod;
+                            return newErrors;
+                          });
+                        }
+                      }}
+                      placeholder="Select method"
+                    />
                     {validationErrors.valuationMethod && (
-                      <div className="error-text">
+                      <div className="text-xs text-md-error pl-2 mt-1">
                         {validationErrors.valuationMethod}
                       </div>
                     )}
                   </div>
 
                   {/* Market Value */}
-                  <div className="form-group">
-                    <label htmlFor="marketValue">
-                      Market Value (RM) <span className="required">*</span>
-                    </label>
-                    <input
+                  <div>
+                    <Input
+                      label="Market Value (RM) *"
                       id="marketValue"
-                      type="text"
                       name="marketValue"
                       value={formData.marketValue}
                       onChange={handleInputChange}
                       placeholder="e.g., 1,500,000"
-                      className={validationErrors.marketValue ? "error" : ""}
                     />
                     {validationErrors.marketValue && (
-                      <div className="error-text">
+                      <div className="text-xs text-md-error pl-2 mt-1">
                         {validationErrors.marketValue}
                       </div>
                     )}
                   </div>
 
                   {/* Recommended Compensation */}
-                  <div className="form-group">
-                    <label htmlFor="recommendedCompensation">
-                      Recommended Compensation (RM){" "}
-                      <span className="required">*</span>
-                    </label>
-                    <input
+                  <div>
+                    <Input
+                      label="Recommended Compensation (RM) *"
                       id="recommendedCompensation"
-                      type="text"
                       name="recommendedCompensation"
                       value={formData.recommendedCompensation}
                       onChange={handleInputChange}
                       placeholder="e.g., 2,200,000"
-                      className={
-                        validationErrors.recommendedCompensation ? "error" : ""
-                      }
                     />
                     {validationErrors.recommendedCompensation && (
-                      <div className="error-text">
+                      <div className="text-xs text-md-error pl-2 mt-1">
                         {validationErrors.recommendedCompensation}
                       </div>
                     )}
                   </div>
 
                   {/* Remarks */}
-                  <div className="form-group">
-                    <label htmlFor="remarks">
-                      Remarks <span className="required">*</span>
-                    </label>
-                    <textarea
+                  <div>
+                    <Textarea
+                      label="Remarks *"
                       id="remarks"
                       name="remarks"
                       value={formData.remarks}
                       onChange={handleInputChange}
                       placeholder="Additional notes, observations, or justifications..."
-                      rows={2}
-                      className={validationErrors.remarks ? "error" : ""}
                     />
                     {validationErrors.remarks && (
-                      <div className="error-text">
+                      <div className="text-xs text-md-error pl-2 mt-1">
                         {validationErrors.remarks}
                       </div>
                     )}
@@ -693,17 +643,17 @@ export const ValuationReportGenerator: React.FC = () => {
                   </div>
 
                   {/* Actions */}
-                  <div className="form-actions">
-                    <button className="btn-cancel" onClick={handleCancel}>
+                  <div className="form-actions flex items-center justify-end gap-3 pt-4 border-t border-md-outline/10">
+                    <Button variant="text" onClick={handleCancel}>
                       <X size={16} /> Cancel
-                    </button>
-                    <button
-                      className="btn-generate"
+                    </Button>
+                    <Button
+                      variant="filled"
                       onClick={handleGeneratePreview}
                       disabled={isSaving || !caseData}
                     >
                       <Eye size={18} /> Generate Report
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>

@@ -1,14 +1,18 @@
 import * as Lucide from "lucide-react";
 import React, { useState, useEffect, useCallback } from "react";
-import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { Eye, ChevronLeft, ChevronRight, Loader2, Plus, Edit2, Trash2, X } from "lucide-react";
+import { Eye, Loader2, Plus, Edit2, Trash2 } from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
-import { useModalPopIn } from "../../hooks/useModalPopIn";
+import { Modal } from "../../components/ui/Modal";
+import { Button } from "../../components/ui/Button";
+import { Select, type SelectOption } from "../../components/ui/Select";
+import { SearchInput } from "../../components/ui/SearchInput";
+import { Input } from "../../components/ui/Input";
+import { Textarea } from "../../components/ui/Textarea";
+import { CopyButton } from "../../components/ui/CopyButton";
 import { Pagination } from "../../components/ui/Pagination";
 import "../../style.css";
 import "./compensation.css";
-
 
 type ObjectionItem = {
   id: string;
@@ -24,10 +28,10 @@ type ObjectionItem = {
 };
 
 const statusClassMap: Record<string, string> = {
-  SUBMITTED: "pending",
-  UNDER_REVIEW: "pending",
-  APPROVED: "approved",
-  REJECTED: "rejected",
+  SUBMITTED: "status-objection-review",
+  UNDER_REVIEW: "status-objection-review",
+  APPROVED: "status-obj-approved",
+  REJECTED: "status-obj-rejected",
 };
 
 const statusLabelMap: Record<string, string> = {
@@ -36,6 +40,14 @@ const statusLabelMap: Record<string, string> = {
   APPROVED: "Approved / Revised",
   REJECTED: "Rejected",
 };
+
+const STATUS_OPTIONS: SelectOption[] = [
+  { value: "", label: "All Status" },
+  { value: "SUBMITTED", label: "Submitted" },
+  { value: "UNDER_REVIEW", label: "Under Review" },
+  { value: "APPROVED", label: "Approved / Revised" },
+  { value: "REJECTED", label: "Rejected" },
+];
 
 export const ObjectionDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -78,7 +90,7 @@ export const ObjectionDashboard: React.FC = () => {
           : "—",
         status: statusLabelMap[o.status] || o.status,
         rawStatus: o.status,
-        statusClass: statusClassMap[o.status] || "pending",
+        statusClass: statusClassMap[o.status] || "status-objection-review",
         reason: o.objectionReason || "—",
       }));
 
@@ -169,85 +181,77 @@ export const ObjectionDashboard: React.FC = () => {
     },
   ];
 
-  const editModalRef = useModalPopIn(Boolean(editItem));
-  const deleteModalRef = useModalPopIn(Boolean(deleteId));
-
   return (
     <div className="compensation-dashboard">
       {/* Edit Modal */}
-      {editItem &&
-        createPortal(
-          <div className="reject-modal-overlay" onClick={() => setEditItem(null)}>
-            <div ref={editModalRef} className="reject-modal" style={{ borderRadius: "28px" }} onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <h3>Edit Objection</h3>
-                <button className="close-btn" onClick={() => setEditItem(null)}>
-                  <X size={20} />
-                </button>
-              </div>
-              <div className="form-group" style={{ marginBottom: "12px" }}>
-                <label>Case Title</label>
-                <input type="text" value={editItem.caseTitle} disabled style={{ opacity: 0.7 }} />
-              </div>
-              <div className="form-group" style={{ marginBottom: "12px" }}>
-                <label>Requested Amount (RM) *</label>
-                <input
-                  type="number"
-                  value={editAmount}
-                  onChange={(e) => setEditAmount(e.target.value === "" ? "" : Number(e.target.value))}
-                  placeholder="Enter requested amount"
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: "16px" }}>
-                <label>Objection Details / Reason *</label>
-                <textarea
-                  rows={4}
-                  value={editReason}
-                  onChange={(e) => setEditReason(e.target.value)}
-                  placeholder="Details of objection..."
-                />
-              </div>
-              <div className="modal-actions">
-                <button className="btn-cancel" onClick={() => setEditItem(null)}>Cancel</button>
-                <button className="btn-submit" onClick={handleSaveEdit} disabled={isUpdating}>
-                  {isUpdating ? "Saving..." : "Save Changes"}
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
+      <Modal
+        isOpen={Boolean(editItem)}
+        onClose={() => setEditItem(null)}
+        title="Edit Objection"
+        subtitle={`Update details for ${editItem?.caseTitle || ""}`}
+        footer={
+          <>
+            <Button variant="text" onClick={() => setEditItem(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="filled"
+              onClick={handleSaveEdit}
+              isLoading={isUpdating}
+            >
+              Save Changes
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <Input
+            label="Case Title"
+            value={editItem?.caseTitle || ""}
+            disabled
+          />
+          <Input
+            label="Requested Amount (RM) *"
+            type="number"
+            value={editAmount === "" ? "" : String(editAmount)}
+            onChange={(e) => setEditAmount(e.target.value === "" ? "" : Number(e.target.value))}
+            placeholder="Enter requested amount"
+          />
+          <Textarea
+            label="Objection Details / Reason *"
+            rows={4}
+            value={editReason}
+            onChange={(e) => setEditReason(e.target.value)}
+            placeholder="Details of objection..."
+          />
+        </div>
+      </Modal>
 
       {/* Delete Modal */}
-      {deleteId &&
-        createPortal(
-          <div className="reject-modal-overlay" onClick={() => setDeleteId(null)}>
-            <div ref={deleteModalRef} className="reject-modal" style={{ borderRadius: "28px" }} onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <h3 style={{ color: "var(--md-error, #cf6679)" }}>Confirm Delete Objection</h3>
-                <button className="close-btn" onClick={() => setDeleteId(null)}>
-                  <X size={20} />
-                </button>
-              </div>
-              <p style={{ margin: "16px 0", color: "var(--md-on-surface-variant)" }}>
-                Are you sure you want to delete this objection record? This action cannot be undone.
-              </p>
-              <div className="modal-actions">
-                <button className="btn-cancel" onClick={() => setDeleteId(null)}>Cancel</button>
-                <button
-                  className="btn-submit"
-                  style={{ background: "#d32f2f" }}
-                  onClick={handleDeleteConfirm}
-                  disabled={isDeleting}
-                >
-                  {isDeleting ? "Deleting..." : "Delete Permanently"}
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-
+      <Modal
+        isOpen={Boolean(deleteId)}
+        onClose={() => setDeleteId(null)}
+        title="Confirm Delete Objection"
+        subtitle="This action cannot be undone."
+        footer={
+          <>
+            <Button variant="text" onClick={() => setDeleteId(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleDeleteConfirm}
+              isLoading={isDeleting}
+            >
+              Delete Permanently
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-md-on-surface-variant">
+          Are you sure you want to permanently delete this objection record from the database?
+        </p>
+      </Modal>
 
       <div className="topbar" style={{ marginBottom: "20px" }}>
         <div className="topbar-left">
@@ -257,9 +261,9 @@ export const ObjectionDashboard: React.FC = () => {
           </div>
         </div>
         <div className="topbar-right" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <button className="btn-primary" onClick={handleCreate}>
-            <Plus size={16} className="inline mr-1" /> Submit Objection
-          </button>
+          <Button variant="filled" onClick={handleCreate}>
+            <Plus size={16} /> Submit Objection
+          </Button>
           <div className="avatar">AO</div>
         </div>
       </div>
@@ -274,31 +278,33 @@ export const ObjectionDashboard: React.FC = () => {
         ))}
       </div>
 
-      <div className="filter-bar">
-        <div className="search-wrap">
-          <span className="search-icon">
-            <Lucide.Search size={16} />
-          </span>
-          <input
-            type="text"
+      <div className="filter-bar flex items-center justify-between gap-4">
+        <div className="search-wrap min-w-[280px]">
+          <SearchInput
             placeholder="Search by case title or objection ID..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
           />
         </div>
         <div className="filter-group">
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="">All Status</option>
-            <option value="SUBMITTED">Submitted</option>
-            <option value="UNDER_REVIEW">Under Review</option>
-            <option value="APPROVED">Approved / Revised</option>
-            <option value="REJECTED">Rejected</option>
-          </select>
+          <Select
+            label="Status"
+            value={statusFilter}
+            options={STATUS_OPTIONS}
+            onChange={(val) => {
+              setStatusFilter(val);
+              setCurrentPage(1);
+            }}
+            placeholder="All Status"
+          />
         </div>
       </div>
 
       <div className="table-wrap">
-        <div className="table-scroll">
+        <div className="table-scroll md-scroll-thin">
           <table>
             <thead>
               <tr>
@@ -327,7 +333,12 @@ export const ObjectionDashboard: React.FC = () => {
               ) : (
                 objections.map((o) => (
                   <tr key={o.id}>
-                    <td><span className="case-id" style={{ fontSize: "11px" }}>{o.id.slice(0, 8)}...</span></td>
+                    <td>
+                      <div className="flex items-center gap-1.5">
+                        <span className="case-id font-mono text-xs">{o.id}</span>
+                        <CopyButton value={o.id} />
+                      </div>
+                    </td>
                     <td className="case-title">{o.caseTitle}</td>
                     <td>{o.ownerName}</td>
                     <td><strong>{formatCurrency(o.requestedAmount)}</strong></td>
@@ -338,26 +349,26 @@ export const ObjectionDashboard: React.FC = () => {
                       </span>
                     </td>
                     <td style={{ textAlign: "center" }}>
-                      <div style={{ display: "inline-flex", gap: "6px", alignItems: "center" }}>
-                        <button className="btn-view" onClick={() => handleView(o.id)} title="Review Objection">
-                          <Eye size={14} style={{ display: "inline", marginRight: "4px" }} /> Review
-                        </button>
-                        <button
-                          className="btn-view"
-                          style={{ background: "rgba(99, 102, 241, 0.12)", color: "#818cf8" }}
+                      <div className="inline-flex gap-1.5 items-center justify-center">
+                        <Button variant="tonal" size="sm" onClick={() => handleView(o.id)} title="Review Objection">
+                          <Eye size={14} /> Review
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          size="sm"
                           onClick={() => handleOpenEdit(o)}
                           title="Edit Objection"
                         >
-                          <Edit2 size={13} style={{ display: "inline" }} />
-                        </button>
-                        <button
-                          className="btn-view"
-                          style={{ background: "rgba(239, 68, 68, 0.12)", color: "#f87171" }}
+                          <Edit2 size={13} />
+                        </Button>
+                        <Button
+                          variant="danger"
+                          size="sm"
                           onClick={() => setDeleteId(o.id)}
                           title="Delete Objection"
                         >
-                          <Trash2 size={13} style={{ display: "inline" }} />
-                        </button>
+                          <Trash2 size={13} />
+                        </Button>
                       </div>
                     </td>
                   </tr>

@@ -1,12 +1,14 @@
 import * as Lucide from "lucide-react";
 import React, { useState, useEffect, useCallback } from "react";
-import { createPortal } from "react-dom";
 import { useNavigate, useLocation } from "react-router-dom";
 import { compensationApi } from "../../services/compensationApi";
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
 import { CaseSelectionModal } from "../LandAcquisition/CaseSelectionModal";
+import { Modal } from "../../components/ui/Modal";
+import { Button } from "../../components/ui/Button";
+import { Input } from "../../components/ui/Input";
+import { CopyButton } from "../../components/ui/CopyButton";
 import { Calculator, FileText, CheckCircle, AlertTriangle } from "lucide-react";
-import { useModalPopIn } from "../../hooks/useModalPopIn";
 import "../../style.css";
 import "./compensation.css";
 
@@ -77,13 +79,11 @@ export const CompensationReportGenerator: React.FC = () => {
   const [isCalculating, setIsCalculating] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showWarning, setShowWarning] = useState(false);
-  const [, setWarningAction] = useState<"review" | "cancel" | null>(null);
   const [generatedReportId, setGeneratedReportId] = useState<string | null>(null);
   const [generatedOfferId, setGeneratedOfferId] = useState<string | null>(null);
   const [generatedOfferRef, setGeneratedOfferRef] = useState<string | null>(null);
   const [statusUpdate, setStatusUpdate] = useState<string>("");
 
-  // Load case data when selectedCaseId changes
   const loadCaseDetails = useCallback(async (cId: string) => {
     setLoadingCase(true);
     try {
@@ -99,7 +99,6 @@ export const CompensationReportGenerator: React.FC = () => {
           status: c.status,
         });
 
-        // Set owner info
         const mainOwner = c.landParcel?.ownerships?.[0]?.landOwner;
         setOwner({
           name: mainOwner?.name || "—",
@@ -108,7 +107,6 @@ export const CompensationReportGenerator: React.FC = () => {
           phone: mainOwner?.contact || "—",
         });
 
-        // Set valuation report details if available
         const valReports = c.valuationReports || [];
         const approvedVal = valReports.find((r: any) => r.reportStatus === "APPROVED") || valReports[0];
 
@@ -126,8 +124,7 @@ export const CompensationReportGenerator: React.FC = () => {
             cropValue: recComp > 0 ? Math.round(recComp * 0.1) : 0,
           });
 
-          setAiPredicted(recComp > 0 ? recComp : 2100000);
-
+          setAiPredicted(recComp > 0 ? recComp : 0);
           setComponents({
             landValue: recComp > 0 ? Math.round(recComp * 0.7) : 0,
             buildingValue: recComp > 0 ? Math.round(recComp * 0.2) : 0,
@@ -139,35 +136,12 @@ export const CompensationReportGenerator: React.FC = () => {
           });
         } else {
           setValuationReportId(null);
-          setValuationReport({
-            valuationMethod: "Comparison Method",
-            marketValue: 1800000,
-            recommendedCompensation: 2000000,
-            landValue: 1400000,
-            buildingValue: 400000,
-            cropValue: 200000,
-          });
-          setAiPredicted(2000000);
-          setComponents({
-            landValue: 1400000,
-            buildingValue: 400000,
-            cropValue: 200000,
-            businessDisruption: 0,
-            disturbanceCompensation: 0,
-            relocationAllowance: 0,
-            otherEligible: 0,
-          });
+          setValuationReport(null);
+          setAiPredicted(0);
         }
-
-        setCalculatedTotal(null);
-        setShowSummary(false);
-        setGeneratedReportId(null);
-        setGeneratedOfferId(null);
-        setGeneratedOfferRef(null);
-        setStatusUpdate("");
       }
     } catch (err: any) {
-      console.error("Failed to load case details:", err);
+      console.error("Failed to load case details for compensation:", err);
     } finally {
       setLoadingCase(false);
     }
@@ -176,77 +150,49 @@ export const CompensationReportGenerator: React.FC = () => {
   useEffect(() => {
     if (selectedCaseId) {
       loadCaseDetails(selectedCaseId);
-    } else {
-      setIsCaseModalOpen(true);
     }
   }, [selectedCaseId, loadCaseDetails]);
 
-  const handleComponentChange = (field: keyof CompensationComponents, value: string) => {
-    const num = parseFloat(value) || 0;
+  const handleComponentChange = (field: keyof CompensationComponents, val: string) => {
+    const num = parseFloat(val) || 0;
     setComponents((prev) => ({ ...prev, [field]: num }));
-    if (calculatedTotal !== null) {
-      setCalculatedTotal(null);
-      setShowSummary(false);
-    }
   };
 
   const calculateTotal = () => {
     setIsCalculating(true);
-    const total =
-      components.landValue +
-      components.buildingValue +
-      components.cropValue +
-      components.businessDisruption +
-      components.disturbanceCompensation +
-      components.relocationAllowance +
-      components.otherEligible;
-    setCalculatedTotal(total);
-    setShowSummary(true);
-    setIsCalculating(false);
+    setTimeout(() => {
+      const sum =
+        components.landValue +
+        components.buildingValue +
+        components.cropValue +
+        components.businessDisruption +
+        components.disturbanceCompensation +
+        components.relocationAllowance +
+        components.otherEligible;
 
-    const targetRef = aiPredicted > 0 ? aiPredicted : 2100000;
-    const diff = Math.abs(total - targetRef);
-    const percent = targetRef > 0 ? (diff / targetRef) * 100 : 0;
-    if (percent > 20) {
-      setShowWarning(true);
-    } else {
-      setShowWarning(false);
-    }
-  };
+      setCalculatedTotal(sum);
+      setShowSummary(true);
+      setIsCalculating(false);
 
-  const handleWarningReview = () => {
-    setShowWarning(false);
-    setWarningAction("review");
-  };
-
-  const handleWarningCancel = () => {
-    setShowWarning(false);
-    setWarningAction("cancel");
-    setStatusUpdate("Pending Compensation Approval");
+      if (aiPredicted > 0) {
+        const diff = Math.abs(sum - aiPredicted) / aiPredicted;
+        if (diff > 0.2) {
+          setShowWarning(true);
+        } else {
+          setShowWarning(false);
+        }
+      }
+    }, 300);
   };
 
   const generateReport = async () => {
-    if (calculatedTotal === null || !selectedCaseId) return;
+    if (!caseData || calculatedTotal === null) return;
+
     setIsGenerating(true);
     try {
-      let valId = valuationReportId;
-
-      if (!valId) {
-        try {
-          const valRes = await landAcquisitionApi.getAllValuationReports({ search: selectedCaseId });
-          valId = valRes.reports?.[0]?.reportId;
-        } catch {
-          // ignore
-        }
-      }
-
-      if (!valId) {
-        valId = "00000000-0000-0000-0000-000000000001";
-      }
-
       const res = await compensationApi.createReport({
-        caseId: selectedCaseId,
-        valuationReportId: valId,
+        caseId: caseData.id,
+        valuationReportId: valuationReportId || "",
         components,
         remarks: "Generated via Compensation Report Generator",
       });
@@ -258,15 +204,9 @@ export const CompensationReportGenerator: React.FC = () => {
       if (offer) {
         setGeneratedOfferId(offer.offerId);
         setGeneratedOfferRef(offer.offerReferenceNo);
-      } else {
-        setGeneratedOfferId(null);
-        setGeneratedOfferRef(null);
       }
 
-      const statusStr = res.requiresApproval
-        ? "Pending Compensation Approval"
-        : "Compensation Approved";
-      setStatusUpdate(statusStr);
+      setStatusUpdate(res.requiresApproval ? "Pending Compensation Approval" : "Compensation Approved");
     } catch (err: any) {
       console.error("Failed to generate compensation report:", err);
       alert(`Report Generation Failed: ${err.message || "Could not reach backend"}`);
@@ -281,7 +221,7 @@ export const CompensationReportGenerator: React.FC = () => {
       return;
     }
     if (showWarning) {
-      alert("Please review the warning first. Either review the components or cancel.");
+      alert("Please review the warning first. Either review the components or dismiss.");
       return;
     }
     generateReport();
@@ -291,8 +231,6 @@ export const CompensationReportGenerator: React.FC = () => {
     return `RM ${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
-  const warningModalRef = useModalPopIn(showWarning);
-
   const handleSelectCaseFromModal = (cId: string) => {
     setSelectedCaseId(cId);
     setIsCaseModalOpen(false);
@@ -300,7 +238,6 @@ export const CompensationReportGenerator: React.FC = () => {
 
   return (
     <>
-      {/* Case Selection Modal */}
       <CaseSelectionModal
         isOpen={isCaseModalOpen}
         onClose={() => setIsCaseModalOpen(false)}
@@ -311,89 +248,29 @@ export const CompensationReportGenerator: React.FC = () => {
         emptyMessage="No cases currently in Valuation Approved or Compensation Rejected status."
       />
 
-      {/* Warning Modal */}
-      {showWarning &&
-        createPortal(
-          <div
-            className="preview-modal-overlay"
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              width: "100vw",
-              height: "100vh",
-              background: "rgba(0, 0, 0, 0.6)",
-              backdropFilter: "blur(4px)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 99999,
-            }}
-            onClick={() => setShowWarning(false)}
-          >
-            <div
-              ref={warningModalRef}
-              className="preview-modal"
-              style={{
-                position: "relative",
-                maxWidth: "460px",
-                width: "90%",
-                padding: "24px",
-                borderRadius: "28px",
-                background: "var(--md-surface-container, #ffffff)",
-                boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.3)",
-                display: "flex",
-                flexDirection: "column",
-                margin: "auto",
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
-                <AlertTriangle size={28} color="#d97706" />
-                <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 600 }}>Difference Exceeds 20%</h3>
-              </div>
-              <p style={{ fontSize: "14px", color: "var(--md-on-surface-variant)", lineHeight: "1.5", margin: "0 0 20px 0" }}>
-                The calculated compensation amount differs from the recommended valuation amount by more than 20%.
-                Please review the components or proceed with caution.
-              </p>
-              <div className="modal-actions" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "16px", borderTop: "1px solid rgba(121, 116, 126, 0.1)" }}>
-                <button
-                  style={{
-                    padding: "8px 20px",
-                    borderRadius: "9999px",
-                    border: "1.5px solid rgba(121, 116, 126, 0.3)",
-                    background: "transparent",
-                    fontSize: "14px",
-                    fontWeight: 500,
-                    cursor: "pointer",
-                  }}
-                  onClick={handleWarningCancel}
-                >
-                  Dismiss Warning
-                </button>
-                <button
-                  style={{
-                    padding: "8px 24px",
-                    borderRadius: "9999px",
-                    border: "none",
-                    background: "var(--md-primary, #6750a4)",
-                    color: "#ffffff",
-                    fontSize: "14px",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    boxShadow: "0 4px 12px rgba(103, 80, 164, 0.25)",
-                  }}
-                  onClick={handleWarningReview}
-                >
-                  Review Components
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
+      <Modal
+        isOpen={showWarning}
+        onClose={() => setShowWarning(false)}
+        title="Difference Exceeds 20%"
+        subtitle="The calculated compensation amount differs from the recommended valuation amount by more than 20%."
+        footer={
+          <>
+            <Button variant="text" onClick={() => setShowWarning(false)}>
+              Dismiss Warning
+            </Button>
+            <Button variant="filled" onClick={() => setShowWarning(false)}>
+              Review Components
+            </Button>
+          </>
+        }
+      >
+        <div className="flex items-center gap-3 p-3 bg-amber-500/10 rounded-xl text-amber-800 dark:text-amber-300">
+          <AlertTriangle size={24} className="shrink-0 text-amber-600" />
+          <p className="text-sm">
+            Please review the component values carefully. A significant variance may require further justification during approval.
+          </p>
+        </div>
+      </Modal>
 
       <div className="flex min-h-screen" style={{ background: "var(--md-background)", color: "var(--md-on-surface)" }}>
         <main className="main blur-shape-bg" style={{ width: "100%", padding: "24px" }}>
@@ -403,16 +280,18 @@ export const CompensationReportGenerator: React.FC = () => {
                 <h1 style={{ marginBottom: 0 }}>Compensation Report Generator</h1>
                 <div className="sub">Create compensation reports for acquisition cases</div>
               </div>
-              <div className="topbar-right">
+              <div className="topbar-right flex items-center gap-3">
                 <span className="date-badge">
                   <Lucide.Calendar size={16} className="inline mr-1" />
                   {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
                 </span>
+                <Button variant="outlined" size="sm" onClick={() => navigate("/admin/compensation/report")}>
+                  <Lucide.ArrowLeft size={16} /> Back to List
+                </Button>
                 <div className="avatar">AO</div>
               </div>
             </div>
 
-            {/* Case Summary Header */}
             {loadingCase ? (
               <div className="case-summary-card" style={{ padding: "20px", textAlign: "center" }}>
                 <Lucide.Loader2 size={24} className="inline animate-spin mr-2" /> Loading selected case details...
@@ -420,7 +299,10 @@ export const CompensationReportGenerator: React.FC = () => {
             ) : caseData ? (
               <div className="case-summary-card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--md-surface-container)", padding: "16px 20px", borderRadius: "12px", marginBottom: "20px" }}>
                 <div className="case-info">
-                  <span className="case-id" style={{ fontSize: "12px", fontWeight: 600, color: "var(--md-primary)" }}>{caseData.id}</span>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="case-id font-mono text-xs">{caseData.id}</span>
+                    <CopyButton value={caseData.id} />
+                  </div>
                   <h3 className="case-title" style={{ margin: "2px 0 6px", fontSize: "18px" }}>{caseData.title}</h3>
                   <div className="case-meta" style={{ display: "flex", gap: "16px", fontSize: "13px", color: "var(--md-on-surface-variant)" }}>
                     <span><Lucide.Folder size={14} className="inline mr-1" /> {caseData.project}</span>
@@ -429,16 +311,16 @@ export const CompensationReportGenerator: React.FC = () => {
                   </div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px" }}>
-                  <span className="status-badge-lg" style={{ fontSize: "12px", padding: "4px 10px", borderRadius: "6px", background: "rgba(59,130,246,0.1)", color: "var(--md-primary)" }}>
-                    {caseData.status}
+                  <span className="status-badge-lg status-val-approved">
+                    <span className="dot"></span> {caseData.status}
                   </span>
-                  <button
-                    className="btn-filter"
-                    style={{ fontSize: "12px", padding: "4px 10px", display: "inline-flex", alignItems: "center", gap: "4px", cursor: "pointer" }}
+                  <Button
+                    variant="outlined"
+                    size="sm"
                     onClick={() => setIsCaseModalOpen(true)}
                   >
                     <Lucide.RefreshCw size={12} /> Change Case
-                  </button>
+                  </Button>
                 </div>
               </div>
             ) : (
@@ -447,24 +329,23 @@ export const CompensationReportGenerator: React.FC = () => {
                   <Lucide.AlertCircle size={20} className="inline mr-2 text-amber-500" />
                   No case selected yet. Select a case in Valuation Approved or Compensation Rejected status.
                 </div>
-                <button
-                  className="btn-primary"
-                  style={{ padding: "6px 16px", fontSize: "13px", cursor: "pointer" }}
+                <Button
+                  variant="filled"
+                  size="sm"
                   onClick={() => setIsCaseModalOpen(true)}
                 >
                   Select Case
-                </button>
+                </Button>
               </div>
             )}
 
             {caseData && valuationReport && owner ? (
               <div className="layout">
-                {/* Left Panel: Case & Owner Info, Valuation Report Summary */}
                 <div className="left-panel">
                   <div className="info-card">
                     <div className="card-title"><Lucide.ClipboardList size={16} className="inline mr-1" /> Case Information</div>
                     <div className="detail-row">
-                      <div className="item"><span className="label">Case ID</span><span className="value">{caseData.id}</span></div>
+                      <div className="item"><span className="label">Case ID</span><span className="value font-mono text-xs">{caseData.id}</span></div>
                       <div className="item"><span className="label">Title</span><span className="value">{caseData.title}</span></div>
                       <div className="item"><span className="label">Project</span><span className="value">{caseData.project}</span></div>
                       <div className="item"><span className="label">Status</span><span className="value">{caseData.status}</span></div>
@@ -486,12 +367,11 @@ export const CompensationReportGenerator: React.FC = () => {
                     <div className="detail-row">
                       <div className="item"><span className="label">Method</span><span className="value">{valuationReport.valuationMethod}</span></div>
                       <div className="item"><span className="label">Market Value</span><span className="value">{formatCurrency(valuationReport.marketValue)}</span></div>
-                      <div className="item"><span className="label">Recommended Compensation</span><span className="value">{formatCurrency(valuationReport.recommendedCompensation)}</span></div>
+                      <div className="item"><span className="label">Recommended Compensation</span><span className="value font-semibold text-md-primary">{formatCurrency(valuationReport.recommendedCompensation)}</span></div>
                     </div>
                   </div>
                 </div>
 
-                {/* Right Panel: Compensation Form & Summary */}
                 <div className="right-panel">
                   <div className="form-card">
                     <div className="form-title">Compensation Components</div>
@@ -499,47 +379,90 @@ export const CompensationReportGenerator: React.FC = () => {
 
                     <div className="comp-grid">
                       <div className="comp-group">
-                        <label htmlFor="landValue">Land Value <span className="required">*</span></label>
-                        <input id="landValue" type="number" value={components.landValue} onChange={(e) => handleComponentChange("landValue", e.target.value)} />
+                        <Input
+                          label="Land Value *"
+                          id="landValue"
+                          type="number"
+                          value={String(components.landValue)}
+                          onChange={(e) => handleComponentChange("landValue", e.target.value)}
+                        />
                         <div className="helper">Pre-filled from valuation</div>
                       </div>
                       <div className="comp-group">
-                        <label htmlFor="buildingValue">Building/Structure Value <span className="required">*</span></label>
-                        <input id="buildingValue" type="number" value={components.buildingValue} onChange={(e) => handleComponentChange("buildingValue", e.target.value)} />
+                        <Input
+                          label="Building/Structure Value *"
+                          id="buildingValue"
+                          type="number"
+                          value={String(components.buildingValue)}
+                          onChange={(e) => handleComponentChange("buildingValue", e.target.value)}
+                        />
                       </div>
                       <div className="comp-group">
-                        <label htmlFor="cropValue">Crop/Plantation Value <span className="required">*</span></label>
-                        <input id="cropValue" type="number" value={components.cropValue} onChange={(e) => handleComponentChange("cropValue", e.target.value)} />
+                        <Input
+                          label="Crop/Plantation Value *"
+                          id="cropValue"
+                          type="number"
+                          value={String(components.cropValue)}
+                          onChange={(e) => handleComponentChange("cropValue", e.target.value)}
+                        />
                       </div>
                       <div className="comp-group">
-                        <label htmlFor="businessDisruption">Business Disruption</label>
-                        <input id="businessDisruption" type="number" value={components.businessDisruption} onChange={(e) => handleComponentChange("businessDisruption", e.target.value)} />
+                        <Input
+                          label="Business Disruption"
+                          id="businessDisruption"
+                          type="number"
+                          value={String(components.businessDisruption)}
+                          onChange={(e) => handleComponentChange("businessDisruption", e.target.value)}
+                        />
                       </div>
                       <div className="comp-group">
-                        <label htmlFor="disturbance">Disturbance Compensation</label>
-                        <input id="disturbance" type="number" value={components.disturbanceCompensation} onChange={(e) => handleComponentChange("disturbanceCompensation", e.target.value)} />
+                        <Input
+                          label="Disturbance Compensation"
+                          id="disturbance"
+                          type="number"
+                          value={String(components.disturbanceCompensation)}
+                          onChange={(e) => handleComponentChange("disturbanceCompensation", e.target.value)}
+                        />
                       </div>
                       <div className="comp-group">
-                        <label htmlFor="relocation">Relocation Allowance</label>
-                        <input id="relocation" type="number" value={components.relocationAllowance} onChange={(e) => handleComponentChange("relocationAllowance", e.target.value)} />
+                        <Input
+                          label="Relocation Allowance"
+                          id="relocation"
+                          type="number"
+                          value={String(components.relocationAllowance)}
+                          onChange={(e) => handleComponentChange("relocationAllowance", e.target.value)}
+                        />
                       </div>
                       <div className="comp-group" style={{ gridColumn: "1 / -1" }}>
-                        <label htmlFor="otherEligible">Other Eligible Items (Special Damages)</label>
-                        <input id="otherEligible" type="number" value={components.otherEligible} onChange={(e) => handleComponentChange("otherEligible", e.target.value)} />
+                        <Input
+                          label="Other Eligible Items (Special Damages)"
+                          id="otherEligible"
+                          type="number"
+                          value={String(components.otherEligible)}
+                          onChange={(e) => handleComponentChange("otherEligible", e.target.value)}
+                        />
                       </div>
                     </div>
 
-                    <div className="actions">
-                      <button className="btn-calc" onClick={calculateTotal} disabled={isCalculating}>
-                        <Calculator size={18} /> {isCalculating ? "Calculating..." : "Calculate Compensation"}
-                      </button>
-                      <button className="btn-generate" onClick={handleGenerateClick} disabled={isGenerating || calculatedTotal === null}>
-                        <FileText size={18} /> {isGenerating ? "Generating..." : "Generate Compensation Report"}
-                      </button>
+                    <div className="actions flex items-center gap-3 pt-4 border-t border-md-outline/10">
+                      <Button
+                        variant="tonal"
+                        onClick={calculateTotal}
+                        isLoading={isCalculating}
+                      >
+                        <Calculator size={18} /> Calculate Compensation
+                      </Button>
+                      <Button
+                        variant="filled"
+                        onClick={handleGenerateClick}
+                        disabled={isGenerating || calculatedTotal === null}
+                        isLoading={isGenerating}
+                      >
+                        <FileText size={18} /> Generate Compensation Report
+                      </Button>
                     </div>
                   </div>
 
-                  {/* Summary */}
                   {showSummary && calculatedTotal !== null && (
                     <div className="summary-card">
                       <div className="summary-title"><Lucide.BarChart2 size={16} className="inline mr-1" /> Compensation Summary</div>
@@ -557,7 +480,6 @@ export const CompensationReportGenerator: React.FC = () => {
                         <span>{formatCurrency(calculatedTotal)}</span>
                       </div>
 
-                      {/* AI / Valuation Comparison */}
                       <div className="ai-comparison">
                         <span className="ai-label"><Lucide.Bot size={16} className="inline mr-1" /> AI / Valuation Reference:</span>
                         <span className="ai-value">{formatCurrency(aiPredicted)}</span>
@@ -574,7 +496,10 @@ export const CompensationReportGenerator: React.FC = () => {
                             <CheckCircle size={18} className="inline mr-2" /> Report Saved Successfully!
                           </div>
                           <div style={{ fontSize: "13px", color: "var(--md-on-surface-variant)" }}>
-                            <strong>Report ID:</strong> {generatedReportId}<br />
+                            <div className="flex items-center gap-1.5 my-1">
+                              <strong>Report ID:</strong> <span className="font-mono">{generatedReportId}</span>
+                              <CopyButton value={generatedReportId} />
+                            </div>
                             <strong>Status:</strong> {statusUpdate}
                             {generatedOfferRef && (
                               <>
@@ -589,21 +514,21 @@ export const CompensationReportGenerator: React.FC = () => {
                           </div>
                           <div style={{ display: "flex", gap: "10px", marginTop: "12px", flexWrap: "wrap" }}>
                             {generatedOfferId && (
-                              <button
-                                className="btn-primary"
-                                style={{ fontSize: "13px", padding: "6px 16px", cursor: "pointer", background: "#16a34a" }}
+                              <Button
+                                variant="filled"
+                                size="sm"
                                 onClick={() => navigate("/admin/compensation/offer/review", { state: { offerId: generatedOfferId } })}
                               >
                                 View Offer Letter
-                              </button>
+                              </Button>
                             )}
-                            <button
-                              className="btn-outline"
-                              style={{ fontSize: "13px", padding: "6px 16px", cursor: "pointer" }}
+                            <Button
+                              variant="outlined"
+                              size="sm"
                               onClick={() => navigate("/admin/compensation/report")}
                             >
                               Go to Compensation Reports
-                            </button>
+                            </Button>
                           </div>
                         </div>
                       )}
@@ -618,13 +543,13 @@ export const CompensationReportGenerator: React.FC = () => {
                 <div style={{ fontSize: "48px", marginBottom: "12px" }}><Lucide.FolderPlus size={48} className="inline" /></div>
                 <h4 style={{ fontWeight: 600, color: "var(--md-on-surface)", opacity: 0.8 }}>Select a case to begin</h4>
                 <p style={{ fontSize: "14px" }}>Choose an acquisition case in Valuation Approved or Compensation Rejected status.</p>
-                <button
-                  className="btn-primary"
-                  style={{ marginTop: "16px", padding: "8px 20px" }}
+                <Button
+                  variant="filled"
+                  style={{ marginTop: "16px" }}
                   onClick={() => setIsCaseModalOpen(true)}
                 >
                   Select Case
-                </button>
+                </Button>
               </div>
             )}
 

@@ -1,10 +1,13 @@
 import * as Lucide from "lucide-react";
 import React, { useState, useEffect } from "react";
-import { createPortal } from "react-dom";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { CheckCircle, XCircle, X, Loader2 } from "lucide-react";
+import { CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
-import { useModalPopIn } from "../../hooks/useModalPopIn";
+import { Modal } from "../../components/ui/Modal";
+import { Button } from "../../components/ui/Button";
+import { Input } from "../../components/ui/Input";
+import { Textarea } from "../../components/ui/Textarea";
+import { CopyButton } from "../../components/ui/CopyButton";
 import "../../style.css";
 import "./valuation_report.css";
 
@@ -26,9 +29,9 @@ type ReportDetail = {
 };
 
 const statusClassMap: Record<string, string> = {
-  PENDING: "pending",
-  APPROVED: "approved",
-  REJECTED: "rejected",
+  PENDING: "status-pending-valuation",
+  APPROVED: "status-valuation-approved",
+  REJECTED: "status-valuation-rejected",
 };
 
 const statusLabelMap: Record<string, string> = {
@@ -52,7 +55,6 @@ export const ValuationReportReview: React.FC = () => {
   const [reasonError, setReasonError] = useState("");
   const [daysError, setDaysError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const rejectModalRef = useModalPopIn(showRejectModal);
 
   useEffect(() => {
     async function fetchReport() {
@@ -83,7 +85,7 @@ export const ValuationReportReview: React.FC = () => {
           buildingAssessment: "building_assessment_report.pdf",
           siteInspection: "site_inspection_notes.pdf",
           status: statusLabelMap[rep.reportStatus] || rep.reportStatus,
-          statusClass: statusClassMap[rep.reportStatus] || "pending",
+          statusClass: statusClassMap[rep.reportStatus] || "status-pending-valuation",
         };
 
         setReport(formatted);
@@ -154,13 +156,7 @@ export const ValuationReportReview: React.FC = () => {
   if (loading) {
     return (
       <div
-        className="flex min-h-screen"
-        style={{
-          background: "var(--md-background)",
-          color: "var(--md-on-surface)",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
+        className="flex min-h-screen items-center justify-center bg-md-background text-md-on-surface"
       >
         <div style={{ textAlign: "center", color: "var(--md-on-surface-variant)" }}>
           <Loader2 size={32} className="inline animate-spin mb-2" />
@@ -173,20 +169,14 @@ export const ValuationReportReview: React.FC = () => {
   if (!report) {
     return (
       <div
-        className="flex min-h-screen"
-        style={{
-          background: "var(--md-background)",
-          color: "var(--md-on-surface)",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
+        className="flex min-h-screen items-center justify-center bg-md-background text-md-on-surface"
       >
         <div style={{ textAlign: "center", color: "var(--md-on-surface-variant)" }}>
-          <h3>Valuation Report Not Found</h3>
-          <p style={{ marginBottom: "16px" }}>No report selected or valid ID provided.</p>
-          <button className="btn-primary" onClick={() => navigate("/admin/case/valuation")}>
+          <h3 className="text-lg font-bold mb-2">Valuation Report Not Found</h3>
+          <p className="mb-4">No report selected or valid ID provided.</p>
+          <Button variant="filled" onClick={() => navigate("/admin/case/valuation")}>
             Back to Valuation Dashboard
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -194,77 +184,64 @@ export const ValuationReportReview: React.FC = () => {
 
   return (
     <>
-      {showRejectModal &&
-        createPortal(
-          <div className="reject-modal-overlay" onClick={closeRejectModal}>
-            <div ref={rejectModalRef} className="reject-modal" style={{ borderRadius: "28px" }} onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <h3>Reject Report</h3>
-                <button className="close-btn" onClick={closeRejectModal}>
-                  <X size={22} />
-                </button>
-              </div>
-              <div className="form-group">
-                <label htmlFor="reason">
-                  Reason for Rejection <span className="required">*</span>
-                </label>
-                <textarea
-                  id="reason"
-                  rows={3}
-                  placeholder="Enter the reason for rejecting this report..."
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  className={reasonError ? "error" : ""}
-                />
-                {reasonError && <div className="error-text">{reasonError}</div>}
-              </div>
-              <div className="form-group">
-                <label htmlFor="days">
-                  Acceptance Period (days) <span className="required">*</span>
-                </label>
-                <input
-                  id="days"
-                  type="number"
-                  min="1"
-                  placeholder="e.g., 7"
-                  value={acceptanceDays}
-                  onChange={(e) => setAcceptanceDays(e.target.value)}
-                  className={daysError ? "error" : ""}
-                />
-                {daysError && <div className="error-text">{daysError}</div>}
-                <div
-                  style={{
-                    fontSize: "12px",
-                    color: "var(--md-on-surface-variant)",
-                    opacity: 0.6,
-                    marginTop: "4px",
-                  }}
-                >
-                  Number of days for the valuer to revise and resubmit.
-                </div>
-              </div>
-              <div className="modal-actions">
-                <button className="btn-cancel" onClick={closeRejectModal}>
-                  Cancel
-                </button>
-                <button
-                  className="btn-submit"
-                  onClick={handleRejectSubmit}
-                  disabled={submitting}
-                >
-                  {submitting ? "Submitting to Backend..." : "Confirm Reject"}
-                </button>
-              </div>
+      <Modal
+        isOpen={showRejectModal}
+        onClose={closeRejectModal}
+        title="Reject Report"
+        subtitle="Provide reason for rejection and specify revision timeline"
+        footer={
+          <>
+            <Button variant="text" onClick={closeRejectModal}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleRejectSubmit}
+              isLoading={submitting}
+            >
+              <XCircle size={16} /> Confirm Reject
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <Textarea
+            label="Reason for Rejection *"
+            rows={3}
+            placeholder="Enter the reason for rejecting this report..."
+            value={reason}
+            onChange={(e) => {
+              setReason(e.target.value);
+              if (reasonError) setReasonError("");
+            }}
+          />
+          {reasonError && <div className="text-xs text-md-error pl-2">{reasonError}</div>}
+
+          <div>
+            <Input
+              label="Acceptance Period (days) *"
+              type="number"
+              min="1"
+              placeholder="e.g., 7"
+              value={acceptanceDays}
+              onChange={(e) => {
+                setAcceptanceDays(e.target.value);
+                if (daysError) setDaysError("");
+              }}
+            />
+            {daysError && <div className="text-xs text-md-error pl-2 mt-1">{daysError}</div>}
+            <div className="text-xs text-md-on-surface-variant/60 mt-1 pl-2">
+              Number of days for the valuer to revise and resubmit.
             </div>
-          </div>,
-          document.body
-        )}
+          </div>
+        </div>
+      </Modal>
 
       <div
         className="flex min-h-screen"
         style={{ background: "var(--md-background)", color: "var(--md-on-surface)" }}
       >
-        <main className="main blur-shape-bg">
+        <main className="main blur-shape-bg w-full">
           <div className="review-container">
             <div className="topbar" style={{ marginBottom: "16px" }}>
               <div className="topbar-left">
@@ -273,27 +250,36 @@ export const ValuationReportReview: React.FC = () => {
                   Review the report details and take action
                 </div>
               </div>
-              <div className="topbar-right">
+              <div className="topbar-right flex items-center gap-3">
                 <span className="date-badge">
                   <Lucide.Calendar size={16} className="inline mr-1" />
                   {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
                 </span>
+                <Button variant="outlined" size="sm" onClick={() => navigate("/admin/case/valuation")}>
+                  <Lucide.ArrowLeft size={16} /> Back to List
+                </Button>
                 <div className="avatar">AO</div>
               </div>
             </div>
 
             <div className="case-summary">
               <div className="left">
-                <div className="case-id" style={{ fontSize: "12px" }}>Case ID: {report.caseId}</div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="case-id font-mono text-sm">Case ID: {report.caseId}</span>
+                  <CopyButton value={report.caseId} />
+                </div>
                 <div className="case-title">{report.caseTitle}</div>
-                <div className="meta">
-                  <span><Lucide.FileText size={14} className="inline mr-1" /> Report ID: {report.id.slice(0, 8)}...</span>
+                <div className="meta flex items-center flex-wrap gap-3 mt-2">
+                  <span className="flex items-center gap-1">
+                    <Lucide.FileText size={14} className="inline" /> Report ID: {report.id}
+                    <CopyButton value={report.id} size="sm" />
+                  </span>
                   <span><Lucide.Scale size={14} className="inline mr-1" /> Valuer: {report.valuer}</span>
                   <span><Lucide.Calendar size={14} className="inline mr-1" /> {report.valuationDate}</span>
                 </div>
               </div>
               <span className={`status-badge-lg ${report.statusClass}`}>
-                <Lucide.Hourglass size={16} className="inline mr-1" /> {report.status}
+                <span className="dot"></span> {report.status}
               </span>
             </div>
 
@@ -317,8 +303,7 @@ export const ValuationReportReview: React.FC = () => {
                 <div className="detail-item">
                   <span className="label">Status</span>
                   <span
-                    className="value"
-                    style={{ fontWeight: 600, color: report.status === "Approved" ? "var(--md-success-text)" : "var(--md-warning-text)" }}
+                    className="value font-semibold"
                   >
                     {report.status}
                   </span>
@@ -330,13 +315,13 @@ export const ValuationReportReview: React.FC = () => {
               </div>
 
               {report.status === "Pending Review" && (
-                <div className="action-bar">
-                  <button className="btn-accept" onClick={handleAccept}>
-                    <CheckCircle size={18} /> Accept & Approve
-                  </button>
-                  <button className="btn-reject" onClick={openRejectModal}>
+                <div className="action-bar flex items-center justify-end gap-3 mt-6 pt-4 border-t border-md-outline/10">
+                  <Button variant="danger" onClick={openRejectModal}>
                     <XCircle size={18} /> Reject
-                  </button>
+                  </Button>
+                  <Button variant="filled" onClick={handleAccept}>
+                    <CheckCircle size={18} /> Accept & Approve
+                  </Button>
                 </div>
               )}
             </div>

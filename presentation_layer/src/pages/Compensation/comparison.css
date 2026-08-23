@@ -8,28 +8,7 @@
   gap: 12px;
   align-items: center;
 }
-.comparison-dashboard .btn-new {
-  padding: 10px 24px;
-  border-radius: var(--radius-full);
-  border: none;
-  background: var(--md-primary);
-  color: white;
-  font-weight: 600;
-  font-size: 14px;
-  font-family: inherit;
-  cursor: pointer;
-  transition:
-    transform 0.15s var(--ease-bouncy),
-    box-shadow 0.2s;
-  box-shadow: var(--shadow-sm);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.comparison-dashboard .btn-new:hover {
-  transform: scale(1.03);
-  box-shadow: var(--shadow-md);
-}
+/* .btn-new removed — use <Button variant="filled"> */
 .comparison-dashboard .saved-list {
   background: var(--md-surface-container);
   border-radius: var(--radius-lg);
@@ -65,20 +44,8 @@
 .comparison-dashboard .saved-list table tr:hover {
   background: rgba(103, 80, 164, 0.04);
 }
-.comparison-dashboard .saved-list .btn-view-comp {
-  padding: 4px 14px;
-  border-radius: var(--radius-full);
-  border: 1.5px solid var(--md-primary);
-  background: transparent;
-  color: var(--md-primary);
-  font-weight: 600;
-  font-size: 12px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.comparison-dashboard .saved-list .btn-view-comp:hover {
-  background: rgba(103, 80, 164, 0.08);
-}
+/* .btn-view-comp removed — use <Button variant="tonal" size="sm"> */
+
 .comparison-dashboard .saved-list .empty-state {
   text-align: center;
   padding: 24px;

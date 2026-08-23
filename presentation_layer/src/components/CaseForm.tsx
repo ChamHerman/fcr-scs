@@ -1,6 +1,12 @@
 import * as Lucide from "lucide-react";
 import React, { useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Trash2, Upload } from "lucide-react";
+import { Button } from "./ui/Button";
+import { Input } from "./ui/Input";
+import { Select, type SelectOption } from "./ui/Select";
+import { Textarea } from "./ui/Textarea";
+import { IconButton } from "./ui/IconButton";
+import { FileUpload } from "./ui/FileUpload";
 import "../style.css";
 import "../pages/LandAcquisition/case_management.css";
 
@@ -55,6 +61,36 @@ export interface CaseFormProps {
   isSubmitting?: boolean;
   onCancel?: () => void;
 }
+
+const PROJECT_TYPE_OPTIONS: SelectOption[] = [
+  { value: "", label: "Select type" },
+  { value: "Public Amenities", label: "Public Amenities" },
+  { value: "Transportation Development", label: "Transportation Development" },
+  { value: "Urban Redevelopment", label: "Urban Redevelopment" },
+  { value: "Tourism Development", label: "Tourism Development" },
+  { value: "Others", label: "Others" },
+];
+
+const OWNERSHIP_TYPE_OPTIONS: SelectOption[] = [
+  { value: "", label: "Select type" },
+  { value: "Individual", label: "Individual" },
+  { value: "Joint", label: "Joint" },
+  { value: "Company", label: "Company" },
+  { value: "Trust", label: "Trust" },
+  { value: "Other", label: "Other" },
+];
+
+const DOCUMENT_TYPE_OPTIONS: SelectOption[] = [
+  { value: "", label: "Select type" },
+  { value: "Project Approval Letter", label: "Project Approval Letter" },
+  { value: "Development Plan", label: "Development Plan" },
+  { value: "Gazette", label: "Gazette" },
+  { value: "Survey Plan", label: "Survey Plan" },
+  { value: "Land Title Copy", label: "Land Title Copy" },
+  { value: "Location Map", label: "Location Map" },
+  { value: "Satellite Image", label: "Satellite Image" },
+  { value: "Others", label: "Others" },
+];
 
 export const CaseForm: React.FC<CaseFormProps> = ({
   mode,
@@ -124,12 +160,7 @@ export const CaseForm: React.FC<CaseFormProps> = ({
     }
   }, [initialValues]);
 
-  const handleInputChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-    >
-  ) => {
-    const { name, value } = e.target;
+  const handleFieldChange = (name: keyof CaseFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -239,72 +270,48 @@ export const CaseForm: React.FC<CaseFormProps> = ({
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="col-span-2">
-                <label className="block text-sm font-medium text-md-on-surface-variant mb-1">
-                  Project Name *
-                </label>
-                <input
-                  type="text"
+                <Input
+                  label="Project Name *"
                   name="projectName"
                   value={formData.projectName}
-                  onChange={handleInputChange}
-                  className="w-full p-3 rounded-xl border border-md-outline/30 bg-md-surface-container-low focus:border-md-primary focus:ring-2 focus:ring-md-primary/20 outline-none transition"
+                  onChange={(e) => handleFieldChange("projectName", e.target.value)}
                   placeholder="Enter project name"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-md-on-surface-variant mb-1">
-                  Project Type *
-                </label>
-                <select
-                  name="projectType"
+                <Select
+                  label="Project Type *"
                   value={formData.projectType}
-                  onChange={handleInputChange}
-                  className="w-full p-3 rounded-xl border border-md-outline/30 bg-md-surface-container-low focus:border-md-primary focus:ring-2 focus:ring-md-primary/20 outline-none transition appearance-none"
-                >
-                  <option value="">Select type</option>
-                  <option value="Public Amenities">Public Amenities</option>
-                  <option value="Transportation Development">Transportation Development</option>
-                  <option value="Urban Redevelopment">Urban Redevelopment</option>
-                  <option value="Tourism Development">Tourism Development</option>
-                  <option value="Others">Others</option>
-                </select>
+                  options={PROJECT_TYPE_OPTIONS}
+                  onChange={(val) => handleFieldChange("projectType", val)}
+                  placeholder="Select type"
+                />
               </div>
               <div>
-                <label className="block text-sm font-medium text-md-on-surface-variant mb-1">
-                  Project Purpose *
-                </label>
-                <input
-                  type="text"
+                <Input
+                  label="Project Purpose *"
                   name="projectPurpose"
                   value={formData.projectPurpose}
-                  onChange={handleInputChange}
-                  className="w-full p-3 rounded-xl border border-md-outline/30 bg-md-surface-container-low focus:border-md-primary focus:ring-2 focus:ring-md-primary/20 outline-none transition"
+                  onChange={(e) => handleFieldChange("projectPurpose", e.target.value)}
                   placeholder="e.g., Infrastructure development"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-md-on-surface-variant mb-1">
-                  Project Budget (RM) *
-                </label>
-                <input
+                <Input
+                  label="Project Budget (RM) *"
                   type="number"
                   name="projectBudget"
                   value={formData.projectBudget}
-                  onChange={handleInputChange}
-                  className="w-full p-3 rounded-xl border border-md-outline/30 bg-md-surface-container-low focus:border-md-primary focus:ring-2 focus:ring-md-primary/20 outline-none transition"
+                  onChange={(e) => handleFieldChange("projectBudget", e.target.value)}
                   placeholder="0.00"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-md-on-surface-variant mb-1">
-                  Funding Source *
-                </label>
-                <input
-                  type="text"
+                <Input
+                  label="Funding Source *"
                   name="fundingSource"
                   value={formData.fundingSource}
-                  onChange={handleInputChange}
-                  className="w-full p-3 rounded-xl border border-md-outline/30 bg-md-surface-container-low focus:border-md-primary focus:ring-2 focus:ring-md-primary/20 outline-none transition"
+                  onChange={(e) => handleFieldChange("fundingSource", e.target.value)}
                   placeholder="e.g., Government, Private, etc."
                 />
               </div>
@@ -319,123 +326,86 @@ export const CaseForm: React.FC<CaseFormProps> = ({
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-md-on-surface-variant mb-1">
-                  Land Title Number *
-                </label>
-                <input
-                  type="text"
+                <Input
+                  label="Land Title Number *"
                   name="landTitleNumber"
                   value={formData.landTitleNumber}
-                  onChange={handleInputChange}
-                  className="w-full p-3 rounded-xl border border-md-outline/30 bg-md-surface-container-low focus:border-md-primary focus:ring-2 focus:ring-md-primary/20 outline-none transition"
+                  onChange={(e) => handleFieldChange("landTitleNumber", e.target.value)}
                   placeholder="e.g., PN 12345"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-md-on-surface-variant mb-1">
-                  Lot Number *
-                </label>
-                <input
-                  type="text"
+                <Input
+                  label="Lot Number *"
                   name="lotNumber"
                   value={formData.lotNumber}
-                  onChange={handleInputChange}
-                  className="w-full p-3 rounded-xl border border-md-outline/30 bg-md-surface-container-low focus:border-md-primary focus:ring-2 focus:ring-md-primary/20 outline-none transition"
+                  onChange={(e) => handleFieldChange("lotNumber", e.target.value)}
                   placeholder="e.g., Lot 1234"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-md-on-surface-variant mb-1">
-                  Mukim *
-                </label>
-                <input
-                  type="text"
+                <Input
+                  label="Mukim *"
                   name="mukim"
                   value={formData.mukim}
-                  onChange={handleInputChange}
-                  className="w-full p-3 rounded-xl border border-md-outline/30 bg-md-surface-container-low focus:border-md-primary focus:ring-2 focus:ring-md-primary/20 outline-none transition"
+                  onChange={(e) => handleFieldChange("mukim", e.target.value)}
                   placeholder="Mukim name"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-md-on-surface-variant mb-1">
-                  District *
-                </label>
-                <input
-                  type="text"
+                <Input
+                  label="District *"
                   name="district"
                   value={formData.district}
-                  onChange={handleInputChange}
-                  className="w-full p-3 rounded-xl border border-md-outline/30 bg-md-surface-container-low focus:border-md-primary focus:ring-2 focus:ring-md-primary/20 outline-none transition"
+                  onChange={(e) => handleFieldChange("district", e.target.value)}
                   placeholder="District name"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-md-on-surface-variant mb-1">
-                  State *
-                </label>
-                <input
-                  type="text"
+                <Input
+                  label="State *"
                   name="state"
                   value={formData.state}
-                  onChange={handleInputChange}
-                  className="w-full p-3 rounded-xl border border-md-outline/30 bg-md-surface-container-low focus:border-md-primary focus:ring-2 focus:ring-md-primary/20 outline-none transition"
+                  onChange={(e) => handleFieldChange("state", e.target.value)}
                   placeholder="State name"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-md-on-surface-variant mb-1">
-                  Land Area (hectares) *
-                </label>
-                <input
+                <Input
+                  label="Land Area (hectares) *"
                   type="number"
                   name="landArea"
                   value={formData.landArea}
-                  onChange={handleInputChange}
-                  className="w-full p-3 rounded-xl border border-md-outline/30 bg-md-surface-container-low focus:border-md-primary focus:ring-2 focus:ring-md-primary/20 outline-none transition"
+                  onChange={(e) => handleFieldChange("landArea", e.target.value)}
                   placeholder="0.0"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-md-on-surface-variant mb-1">
-                  Land Category *
-                </label>
-                <input
-                  type="text"
+              <div className="col-span-1 md:col-span-2">
+                <Input
+                  label="Land Category *"
                   name="landCategory"
                   value={formData.landCategory}
-                  onChange={handleInputChange}
-                  className="w-full p-3 rounded-xl border border-md-outline/30 bg-md-surface-container-low focus:border-md-primary focus:ring-2 focus:ring-md-primary/20 outline-none transition"
+                  onChange={(e) => handleFieldChange("landCategory", e.target.value)}
                   placeholder="e.g., Agricultural, Residential"
                 />
               </div>
-              <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-md-on-surface-variant mb-1">
-                    GPS Latitude *
-                  </label>
-                  <input
-                    type="text"
-                    name="gpsLatitude"
-                    value={formData.gpsLatitude}
-                    onChange={handleInputChange}
-                    className="w-full p-3 rounded-xl border border-md-outline/30 bg-md-surface-container-low focus:border-md-primary focus:ring-2 focus:ring-md-primary/20 outline-none transition"
-                    placeholder="e.g., 3.1390"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-md-on-surface-variant mb-1">
-                    GPS Longitude *
-                  </label>
-                  <input
-                    type="text"
-                    name="gpsLongitude"
-                    value={formData.gpsLongitude}
-                    onChange={handleInputChange}
-                    className="w-full p-3 rounded-xl border border-md-outline/30 bg-md-surface-container-low focus:border-md-primary focus:ring-2 focus:ring-md-primary/20 outline-none transition"
-                    placeholder="e.g., 101.6869"
-                  />
-                </div>
+              <div>
+                <Input
+                  label="GPS Latitude *"
+                  name="gpsLatitude"
+                  value={formData.gpsLatitude}
+                  onChange={(e) => handleFieldChange("gpsLatitude", e.target.value)}
+                  placeholder="e.g., 3.1390"
+                />
+              </div>
+              <div>
+                <Input
+                  label="GPS Longitude *"
+                  name="gpsLongitude"
+                  value={formData.gpsLongitude}
+                  onChange={(e) => handleFieldChange("gpsLongitude", e.target.value)}
+                  placeholder="e.g., 101.6869"
+                />
               </div>
             </div>
           </div>
@@ -447,13 +417,13 @@ export const CaseForm: React.FC<CaseFormProps> = ({
               <h3 className="text-xl font-bold text-md-on-surface">
                 Owner Information
               </h3>
-              <button
-                type="button"
+              <Button
+                variant="filled"
+                size="sm"
                 onClick={addOwner}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-md-primary text-white text-sm font-semibold hover:shadow-md transition active:scale-95"
               >
                 <Plus size={16} /> Add Owner
-              </button>
+              </Button>
             </div>
             {owners.map((owner, index) => (
               <div
@@ -461,96 +431,73 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                 className="p-6 bg-md-surface-container rounded-2xl border border-md-outline/10 relative"
               >
                 {owners.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeOwner(owner.id)}
-                    className="absolute top-4 right-4 text-md-error-text hover:bg-md-error/20 p-2 rounded-full transition"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                  <div className="absolute top-4 right-4">
+                    <IconButton
+                      title="Remove Owner"
+                      size="sm"
+                      variant="danger"
+                      onClick={() => removeOwner(owner.id)}
+                    >
+                      <Trash2 size={18} />
+                    </IconButton>
+                  </div>
                 )}
                 <div className="text-sm font-semibold text-md-on-surface-variant mb-4">
                   Owner #{index + 1}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-md-on-surface-variant mb-1">
-                      Full Name *
-                    </label>
-                    <input
-                      type="text"
+                    <Input
+                      label="Full Name *"
                       value={owner.name}
                       onChange={(e) =>
                         handleOwnerChange(owner.id, "name", e.target.value)
                       }
-                      className="w-full p-3 rounded-xl border border-md-outline/30 bg-md-surface-container-low focus:border-md-primary focus:ring-2 focus:ring-md-primary/20 outline-none transition"
                       placeholder="Owner name"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-md-on-surface-variant mb-1">
-                      Identity Card Number *
-                    </label>
-                    <input
-                      type="text"
+                    <Input
+                      label="Identity Card Number *"
                       value={owner.icNumber}
                       onChange={(e) =>
                         handleOwnerChange(owner.id, "icNumber", e.target.value)
                       }
-                      className="w-full p-3 rounded-xl border border-md-outline/30 bg-md-surface-container-low focus:border-md-primary focus:ring-2 focus:ring-md-primary/20 outline-none transition"
                       placeholder="e.g., 800101-10-1234"
                     />
                   </div>
                   <div className="col-span-2">
-                    <label className="block text-sm font-medium text-md-on-surface-variant mb-1">
-                      Address *
-                    </label>
-                    <textarea
+                    <Textarea
+                      label="Address *"
                       value={owner.address}
                       onChange={(e) =>
                         handleOwnerChange(owner.id, "address", e.target.value)
                       }
                       rows={2}
-                      className="w-full p-3 rounded-xl border border-md-outline/30 bg-md-surface-container-low focus:border-md-primary focus:ring-2 focus:ring-md-primary/20 outline-none transition resize-none"
                       placeholder="Full address"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-md-on-surface-variant mb-1">
-                      Phone Number *
-                    </label>
-                    <input
+                    <Input
+                      label="Phone Number *"
                       type="tel"
                       value={owner.phone}
                       onChange={(e) =>
                         handleOwnerChange(owner.id, "phone", e.target.value)
                       }
-                      className="w-full p-3 rounded-xl border border-md-outline/30 bg-md-surface-container-low focus:border-md-primary focus:ring-2 focus:ring-md-primary/20 outline-none transition"
                       placeholder="e.g., 012-3456789"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-md-on-surface-variant mb-1">
-                      Ownership Type *
-                    </label>
-                    <select
+                    <Select
+                      label="Ownership Type *"
                       value={owner.ownershipType}
-                      onChange={(e) =>
-                        handleOwnerChange(
-                          owner.id,
-                          "ownershipType",
-                          e.target.value
-                        )
+                      options={OWNERSHIP_TYPE_OPTIONS}
+                      onChange={(val) =>
+                        handleOwnerChange(owner.id, "ownershipType", val)
                       }
-                      className="w-full p-3 rounded-xl border border-md-outline/30 bg-md-surface-container-low focus:border-md-primary focus:ring-2 focus:ring-md-primary/20 outline-none transition appearance-none"
-                    >
-                      <option value="">Select type</option>
-                      <option value="Individual">Individual</option>
-                      <option value="Joint">Joint</option>
-                      <option value="Company">Company</option>
-                      <option value="Trust">Trust</option>
-                      <option value="Other">Other</option>
-                    </select>
+                      placeholder="Select type"
+                    />
                   </div>
                 </div>
               </div>
@@ -564,13 +511,13 @@ export const CaseForm: React.FC<CaseFormProps> = ({
               <h3 className="text-xl font-bold text-md-on-surface">
                 Supporting Documents
               </h3>
-              <button
-                type="button"
+              <Button
+                variant="filled"
+                size="sm"
                 onClick={addDocument}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-md-primary text-white text-sm font-semibold hover:shadow-md transition active:scale-95"
               >
                 <Plus size={16} /> Add Document
-              </button>
+              </Button>
             </div>
             {documents.map((doc, index) => (
               <div
@@ -578,76 +525,37 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                 className="p-6 bg-md-surface-container rounded-2xl border border-md-outline/10 relative"
               >
                 {documents.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeDocument(doc.id)}
-                    className="absolute top-4 right-4 text-md-error-text hover:bg-md-error/20 p-2 rounded-full transition"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                  <div className="absolute top-4 right-4">
+                    <IconButton
+                      title="Remove Document"
+                      size="sm"
+                      variant="danger"
+                      onClick={() => removeDocument(doc.id)}
+                    >
+                      <Trash2 size={18} />
+                    </IconButton>
+                  </div>
                 )}
                 <div className="text-sm font-semibold text-md-on-surface-variant mb-4">
                   Document #{index + 1}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-md-on-surface-variant mb-1">
-                      Document Type *
-                    </label>
-                    <select
+                    <Select
+                      label="Document Type *"
                       value={doc.type}
-                      onChange={(e) =>
-                        handleDocumentTypeChange(doc.id, e.target.value)
-                      }
-                      className="w-full p-3 rounded-xl border border-md-outline/30 bg-md-surface-container-low focus:border-md-primary focus:ring-2 focus:ring-md-primary/20 outline-none transition appearance-none"
-                    >
-                      <option value="">Select type</option>
-                      <option value="Project Approval Letter">Project Approval Letter</option>
-                      <option value="Development Plan">Development Plan</option>
-                      <option value="Gazette">Gazette</option>
-                      <option value="Survey Plan">Survey Plan</option>
-                      <option value="Land Title Copy">Land Title Copy</option>
-                      <option value="Location Map">Location Map</option>
-                      <option value="Satellite Image">Satellite Image</option>
-                      <option value="Others">Others</option>
-                    </select>
+                      options={DOCUMENT_TYPE_OPTIONS}
+                      onChange={(val) => handleDocumentTypeChange(doc.id, val)}
+                      placeholder="Select type"
+                    />
                   </div>
-                  <div className="flex items-end">
-                    <div className="w-full">
-                      <label className="block text-sm font-medium text-md-on-surface-variant mb-1">
-                        Upload File *
-                      </label>
-                      <div className="flex items-center gap-3">
-                        <label className="flex-1 cursor-pointer">
-                          <div className="w-full p-3 rounded-xl border-2 border-dashed border-md-outline/30 bg-md-surface-container-low hover:border-md-primary transition flex items-center justify-center gap-2 text-md-on-surface-variant">
-                            <Upload size={18} />
-                            <span className="text-sm">
-                              {doc.file
-                                ? doc.fileName
-                                : doc.fileName || "Choose file (PDF, JPG, PNG, DOC, XLSX, CSV)"}
-                            </span>
-                            <input
-                              type="file"
-                              className="hidden"
-                              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx,.csv"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0] || null;
-                                handleFileUpload(doc.id, file);
-                              }}
-                            />
-                          </div>
-                        </label>
-                        {doc.file && (
-                          <button
-                            type="button"
-                            onClick={() => handleFileUpload(doc.id, null)}
-                            className="text-md-error-text hover:bg-md-error/20 p-2 rounded-full transition"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                  <div>
+                    <FileUpload
+                      label="Upload File *"
+                      fileName={doc.fileName}
+                      onChange={(file) => handleFileUpload(doc.id, file)}
+                      onClear={() => handleFileUpload(doc.id, null)}
+                    />
                   </div>
                 </div>
               </div>
@@ -735,74 +643,56 @@ export const CaseForm: React.FC<CaseFormProps> = ({
             {/* Left Button Group */}
             <div className="flex items-center gap-3">
               {isSectionEdit ? (
-                /* Section Edit Mode: ONLY show Cancel */
                 onCancel && (
-                  <button
-                    type="button"
+                  <Button
+                    variant="tonal"
                     onClick={onCancel}
-                    className="px-6 py-3 rounded-full font-medium text-md-on-surface-variant bg-md-surface-container-high hover:bg-md-outline/10 transition active:scale-95"
                   >
                     Cancel
-                  </button>
+                  </Button>
                 )
               ) : currentStep === 0 ? (
-                /* First Step (Step 0): Show Cancel and jump back to previous page */
-                <button
-                  type="button"
+                <Button
+                  variant="tonal"
                   onClick={onCancel || (() => window.history.back())}
-                  className="px-6 py-3 rounded-full font-medium text-md-on-surface-variant hover:bg-md-outline/10 transition active:scale-95"
                 >
                   Cancel
-                </button>
+                </Button>
               ) : (
-                /* Steps 1, 2, 3: Show Back button to go to previous step */
-                <button
-                  type="button"
+                <Button
+                  variant="outlined"
                   onClick={prevStep}
-                  className="flex items-center gap-2 px-6 py-3 rounded-full font-medium text-md-on-surface-variant hover:bg-md-primary/10 transition active:scale-95"
                 >
                   <ChevronLeft size={18} /> Back
-                </button>
+                </Button>
               )}
             </div>
 
             {/* Right Button Group */}
             <div className="flex items-center gap-3">
               {isSectionEdit ? (
-                /* Section Edit Mode: ONLY show Save Changes */
-                <button
-                  type="button"
-                  disabled={isSubmitting}
+                <Button
+                  variant="filled"
+                  isLoading={isSubmitting}
                   onClick={handleFormSubmit}
-                  className="flex items-center gap-2 px-8 py-3 rounded-full bg-md-primary text-white font-semibold shadow-sm hover:shadow-md transition active:scale-95 disabled:opacity-50"
                 >
-                  {isSubmitting ? "Saving Changes..." : "Save Changes"}
-                </button>
+                  Save Changes
+                </Button>
               ) : currentStep === 3 ? (
-                /* Last Step (Step 3) for Whole Case Edit or Create Mode: Show Save Changes or Submit Case */
-                <button
-                  type="button"
-                  disabled={isSubmitting}
+                <Button
+                  variant="filled"
+                  isLoading={isSubmitting}
                   onClick={handleFormSubmit}
-                  className="flex items-center gap-2 px-8 py-3 rounded-full bg-md-primary text-white font-semibold shadow-sm hover:shadow-md transition active:scale-95 disabled:opacity-50"
                 >
-                  {isSubmitting
-                    ? isWholeCaseEdit
-                      ? "Saving Changes..."
-                      : "Processing..."
-                    : isWholeCaseEdit
-                    ? "Save Changes"
-                    : "Submit Case"}
-                </button>
+                  {isWholeCaseEdit ? "Save Changes" : "Submit Case"}
+                </Button>
               ) : (
-                /* Steps 0, 1, 2 for Whole Case Edit or Create Mode: Show Next */
-                <button
-                  type="button"
+                <Button
+                  variant="filled"
                   onClick={nextStep}
-                  className="flex items-center gap-2 px-8 py-3 rounded-full bg-md-primary text-white font-semibold shadow-sm hover:shadow-md transition active:scale-95"
                 >
                   Next <ChevronRight size={18} />
-                </button>
+                </Button>
               )}
             </div>
           </div>

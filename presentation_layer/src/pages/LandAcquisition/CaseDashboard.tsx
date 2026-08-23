@@ -6,26 +6,30 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
 import { Pagination } from "../../components/ui/Pagination";
+import { Button } from "../../components/ui/Button";
+import { Select, type SelectOption } from "../../components/ui/Select";
+import { SearchInput } from "../../components/ui/SearchInput";
+import { CopyButton } from "../../components/ui/CopyButton";
 import "../../style.css";
 import "./case_management.css";
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
 const statusClassMap: Record<string, string> = {
-  CASE_REGISTERED: "registered",
-  VALUER_ASSIGNED: "valuation",
-  VALUATION_IN_PROGRESS: "valuation",
-  PENDING_VALUATION_APPROVAL: "pending",
-  VALUATION_APPROVED: "approved",
-  VALUATION_REJECTED: "rejected",
-  PENDING_COMPENSATION_APPROVAL: "pending",
-  COMPENSATION_APPROVED: "approved",
-  COMPENSATION_REJECTED: "rejected",
-  OFFER_ISSUED: "offer",
-  OFFER_REJECTED: "rejected",
-  PAYMENT_IN_PROGRESS: "payment",
-  PAYMENT_COMPLETED: "approved",
-  CASE_CLOSED: "closed",
+  CASE_REGISTERED: "status-case-registered",
+  VALUER_ASSIGNED: "status-valuer-assigned",
+  VALUATION_IN_PROGRESS: "status-valuation-progress",
+  PENDING_VALUATION_APPROVAL: "status-pending-valuation",
+  VALUATION_APPROVED: "status-valuation-approved",
+  VALUATION_REJECTED: "status-valuation-rejected",
+  PENDING_COMPENSATION_APPROVAL: "status-pending-comp",
+  COMPENSATION_APPROVED: "status-comp-approved",
+  COMPENSATION_REJECTED: "status-comp-rejected",
+  OFFER_ISSUED: "status-offer-issued",
+  OFFER_REJECTED: "status-offer-rejected",
+  PAYMENT_IN_PROGRESS: "status-payment-progress",
+  PAYMENT_COMPLETED: "status-payment-completed",
+  CASE_CLOSED: "status-case-closed",
 };
 
 const statusLabelMap: Record<string, string> = {
@@ -44,6 +48,32 @@ const statusLabelMap: Record<string, string> = {
   PAYMENT_COMPLETED: "Payment Completed",
   CASE_CLOSED: "Case Closed",
 };
+
+const STATUS_OPTIONS: SelectOption[] = [
+  { value: "", label: "All Status" },
+  { value: "CASE_REGISTERED", label: "Case Registered" },
+  { value: "VALUER_ASSIGNED", label: "Valuer Assigned" },
+  { value: "VALUATION_IN_PROGRESS", label: "Valuation In Progress" },
+  { value: "PENDING_VALUATION_APPROVAL", label: "Pending Valuation Approval" },
+  { value: "VALUATION_APPROVED", label: "Valuation Approved" },
+  { value: "VALUATION_REJECTED", label: "Valuation Rejected" },
+  { value: "PENDING_COMPENSATION_APPROVAL", label: "Pending Compensation Approval" },
+  { value: "COMPENSATION_APPROVED", label: "Compensation Approved" },
+  { value: "COMPENSATION_REJECTED", label: "Compensation Rejected" },
+  { value: "OFFER_ISSUED", label: "Offer Issued" },
+  { value: "OFFER_REJECTED", label: "Offer Rejected" },
+  { value: "PAYMENT_IN_PROGRESS", label: "Payment In Progress" },
+  { value: "PAYMENT_COMPLETED", label: "Payment Completed" },
+  { value: "CASE_CLOSED", label: "Case Closed" },
+];
+
+const PROJECT_TYPE_OPTIONS: SelectOption[] = [
+  { value: "", label: "All Project Types" },
+  { value: "Public Amenities", label: "Public Amenities" },
+  { value: "Transportation Development", label: "Transportation Development" },
+  { value: "Urban Redevelopment", label: "Urban Redevelopment" },
+  { value: "Tourism Development", label: "Tourism Development" },
+];
 
 export const CaseManagementDashboard: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -93,11 +123,6 @@ export const CaseManagementDashboard: React.FC = () => {
   useEffect(() => {
     loadDashboardData();
   }, [loadDashboardData]);
-
-  const handleApplyFilters = () => {
-    setCurrentPage(1);
-    loadDashboardData();
-  };
 
   const handleClearFilters = () => {
     setSearchTerm("");
@@ -253,49 +278,42 @@ export const CaseManagementDashboard: React.FC = () => {
 
         {/* Filter Bar */}
         <div className="filter-bar">
-          <div className="search-wrap">
-            <span className="search-icon">
-              <Lucide.Search size={16} className="inline" />
-            </span>
-            <input
-              type="text"
+          <div className="search-wrap min-w-[280px]">
+            <SearchInput
               placeholder="Search by case title or project..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleApplyFilters()}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
             />
           </div>
-          <div className="filter-group">
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="">All Status</option>
-              <option value="CASE_REGISTERED">Case Registered</option>
-              <option value="VALUER_ASSIGNED">Valuer Assigned</option>
-              <option value="VALUATION_IN_PROGRESS">Valuation In Progress</option>
-              <option value="PENDING_VALUATION_APPROVAL">Pending Valuation Approval</option>
-              <option value="VALUATION_APPROVED">Valuation Approved</option>
-              <option value="VALUATION_REJECTED">Valuation Rejected</option>
-              <option value="PENDING_COMPENSATION_APPROVAL">Pending Compensation Approval</option>
-              <option value="COMPENSATION_APPROVED">Compensation Approved</option>
-              <option value="COMPENSATION_REJECTED">Compensation Rejected</option>
-              <option value="OFFER_ISSUED">Offer Issued</option>
-              <option value="OFFER_REJECTED">Offer Rejected</option>
-              <option value="PAYMENT_IN_PROGRESS">Payment In Progress</option>
-              <option value="PAYMENT_COMPLETED">Payment Completed</option>
-              <option value="CASE_CLOSED">Case Closed</option>
-            </select>
-            <select value={projectTypeFilter} onChange={(e) => setProjectTypeFilter(e.target.value)}>
-              <option value="">All Project Types</option>
-              <option value="Public Amenities">Public Amenities</option>
-              <option value="Transportation Development">Transportation Development</option>
-              <option value="Urban Redevelopment">Urban Redevelopment</option>
-              <option value="Tourism Development">Tourism Development</option>
-            </select>
-            <button className="btn-filter" onClick={handleApplyFilters}>
-              Apply Filters
-            </button>
-            <button className="btn-clear" onClick={handleClearFilters}>
-              Clear
-            </button>
+          <div className="filter-group flex items-center gap-3">
+            <Select
+              label="Status"
+              value={statusFilter}
+              options={STATUS_OPTIONS}
+              onChange={(val) => {
+                setStatusFilter(val);
+                setCurrentPage(1);
+              }}
+              placeholder="All Status"
+            />
+            <Select
+              label="Project Type"
+              value={projectTypeFilter}
+              options={PROJECT_TYPE_OPTIONS}
+              onChange={(val) => {
+                setProjectTypeFilter(val);
+                setCurrentPage(1);
+              }}
+              placeholder="All Project Types"
+            />
+            {(searchTerm || statusFilter || projectTypeFilter) && (
+              <Button variant="outlined" size="sm" onClick={handleClearFilters}>
+                Clear
+              </Button>
+            )}
           </div>
         </div>
 
@@ -310,15 +328,15 @@ export const CaseManagementDashboard: React.FC = () => {
             </span>
           </div>
           <div className="right">
-            <button className="btn-primary" onClick={() => navigate("/admin/case/register")}>
-              <Lucide.Plus size={16} className="inline mr-1" /> New Case
-            </button>
+            <Button variant="filled" onClick={() => navigate("/admin/case/register")}>
+              <Lucide.Plus size={16} /> New Case
+            </Button>
           </div>
         </div>
 
         {/* Table */}
         <div className="table-wrap">
-          <div className="table-scroll">
+          <div className="table-scroll md-scroll-thin">
             <table>
               <thead>
                 <tr>
@@ -346,7 +364,7 @@ export const CaseManagementDashboard: React.FC = () => {
                   </tr>
                 ) : (
                   cases.map((c) => {
-                    const statusClass = statusClassMap[c.status] || "registered";
+                    const statusClass = statusClassMap[c.status] || "status-case-registered";
                     const statusLabel = statusLabelMap[c.status] || c.status;
                     const assignedValuer =
                       c.caseAssignments?.[0]?.assignedTo?.name || "—";
@@ -354,14 +372,20 @@ export const CaseManagementDashboard: React.FC = () => {
                     return (
                       <tr
                         key={c.caseId}
-                        className="case-row"
-                        style={{ cursor: "pointer" }}
+                        className="case-row row-clickable"
                         onClick={() => navigate("/admin/case/details", { state: { caseId: c.caseId } })}
                       >
                         <td>
-                          <span className="case-id" style={{ fontSize: "12px" }}>
-                            {c.caseId.slice(0, 8)}...
-                          </span>
+                          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            <span 
+                              className="case-id hover:underline cursor-pointer font-mono font-semibold"
+                              onClick={() => navigate("/admin/case/details", { state: { caseId: c.caseId } })}
+                              title={c.caseId}
+                            >
+                              {c.caseId}
+                            </span>
+                            <CopyButton value={c.caseId} />
+                          </div>
                         </td>
                         <td className="case-title">{c.caseTitle}</td>
                         <td>

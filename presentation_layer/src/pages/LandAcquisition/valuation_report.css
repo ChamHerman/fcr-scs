@@ -735,7 +735,15 @@
 }
 .valuation-report-dashboard .table-scroll {
   overflow-x: auto;
+  overflow-y: auto;
 }
+.valuation-report-dashboard .table-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.valuation-report-dashboard .table-scroll::-webkit-scrollbar-track { background: transparent; }
+.valuation-report-dashboard .table-scroll::-webkit-scrollbar-thumb {
+  background: var(--md-scrollbar-thumb, rgba(121, 116, 126, 0.4));
+  border-radius: 10px;
+}
+.valuation-report-dashboard .table-scroll::-webkit-scrollbar-thumb:hover { background: rgba(121, 116, 126, 0.6); }
 .valuation-report-dashboard table {
   width: 100%;
   border-collapse: collapse;
@@ -785,33 +793,23 @@
   border-radius: 50%;
   flex-shrink: 0;
 }
-.valuation-report-dashboard .status-badge.pending {
-  background: #fef7e0;
-  color: #8d6e00;
-}
-.valuation-report-dashboard .status-badge.pending .dot {
-  background: #8d6e00;
-}
-.valuation-report-dashboard .status-badge.approved {
-  background: #e6f4ea;
-  color: #1e7b4a;
-}
-.valuation-report-dashboard .status-badge.approved .dot {
-  background: #1e7b4a;
-}
-.valuation-report-dashboard .status-badge.rejected {
-  background: #fce8e6;
-  color: #b3261e;
-}
-.valuation-report-dashboard .status-badge.rejected .dot {
-  background: #b3261e;
-}
-.valuation-report-dashboard .status-badge.review {
-  background: #e3f2fd;
-  color: #0b5b8c;
-}
-.valuation-report-dashboard .status-badge.review .dot {
-  background: #0b5b8c;
+.valuation-report-dashboard .status-badge.pending { background: #FEF9C3; color: #854D0E; }
+.valuation-report-dashboard .status-badge.pending .dot { background: #CA8A04; }
+.valuation-report-dashboard .status-badge.approved { background: #E8F5E9; color: #1B5E20; }
+.valuation-report-dashboard .status-badge.approved .dot { background: #2E7D32; }
+.valuation-report-dashboard .status-badge.rejected { background: #FFEBEE; color: #B71C1C; }
+.valuation-report-dashboard .status-badge.rejected .dot { background: #C62828; }
+.valuation-report-dashboard .status-badge.review { background: #E0F2FE; color: #075985; }
+.valuation-report-dashboard .status-badge.review .dot { background: #0284C7; }
+@media (prefers-color-scheme: dark) {
+  .valuation-report-dashboard .status-badge.pending { background: rgba(202,138,4,0.22); color: #FEF08A; }
+  .valuation-report-dashboard .status-badge.pending .dot { background: #FACC15; }
+  .valuation-report-dashboard .status-badge.approved { background: rgba(46,125,50,0.22); color: #A5D6A7; }
+  .valuation-report-dashboard .status-badge.approved .dot { background: #81C784; }
+  .valuation-report-dashboard .status-badge.rejected { background: rgba(198,40,40,0.25); color: #FFCDD2; }
+  .valuation-report-dashboard .status-badge.rejected .dot { background: #E57373; }
+  .valuation-report-dashboard .status-badge.review { background: rgba(2,132,199,0.22); color: #7DD3FC; }
+  .valuation-report-dashboard .status-badge.review .dot { background: #38BDF8; }
 }
 .valuation-report-dashboard .pagination {
   display: flex;

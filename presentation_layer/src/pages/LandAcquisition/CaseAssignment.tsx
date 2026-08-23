@@ -1,7 +1,14 @@
 import * as Lucide from "lucide-react";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { CheckCircle, Send, Loader2 } from "lucide-react";
+import gsap from "gsap";
+import { useGSAP } from "@gsap/react";
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
+import { Button } from "../../components/ui/Button";
+import { Select, type SelectOption } from "../../components/ui/Select";
+import { SearchInput } from "../../components/ui/SearchInput";
+import { Input } from "../../components/ui/Input";
+import { CopyButton } from "../../components/ui/CopyButton";
 import "../../style.css";
 import "./case_management.css";
 
@@ -90,20 +97,27 @@ export const CaseAssignment: React.FC = () => {
       c.project.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // GSAP animations on load
+  useGSAP(
+    () => {
+      if (loading) return;
+      gsap.fromTo(
+        ".assignment-case-item",
+        { y: 15, autoAlpha: 0 },
+        { y: 0, autoAlpha: 1, duration: 0.35, stagger: 0.05, ease: "power2.out" }
+      );
+    },
+    { scope: containerRef, dependencies: [loading, filteredCases.length] }
+  );
+
   // --- Handlers ---
   const handleSelectCase = (id: string) => {
     setSelectedCaseId(id);
     setAssignmentRecord(null);
     setSelectedValuerId(null);
     setAcceptancePeriod("7");
-  };
-
-  const handleSelectValuer = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedValuerId(e.target.value);
-  };
-
-  const handleAcceptancePeriodChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setAcceptancePeriod(e.target.value);
   };
 
   const handleConfirmAssignment = async () => {
@@ -165,23 +179,28 @@ export const CaseAssignment: React.FC = () => {
     setAcceptancePeriod("7");
   };
 
+  const valuerOptions: SelectOption[] = [
+    { value: "", label: "— Select a valuer —" },
+    ...valuers.map((v) => ({
+      value: v.id,
+      label: `${v.name} (${v.email})`,
+    })),
+  ];
+
   // --- Render ---
   const renderCaseList = () => (
-    <div className="assignment-case-list">
+    <div className="assignment-case-list md-scroll-thin">
       <div className="list-header">
         <h3>Unassigned Cases</h3>
         <span className="badge-count">{unassignedCases.length}</span>
       </div>
 
       {/* Search */}
-      <div className="search-wrap" style={{ marginBottom: "12px" }}>
-        <span className="search-icon"></span>
-        <input
-          type="text"
+      <div style={{ marginBottom: "12px" }}>
+        <SearchInput
           placeholder="Search cases..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ padding: "8px 16px 8px 36px", fontSize: "13px" }}
         />
       </div>
 
@@ -206,22 +225,26 @@ export const CaseAssignment: React.FC = () => {
             onClick={() => handleSelectCase(c.id)}
           >
             <div className="case-info">
-              <span className="case-id" style={{ fontSize: "11px" }}>{c.id.slice(0, 8)}...</span>
+              <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                <span className="case-id font-mono text-xs">{c.id}</span>
+                <CopyButton value={c.id} />
+              </div>
               <span className="case-title">{c.title}</span>
               <div className="case-meta">
                 <span>{c.project}</span>
                 <span><Lucide.Calendar size={14} className="inline mr-1" /> {c.registrationDate}</span>
               </div>
             </div>
-            <button
-              className={`btn-select ${selectedCaseId === c.id ? "selected" : ""}`}
+            <Button
+              variant={selectedCaseId === c.id ? "filled" : "outlined"}
+              size="sm"
               onClick={(e) => {
                 e.stopPropagation();
                 handleSelectCase(c.id);
               }}
             >
               {selectedCaseId === c.id ? "Selected" : "Select"}
-            </button>
+            </Button>
           </div>
         ))
       )}
@@ -253,55 +276,44 @@ export const CaseAssignment: React.FC = () => {
             </div>
           </div>
 
-          <div className="form-group">
-            <label htmlFor="valuerSelect">Available Land Valuer Staff *</label>
-            <select
-              id="valuerSelect"
+          <div className="mb-4">
+            <Select
+              label="Available Land Valuer Staff *"
               value={selectedValuerId || ""}
-              onChange={handleSelectValuer}
-            >
-              <option value="">— Select a valuer —</option>
-              {valuers.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name} ({v.email})
-                </option>
-              ))}
-            </select>
+              options={valuerOptions}
+              onChange={(val) => setSelectedValuerId(val)}
+              placeholder="— Select a valuer —"
+            />
             {valuers.length === 0 && !loading && (
-              <div className="helper-text" style={{ color: "var(--md-error-text)" }}>
+              <div className="helper-text mt-1 text-xs" style={{ color: "var(--md-error-text)" }}>
                 <Lucide.AlertTriangle size={14} className="inline mr-1" /> No active valuer staff found in database.
               </div>
             )}
           </div>
 
-          <div className="form-group">
-            <label htmlFor="acceptancePeriod">Acceptance Period (days) *</label>
-            <input
-              id="acceptancePeriod"
+          <div className="mb-6">
+            <Input
+              label="Acceptance Period (days) *"
               type="number"
               min="1"
               value={acceptancePeriod}
-              onChange={handleAcceptancePeriodChange}
+              onChange={(e) => setAcceptancePeriod(e.target.value)}
               placeholder="e.g., 7"
             />
-            <div className="helper-text">
+            <div className="text-xs text-md-on-surface-variant/60 mt-1 pl-2">
               Number of days for the valuer to accept and complete valuation.
             </div>
           </div>
 
-          <button
-            className="btn-assign"
+          <Button
+            variant="filled"
             onClick={handleConfirmAssignment}
             disabled={isAssigning || !selectedValuerId}
+            isLoading={isAssigning}
+            className="w-full"
           >
-            {isAssigning ? (
-              "Assigning in Backend..."
-            ) : (
-              <>
-                <Send size={18} /> Confirm Assignment
-              </>
-            )}
-          </button>
+            <Send size={18} /> Confirm Assignment
+          </Button>
         </>
       ) : (
         <div className="empty-state" style={{ padding: "40px 0" }}>
@@ -349,19 +361,22 @@ export const CaseAssignment: React.FC = () => {
             </div>
           </>
         )}
-        <button className="btn-reset" onClick={handleReset}>
-          Assign Another Case
-        </button>
+        <div className="mt-6 flex justify-center">
+          <Button variant="outlined" onClick={handleReset}>
+            Assign Another Case
+          </Button>
+        </div>
       </div>
     </div>
   );
 
   return (
     <div
+      ref={containerRef}
       className="flex min-h-screen"
       style={{ background: "var(--md-background)", color: "var(--md-on-surface)" }}
     >
-      <main className="main blur-shape-bg">
+      <main className="main blur-shape-bg w-full">
         <div className="topbar" style={{ marginBottom: "20px" }}>
           <div className="topbar-left">
             <h1 style={{ marginBottom: 0 }}>Case Assignment</h1>
@@ -370,7 +385,7 @@ export const CaseAssignment: React.FC = () => {
             </div>
           </div>
           <div className="topbar-right">
-            <span className="date-badge"><Lucide.Calendar size={16} className="inline mr-1" /> 24 Jul 2026</span>
+            <span className="date-badge"><Lucide.Calendar size={16} className="inline mr-1" /> {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
             <div className="avatar">AO</div>
           </div>
         </div>

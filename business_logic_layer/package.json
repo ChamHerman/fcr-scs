@@ -5,6 +5,7 @@
   "main": "server.ts",
   "scripts": {
     "dev": "ts-node server.ts",
+    "prisma:generate": "prisma generate --schema=../data_layer/database/prisma/schema.prisma",
     "build": "tsc",
     "test": "jest --forceExit"
   },
