@@ -502,8 +502,8 @@ model User {
   userId               String    @id @default(uuid()) @db.Uuid @map("user_id")
   name                 String    @db.VarChar(255)
   email                String    @unique @db.VarChar(255)
-  contactNumber        String    @unique @db.VarChar(100) @map("contact_number")
-  identificationNumber String    @unique @db.VarChar(100) @map("identification_number")
+  contactNumber        String    @db.VarChar(100) @map("contact_number")
+  identificationNumber String    @db.VarChar(100) @map("identification_number")
   passwordHash         String    @map("password_hash")
   role                 UserRole
   isActive             Boolean   @default(true) @map("is_active")
@@ -532,6 +532,7 @@ model User {
 
   sessions                UserSession[]
   passwordResets          PasswordReset[]
+  accountActivations      AccountActivation[]
   auditLogs               AuditLog[]
   alerts                  SystemAlert[]
   createdEmailTemplates   EmailTemplate[]
@@ -540,6 +541,8 @@ model User {
   updatedAt               DateTime              @updatedAt @map("updated_at")
   deletedAt               DateTime?             @map("deleted_at")
 
+  @@unique([contactNumber, role])
+  @@unique([identificationNumber, role])
   @@map("user")
 }
 
@@ -571,6 +574,20 @@ model PasswordReset {
 
   @@index([userId])
   @@map("password_reset")
+}
+
+model AccountActivation {
+  activationId String   @id @default(uuid()) @db.Uuid @map("activation_id")
+  userId       String   @db.Uuid @map("user_id")
+  token        String   @unique @db.VarChar(255)
+  expiresAt    DateTime @map("expires_at")
+  isUsed       Boolean  @default(false) @map("is_used")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user         User     @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("account_activation")
 }
 
 model AuditLog {

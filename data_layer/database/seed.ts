@@ -71,6 +71,30 @@ async function main() {
 
   console.log(`✅ Upserted Email Template: ${template.templateName}`);
 
+  const activationTemplateName = 'ACCOUNT_ACTIVATION';
+  const activationTemplate = await prisma.emailTemplate.upsert({
+    where: { templateName: activationTemplateName },
+    update: {},
+    create: {
+      templateName: activationTemplateName,
+      subject: 'FCR-SCS: Activate Your Account',
+      bodyContent: `
+        <div style="font-family: sans-serif; padding: 20px;">
+          <h2>Activate Your Account</h2>
+          <p>Hi {{name}},</p>
+          <p>Thank you for registering with FCR-SCS. Please click the button below to activate your account:</p>
+          <a href="{{activationLink}}" style="background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0;">Activate Account</a>
+          <p>If you did not register for an account, please ignore this email. This link is valid for 24 hours.</p>
+          <br>
+          <p>Thanks,<br>The FCR-SCS Team</p>
+        </div>
+      `,
+      createdById: firstAdminId,
+    },
+  });
+
+  console.log(`✅ Upserted Email Template: ${activationTemplate.templateName}`);
+
   console.log('Seeding completed successfully.');
 }
 

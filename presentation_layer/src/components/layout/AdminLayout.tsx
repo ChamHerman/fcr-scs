@@ -32,7 +32,6 @@ import {
   Ban,
   LogOut
 } from 'lucide-react';
-import { IdentitySwitcher } from '../admin/IdentitySwitcher';
 import { useAuth } from '../../context/AuthContext';
 
 export const AdminLayout: React.FC = () => {
@@ -587,33 +586,6 @@ export const AdminLayout: React.FC = () => {
         </aside>
 
         <main className="admin-main">
-          <div
-            className="admin-identity-bar"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              padding: '10px 32px',
-              borderBottom: '1px solid rgba(121,116,126,0.1)',
-              background: 'var(--md-surface-container)',
-            }}
-          >
-            <span
-              className="dev-tag"
-              style={{
-                fontSize: '10px',
-                fontWeight: 700,
-                letterSpacing: '0.6px',
-                textTransform: 'uppercase',
-                color: 'var(--md-on-surface-variant)',
-                opacity: 0.6,
-                marginRight: '10px',
-              }}
-            >
-              Dev Simulation
-            </span>
-            <IdentitySwitcher />
-          </div>
           <div className="admin-content">
             <Outlet />
           </div>

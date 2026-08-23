@@ -15,6 +15,8 @@ import { Login } from './pages/Login/Login';
 import { Register } from './pages/Login/Register';
 import { ForgotPassword } from './pages/Login/ForgotPassword';
 import { ResetPassword } from './pages/Login/ResetPassword';
+import { AccountActivation } from './pages/Login/AccountActivation';
+import { Unauthorized } from './pages/Login/Unauthorized';
 
 import { DashboardOverview } from './pages/Dashboard/DashboardOverview';
 import { UserProfile } from './pages/Dashboard/UserProfile';
@@ -92,9 +94,10 @@ function App() {
           </Route>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/activate" element={<AccountActivation />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/unauthorized" element={<div>Unauthorized Access. You do not have permission to view this page.</div>} />
+          <Route path="/unauthorized" element={<Unauthorized />} />
           {/* Admin Routes - Protected */}
           <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
             <Route path="/admin" element={<AdminIdentityProvider><AdminLayout /></AdminIdentityProvider>}>

@@ -14,6 +14,7 @@ interface AuthContextType {
   login: (token: string, userData: User) => void;
   logout: () => void;
   refreshPermissions: () => Promise<void>;
+  isLoadingPermissions: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -32,6 +33,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const [allowedPages, setAllowedPages] = useState<string[]>([]);
+  const [isLoadingPermissions, setIsLoadingPermissions] = useState<boolean>(true);
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     const token = localStorage.getItem('auth_token');
@@ -48,12 +50,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const refreshPermissions = async () => {
-    if (!user) return;
+    if (!user) {
+      setIsLoadingPermissions(false);
+      return;
+    }
     
+    setIsLoadingPermissions(true);
     // System admin has full access by default. 
-    // We could return '*' or all paths, but we can also just let the UI handle SYSTEM_ADMINISTRATOR uniquely.
     if (user.role === 'SYSTEM_ADMINISTRATOR') {
       setAllowedPages(['*']);
+      setIsLoadingPermissions(false);
       return;
     }
 
@@ -68,6 +74,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (e) {
       console.error('Failed to fetch permissions', e);
+    } finally {
+      setIsLoadingPermissions(false);
     }
   };
 
@@ -103,7 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, allowedPages, login, logout, refreshPermissions }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, allowedPages, login, logout, refreshPermissions, isLoadingPermissions }}>
       {children}
     </AuthContext.Provider>
   );
