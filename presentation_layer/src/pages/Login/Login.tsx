@@ -8,7 +8,7 @@ import { authService } from '../../services/auth.service';
 export const Login: React.FC = () => {
   const [step, setStep] = useState<'credentials' | 'otp'>('credentials');
   const [email, setEmail] = useState('admin@fcrscs.gov.my');
-  const [password, setPassword] = useState('password123');
+  const [password, setPassword] = useState('Password$123');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
