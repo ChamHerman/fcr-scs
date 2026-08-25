@@ -393,7 +393,7 @@ export const ValuationReportGenerator: React.FC = () => {
       <div className="success-banner">
         <span className="check-icon"><Lucide.CheckCircle size={16} className="inline mr-1" /></span>
         <div>
-          <strong>Report saved successfully!</strong>
+          <strong>New Valuation Report Created Successfully!</strong>
           <span style={{ marginLeft: "12px", fontWeight: 400 }}>
             Case status updated to <strong>Pending Valuation Approval</strong>
           </span>
@@ -403,15 +403,26 @@ export const ValuationReportGenerator: React.FC = () => {
         <div
           style={{ fontSize: "14px", color: "var(--md-on-surface-variant)" }}
         >
-          <div>
-            <strong>Report ID:</strong> {savedReport?.reportId}
+          <div className="mb-2">
+            <span className="text-sm">Assigned New Report ID:</span>{" "}
+            <span className="font-mono text-base font-bold text-md-primary">{savedReport?.reportId}</span>
+            <CopyButton value={savedReport?.reportId || ""} />
           </div>
           <div>
             <strong>Recommended Compensation:</strong> RM{" "}
             {savedReport?.recommendedCompensation}
           </div>
+          <div className="text-xs text-md-on-surface-variant/70 mt-3 max-w-md mx-auto">
+            This report was saved as a brand-new row in the database. All previous report history for case <strong>{savedReport?.caseId}</strong> remains fully preserved and traceable.
+          </div>
         </div>
-        <div className="mt-6 flex justify-center">
+        <div className="mt-6 flex justify-center gap-3">
+          <Button
+            variant="outlined"
+            onClick={() => navigate("/admin/case/valuation/review", { state: { reportId: savedReport?.reportId } })}
+          >
+            <Lucide.Eye size={16} /> View New Report
+          </Button>
           <Button
             variant="filled"
             onClick={handleBackToDashboard}
@@ -525,6 +536,19 @@ export const ValuationReportGenerator: React.FC = () => {
               renderSuccessState()
             ) : (
               <div className="report-form-card">
+                {caseData?.status === "VALUATION_REJECTED" && (
+                  <div className="p-4 mb-5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex items-start gap-3">
+                    <Lucide.AlertCircle size={20} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                    <div className="text-sm">
+                      <div className="font-semibold text-amber-800 dark:text-amber-300 mb-0.5">
+                        Revision Report Creation
+                      </div>
+                      <div className="text-xs text-amber-700/90 dark:text-amber-300/80">
+                        The previous valuation report for this case was rejected. Submitting this form will generate a <strong>new report row (with a new Report ID)</strong> in the database. The previous rejected report remains preserved for history and audit traceability.
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div className="form-title">
                   {isEditMode ? (
                     <>

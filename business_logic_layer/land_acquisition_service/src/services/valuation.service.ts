@@ -132,7 +132,7 @@ export async function createOrUpdateReport(input: CreateValuationInput) {
 
   const caseData = await prisma.acquisitionCase.findUnique({
     where: { caseId },
-    include: { valuationReports: true },
+    include: { valuationReports: true, caseAssignments: true },
   });
 
   if (!caseData) throw new Error("Case not found");
@@ -148,50 +148,32 @@ export async function createOrUpdateReport(input: CreateValuationInput) {
     throw new Error(`Cannot submit valuation report for case in '${caseData.status}' status`);
   }
 
-  const existingReport = caseData.valuationReports[0];
-  const targetValuerId = valuerId || existingReport?.valuerId || createdById;
+  const targetValuerId = valuerId || caseData.caseAssignments[0]?.assignedToId || createdById;
 
   const result = await prisma.$transaction(async (tx) => {
-    let report;
+    // Always create a new report so previous reports are preserved for history and traceability
+    const report = await tx.valuationReport.create({
+      data: {
+        caseId,
+        valuerId: targetValuerId,
+        valuationDate: new Date(),
+        valuationMethod,
+        marketValue,
+        recommendedCompensation,
+        remarks,
+        reportStatus: ReportStatus.PENDING,
+        createdById,
+      },
+      include: { acquisitionCase: true, valuer: true },
+    });
 
-    if (existingReport) {
-      report = await tx.valuationReport.update({
-        where: { reportId: existingReport.reportId },
-        data: {
-          valuationDate: new Date(),
-          valuationMethod,
-          marketValue,
-          recommendedCompensation,
-          remarks,
-          reportStatus: ReportStatus.PENDING,
-          createdById,
-        },
-        include: { acquisitionCase: true, valuer: true },
-      });
-    } else {
-      report = await tx.valuationReport.create({
-        data: {
-          caseId,
-          valuerId: targetValuerId,
-          valuationDate: new Date(),
-          valuationMethod,
-          marketValue,
-          recommendedCompensation,
-          remarks,
-          reportStatus: ReportStatus.PENDING,
-          createdById,
-        },
-        include: { acquisitionCase: true, valuer: true },
-      });
-    }
-
-    // Link valuationReport to existing CaseAssignment if unlinked
+    // Link valuationReport to the latest case assignment
     const assignment = await tx.caseAssignment.findFirst({
       where: { caseId },
       orderBy: { createdAt: "desc" },
     });
 
-    if (assignment && !assignment.valuationReportId) {
+    if (assignment) {
       await tx.caseAssignment.update({
         where: { assignmentId: assignment.assignmentId },
         data: { valuationReportId: report.reportId },

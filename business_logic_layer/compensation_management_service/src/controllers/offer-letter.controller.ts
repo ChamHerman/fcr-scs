@@ -3,11 +3,14 @@ import * as offerService from "../services/offer-letter.service";
 
 export async function getAllOfferLetters(req: Request, res: Response): Promise<void> {
   try {
-    const { status, search, ownerNric, page, limit } = req.query;
+    const { status, search, ownerNric, caseCreatedById, userRole, userId, page, limit } = req.query;
     const result = await offerService.getAllOfferLetters({
       status: status as string,
       search: search as string,
       ownerNric: ownerNric as string,
+      caseCreatedById: caseCreatedById as string,
+      userRole: userRole as string,
+      userId: userId as string,
       page: page ? parseInt(page as string, 10) : undefined,
       limit: limit ? parseInt(limit as string, 10) : undefined,
     });
@@ -75,7 +78,7 @@ export async function createOfferLetter(req: Request, res: Response): Promise<vo
 
 export async function acceptOffer(req: Request, res: Response): Promise<void> {
   const offerId = req.params.offerId as string;
-  const { signedDocument, forceAccept } = req.body;
+  const { signedDocument, forceAccept, ownerNric, ownerId, userId } = req.body;
 
   if (!offerId) {
     res.status(400).json({ error: "offerId is required" });
@@ -83,7 +86,12 @@ export async function acceptOffer(req: Request, res: Response): Promise<void> {
   }
 
   try {
-    const offer = await offerService.acceptOffer(offerId, signedDocument, Boolean(forceAccept));
+    const offer = await offerService.acceptOffer(
+      offerId,
+      signedDocument,
+      Boolean(forceAccept),
+      { ownerNric, ownerId, userId }
+    );
     res.json({ offerLetter: offer });
   } catch (e: any) {
     const msg = e.message || "Accept offer failed";
@@ -106,7 +114,7 @@ export async function acceptOffer(req: Request, res: Response): Promise<void> {
 
 export async function rejectOffer(req: Request, res: Response): Promise<void> {
   const offerId = req.params.offerId as string;
-  const { remarks } = req.body;
+  const { remarks, ownerNric, ownerId, userId } = req.body;
 
   if (!offerId) {
     res.status(400).json({ error: "offerId is required" });
@@ -114,7 +122,12 @@ export async function rejectOffer(req: Request, res: Response): Promise<void> {
   }
 
   try {
-    const offer = await offerService.rejectOffer(offerId, remarks);
+    const offer = await offerService.rejectOffer(offerId, remarks, {
+      ownerNric,
+      ownerId,
+      userId,
+      remarks,
+    });
     res.json({ offerLetter: offer });
   } catch (e: unknown) {
     const msg = (e as Error).message;

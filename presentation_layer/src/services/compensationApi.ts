@@ -75,6 +75,9 @@ export const compensationApi = {
     if (params?.search) query.append("search", params.search);
     if (params?.status) query.append("status", params.status);
     if (params?.ownerNric) query.append("ownerNric", params.ownerNric);
+    if (params?.caseCreatedById) query.append("caseCreatedById", params.caseCreatedById);
+    if (params?.userRole) query.append("userRole", params.userRole);
+    if (params?.userId) query.append("userId", params.userId);
     if (params?.page) query.append("page", params.page.toString());
     if (params?.limit) query.append("limit", params.limit.toString());
 
@@ -102,18 +105,26 @@ export const compensationApi = {
     });
   },
 
-  acceptOffer: async (offerId: string, signedDocument?: string, forceAccept?: boolean) => {
+  acceptOffer: async (
+    offerId: string,
+    signedDocument?: string,
+    forceAccept?: boolean,
+    options?: { ownerNric?: string; ownerId?: string; userId?: string }
+  ) => {
     return fetchJSON(COMPENSATION_BASE + `/api/compensation/offer-letters/${encodeURIComponent(offerId)}/accept`, {
       method: "POST",
-      body: JSON.stringify({ signedDocument, forceAccept }),
+      body: JSON.stringify({ signedDocument, forceAccept, ...options }),
     });
   },
 
-
-  rejectOffer: async (offerId: string, remarks?: string) => {
+  rejectOffer: async (
+    offerId: string,
+    remarks?: string,
+    options?: { ownerNric?: string; ownerId?: string; userId?: string }
+  ) => {
     return fetchJSON(COMPENSATION_BASE + `/api/compensation/offer-letters/${encodeURIComponent(offerId)}/reject`, {
       method: "POST",
-      body: JSON.stringify({ remarks }),
+      body: JSON.stringify({ remarks, ...options }),
     });
   },
 
@@ -122,6 +133,10 @@ export const compensationApi = {
     const query = new URLSearchParams();
     if (params?.search) query.append("search", params.search);
     if (params?.status) query.append("status", params.status);
+    if (params?.ownerNric) query.append("ownerNric", params.ownerNric);
+    if (params?.caseCreatedById) query.append("caseCreatedById", params.caseCreatedById);
+    if (params?.userRole) query.append("userRole", params.userRole);
+    if (params?.userId) query.append("userId", params.userId);
     if (params?.page) query.append("page", params.page.toString());
     if (params?.limit) query.append("limit", params.limit.toString());
 
@@ -147,17 +162,17 @@ export const compensationApi = {
     });
   },
 
-  approveObjection: async (objectionId: string, revisedCompensation?: number, reviewRemarks?: string) => {
+  approveObjection: async (objectionId: string, revisedCompensation?: number, reviewRemarks?: string, reviewedById?: string) => {
     return fetchJSON(COMPENSATION_BASE + `/api/compensation/objections/${encodeURIComponent(objectionId)}/approve`, {
       method: "POST",
-      body: JSON.stringify({ revisedCompensation, reviewRemarks }),
+      body: JSON.stringify({ revisedCompensation, reviewRemarks, reviewedById }),
     });
   },
 
-  rejectObjection: async (objectionId: string, reviewRemarks?: string) => {
+  rejectObjection: async (objectionId: string, reviewRemarks?: string, reviewedById?: string) => {
     return fetchJSON(COMPENSATION_BASE + `/api/compensation/objections/${encodeURIComponent(objectionId)}/reject`, {
       method: "POST",
-      body: JSON.stringify({ reviewRemarks }),
+      body: JSON.stringify({ reviewRemarks, reviewedById }),
     });
   },
 

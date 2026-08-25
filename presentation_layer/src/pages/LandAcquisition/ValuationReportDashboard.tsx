@@ -307,13 +307,13 @@ export const ValuationReportList: React.FC = () => {
                     title="Click to view report details"
                   >
                     <td>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                         <span className="case-id font-mono text-xs font-semibold text-md-primary">{r.id}</span>
                         <CopyButton value={r.id} />
                       </div>
                     </td>
                     <td>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                         <span className="font-mono text-xs text-md-on-surface-variant">{r.caseId}</span>
                         <CopyButton value={r.caseId} />
                       </div>

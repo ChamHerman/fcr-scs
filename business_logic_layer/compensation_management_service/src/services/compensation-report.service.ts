@@ -32,7 +32,7 @@ export interface CreateCompensationReportInput {
 async function getOrCreateLandOwnership(
   tx: Prisma.TransactionClient,
   caseId: string,
-  createdById: string
+  _createdById?: string
 ): Promise<string> {
   const caseData = await tx.acquisitionCase.findUnique({
     where: { caseId },
@@ -45,55 +45,14 @@ async function getOrCreateLandOwnership(
     },
   });
 
-  let ownershipId = caseData?.landParcel?.ownerships?.[0]?.ownershipId;
-  if (ownershipId) return ownershipId;
-
-  let targetLandId = caseData?.landParcel?.landId;
-  if (!targetLandId) {
-    const newLand = await tx.landParcel.create({
-      data: {
-        caseId,
-        landTitleNo: `TITLE-${caseId.slice(-6)}-${Math.floor(Math.random() * 1000)}`,
-        lotNo: "LOT-1",
-        mukim: "Default Mukim",
-        district: "Default District",
-        state: "Default State",
-        area: 1.0,
-        areaUnit: "HECTARE",
-        category: "AGRICULTURAL",
-        latitude: 3.1408,
-        longitude: 101.6932,
-        createdById,
-      },
-    });
-    targetLandId = newLand.landId;
+  const ownershipId = caseData?.landParcel?.ownerships?.[0]?.ownershipId;
+  if (!ownershipId) {
+    throw new Error(
+      "No registered land owner found for this acquisition case. Please add a land owner to the case before issuing an offer letter."
+    );
   }
 
-  let owner = await tx.landOwner.findFirst();
-  if (!owner) {
-    owner = await tx.landOwner.create({
-      data: {
-        name: "Land Owner",
-        nric: "900101-01-5555",
-        address: "Default Address",
-        contact: "+60123456789",
-        createdById,
-      },
-    });
-  }
-
-  const newOwnership = await tx.landOwnership.create({
-    data: {
-      landId: targetLandId,
-      ownerId: owner.ownerId,
-      ownershipType: "SOLE_OWNER",
-      ownershipStart: new Date(),
-      isCurrent: true,
-      createdById,
-    },
-  });
-
-  return newOwnership.ownershipId;
+  return ownershipId;
 }
 
 export async function getAllReports(filters: CompensationFilters) {
@@ -329,7 +288,7 @@ export async function approveReport(compensationReportId: string, approvedById: 
         acceptancePeriodDays: 14,
         status: OfferStatus.PENDING,
         remarks: "Auto-generated upon Compensation Report Approval",
-        createdById: approvedById,
+        createdById: report.createdById,
       },
     });
 

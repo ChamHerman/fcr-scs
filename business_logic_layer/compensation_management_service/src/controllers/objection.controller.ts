@@ -3,10 +3,14 @@ import * as objectionService from "../services/objection.service";
 
 export async function getAllObjections(req: Request, res: Response): Promise<void> {
   try {
-    const { status, search, page, limit } = req.query;
+    const { status, search, ownerNric, caseCreatedById, userRole, userId, page, limit } = req.query;
     const result = await objectionService.getAllObjections({
       status: status as string,
       search: search as string,
+      ownerNric: ownerNric as string,
+      caseCreatedById: caseCreatedById as string,
+      userRole: userRole as string,
+      userId: userId as string,
       page: page ? parseInt(page as string, 10) : undefined,
       limit: limit ? parseInt(limit as string, 10) : undefined,
     });
@@ -78,15 +82,13 @@ export async function approveObjection(req: Request, res: Response): Promise<voi
     return;
   }
 
-  const userId = reviewedById || "00000000-0000-0000-0000-000000000001";
-
   try {
     const objection = await objectionService.reviewObjection({
       objectionId,
       decision: revisedCompensation ? "REVISED" : "ACCEPTED",
       revisedCompensation: revisedCompensation ? parseFloat(revisedCompensation) : undefined,
       reviewRemarks: reviewRemarks || "Objection approved.",
-      reviewedById: userId,
+      reviewedById: reviewedById || undefined,
     });
     res.json({ objection });
   } catch (e: unknown) {
@@ -108,14 +110,12 @@ export async function rejectObjection(req: Request, res: Response): Promise<void
     return;
   }
 
-  const userId = reviewedById || "00000000-0000-0000-0000-000000000001";
-
   try {
     const objection = await objectionService.reviewObjection({
       objectionId,
       decision: "REJECTED",
       reviewRemarks: reviewRemarks || "Objection rejected after review.",
-      reviewedById: userId,
+      reviewedById: reviewedById || undefined,
     });
     res.json({ objection });
   } catch (e: unknown) {
