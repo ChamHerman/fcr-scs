@@ -30,6 +30,7 @@ import {
   AlertTriangle,
   Upload,
   Ban,
+  RefreshCw,
   LogOut
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -44,6 +45,7 @@ export const AdminLayout: React.FC = () => {
   const [landAcquisitionExpanded, setLandAcquisitionExpanded] = useState(false);
   const [compensationExpanded, setCompensationExpanded] = useState(false);
   const [reportsExpanded, setReportsExpanded] = useState(false);
+  const [aiValuationExpanded, setAiValuationExpanded] = useState(false);
   const [isDark, setIsDark] = useState<boolean>(() => {
     return localStorage.getItem('admin_theme') === 'dark';
   });
@@ -68,6 +70,13 @@ export const AdminLayout: React.FC = () => {
       setCompensationExpanded(false);
       setFinanceExpanded(false);
       setReportsExpanded(true);
+      setAiValuationExpanded(false);
+    } else if (path.startsWith('/admin/prediction')) {
+      setLandAcquisitionExpanded(false);
+      setCompensationExpanded(false);
+      setFinanceExpanded(false);
+      setReportsExpanded(false);
+      setAiValuationExpanded(true);
     }
   }, [location.pathname]);
 
@@ -453,12 +462,28 @@ export const AdminLayout: React.FC = () => {
             </div>
 
             <div className="nav-section">
-              {!isCollapsed && <span className="nav-label">AI Features</span>}
-              {(allowedPages.includes('*') || allowedPages.includes('/admin/prediction')) && (
-                <NavLink to="/admin/prediction" className="nav-item" title={isCollapsed ? "AI Valuation" : ""}>
-                  <BrainCircuit size={22} className="nav-icon" />
-                  {!isCollapsed && <span>AI Valuation</span>}
-                </NavLink>
+              {!isCollapsed && (
+                <div className="nav-label" onClick={() => setAiValuationExpanded(!aiValuationExpanded)} style={{ cursor: 'pointer' }}>
+                  <span>AI Valuation</span>
+                  {aiValuationExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </div>
+              )}
+              {isCollapsed && <div style={{ height: 16 }} />}
+              {(aiValuationExpanded || isCollapsed) && (
+                <>
+                  {(allowedPages.includes('*') || allowedPages.includes('/admin/prediction')) && (
+                    <NavLink to="/admin/prediction" end className="nav-item" title={isCollapsed ? "Generate AI Valuation" : ""}>
+                      <BrainCircuit size={22} className="nav-icon" />
+                      {!isCollapsed && <span>Generate AI Valuation</span>}
+                    </NavLink>
+                  )}
+                  {(allowedPages.includes('*') || allowedPages.includes('/admin/prediction')) && (
+                    <NavLink to="/admin/prediction/retrain" className="nav-item" title={isCollapsed ? "Retrain Model" : ""}>
+                      <RefreshCw size={22} className="nav-icon" />
+                      {!isCollapsed && <span>Retrain Model</span>}
+                    </NavLink>
+                  )}
+                </>
               )}
             </div>
 

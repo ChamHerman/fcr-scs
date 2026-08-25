@@ -5,9 +5,11 @@
   "scripts": {
     "postinstall": "prisma generate --schema=data_layer/database/prisma/schema.prisma",
     "prisma:generate": "prisma generate --schema=data_layer/database/prisma/schema.prisma",
+    "db:seed": "cd data_layer/database && npx ts-node seed.ts",
     "dev:backend": "cd business_logic_layer && npm run dev",
     "dev:frontend": "cd presentation_layer && npm run dev",
-    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:ai": "cd business_logic_layer/ai_prediction_service && python app.py",
+    "dev": "concurrently -n backend,frontend,ai \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run dev:ai\"",
     "build": "npm run build --workspace=presentation_layer"
   },
   "workspaces": [

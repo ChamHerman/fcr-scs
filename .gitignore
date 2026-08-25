@@ -23,3 +23,7 @@ dist/
 /.zcode
 /.playwright-mcp
 package-lock.json
+
+# Python bytecode (AI valuation sidecar)
+__pycache__/
+*.pyc

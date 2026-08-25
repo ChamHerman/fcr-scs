@@ -1,0 +1,48 @@
+{
+  "activeModel": {
+    "version": "v1.0",
+    "file": "fcr_scs_property_valuation_rf.joblib",
+    "trainedAt": "2026-08-24T20:24:28.660571+00:00",
+    "metrics": {
+      "mae": 147368.17,
+      "rmse": 258197.69,
+      "r2": 0.9767
+    },
+    "datasetRows": 6000,
+    "features": [
+      "state",
+      "land_category",
+      "location_type",
+      "tenure_type",
+      "building_condition",
+      "land_area_sqft",
+      "built_up_area_sqft",
+      "building_age_years"
+    ]
+  },
+  "candidates": [],
+  "history": [
+    {
+      "version": "v1.0",
+      "file": "fcr_scs_property_valuation_rf.joblib",
+      "trainedAt": "2026-08-24T20:21:23.473140+00:00",
+      "metrics": {
+        "mae": 147368.17,
+        "rmse": 258197.69,
+        "r2": 0.9767
+      },
+      "datasetRows": 6000,
+      "features": [
+        "state",
+        "land_category",
+        "location_type",
+        "tenure_type",
+        "building_condition",
+        "land_area_sqft",
+        "built_up_area_sqft",
+        "building_age_years"
+      ],
+      "replacedAt": "2026-08-24T20:24:13.226667+00:00"
+    }
+  ]
+}
