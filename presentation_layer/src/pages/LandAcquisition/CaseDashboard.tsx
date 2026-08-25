@@ -13,6 +13,7 @@ import { CopyButton } from "../../components/ui/CopyButton";
 import { Modal } from "../../components/ui/Modal";
 import { Input } from "../../components/ui/Input";
 import { useRole } from "../../hooks/useRole";
+import { useNotification } from "../../components/ui/NotificationSystem";
 import "../../style.css";
 import "./case_management.css";
 
@@ -81,6 +82,7 @@ const PROJECT_TYPE_OPTIONS: SelectOption[] = [
 export const CaseManagementDashboard: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const { notify } = useNotification();
 
   // Role Based Access Control Hook
   const {
@@ -90,6 +92,7 @@ export const CaseManagementDashboard: React.FC = () => {
     isAdmin,
     isOfficer,
     isValuer,
+    isMember,
     canAddCase,
     canEditCaseDetails,
     canAssignValuer,
@@ -124,7 +127,11 @@ export const CaseManagementDashboard: React.FC = () => {
   // Open Valuer Assignment Modal
   const handleOpenAssignModal = async (caseItem: any) => {
     if (!canAssignValuer) {
-      alert("Only Government Administrators can assign land valuers.");
+      notify({
+        type: 'error',
+        title: 'Access Denied',
+        message: 'Only Government Administrators can assign land valuers.',
+      });
       return;
     }
 
@@ -175,7 +182,11 @@ export const CaseManagementDashboard: React.FC = () => {
         assignedById: user?.userId,
       });
 
-      alert(`Land Valuer assigned successfully to case: ${selectedCaseToAssign.caseId}`);
+      notify({
+        type: 'success',
+        title: 'Valuer Assigned',
+        message: `Land Valuer assigned successfully to case: ${selectedCaseToAssign.caseId}`,
+      });
       setIsAssignModalOpen(false);
       setSelectedCaseToAssign(null);
       await loadDashboardData();
@@ -198,6 +209,7 @@ export const CaseManagementDashboard: React.FC = () => {
         assignedToId?: string;
         userRole?: string;
         userId?: string;
+        ownerNric?: string;
       } = {};
 
       if (isOfficer && !isAdmin && userId) {
@@ -208,6 +220,12 @@ export const CaseManagementDashboard: React.FC = () => {
         scopeParams.assignedToId = userId;
         scopeParams.userRole = "LAND_VALUER";
         scopeParams.userId = userId;
+      } else if (isMember && !isAdmin) {
+        scopeParams.userRole = "DISPLACED_COMMUNITY_MEMBER";
+        scopeParams.userId = userId;
+        if (user?.identificationNumber) {
+          scopeParams.ownerNric = user.identificationNumber;
+        }
       } else if (isAdmin) {
         scopeParams.userRole = role || "ADMINISTRATOR";
       } else if (userId) {
@@ -241,6 +259,15 @@ export const CaseManagementDashboard: React.FC = () => {
             (a: any) => a.assignedToId === userId || a.assignedTo?.userId === userId
           );
         }
+        // 4. Community Members only see cases involving their land or created by them
+        if (isMember) {
+          if (c.createdById === userId) return true;
+          if (user?.identificationNumber) {
+            const cleanUserIc = user.identificationNumber.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+            const owners = c.landParcel?.ownerships?.map((o: any) => o.landOwner).filter(Boolean) || [];
+            return owners.some((ow: any) => (ow.nric || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase() === cleanUserIc);
+          }
+        }
         return false;
       });
 
@@ -253,7 +280,7 @@ export const CaseManagementDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, statusFilter, projectTypeFilter, currentPage, isAdmin, isOfficer, isValuer, userId, role]);
+  }, [searchTerm, statusFilter, projectTypeFilter, currentPage, isAdmin, isOfficer, isValuer, isMember, userId, role, user?.identificationNumber]);
 
   useEffect(() => {
     loadDashboardData();
@@ -266,12 +293,20 @@ export const CaseManagementDashboard: React.FC = () => {
     setCurrentPage(1);
   };
 
-  // Compute stats display
+  // Compute stats display strictly reflecting the user's role scope
   const stats = [
     {
       label: "Total Cases",
       value: statsData?.totalCases ?? "0",
-      change: isAdmin ? "All database cases" : isOfficer ? "Your created cases" : "Your assigned cases",
+      change: isAdmin
+        ? "All database cases"
+        : isOfficer
+        ? "Your created cases"
+        : isValuer
+        ? "Your assigned cases"
+        : isMember
+        ? "Your land cases"
+        : "User cases",
       icon: <Lucide.Folder size={16} className="inline" />,
       trend: "up",
     },
@@ -301,7 +336,7 @@ export const CaseManagementDashboard: React.FC = () => {
       value: statsData?.totalCompensation
         ? `RM ${(Number(statsData.totalCompensation) / 1_000_000).toFixed(1)}M`
         : "RM 0.0M",
-      change: "Approved compensation",
+      change: isAdmin ? "All approved compensation" : "Your scope compensation",
       icon: <Lucide.CircleDollarSign size={16} className="inline" />,
       trend: "up",
     },

@@ -15,6 +15,7 @@ export interface CaseFilters {
   assignedToId?: string;
   userRole?: string;
   userId?: string;
+  ownerNric?: string;
 }
 
 export interface CreateCaseInput {
@@ -142,6 +143,56 @@ function buildWhereClause(filters: CaseFilters): Prisma.AcquisitionCaseWhereInpu
     };
   }
 
+  // 3. Displaced Community Member: cases associated with user's land parcel or created by user
+  if (filters.userRole === "DISPLACED_COMMUNITY_MEMBER" || filters.ownerNric) {
+    const memberOrConditions: Prisma.AcquisitionCaseWhereInput[] = [];
+    if (filters.userId) {
+      memberOrConditions.push({ createdById: filters.userId });
+    }
+    if (filters.ownerNric) {
+      const rawNric = filters.ownerNric.trim();
+      const cleanNric = rawNric.replace(/[^a-zA-Z0-9]/g, "");
+      let formattedWithDashes = rawNric;
+      if (cleanNric.length === 12) {
+        formattedWithDashes = `${cleanNric.slice(0, 6)}-${cleanNric.slice(6, 8)}-${cleanNric.slice(8)}`;
+      }
+
+      const nricConditions: Prisma.LandOwnerWhereInput[] = [
+        { nric: { contains: rawNric, mode: "insensitive" } },
+      ];
+      if (cleanNric && cleanNric !== rawNric) {
+        nricConditions.push({ nric: { contains: cleanNric, mode: "insensitive" } });
+      }
+      if (formattedWithDashes && formattedWithDashes !== rawNric && formattedWithDashes !== cleanNric) {
+        nricConditions.push({ nric: { contains: formattedWithDashes, mode: "insensitive" } });
+      }
+
+      memberOrConditions.push({
+        landParcel: {
+          ownerships: {
+            some: {
+              landOwner: {
+                OR: nricConditions,
+              },
+            },
+          },
+        },
+      });
+    }
+
+    if (memberOrConditions.length > 0) {
+      if (where.OR) {
+        where.AND = [
+          { OR: where.OR },
+          { OR: memberOrConditions },
+        ];
+        delete where.OR;
+      } else {
+        where.OR = memberOrConditions;
+      }
+    }
+  }
+
   return where;
 }
 
@@ -251,7 +302,7 @@ export async function getCaseStats(filters?: CaseFilters) {
   const compensationWhere: Prisma.CompensationReportWhereInput = {
     status: "APPROVED",
   };
-  if (where.createdById || where.caseAssignments) {
+  if (Object.keys(where).length > 0) {
     compensationWhere.acquisitionCase = where;
   }
 

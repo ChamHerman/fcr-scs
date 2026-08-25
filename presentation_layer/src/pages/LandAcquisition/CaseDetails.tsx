@@ -17,6 +17,7 @@ import { Button } from "../../components/ui/Button";
 import { Modal } from "../../components/ui/Modal";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
+import { useNotification } from "../../components/ui/NotificationSystem";
 import "../../style.css";
 import "./case_management.css";
 
@@ -107,6 +108,7 @@ export const CaseView: React.FC = () => {
   const params = useParams<{ caseId?: string }>();
   const [searchParams] = useSearchParams();
   const stateCaseId = params.caseId || searchParams.get("caseId") || location.state?.caseId;
+  const { notify } = useNotification();
 
   const { user, canEditCaseDetails, canDeleteCase, isOfficer, isSysAdmin, isAdmin } = useRole();
 
@@ -243,7 +245,11 @@ export const CaseView: React.FC = () => {
       navigate("/admin/case");
     } catch (err: any) {
       console.error("Failed to delete case:", err);
-      alert(`Delete Failed: ${err.message}`);
+      notify({
+        type: 'error',
+        title: 'Delete Failed',
+        message: err.message,
+      });
     } finally {
       setDeleting(false);
     }

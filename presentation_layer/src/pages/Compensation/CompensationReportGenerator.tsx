@@ -10,6 +10,7 @@ import { Input } from "../../components/ui/Input";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { Calculator, FileText, CheckCircle, AlertTriangle } from "lucide-react";
 import { useRole } from "../../hooks/useRole";
+import { useNotification } from "../../components/ui/NotificationSystem";
 import "../../style.css";
 import "./compensation.css";
 
@@ -53,6 +54,7 @@ export const CompensationReportGenerator: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, userId, isOfficer, isAdmin } = useRole();
+  const { notify } = useNotification();
 
   const initialCaseId = location.state?.caseId as string | undefined;
 
@@ -123,14 +125,14 @@ export const CompensationReportGenerator: React.FC = () => {
             recommendedCompensation: recComp,
             landValue: recComp > 0 ? Math.round(recComp * 0.7) : 0,
             buildingValue: recComp > 0 ? Math.round(recComp * 0.2) : 0,
-            cropValue: recComp > 0 ? Math.round(recComp * 0.1) : 0,
+            cropValue: 0,
           });
 
           setAiPredicted(recComp > 0 ? recComp : 0);
           setComponents({
             landValue: recComp > 0 ? Math.round(recComp * 0.7) : 0,
             buildingValue: recComp > 0 ? Math.round(recComp * 0.2) : 0,
-            cropValue: recComp > 0 ? Math.round(recComp * 0.1) : 0,
+            cropValue: 0,
             businessDisruption: 0,
             disturbanceCompensation: 0,
             relocationAllowance: 0,
@@ -155,8 +157,17 @@ export const CompensationReportGenerator: React.FC = () => {
     }
   }, [selectedCaseId, loadCaseDetails]);
 
-  const handleComponentChange = (field: keyof CompensationComponents, val: string) => {
-    const num = parseFloat(val) || 0;
+  const handleSelectCaseFromModal = (caseId: string) => {
+    setSelectedCaseId(caseId);
+    setIsCaseModalOpen(false);
+    setGeneratedReportId(null);
+    setGeneratedOfferId(null);
+    setShowSummary(false);
+    setCalculatedTotal(null);
+  };
+
+  const handleComponentChange = (field: keyof CompensationComponents, value: string) => {
+    const num = parseFloat(value) || 0;
     setComponents((prev) => ({ ...prev, [field]: num }));
   };
 
@@ -189,7 +200,6 @@ export const CompensationReportGenerator: React.FC = () => {
 
   const generateReport = async () => {
     if (!caseData || calculatedTotal === null) return;
-
     setIsGenerating(true);
     try {
       const res = await compensationApi.createReport({
@@ -212,7 +222,11 @@ export const CompensationReportGenerator: React.FC = () => {
       setStatusUpdate(res.requiresApproval ? "Pending Compensation Approval" : "Compensation Approved");
     } catch (err: any) {
       console.error("Failed to generate compensation report:", err);
-      alert(`Report Generation Failed: ${err.message || "Could not reach backend"}`);
+      notify({
+        type: 'error',
+        title: 'Generation Failed',
+        message: err.message || "Could not reach backend",
+      });
     } finally {
       setIsGenerating(false);
     }
@@ -220,11 +234,19 @@ export const CompensationReportGenerator: React.FC = () => {
 
   const handleGenerateClick = () => {
     if (calculatedTotal === null) {
-      alert("Please calculate compensation first.");
+      notify({
+        type: 'general',
+        title: 'Action Required',
+        message: 'Please calculate compensation first.',
+      });
       return;
     }
     if (showWarning) {
-      alert("Please review the warning first. Either review the components or dismiss.");
+      notify({
+        type: 'general',
+        title: 'Action Required',
+        message: 'Please review the warning first. Either review the components or dismiss.',
+      });
       return;
     }
     generateReport();

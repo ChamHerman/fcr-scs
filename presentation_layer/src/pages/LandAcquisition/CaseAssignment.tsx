@@ -10,6 +10,7 @@ import { SearchInput } from "../../components/ui/SearchInput";
 import { Input } from "../../components/ui/Input";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
+import { useNotification } from "../../components/ui/NotificationSystem";
 import "../../style.css";
 import "./case_management.css";
 
@@ -41,6 +42,7 @@ type AssignmentRecord = {
 
 export const CaseAssignment: React.FC = () => {
   const { user, canAssignValuer, isAdmin } = useRole();
+  const { notify } = useNotification();
   // --- State ---
   const [unassignedCases, setUnassignedCases] = useState<UnassignedCase[]>([]);
   const [valuers, setValuers] = useState<ValuerStaff[]>([]);
@@ -124,19 +126,35 @@ export const CaseAssignment: React.FC = () => {
 
   const handleConfirmAssignment = async () => {
     if (!canAssignValuer) {
-      alert("Access Denied: Only Government Administrators can assign land valuers to cases.");
+      notify({
+        type: 'error',
+        title: 'Access Denied',
+        message: 'Only Government Administrators can assign land valuers to cases.',
+      });
       return;
     }
     if (!selectedCaseId) {
-      alert("Please select a case to assign.");
+      notify({
+        type: 'general',
+        title: 'No Case Selected',
+        message: 'Please select a case to assign.',
+      });
       return;
     }
     if (!selectedValuerId) {
-      alert("Please select a land valuer.");
+      notify({
+        type: 'general',
+        title: 'No Valuer Selected',
+        message: 'Please select a land valuer.',
+      });
       return;
     }
     if (!acceptancePeriod || parseInt(acceptancePeriod, 10) <= 0) {
-      alert("Please enter a valid acceptance period (greater than 0 days).");
+      notify({
+        type: 'general',
+        title: 'Invalid Period',
+        message: 'Please enter a valid acceptance period (greater than 0 days).',
+      });
       return;
     }
 
@@ -172,7 +190,11 @@ export const CaseAssignment: React.FC = () => {
       setAcceptancePeriod("7");
     } catch (err: any) {
       console.error("Assignment failed:", err);
-      alert(`Assignment Failed: ${err.message || "Could not reach backend"}`);
+      notify({
+        type: 'error',
+        title: 'Assignment Failed',
+        message: err.message || "Could not reach backend",
+      });
     } finally {
       setIsAssigning(false);
     }

@@ -6,10 +6,12 @@ import { CaseForm } from "../../components/CaseForm";
 import type { CaseFormData, Owner, Document } from "../../components/CaseForm";
 import { useAuth } from "../../context/AuthContext";
 import { Button } from "../../components/ui/Button";
+import { useNotification } from "../../components/ui/NotificationSystem";
 
 export const CaseRegistration: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { notify } = useNotification();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Authorised roles for case registration: Government Officers, System Administrators
@@ -90,11 +92,19 @@ export const CaseRegistration: React.FC = () => {
         }
       }
 
-      alert(`Case Registered Successfully in Backend!\n\nCase ID: ${newCaseId}\nStatus: Case Registered`);
+      notify({
+        type: 'success',
+        title: 'Case Registered',
+        message: `Case ID: ${newCaseId} — Status: Case Registered`,
+      });
       navigate('/admin/case/details', { state: { caseId: newCaseId } });
     } catch (err: any) {
       console.error("Case registration failed:", err);
-      alert(`Registration Failed: ${err.message || "Could not reach backend"}`);
+      notify({
+        type: 'error',
+        title: 'Registration Failed',
+        message: err.message || "Could not reach backend",
+      });
     } finally {
       setIsSubmitting(false);
     }
