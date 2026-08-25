@@ -7,6 +7,7 @@ import { Select, type SelectOption } from "./ui/Select";
 import { Textarea } from "./ui/Textarea";
 import { IconButton } from "./ui/IconButton";
 import { FileUpload } from "./ui/FileUpload";
+import { useAuth } from "../context/AuthContext";
 import "../style.css";
 import "../pages/LandAcquisition/case_management.css";
 
@@ -101,6 +102,7 @@ export const CaseForm: React.FC<CaseFormProps> = ({
   isSubmitting = false,
   onCancel,
 }) => {
+  const { user } = useAuth();
   const isSectionEdit = mode === "edit" && Boolean(targetSection);
   const isWholeCaseEdit = mode === "edit" && !targetSection;
   const isCreate = mode === "create";
@@ -214,31 +216,77 @@ export const CaseForm: React.FC<CaseFormProps> = ({
     }
   };
 
-  const validateStep = (stepIndex: number): boolean => {
+  const isStepValid = (stepIndex: number): boolean => {
     if (stepIndex === 0) {
       const { projectName, projectType, projectPurpose, projectBudget, fundingSource } = formData;
-      if (!projectName || !projectType || !projectPurpose || !projectBudget || !fundingSource) {
-        alert("Please fill all required fields in Project Information.");
+      return Boolean(
+        projectName.trim() &&
+        projectType.trim() &&
+        projectPurpose.trim() &&
+        projectBudget.trim() &&
+        fundingSource.trim()
+      );
+    } else if (stepIndex === 1) {
+      const { landTitleNumber, lotNumber, mukim, district, state, landArea, landCategory, gpsLatitude, gpsLongitude } = formData;
+      return Boolean(
+        landTitleNumber.trim() &&
+        lotNumber.trim() &&
+        mukim.trim() &&
+        district.trim() &&
+        state.trim() &&
+        landArea.trim() &&
+        landCategory.trim() &&
+        gpsLatitude.trim() &&
+        gpsLongitude.trim()
+      );
+    } else if (stepIndex === 2) {
+      if (!owners || owners.length === 0) return false;
+      return owners.every(
+        (owner) =>
+          owner.name.trim() &&
+          owner.icNumber.trim() &&
+          owner.address.trim() &&
+          owner.phone.trim() &&
+          owner.ownershipType.trim()
+      );
+    } else if (stepIndex === 3) {
+      if (mode === "create") {
+        return documents.some((d) => d.type.trim() && (d.file || d.fileName.trim()));
+      }
+      return true;
+    }
+    return true;
+  };
+
+  const validateStep = (stepIndex: number, showAlert = true): boolean => {
+    if (stepIndex === 0) {
+      const { projectName, projectType, projectPurpose, projectBudget, fundingSource } = formData;
+      if (!projectName.trim() || !projectType.trim() || !projectPurpose.trim() || !projectBudget.trim() || !fundingSource.trim()) {
+        if (showAlert) alert("Please fill all required fields in Project Information.");
         return false;
       }
     } else if (stepIndex === 1) {
       const { landTitleNumber, lotNumber, mukim, district, state, landArea, landCategory, gpsLatitude, gpsLongitude } = formData;
-      if (!landTitleNumber || !lotNumber || !mukim || !district || !state || !landArea || !landCategory || !gpsLatitude || !gpsLongitude) {
-        alert("Please fill all required fields in Land Information.");
+      if (!landTitleNumber.trim() || !lotNumber.trim() || !mukim.trim() || !district.trim() || !state.trim() || !landArea.trim() || !landCategory.trim() || !gpsLatitude.trim() || !gpsLongitude.trim()) {
+        if (showAlert) alert("Please fill all required fields in Land Information.");
         return false;
       }
     } else if (stepIndex === 2) {
+      if (!owners || owners.length === 0) {
+        if (showAlert) alert("Please add at least one owner.");
+        return false;
+      }
       for (const owner of owners) {
-        if (!owner.name || !owner.icNumber || !owner.address || !owner.phone || !owner.ownershipType) {
-          alert("Please fill all required fields for each owner.");
+        if (!owner.name.trim() || !owner.icNumber.trim() || !owner.address.trim() || !owner.phone.trim() || !owner.ownershipType.trim()) {
+          if (showAlert) alert("Please fill all required fields for each owner.");
           return false;
         }
       }
     } else if (stepIndex === 3) {
       if (mode === "create") {
-        const hasValidDoc = documents.some((d) => d.type && d.file);
+        const hasValidDoc = documents.some((d) => d.type.trim() && (d.file || d.fileName.trim()));
         if (!hasValidDoc) {
-          alert("Please upload at least one supporting document with a selected type.");
+          if (showAlert) alert("Please upload at least one supporting document with a selected type.");
           return false;
         }
       }
@@ -246,18 +294,60 @@ export const CaseForm: React.FC<CaseFormProps> = ({
     return true;
   };
 
+  const canNavigateToStep = (targetIndex: number): boolean => {
+    if (isSectionEdit) return targetIndex === currentStep;
+    // Backward step is always allowed
+    if (targetIndex <= currentStep) return true;
+    // Forward step: All steps from 0 up to targetIndex - 1 must be valid
+    for (let i = 0; i < targetIndex; i++) {
+      if (!isStepValid(i)) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const handleStepClick = (targetIndex: number) => {
+    if (isSectionEdit) return;
+    if (targetIndex === currentStep) return;
+
+    // Backward step is always allowed
+    if (targetIndex < currentStep) {
+      setCurrentStep(targetIndex);
+      return;
+    }
+
+    // Forward step: Must validate preceding steps sequentially
+    for (let i = 0; i < targetIndex; i++) {
+      if (!validateStep(i, true)) {
+        setCurrentStep(i);
+        return;
+      }
+    }
+
+    setCurrentStep(targetIndex);
+  };
+
   const nextStep = () => {
-    if (!validateStep(currentStep)) return;
+    if (!validateStep(currentStep, true)) return;
     setCurrentStep((prev) => Math.min(prev + 1, 3));
   };
 
   const prevStep = () => {
+    // Backward step is unconditionally allowed
     setCurrentStep((prev) => Math.max(prev - 1, 0));
   };
 
   const handleFormSubmit = async () => {
-    if (!validateStep(currentStep)) return;
+    if (!validateStep(currentStep, true)) return;
     await onSubmit({ formData, owners, documents });
+  };
+
+  const getUserInitials = (name?: string) => {
+    if (!name) return "AO";
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
 
   const renderStepContent = () => {
@@ -590,114 +680,134 @@ export const CaseForm: React.FC<CaseFormProps> = ({
     : "Fill in the details below to create a new land acquisition case";
 
   return (
-    <div className="flex min-h-screen" style={{ background: "var(--md-background)", color: "var(--md-on-surface)" }}>
-      <main className="main blur-shape-bg w-full">
-        <div className="topbar flex flex-wrap justify-between items-center gap-4 mb-6">
-          <div className="topbar-left">
-            <h1 className="mb-0 text-2xl md:text-3xl font-bold text-md-on-surface">{titleText}</h1>
-            <div className="sub">{subtitleText}</div>
-          </div>
-          <div className="topbar-right flex items-center gap-4">
-            <span className="date-badge bg-md-surface-container px-4 py-2 rounded-full text-sm font-medium text-md-on-surface-variant">
-              <Lucide.Calendar size={16} className="inline mr-1" /> {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-            </span>
-            <div className="avatar w-10 h-10 rounded-full bg-md-primary text-white flex items-center justify-center font-semibold">
-              AO
-            </div>
+    <div className="main blur-shape-bg">
+      <div className="topbar flex flex-wrap justify-between items-center gap-4 mb-6">
+        <div className="topbar-left">
+          <h1 className="mb-0 text-2xl md:text-3xl font-bold text-md-on-surface">{titleText}</h1>
+          <div className="sub">{subtitleText}</div>
+        </div>
+        <div className="topbar-right flex items-center gap-3">
+          {onCancel && (
+            <Button variant="outlined" size="sm" onClick={onCancel}>
+              <Lucide.ArrowLeft size={16} /> Back
+            </Button>
+          )}
+          <span className="date-badge">
+            <Lucide.Calendar size={16} className="inline mr-1" /> {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+          </span>
+          <div
+            className="avatar"
+            title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "Current User"}
+          >
+            {user?.name ? getUserInitials(user.name) : "AO"}
           </div>
         </div>
+      </div>
 
-        {/* Stepper Header */}
-        <div className="stepper-wrapper max-w-4xl mx-auto">
-          {["Project", "Land", "Owners", "Documents"].map((label, index) => {
-            let status = "inactive";
-            if (index === currentStep) status = "active";
-            else if (index < currentStep && !isSectionEdit) status = "completed";
+      {/* Stepper Header */}
+      <div className="stepper-wrapper w-full mb-6">
+        {["Project", "Land", "Owners", "Documents"].map((label, index) => {
+          const isAccessible = canNavigateToStep(index);
+          const isActive = index === currentStep;
+          const isCompleted = index < currentStep && isStepValid(index);
+          const isLocked = !isAccessible && !isActive;
 
-            const isClickable = !isSectionEdit;
+          let status = "inactive";
+          if (isActive) status = "active";
+          else if (isCompleted) status = "completed";
+          else if (isLocked) status = "locked";
 
-            return (
-              <div
-                key={index}
-                className={`step-item ${isClickable ? "cursor-pointer" : "cursor-not-allowed opacity-50"}`}
-                onClick={() => {
-                  if (isClickable) setCurrentStep(index);
-                }}
-                title={isClickable ? `Jump to ${label} section` : `${label} section is locked`}
-              >
-                <div className={`step-circle ${status === "active" ? "active" : status === "completed" ? "completed" : ""}`}>
-                  {status === "completed" ? <Lucide.Check size={16} /> : index + 1}
-                </div>
-                <div className={`step-label ${status === "active" ? "active" : ""}`}>{label}</div>
+          return (
+            <div
+              key={index}
+              className={`step-item ${isAccessible ? "cursor-pointer" : "cursor-not-allowed"} ${isLocked ? "locked" : ""}`}
+              onClick={() => handleStepClick(index)}
+              title={
+                isActive
+                  ? `Current step: ${label}`
+                  : isAccessible
+                  ? `Navigate to ${label}`
+                  : `Complete previous step before unlocking ${label}`
+              }
+            >
+              <div className={`step-circle ${status}`}>
+                {isLocked ? (
+                  <Lucide.Lock size={14} />
+                ) : isCompleted ? (
+                  <Lucide.Check size={16} />
+                ) : (
+                  index + 1
+                )}
               </div>
-            );
-          })}
-        </div>
+              <div className={`step-label ${isActive ? "active" : ""}`}>{label}</div>
+            </div>
+          );
+        })}
+      </div>
 
-        {/* Form card */}
-        <div className="max-w-4xl mx-auto bg-md-surface-container rounded-2xl p-6 md:p-8 shadow-sm">
-          {renderStepContent()}
+      {/* Form card */}
+      <div className="w-full bg-md-surface-container rounded-2xl p-6 md:p-8 shadow-sm">
+        {renderStepContent()}
 
-          {/* Navigation Action Buttons */}
-          <div className="flex justify-between items-center mt-8 pt-6 border-t border-md-outline/10">
-            {/* Left Button Group */}
-            <div className="flex items-center gap-3">
-              {isSectionEdit ? (
-                onCancel && (
-                  <Button
-                    variant="tonal"
-                    onClick={onCancel}
-                  >
-                    Cancel
-                  </Button>
-                )
-              ) : currentStep === 0 ? (
+        {/* Navigation Action Buttons */}
+        <div className="flex justify-between items-center mt-8 pt-6 border-t border-md-outline/10">
+          {/* Left Button Group */}
+          <div className="flex items-center gap-3">
+            {isSectionEdit ? (
+              onCancel && (
                 <Button
                   variant="tonal"
-                  onClick={onCancel || (() => window.history.back())}
+                  onClick={onCancel}
                 >
                   Cancel
                 </Button>
-              ) : (
-                <Button
-                  variant="outlined"
-                  onClick={prevStep}
-                >
-                  <ChevronLeft size={18} /> Back
-                </Button>
-              )}
-            </div>
+              )
+            ) : currentStep === 0 ? (
+              <Button
+                variant="tonal"
+                onClick={onCancel || (() => window.history.back())}
+              >
+                Cancel
+              </Button>
+            ) : (
+              <Button
+                variant="outlined"
+                onClick={prevStep}
+              >
+                <ChevronLeft size={18} /> Back
+              </Button>
+            )}
+          </div>
 
-            {/* Right Button Group */}
-            <div className="flex items-center gap-3">
-              {isSectionEdit ? (
-                <Button
-                  variant="filled"
-                  isLoading={isSubmitting}
-                  onClick={handleFormSubmit}
-                >
-                  Save Changes
-                </Button>
-              ) : currentStep === 3 ? (
-                <Button
-                  variant="filled"
-                  isLoading={isSubmitting}
-                  onClick={handleFormSubmit}
-                >
-                  {isWholeCaseEdit ? "Save Changes" : "Submit Case"}
-                </Button>
-              ) : (
-                <Button
-                  variant="filled"
-                  onClick={nextStep}
-                >
-                  Next <ChevronRight size={18} />
-                </Button>
-              )}
-            </div>
+          {/* Right Button Group */}
+          <div className="flex items-center gap-3">
+            {isSectionEdit ? (
+              <Button
+                variant="filled"
+                isLoading={isSubmitting}
+                onClick={handleFormSubmit}
+              >
+                Save Changes
+              </Button>
+            ) : currentStep === 3 ? (
+              <Button
+                variant="filled"
+                isLoading={isSubmitting}
+                onClick={handleFormSubmit}
+              >
+                {isWholeCaseEdit ? "Save Changes" : "Submit Case"}
+              </Button>
+            ) : (
+              <Button
+                variant="filled"
+                onClick={nextStep}
+              >
+                Next <ChevronRight size={18} />
+              </Button>
+            )}
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 };

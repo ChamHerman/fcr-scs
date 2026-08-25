@@ -6,6 +6,9 @@ export interface CompensationFilters {
   search?: string;
   page?: number;
   limit?: number;
+  caseCreatedById?: string;
+  userRole?: string;
+  userId?: string;
 }
 
 export interface CompensationComponentsInput {
@@ -108,6 +111,7 @@ export async function getAllReports(filters: CompensationFilters) {
 
     const orConditions: Prisma.CompensationReportWhereInput[] = [
       { acquisitionCase: { caseTitle: { contains: term, mode: "insensitive" } } },
+      { caseId: { contains: term, mode: "insensitive" } },
     ];
 
     if (isUuid) {
@@ -115,6 +119,19 @@ export async function getAllReports(filters: CompensationFilters) {
     }
 
     where.OR = orConditions;
+  }
+
+  // 1. Government Officer: only reports under cases created by this officer
+  if (filters.caseCreatedById) {
+    where.acquisitionCase = {
+      ...(where.acquisitionCase as Prisma.AcquisitionCaseWhereInput),
+      createdById: filters.caseCreatedById,
+    };
+  } else if (filters.userRole === "GOVERNMENT_OFFICER" && filters.userId) {
+    where.acquisitionCase = {
+      ...(where.acquisitionCase as Prisma.AcquisitionCaseWhereInput),
+      createdById: filters.userId,
+    };
   }
 
   const [reports, total] = await Promise.all([

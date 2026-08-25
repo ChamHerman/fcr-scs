@@ -7,13 +7,17 @@ import crypto from "crypto";
 
 export async function getAllCases(req: Request, res: Response): Promise<void> {
   try {
-    const { search, status, projectType, page, limit } = req.query;
+    const { search, status, projectType, page, limit, createdById, assignedToId, userRole, userId } = req.query;
     const result = await caseService.getAllCases({
       search: search as string,
       status: status as string,
       projectType: projectType as string,
       page: page ? parseInt(page as string, 10) : undefined,
       limit: limit ? parseInt(limit as string, 10) : undefined,
+      createdById: createdById as string,
+      assignedToId: assignedToId as string,
+      userRole: userRole as string,
+      userId: userId as string,
     });
     res.json(result);
   } catch (e: unknown) {
@@ -40,9 +44,15 @@ export async function getCaseById(req: Request, res: Response): Promise<void> {
   }
 }
 
-export async function getCaseStats(_req: Request, res: Response): Promise<void> {
+export async function getCaseStats(req: Request, res: Response): Promise<void> {
   try {
-    const stats = await caseService.getCaseStats();
+    const { createdById, assignedToId, userRole, userId } = req.query;
+    const stats = await caseService.getCaseStats({
+      createdById: createdById as string,
+      assignedToId: assignedToId as string,
+      userRole: userRole as string,
+      userId: userId as string,
+    });
     res.json(stats);
   } catch (e: unknown) {
     res.status(500).json({ error: (e as Error).message });

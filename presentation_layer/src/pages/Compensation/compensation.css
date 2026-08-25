@@ -1,7 +1,6 @@
 /* Compensation */
 .compensation-generator {
-  max-width: 1100px;
-  margin: 0 auto;
+  width: 100%;
 }
 .compensation-generator .case-selector {
   background: var(--md-surface-container);
@@ -396,8 +395,7 @@
 
 /* Compensation Dashboard */
 .compensation-dashboard {
-  max-width: 1440px;
-  margin: 0 auto;
+  width: 100%;
 }
 .compensation-dashboard .stats-grid {
   display: grid;
@@ -680,8 +678,7 @@
 
 /* Compensation Approval */
 .compensation-approval {
-  max-width: 1100px;
-  margin: 0 auto;
+  width: 100%;
 }
 .compensation-approval .report-card {
   background: var(--md-surface-container);
@@ -996,3 +993,43 @@
     padding: 20px;
   }
 }
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full, 9999px);
+  background: var(--md-primary, #6750a4);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+  user-select: none;
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.1));
+}
+
+.compensation-dashboard .action-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.compensation-dashboard .action-bar .left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--md-on-surface-variant);
+}
+.compensation-dashboard .action-bar .left .count {
+  font-weight: 600;
+  color: var(--md-on-surface);
+}
+.compensation-dashboard .action-bar .right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}

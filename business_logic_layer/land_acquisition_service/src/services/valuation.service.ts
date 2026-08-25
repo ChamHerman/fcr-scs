@@ -6,6 +6,10 @@ export interface ValuationFilters {
   search?: string;
   page?: number;
   limit?: number;
+  caseCreatedById?: string;
+  valuerId?: string;
+  userRole?: string;
+  userId?: string;
 }
 
 export interface CreateValuationInput {
@@ -34,6 +38,7 @@ export async function getAllReports(filters: ValuationFilters) {
     const orConditions: Prisma.ValuationReportWhereInput[] = [
       { acquisitionCase: { caseTitle: { contains: term, mode: "insensitive" } } },
       { valuer: { name: { contains: term, mode: "insensitive" } } },
+      { caseId: { contains: term, mode: "insensitive" } },
     ];
 
     if (isUuid) {
@@ -43,12 +48,46 @@ export async function getAllReports(filters: ValuationFilters) {
     where.OR = orConditions;
   }
 
+  // 1. Government Officer: only reports under cases created by this officer
+  if (filters.caseCreatedById) {
+    where.acquisitionCase = {
+      ...(where.acquisitionCase as Prisma.AcquisitionCaseWhereInput),
+      createdById: filters.caseCreatedById,
+    };
+  } else if (filters.userRole === "GOVERNMENT_OFFICER" && filters.userId) {
+    where.acquisitionCase = {
+      ...(where.acquisitionCase as Prisma.AcquisitionCaseWhereInput),
+      createdById: filters.userId,
+    };
+  }
+
+  // 2. Land Valuer: only reports evaluated by or assigned to this valuer
+  if (filters.valuerId) {
+    where.OR = [
+      ...(where.OR || []),
+      { valuerId: filters.valuerId },
+      { acquisitionCase: { caseAssignments: { some: { assignedToId: filters.valuerId } } } },
+    ];
+  } else if (filters.userRole === "LAND_VALUER" && filters.userId) {
+    where.OR = [
+      ...(where.OR || []),
+      { valuerId: filters.userId },
+      { acquisitionCase: { caseAssignments: { some: { assignedToId: filters.userId } } } },
+    ];
+  }
+
   const [reports, total] = await Promise.all([
     prisma.valuationReport.findMany({
       where,
       include: {
         acquisitionCase: {
-          include: { project: true, landParcel: true },
+          include: {
+            project: true,
+            landParcel: true,
+            caseAssignments: {
+              include: { assignedTo: true },
+            },
+          },
         },
         valuer: true,
       },

@@ -1,6 +1,5 @@
 .objection-dashboard {
-  max-width: 1200px;
-  margin: 0 auto;
+  width: 100%;
 }
 .objection-dashboard .stats-grid {
   display: grid;
@@ -274,8 +273,7 @@
 }
 
 .objection-create {
-  max-width: 800px;
-  margin: 0 auto;
+  width: 100%;
 }
 .objection-create .form-card {
   background: var(--md-surface-container);
@@ -516,8 +514,7 @@
 }
 
 .objection-review {
-  max-width: 900px;
-  margin: 0 auto;
+  width: 100%;
 }
 .objection-review .back-link {
   background: none;

@@ -1,7 +1,6 @@
 /* Comparison */
 .comparison-dashboard {
-  max-width: 1400px;
-  margin: 0 auto;
+  width: 100%;
 }
 .comparison-dashboard .header-actions {
   display: flex;
@@ -54,8 +53,7 @@
 }
 
 .comparison-view {
-  max-width: 1400px;
-  margin: 0 auto;
+  width: 100%;
 }
 .comparison-view .back-link {
   background: none;

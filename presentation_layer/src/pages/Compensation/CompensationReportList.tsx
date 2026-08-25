@@ -9,6 +9,7 @@ import { Button } from "../../components/ui/Button";
 import { Select, type SelectOption } from "../../components/ui/Select";
 import { SearchInput } from "../../components/ui/SearchInput";
 import { CopyButton } from "../../components/ui/CopyButton";
+import { useRole } from "../../hooks/useRole";
 import "../../style.css";
 import "./compensation.css";
 
@@ -16,6 +17,7 @@ type ReportItem = {
   id: string;
   caseId: string;
   caseTitle: string;
+  caseCreatedById?: string;
   owner: string;
   totalAmount: number;
   status: string;
@@ -45,6 +47,7 @@ const STATUS_OPTIONS: SelectOption[] = [
 
 export const CompensationReportList: React.FC = () => {
   const navigate = useNavigate();
+  const { user, userId, role, isAdmin, isOfficer } = useRole();
   const [reports, setReports] = useState<ReportItem[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
@@ -57,17 +60,42 @@ export const CompensationReportList: React.FC = () => {
   const loadReports = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await compensationApi.getAllReports({
+      const scopeParams: any = {
         search: searchTerm || undefined,
         status: statusFilter || undefined,
         page: currentPage,
         limit: itemsPerPage,
+      };
+
+      if (isOfficer && !isAdmin && userId) {
+        scopeParams.caseCreatedById = userId;
+        scopeParams.userRole = "GOVERNMENT_OFFICER";
+        scopeParams.userId = userId;
+      } else if (isAdmin) {
+        scopeParams.userRole = role || "ADMINISTRATOR";
+      }
+
+      const res = await compensationApi.getAllReports(scopeParams);
+      const fetchedList = res.reports || [];
+
+      // Defensive client-side RBAC filter
+      const filteredList = fetchedList.filter((r: any) => {
+        // 1. Administrators can view all records
+        if (isAdmin) return true;
+
+        // 2. Government Officers can only view reports for cases they created
+        if (isOfficer) {
+          return r.acquisitionCase?.createdById === userId;
+        }
+
+        return false;
       });
 
-      const formatted: ReportItem[] = (res.reports || []).map((r: any) => ({
+      const formatted: ReportItem[] = filteredList.map((r: any) => ({
         id: r.compensationReportId,
         caseId: r.caseId,
         caseTitle: r.acquisitionCase?.caseTitle || "—",
+        caseCreatedById: r.acquisitionCase?.createdById,
         owner: r.acquisitionCase?.landParcel?.ownerships?.[0]?.landOwner?.name || "—",
         totalAmount: Number(r.totalCompensation || 0),
         status: statusLabelMap[r.status] || r.status,
@@ -79,13 +107,13 @@ export const CompensationReportList: React.FC = () => {
       }));
 
       setReports(formatted);
-      setTotalCount(res.total || 0);
+      setTotalCount(res.total || formatted.length);
     } catch (err: any) {
       console.error("Failed to load compensation reports:", err);
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, statusFilter, currentPage]);
+  }, [searchTerm, statusFilter, currentPage, isAdmin, isOfficer, userId, role]);
 
   useEffect(() => {
     loadReports();
@@ -96,6 +124,10 @@ export const CompensationReportList: React.FC = () => {
   };
 
   const handleCreateReport = () => {
+    if (!isOfficer && !isAdmin) {
+      alert("Only Government Officers and Administrators can create compensation reports.");
+      return;
+    }
     setIsCaseModalOpen(true);
   };
 
@@ -145,14 +177,34 @@ export const CompensationReportList: React.FC = () => {
           <div className="topbar-left">
             <h1 style={{ marginBottom: 0 }}>Compensation Reports</h1>
             <div className="sub">
-              Review and generate compensation calculation reports
+              {isAdmin
+                ? "Review and manage all compensation calculation reports across the system"
+                : isOfficer
+                ? "Review and generate compensation calculation reports for cases created by your account"
+                : "Review and manage compensation calculation reports"}
             </div>
           </div>
           <div className="topbar-right" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <Button variant="filled" onClick={handleCreateReport}>
-              <Plus size={16} /> Create Compensation Report
-            </Button>
-            <div className="avatar">AO</div>
+            <span className="date-badge">
+              <Lucide.Calendar size={16} className="inline mr-1" />
+              {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+            </span>
+            <div
+              className="avatar"
+              title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
+            >
+              {user?.name ? (
+                <span className="text-xs font-bold uppercase">
+                  {user.name
+                    .split(/\s+/)
+                    .map((n: string) => n[0])
+                    .slice(0, 2)
+                    .join("")}
+                </span>
+              ) : (
+                <Lucide.User size={16} />
+              )}
+            </div>
           </div>
         </div>
 
@@ -191,6 +243,26 @@ export const CompensationReportList: React.FC = () => {
           </div>
         </div>
 
+        {/* Action Bar */}
+        <div className="action-bar">
+          <div className="left">
+            <span className="count">{totalCount}</span> reports found
+            <span style={{ opacity: 0.4, margin: "0 4px" }}>·</span>
+            <span style={{ fontSize: "13px" }}>
+              Showing {reports.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}–
+              {Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount}
+            </span>
+          </div>
+
+          {(isOfficer || isAdmin) && (
+            <div className="right">
+              <Button variant="filled" onClick={handleCreateReport}>
+                <Plus size={16} /> New Report
+              </Button>
+            </div>
+          )}
+        </div>
+
         <div className="table-wrap">
           <div className="table-scroll md-scroll-thin">
             <table>
@@ -202,29 +274,34 @@ export const CompensationReportList: React.FC = () => {
                   <th>Total Amount</th>
                   <th>Status</th>
                   <th>Date</th>
-                  <th style={{ textAlign: "center" }}>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)" }}>
+                    <td colSpan={6} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)" }}>
                       <Loader2 size={24} className="inline animate-spin mr-2" /> Loading reports from backend...
                     </td>
                   </tr>
                 ) : reports.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)", opacity: 0.6 }}>
+                    <td colSpan={6} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)", opacity: 0.6 }}>
                       No compensation reports found in database.
                     </td>
                   </tr>
                 ) : (
                   reports.map((r) => (
-                    <tr key={r.id}>
+                    <tr
+                      key={r.id}
+                      onClick={() => handleView(r.id)}
+                      className="cursor-pointer hover:bg-md-primary/5 transition-colors"
+                    >
                       <td>
                         <div className="flex items-center gap-1.5">
                           <span className="case-id font-mono text-xs">{r.id}</span>
-                          <CopyButton value={r.id} />
+                          <span onClick={(e) => e.stopPropagation()}>
+                            <CopyButton value={r.id} />
+                          </span>
                         </div>
                       </td>
                       <td className="case-title">{r.caseTitle}</td>
@@ -236,11 +313,6 @@ export const CompensationReportList: React.FC = () => {
                         </span>
                       </td>
                       <td>{r.generatedDate}</td>
-                      <td style={{ textAlign: "center" }}>
-                        <Button variant="tonal" size="sm" onClick={() => handleView(r.id)}>
-                          <Eye size={14} /> View
-                        </Button>
-                      </td>
                     </tr>
                   ))
                 )}

@@ -371,12 +371,8 @@ export const CaseAssignment: React.FC = () => {
   );
 
   return (
-    <div
-      ref={containerRef}
-      className="flex min-h-screen"
-      style={{ background: "var(--md-background)", color: "var(--md-on-surface)" }}
-    >
-      <main className="main blur-shape-bg w-full">
+    <div ref={containerRef}>
+      <div className="main blur-shape-bg">
         <div className="topbar" style={{ marginBottom: "20px" }}>
           <div className="topbar-left">
             <h1 style={{ marginBottom: 0 }}>Case Assignment</h1>
@@ -412,7 +408,7 @@ export const CaseAssignment: React.FC = () => {
         >
           FCR-SCS · Case Assignment Module · Connected to Business Logic Backend
         </div>
-      </main>
+      </div>
     </div>
   );
 };

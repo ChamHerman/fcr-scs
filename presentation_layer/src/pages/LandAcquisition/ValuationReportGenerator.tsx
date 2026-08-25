@@ -10,6 +10,7 @@ import { Select, type SelectOption } from "../../components/ui/Select";
 import { Input } from "../../components/ui/Input";
 import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
+import { useAuth } from "../../context/AuthContext";
 import "../../style.css";
 import "./valuation_report.css";
 
@@ -69,6 +70,7 @@ const VALUATION_METHOD_OPTIONS: SelectOption[] = [
 ];
 
 export const ValuationReportGenerator: React.FC = () => {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -226,19 +228,21 @@ export const ValuationReportGenerator: React.FC = () => {
         marketValue: parseFloat(formData.marketValue.replace(/[^0-9.]/g, "")) || 0,
         recommendedCompensation: parseFloat(formData.recommendedCompensation.replace(/[^0-9.]/g, "")) || 0,
         remarks: formData.remarks,
+        createdById: user?.userId,
+        valuerId: user?.userId,
       });
 
       // Upload attached files if present
       if (formData.buildingAssessment) {
         try {
-          await landAcquisitionApi.uploadDocument(caseData.id, formData.buildingAssessment, "Building Assessment");
+          await landAcquisitionApi.uploadDocument(caseData.id, formData.buildingAssessment, "Building Assessment", user?.userId);
         } catch (fileErr) {
           console.warn("File upload notice (building assessment):", fileErr);
         }
       }
       if (formData.siteInspection) {
         try {
-          await landAcquisitionApi.uploadDocument(caseData.id, formData.siteInspection, "Site Inspection");
+          await landAcquisitionApi.uploadDocument(caseData.id, formData.siteInspection, "Site Inspection", user?.userId);
         } catch (fileErr) {
           console.warn("File upload notice (site inspection):", fileErr);
         }
@@ -429,13 +433,8 @@ export const ValuationReportGenerator: React.FC = () => {
         onSelectCase={handleSelectCaseFromModal}
       />
 
-      <div
-        className="flex min-h-screen"
-        style={{ background: "var(--md-background)", color: "var(--md-on-surface)" }}
-      >
-        {/* Main Content */}
-        <main className="main blur-shape-bg" style={{ width: "100%", padding: "24px" }}>
-          <div className="report-generator-container">
+      <div className="main blur-shape-bg">
+        <div className="report-generator-container">
             {/* Top Bar */}
             <div className="topbar" style={{ marginBottom: "20px" }}>
               <div className="topbar-left">
@@ -445,14 +444,29 @@ export const ValuationReportGenerator: React.FC = () => {
                 </div>
               </div>
               <div className="topbar-right flex items-center gap-3">
+                <Button variant="outlined" size="sm" onClick={() => navigate("/admin/case/valuation")}>
+                  <Lucide.ArrowLeft size={16} /> Back
+                </Button>
                 <span className="date-badge">
                   <Lucide.Calendar size={16} className="inline mr-1" />
                   {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
                 </span>
-                <Button variant="outlined" size="sm" onClick={() => navigate("/admin/case/valuation")}>
-                  <Lucide.ArrowLeft size={16} /> Back to List
-                </Button>
-                <div className="avatar">AF</div>
+                <div
+                  className="avatar"
+                  title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
+                >
+                  {user?.name ? (
+                    <span className="text-xs font-bold uppercase">
+                      {user.name
+                        .split(/\s+/)
+                        .map((n: string) => n[0])
+                        .slice(0, 2)
+                        .join("")}
+                    </span>
+                  ) : (
+                    <Lucide.User size={16} />
+                  )}
+                </div>
               </div>
             </div>
 
@@ -658,23 +672,22 @@ export const ValuationReportGenerator: React.FC = () => {
                 </div>
               </div>
             )}
-          </div>
 
-          <div
-            style={{
-              marginTop: "32px",
-              fontSize: "13px",
-              color: "var(--md-on-surface-variant)",
-              opacity: 0.6,
-              textAlign: "center",
-              borderTop: "1px solid rgba(121,116,126,0.08)",
-              paddingTop: "18px",
-            }}
-          >
-            FCR-SCS · Valuation Report Generator · For Land Valuers only
+            <div
+              style={{
+                marginTop: "32px",
+                fontSize: "13px",
+                color: "var(--md-on-surface-variant)",
+                opacity: 0.6,
+                textAlign: "center",
+                borderTop: "1px solid rgba(121,116,126,0.08)",
+                paddingTop: "18px",
+              }}
+            >
+              FCR-SCS · Valuation Report Generator · For Land Valuers only
+            </div>
           </div>
-        </main>
-      </div>
+        </div>
     </>
   );
 };

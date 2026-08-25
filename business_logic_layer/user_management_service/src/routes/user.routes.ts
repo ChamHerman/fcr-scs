@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { login, forgotPassword, resetPassword, register, activateAccount, adminCreateUser, getAllUsers } from '../controllers/user.controller';
+import { login, forgotPassword, resetPassword, register, activateAccount, adminCreateUser, getAllUsers, getUserById } from '../controllers/user.controller';
 import { getRolePermissions, updateRolePermissions } from '../controllers/permission.controller';
 
 const router = Router();
@@ -15,5 +15,7 @@ router.post('/admin-create', adminCreateUser);
 // RBAC Permissions
 router.get('/permissions/:role', getRolePermissions);
 router.post('/permissions/:role', updateRolePermissions);
+
+router.get('/:id', getUserById);
 
 export default router;

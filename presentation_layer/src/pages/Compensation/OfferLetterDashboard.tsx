@@ -8,6 +8,7 @@ import { Select, type SelectOption } from "../../components/ui/Select";
 import { SearchInput } from "../../components/ui/SearchInput";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { Pagination } from "../../components/ui/Pagination";
+import { useRole } from "../../hooks/useRole";
 import "../../style.css";
 import "./compensation.css";
 
@@ -16,6 +17,7 @@ type OfferItem = {
   caseId: string;
   caseTitle: string;
   ownerName: string;
+  ownerNric: string;
   offerAmount: number;
   offerDate: string;
   expiryDate: string;
@@ -46,9 +48,14 @@ const STATUS_OPTIONS: SelectOption[] = [
   { value: "EXPIRED", label: "Expired" },
 ];
 
+const normalizeIc = (ic?: string) => (ic || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase().trim();
+
 export const OfferLetterDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { user, isMember } = useRole();
+  const [userIc, setUserIc] = useState<string>(() => user?.identificationNumber || "");
   const [offerLetters, setOfferLetters] = useState<OfferItem[]>([]);
+  const [allMemberOffersForStats, setAllMemberOffersForStats] = useState<OfferItem[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -56,41 +63,124 @@ export const OfferLetterDashboard: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // Retrieve user IC if missing in context
+  useEffect(() => {
+    if (user?.identificationNumber) {
+      setUserIc(user.identificationNumber);
+    } else if (isMember && user?.userId) {
+      fetch(`http://localhost:3030/api/users/${user.userId}`)
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.success && json.data?.identificationNumber) {
+            setUserIc(json.data.identificationNumber);
+            const stored = localStorage.getItem("user_data");
+            if (stored) {
+              try {
+                const parsed = JSON.parse(stored);
+                parsed.identificationNumber = json.data.identificationNumber;
+                localStorage.setItem("user_data", JSON.stringify(parsed));
+              } catch (e) {}
+            }
+          }
+        })
+        .catch((err) => console.error("Failed to load user identification number:", err));
+    }
+  }, [user, isMember]);
+
   const loadOfferLetters = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await compensationApi.getAllOfferLetters({
-        search: searchTerm || undefined,
-        status: statusFilter || undefined,
-        page: currentPage,
-        limit: itemsPerPage,
-      });
+      if (isMember) {
+        // For members: fetch all offer letters, then strictly filter by matching IC
+        const res = await compensationApi.getAllOfferLetters({
+          limit: 1000,
+        });
 
-      const formatted: OfferItem[] = (res.offerLetters || []).map((o: any) => ({
-        id: o.offerId,
-        offerReferenceNo: o.offerReferenceNo,
-        caseId: o.caseId,
-        caseTitle: o.acquisitionCase?.caseTitle || "—",
-        ownerName: o.landOwnership?.landOwner?.name || "—",
-        offerAmount: Number(o.offerAmount || 0),
-        offerDate: o.offerDate
-          ? new Date(o.offerDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-          : "—",
-        expiryDate: o.expiryDate
-          ? new Date(o.expiryDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-          : "—",
-        status: statusLabelMap[o.status] || o.status,
-        statusClass: statusClassMap[o.status] || "status-offer-pending",
-      }));
+        const activeMemberIc = normalizeIc(userIc || user?.identificationNumber);
 
-      setOfferLetters(formatted);
-      setTotalCount(res.total || 0);
+        // Filter: ONLY retain cases where land owner's IC matches the member's IC
+        const matchingOffers: OfferItem[] = (res.offerLetters || [])
+          .filter((o: any) => {
+            const rawOwnerNric = o.landOwnership?.landOwner?.nric || "";
+            const ownerIc = normalizeIc(rawOwnerNric);
+            return activeMemberIc ? ownerIc === activeMemberIc : false;
+          })
+          .map((o: any) => ({
+            id: o.offerId,
+            offerReferenceNo: o.offerReferenceNo,
+            caseId: o.caseId,
+            caseTitle: o.acquisitionCase?.caseTitle || "—",
+            ownerName: o.landOwnership?.landOwner?.name || "—",
+            ownerNric: o.landOwnership?.landOwner?.nric || "—",
+            offerAmount: Number(o.offerAmount || 0),
+            offerDate: o.offerDate
+              ? new Date(o.offerDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+              : "—",
+            expiryDate: o.expiryDate
+              ? new Date(o.expiryDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+              : "—",
+            status: statusLabelMap[o.status] || o.status,
+            statusClass: statusClassMap[o.status] || "status-offer-pending",
+          }));
+
+        setAllMemberOffersForStats(matchingOffers);
+
+        // Apply local search and status filtering on the member's matching cases
+        let filtered = matchingOffers;
+        if (searchTerm) {
+          const term = searchTerm.toLowerCase();
+          filtered = filtered.filter(
+            (o) =>
+              o.offerReferenceNo.toLowerCase().includes(term) ||
+              o.caseTitle.toLowerCase().includes(term) ||
+              o.ownerName.toLowerCase().includes(term)
+          );
+        }
+
+        if (statusFilter) {
+          const expectedLabel = statusLabelMap[statusFilter] || statusFilter;
+          filtered = filtered.filter((o) => o.status === expectedLabel || o.status === statusFilter);
+        }
+
+        setTotalCount(filtered.length);
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        setOfferLetters(filtered.slice(startIndex, startIndex + itemsPerPage));
+      } else {
+        // Non-member roles: view all cases
+        const res = await compensationApi.getAllOfferLetters({
+          search: searchTerm || undefined,
+          status: statusFilter || undefined,
+          page: currentPage,
+          limit: itemsPerPage,
+        });
+
+        const formatted: OfferItem[] = (res.offerLetters || []).map((o: any) => ({
+          id: o.offerId,
+          offerReferenceNo: o.offerReferenceNo,
+          caseId: o.caseId,
+          caseTitle: o.acquisitionCase?.caseTitle || "—",
+          ownerName: o.landOwnership?.landOwner?.name || "—",
+          ownerNric: o.landOwnership?.landOwner?.nric || "—",
+          offerAmount: Number(o.offerAmount || 0),
+          offerDate: o.offerDate
+            ? new Date(o.offerDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+            : "—",
+          expiryDate: o.expiryDate
+            ? new Date(o.expiryDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+            : "—",
+          status: statusLabelMap[o.status] || o.status,
+          statusClass: statusClassMap[o.status] || "status-offer-pending",
+        }));
+
+        setOfferLetters(formatted);
+        setTotalCount(res.total || 0);
+      }
     } catch (err: any) {
       console.error("Failed to load offer letters:", err);
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, statusFilter, currentPage]);
+  }, [searchTerm, statusFilter, currentPage, isMember, userIc, user?.identificationNumber]);
 
   useEffect(() => {
     loadOfferLetters();
@@ -104,21 +194,24 @@ export const OfferLetterDashboard: React.FC = () => {
     return "RM " + val.toLocaleString("en-MY", { minimumFractionDigits: 2 });
   };
 
+  const statsDataSource = isMember ? allMemberOffersForStats : offerLetters;
+  const statsTotalCount = isMember ? allMemberOffersForStats.length : totalCount;
+
   const stats = [
-    { label: "Total Offer Letters", value: totalCount, icon: <Lucide.Mail size={16} className="inline mr-1" /> },
+    { label: "Total Offer Letters", value: statsTotalCount, icon: <Lucide.Mail size={16} className="inline mr-1" /> },
     {
       label: "Accepted",
-      value: offerLetters.filter((o) => o.status === "Accepted").length,
+      value: statsDataSource.filter((o) => o.status === "Accepted").length,
       icon: <Lucide.CheckCircle size={16} className="inline mr-1" />,
     },
     {
       label: "Pending Response",
-      value: offerLetters.filter((o) => o.status === "Pending Response").length,
+      value: statsDataSource.filter((o) => o.status === "Pending Response" || o.status === "Pending").length,
       icon: <Lucide.Clock size={16} className="inline mr-1" />,
     },
     {
       label: "Rejected",
-      value: offerLetters.filter((o) => o.status === "Rejected").length,
+      value: statsDataSource.filter((o) => o.status === "Rejected").length,
       icon: <Lucide.XCircle size={16} className="inline mr-1" />,
     },
   ];
@@ -129,15 +222,30 @@ export const OfferLetterDashboard: React.FC = () => {
         <div className="topbar-left">
           <h1 style={{ marginBottom: 0 }}>Offer Letter Dashboard</h1>
           <div className="sub">
-            Track and manage formal compensation offer letters
+            {isMember ? "View and respond to your compensation offer letters" : "Track and manage formal compensation offer letters"}
           </div>
         </div>
-        <div className="topbar-right">
+        <div className="topbar-right" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <span className="date-badge">
             <Lucide.Calendar size={16} className="inline mr-1" />
             {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
           </span>
-          <div className="avatar">AO</div>
+          <div
+            className="avatar"
+            title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
+          >
+            {user?.name ? (
+              <span className="text-xs font-bold uppercase">
+                {user.name
+                  .split(/\s+/)
+                  .map((n: string) => n[0])
+                  .slice(0, 2)
+                  .join("")}
+              </span>
+            ) : (
+              <Lucide.User size={16} />
+            )}
+          </div>
         </div>
       </div>
 
@@ -176,6 +284,18 @@ export const OfferLetterDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Action Bar */}
+      <div className="action-bar">
+        <div className="left">
+          <span className="count">{totalCount}</span> offer letters found
+          <span style={{ opacity: 0.4, margin: "0 4px" }}>·</span>
+          <span style={{ fontSize: "13px" }}>
+            Showing {offerLetters.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}–
+            {Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount}
+          </span>
+        </div>
+      </div>
+
       <div className="table-wrap">
         <div className="table-scroll md-scroll-thin">
           <table>
@@ -187,29 +307,36 @@ export const OfferLetterDashboard: React.FC = () => {
                 <th>Offer Amount</th>
                 <th>Expiry Date</th>
                 <th>Status</th>
-                <th style={{ textAlign: "center" }}>Action</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)" }}>
+                  <td colSpan={6} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)" }}>
                     <Loader2 size={24} className="inline animate-spin mr-2" /> Loading offer letters...
                   </td>
                 </tr>
               ) : offerLetters.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)", opacity: 0.6 }}>
-                    No offer letters found in database.
+                  <td colSpan={6} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)", opacity: 0.6 }}>
+                    {isMember
+                      ? "No offer letters found matching your registered identification number (IC)."
+                      : "No offer letters found in database."}
                   </td>
                 </tr>
               ) : (
                 offerLetters.map((o) => (
-                  <tr key={o.id}>
+                  <tr
+                    key={o.id}
+                    onClick={() => handleView(o.id)}
+                    className="cursor-pointer hover:bg-md-primary/5 transition-colors"
+                  >
                     <td>
                       <div className="flex items-center gap-1.5">
                         <span className="case-id font-mono text-xs">{o.offerReferenceNo}</span>
-                        <CopyButton value={o.offerReferenceNo} />
+                        <span onClick={(e) => e.stopPropagation()}>
+                          <CopyButton value={o.offerReferenceNo} />
+                        </span>
                       </div>
                     </td>
                     <td className="case-title">{o.caseTitle}</td>
@@ -220,11 +347,6 @@ export const OfferLetterDashboard: React.FC = () => {
                       <span className={`status-badge ${o.statusClass}`}>
                         <span className="dot"></span> {o.status}
                       </span>
-                    </td>
-                    <td style={{ textAlign: "center" }}>
-                      <Button variant="tonal" size="sm" onClick={() => handleView(o.id)}>  
-                        <Eye size={14} /> View
-                      </Button>
                     </td>
                   </tr>
                 ))

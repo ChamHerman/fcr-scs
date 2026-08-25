@@ -1,7 +1,6 @@
 /* Offer Letter Dashboard */
 .offer-dashboard {
-  max-width: 1100px;
-  margin: 0 auto;
+  width: 100%;
 }
 .offer-dashboard .stats-grid {
   display: grid;
@@ -260,8 +259,7 @@
 
 /* Offer Details */
 .offer-detail {
-  max-width: 900px;
-  margin: 0 auto;
+  width: 100%;
 }
 .offer-detail .back-link {
   background: none;

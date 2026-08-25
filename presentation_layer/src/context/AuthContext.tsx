@@ -5,6 +5,8 @@ export interface User {
   name: string;
   email: string;
   role: string;
+  identificationNumber?: string;
+  contactNumber?: string;
 }
 
 interface AuthContextType {

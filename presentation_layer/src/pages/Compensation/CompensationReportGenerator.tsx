@@ -9,6 +9,7 @@ import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { Calculator, FileText, CheckCircle, AlertTriangle } from "lucide-react";
+import { useRole } from "../../hooks/useRole";
 import "../../style.css";
 import "./compensation.css";
 
@@ -51,6 +52,7 @@ type CompensationComponents = {
 export const CompensationReportGenerator: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, userId, isOfficer, isAdmin } = useRole();
 
   const initialCaseId = location.state?.caseId as string | undefined;
 
@@ -195,6 +197,7 @@ export const CompensationReportGenerator: React.FC = () => {
         valuationReportId: valuationReportId || "",
         components,
         remarks: "Generated via Compensation Report Generator",
+        createdById: userId,
       });
 
       const repId = res.report?.compensationReportId || res.reportId;
@@ -231,42 +234,62 @@ export const CompensationReportGenerator: React.FC = () => {
     return `RM ${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
-  const handleSelectCaseFromModal = (cId: string) => {
-    setSelectedCaseId(cId);
-    setIsCaseModalOpen(false);
-  };
-
   return (
     <>
+      {/* Case Selection Modal */}
       <CaseSelectionModal
         isOpen={isCaseModalOpen}
         onClose={() => setIsCaseModalOpen(false)}
-        onSelectCase={handleSelectCaseFromModal}
+        onSelectCase={(cId) => {
+          setSelectedCaseId(cId);
+          setIsCaseModalOpen(false);
+        }}
         allowedStatuses={["VALUATION_APPROVED", "COMPENSATION_REJECTED"]}
         title="Select Case for Compensation Report"
-        subtitle="Choose a case in Valuation Approved or Compensation Rejected status to calculate compensation."
-        emptyMessage="No cases currently in Valuation Approved or Compensation Rejected status."
+        subtitle="Choose a case in Valuation Approved or Compensation Rejected status to create a report."
+        emptyMessage="No eligible cases created by you are currently ready for compensation report."
       />
 
+      {/* Warning Modal */}
       <Modal
         isOpen={showWarning}
         onClose={() => setShowWarning(false)}
-        title="Difference Exceeds 20%"
-        subtitle="The calculated compensation amount differs from the recommended valuation amount by more than 20%."
+        title="AI Compensation Variance Warning"
+        subtitle="Compensation total deviates by more than 20% from AI prediction"
         footer={
           <>
             <Button variant="text" onClick={() => setShowWarning(false)}>
-              Dismiss Warning
+              Adjust Components
             </Button>
-            <Button variant="filled" onClick={() => setShowWarning(false)}>
-              Review Components
+            <Button
+              variant="filled"
+              onClick={() => {
+                setShowWarning(false);
+                generateReport();
+              }}
+            >
+              Proceed Anyway
             </Button>
           </>
         }
       >
-        <div className="flex items-center gap-3 p-3 bg-amber-500/10 rounded-xl text-amber-800 dark:text-amber-300">
-          <AlertTriangle size={24} className="shrink-0 text-amber-600" />
-          <p className="text-sm">
+        <div className="flex flex-col gap-3 py-2">
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-start gap-3">
+            <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={20} />
+            <div className="text-sm">
+              <p className="font-semibold text-amber-700 dark:text-amber-400 mb-1">High Variance Detected</p>
+              <p className="text-md-on-surface-variant">
+                Calculated total (<strong>RM {calculatedTotal?.toLocaleString()}</strong>) differs by{" "}
+                <strong>
+                  {aiPredicted > 0 && calculatedTotal !== null
+                    ? `${((Math.abs(calculatedTotal - aiPredicted) / aiPredicted) * 100).toFixed(1)}%`
+                    : "N/A"}
+                </strong>{" "}
+                from the AI-recommended compensation (<strong>RM {aiPredicted.toLocaleString()}</strong>).
+              </p>
+            </div>
+          </div>
+          <p className="text-xs text-md-on-surface-variant/80">
             Please review the component values carefully. A significant variance may require further justification during approval.
           </p>
         </div>
@@ -281,14 +304,29 @@ export const CompensationReportGenerator: React.FC = () => {
                 <div className="sub">Create compensation reports for acquisition cases</div>
               </div>
               <div className="topbar-right flex items-center gap-3">
+                <Button variant="outlined" size="sm" onClick={() => navigate("/admin/compensation/report")}>
+                  <Lucide.ArrowLeft size={16} /> Back
+                </Button>
                 <span className="date-badge">
                   <Lucide.Calendar size={16} className="inline mr-1" />
                   {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
                 </span>
-                <Button variant="outlined" size="sm" onClick={() => navigate("/admin/compensation/report")}>
-                  <Lucide.ArrowLeft size={16} /> Back to List
-                </Button>
-                <div className="avatar">AO</div>
+                <div
+                  className="avatar"
+                  title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
+                >
+                  {user?.name ? (
+                    <span className="text-xs font-bold uppercase">
+                      {user.name
+                        .split(/\s+/)
+                        .map((n: string) => n[0])
+                        .slice(0, 2)
+                        .join("")}
+                    </span>
+                  ) : (
+                    <Lucide.User size={16} />
+                  )}
+                </div>
               </div>
             </div>
 

@@ -8,6 +8,10 @@ export interface CaseFilterParams {
   projectType?: string;
   page?: number;
   limit?: number;
+  createdById?: string;
+  assignedToId?: string;
+  userRole?: string;
+  userId?: string;
 }
 
 export interface ValuationFilterParams {
@@ -15,6 +19,10 @@ export interface ValuationFilterParams {
   status?: string;
   page?: number;
   limit?: number;
+  caseCreatedById?: string;
+  valuerId?: string;
+  userRole?: string;
+  userId?: string;
 }
 
 export const landAcquisitionApi = {
@@ -26,14 +34,26 @@ export const landAcquisitionApi = {
     if (params?.projectType) query.append("projectType", params.projectType);
     if (params?.page) query.append("page", params.page.toString());
     if (params?.limit) query.append("limit", params.limit.toString());
+    if (params?.createdById) query.append("createdById", params.createdById);
+    if (params?.assignedToId) query.append("assignedToId", params.assignedToId);
+    if (params?.userRole) query.append("userRole", params.userRole);
+    if (params?.userId) query.append("userId", params.userId);
 
     const queryString = query.toString();
     const url = `/api/land-acquisition/cases${queryString ? `?${queryString}` : ""}`;
     return fetchJSON(LAND_ACQUISITION_BASE + url);
   },
 
-  getCaseStats: async () => {
-    return fetchJSON(LAND_ACQUISITION_BASE + "/api/land-acquisition/cases/stats");
+  getCaseStats: async (params?: { createdById?: string; assignedToId?: string; userRole?: string; userId?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.createdById) query.append("createdById", params.createdById);
+    if (params?.assignedToId) query.append("assignedToId", params.assignedToId);
+    if (params?.userRole) query.append("userRole", params.userRole);
+    if (params?.userId) query.append("userId", params.userId);
+
+    const queryString = query.toString();
+    const url = `/api/land-acquisition/cases/stats${queryString ? `?${queryString}` : ""}`;
+    return fetchJSON(LAND_ACQUISITION_BASE + url);
   },
 
   getUnassignedCases: async () => {
@@ -93,10 +113,11 @@ export const landAcquisitionApi = {
     });
   },
 
-  uploadDocument: async (caseId: string, file: File, documentType?: string) => {
+  uploadDocument: async (caseId: string, file: File, documentType?: string, createdById?: string) => {
     const form = new FormData();
     form.append("file", file);
     if (documentType) form.append("documentType", documentType);
+    if (createdById) form.append("createdById", createdById);
 
     let res: Response;
     try {
@@ -134,7 +155,7 @@ export const landAcquisitionApi = {
     return fetchJSON(LAND_ACQUISITION_BASE + "/api/land-acquisition/assignments");
   },
 
-  assignValuer: async (payload: { caseId: string; valuerId: string; acceptancePeriodDays?: number; remarks?: string }) => {
+  assignValuer: async (payload: { caseId: string; valuerId: string; acceptancePeriodDays?: number; remarks?: string; assignedById?: string }) => {
     return fetchJSON(LAND_ACQUISITION_BASE + "/api/land-acquisition/assignments", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -148,6 +169,10 @@ export const landAcquisitionApi = {
     if (params?.status) query.append("status", params.status);
     if (params?.page) query.append("page", params.page.toString());
     if (params?.limit) query.append("limit", params.limit.toString());
+    if (params?.caseCreatedById) query.append("caseCreatedById", params.caseCreatedById);
+    if (params?.valuerId) query.append("valuerId", params.valuerId);
+    if (params?.userRole) query.append("userRole", params.userRole);
+    if (params?.userId) query.append("userId", params.userId);
 
     const queryString = query.toString();
     const url = `/api/land-acquisition/valuation-reports${queryString ? `?${queryString}` : ""}`;
@@ -164,6 +189,8 @@ export const landAcquisitionApi = {
     marketValue: number;
     recommendedCompensation: number;
     remarks: string;
+    createdById?: string;
+    valuerId?: string;
   }) => {
     return fetchJSON(LAND_ACQUISITION_BASE + "/api/land-acquisition/valuation-reports", {
       method: "POST",
