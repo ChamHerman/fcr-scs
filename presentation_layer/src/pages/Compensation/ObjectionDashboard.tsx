@@ -52,7 +52,9 @@ const STATUS_OPTIONS: SelectOption[] = [
 
 export const ObjectionDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { user, isMember, isAdmin } = useRole();
+  const { user, isMember, isOfficer, isValuer, isAdmin, userId, role } = useRole();
+  const [userIc, setUserIc] = useState<string>(() => user?.identificationNumber || "");
+  const [allScopedObjections, setAllScopedObjections] = useState<ObjectionItem[]>([]);
   const [objections, setObjections] = useState<ObjectionItem[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
@@ -71,43 +73,145 @@ export const ObjectionDashboard: React.FC = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const loadObjections = useCallback(async () => {
+  // Retrieve user IC if missing in context
+  useEffect(() => {
+    if (user?.identificationNumber) {
+      setUserIc(user.identificationNumber);
+    } else if (isMember && user?.userId) {
+      fetch(`http://localhost:3030/api/users/${user.userId}`)
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.success && json.data?.identificationNumber) {
+            setUserIc(json.data.identificationNumber);
+            const stored = localStorage.getItem("user_data");
+            if (stored) {
+              try {
+                const parsed = JSON.parse(stored);
+                parsed.identificationNumber = json.data.identificationNumber;
+                localStorage.setItem("user_data", JSON.stringify(parsed));
+              } catch (e) {}
+            }
+          }
+        })
+        .catch((err) => console.error("Failed to load user identification number:", err));
+    }
+  }, [user, isMember]);
+
+  // 1. Fetch all objections within user's role scope
+  const loadScopedObjections = useCallback(async () => {
+    if (isValuer) {
+      setAllScopedObjections([]);
+      setObjections([]);
+      setTotalCount(0);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
-      const res = await compensationApi.getAllObjections({
-        search: searchTerm || undefined,
-        status: statusFilter || undefined,
-        page: currentPage,
-        limit: itemsPerPage,
+      const activeMemberIc = isMember ? (userIc || user?.identificationNumber || "").trim() : undefined;
+      const scopeParams: any = {
+        limit: 1000,
+        userRole: role,
+      };
+
+      if (isMember) {
+        scopeParams.ownerNric = activeMemberIc || undefined;
+        scopeParams.userId = userId;
+        scopeParams.userRole = "DISPLACED_COMMUNITY_MEMBER";
+      } else if (isOfficer && !isAdmin && userId) {
+        scopeParams.userId = userId;
+        scopeParams.userRole = "GOVERNMENT_OFFICER";
+        scopeParams.caseCreatedById = userId;
+      }
+
+      const res = await compensationApi.getAllObjections(scopeParams);
+      const rawObjections = res.objections || [];
+
+      // Defensive client-side check for officer, valuer, and member
+      const scopedList = rawObjections.filter((o: any) => {
+        if (isValuer) return false;
+        if (isAdmin) return true;
+        if (isOfficer && userId) {
+          return o.acquisitionCase?.createdById === userId || o.offerLetter?.createdById === userId;
+        }
+        if (isMember) {
+          if (userId && o.createdById === userId) return true;
+          if (activeMemberIc) {
+            const cleanActiveIc = activeMemberIc.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+            const directOwnerIc = (o.offerLetter?.landOwnership?.landOwner?.nric || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+            if (directOwnerIc && directOwnerIc === cleanActiveIc) return true;
+
+            const parcelOwners = o.acquisitionCase?.landParcel?.ownerships?.map((ow: any) => ow.landOwner).filter(Boolean) || [];
+            const isParcelOwner = parcelOwners.some((ow: any) => (ow.nric || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase() === cleanActiveIc);
+            if (isParcelOwner) return true;
+          }
+          return false;
+        }
+        return true;
       });
 
-      const formatted: ObjectionItem[] = (res.objections || []).map((o: any) => ({
-        id: o.objectionId,
-        offerId: o.offerId,
-        caseTitle: o.acquisitionCase?.caseTitle || "—",
-        ownerName: o.offerLetter?.landOwnership?.landOwner?.name || "—",
-        requestedAmount: Number(o.requestedAmount || 0),
-        submissionDate: o.createdAt
-          ? new Date(o.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-          : "—",
-        status: statusLabelMap[o.status] || o.status,
-        rawStatus: o.status,
-        statusClass: statusClassMap[o.status] || "status-objection-review",
-        reason: o.objectionReason || "—",
-      }));
+      const formatted: ObjectionItem[] = scopedList.map((o: any) => {
+        const parcelOwners = o.acquisitionCase?.landParcel?.ownerships?.map((ow: any) => ow.landOwner).filter(Boolean) || [];
+        const ownerName = parcelOwners.length > 0 ? parcelOwners.map((ow: any) => ow.name).join(", ") : (o.offerLetter?.landOwnership?.landOwner?.name || "—");
 
-      setObjections(formatted);
-      setTotalCount(res.total || 0);
+        return {
+          id: o.objectionId,
+          offerId: o.offerId,
+          caseTitle: o.acquisitionCase?.caseTitle || "—",
+          ownerName,
+          requestedAmount: Number(o.requestedAmount || 0),
+          submissionDate: o.createdAt
+            ? new Date(o.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+            : "—",
+          status: statusLabelMap[o.status] || o.status,
+          rawStatus: o.status,
+          statusClass: statusClassMap[o.status] || "status-objection-review",
+          reason: o.objectionReason || "—",
+        };
+      });
+
+      setAllScopedObjections(formatted);
     } catch (err: any) {
       console.error("Failed to load objections:", err);
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, statusFilter, currentPage]);
+  }, [isMember, isOfficer, isAdmin, userId, userIc, user?.identificationNumber]);
 
   useEffect(() => {
-    loadObjections();
-  }, [loadObjections]);
+    loadScopedObjections();
+  }, [loadScopedObjections]);
+
+  // 2. Filter data based on search and status
+  const filteredObjections = React.useMemo(() => {
+    let list = allScopedObjections;
+
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      list = list.filter(
+        (o) =>
+          o.caseTitle.toLowerCase().includes(term) ||
+          o.ownerName.toLowerCase().includes(term) ||
+          o.reason.toLowerCase().includes(term) ||
+          o.id.toLowerCase().includes(term)
+      );
+    }
+
+    if (statusFilter) {
+      const expectedLabel = statusLabelMap[statusFilter] || statusFilter;
+      list = list.filter((o) => o.status === expectedLabel || o.rawStatus === statusFilter);
+    }
+
+    return list;
+  }, [allScopedObjections, searchTerm, statusFilter]);
+
+  // 3. Paginate the filtered data for table display
+  useEffect(() => {
+    setTotalCount(filteredObjections.length);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    setObjections(filteredObjections.slice(startIndex, startIndex + itemsPerPage));
+  }, [filteredObjections, currentPage, itemsPerPage]);
 
   const handleView = (objectionId: string) => {
     navigate(`/admin/compensation/objection/review/${objectionId}`, { state: { objectionId } });
@@ -140,7 +244,7 @@ export const ObjectionDashboard: React.FC = () => {
         requestedAmount: Number(editAmount),
       });
       setEditItem(null);
-      await loadObjections();
+      await loadScopedObjections();
     } catch (err: any) {
       console.error("Failed to update objection:", err);
       alert(`Update failed: ${err.message}`);
@@ -155,7 +259,7 @@ export const ObjectionDashboard: React.FC = () => {
     try {
       await compensationApi.deleteObjection(deleteId);
       setDeleteId(null);
-      await loadObjections();
+      await loadScopedObjections();
     } catch (err: any) {
       console.error("Failed to delete objection:", err);
       alert(`Delete failed: ${err.message}`);
@@ -168,21 +272,22 @@ export const ObjectionDashboard: React.FC = () => {
     return "RM " + val.toLocaleString("en-MY", { minimumFractionDigits: 2 });
   };
 
+  // 4. Metrics dynamically derived directly from filtered data
   const stats = [
-    { label: "Total Objections", value: totalCount, icon: <Lucide.AlertCircle size={16} className="inline mr-1" /> },
+    { label: "Total Objections", value: filteredObjections.length, icon: <Lucide.AlertCircle size={16} className="inline mr-1" /> },
     {
       label: "Under Review",
-      value: objections.filter((o) => o.status === "Submitted" || o.status === "Under Review").length,
+      value: filteredObjections.filter((o) => o.status === "Submitted" || o.status === "Under Review" || o.rawStatus === "SUBMITTED" || o.rawStatus === "UNDER_REVIEW").length,
       icon: <Lucide.Clock size={16} className="inline mr-1" />,
     },
     {
       label: "Approved / Revised",
-      value: objections.filter((o) => o.status === "Approved / Revised").length,
+      value: filteredObjections.filter((o) => o.status === "Approved / Revised" || o.rawStatus === "APPROVED").length,
       icon: <Lucide.CheckCircle size={16} className="inline mr-1" />,
     },
     {
       label: "Rejected",
-      value: objections.filter((o) => o.status === "Rejected").length,
+      value: filteredObjections.filter((o) => o.status === "Rejected" || o.rawStatus === "REJECTED").length,
       icon: <Lucide.XCircle size={16} className="inline mr-1" />,
     },
   ];

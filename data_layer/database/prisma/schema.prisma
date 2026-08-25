@@ -296,8 +296,9 @@ model LandOwner {
   nric        String          @db.VarChar(100)
   address     String
   contact     String          @db.VarChar(100)
-  ownerships  LandOwnership[]
-  createdAt   DateTime        @default(now()) @map("created_at")
+  ownerships     LandOwnership[]
+  offerResponses OfferMemberResponse[]
+  createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt   DateTime        @updatedAt @map("updated_at")
   deletedAt   DateTime?       @map("deleted_at")
   createdById String          @db.Uuid @map("created_by_id")
@@ -361,7 +362,7 @@ model ValuationReport {
   acquisitionCase         AcquisitionCase      @relation(fields: [caseId], references: [caseId])
   valuer                  User                 @relation("Valuer", fields: [valuerId], references: [userId])
   compensationReports     CompensationReport[]
-  caseAssignment          CaseAssignment?
+  caseAssignments         CaseAssignment[]
   createdAt               DateTime             @default(now()) @map("created_at")
   updatedAt               DateTime             @updatedAt @map("updated_at")
   deletedAt               DateTime?            @map("deleted_at")
@@ -383,7 +384,7 @@ model CaseAssignment {
   remarks           String?
   acquisitionCase   AcquisitionCase  @relation(fields: [caseId], references: [caseId])
   assignedTo        User             @relation("AssignedToUser", fields: [assignedToId], references: [userId])
-  valuationReportId String?          @unique @db.Uuid @map("valuation_report_id")
+  valuationReportId String?          @db.Uuid @map("valuation_report_id")
   valuationReport   ValuationReport? @relation(fields: [valuationReportId], references: [reportId])
   createdAt         DateTime         @default(now()) @map("created_at")
   updatedAt         DateTime         @updatedAt @map("updated_at")
@@ -441,6 +442,7 @@ model OfferLetter {
   acquisitionCase      AcquisitionCase    @relation(fields: [caseId], references: [caseId])
   landOwnership        LandOwnership      @relation(fields: [ownershipId], references: [ownershipId])
   objections           Objection[]
+  memberResponses      OfferMemberResponse[]
   createdAt            DateTime           @default(now()) @map("created_at")
   updatedAt            DateTime           @updatedAt @map("updated_at")
   deletedAt            DateTime?          @map("deleted_at")
@@ -451,6 +453,24 @@ model OfferLetter {
   @@index([ownershipId])
   @@index([status])
   @@map("offer_letter")
+}
+
+model OfferMemberResponse {
+  responseId     String      @id @default(uuid()) @db.Uuid @map("response_id")
+  offerId        String      @db.Uuid @map("offer_id")
+  ownerId        String      @db.Uuid @map("owner_id")
+  status         OfferStatus @map("status")
+  remarks        String?     @map("remarks")
+  signedDocument String?     @map("signed_document")
+  respondedAt    DateTime    @default(now()) @map("responded_at")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  offerLetter    OfferLetter @relation(fields: [offerId], references: [offerId], onDelete: Cascade)
+  landOwner      LandOwner   @relation(fields: [ownerId], references: [ownerId], onDelete: Cascade)
+
+  @@unique([offerId, ownerId])
+  @@map("offer_member_response")
 }
 
 model Objection {

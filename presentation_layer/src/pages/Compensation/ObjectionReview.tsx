@@ -17,6 +17,8 @@ type ObjectionDetail = {
   caseId: string;
   offerId: string;
   caseTitle: string;
+  caseCreatedById?: string;
+  offerCreatedById?: string;
   submittedBy: string;
   submittedById: string;
   submittedDate: string;
@@ -51,7 +53,7 @@ export const ObjectionReview: React.FC = () => {
   const { objectionId: paramId } = useParams<{ objectionId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, userId, isOfficer, isMember, isAdmin } = useRole();
+  const { user, userId, isOfficer, isMember, isAdmin, isGovAdmin, isSysAdmin } = useRole();
 
   const activeObjectionId = paramId || location.state?.objectionId;
 
@@ -83,12 +85,17 @@ export const ObjectionReview: React.FC = () => {
         const res = await compensationApi.getObjectionById(activeObjectionId);
         const obj = res.objection;
 
+        const parcelOwners = obj.acquisitionCase?.landParcel?.ownerships?.map((ow: any) => ow.landOwner).filter(Boolean) || [];
+        const submittedBy = parcelOwners.length > 0 ? parcelOwners.map((ow: any) => ow.name).join(", ") : (obj.offerLetter?.landOwnership?.landOwner?.name || "—");
+
         const formatted: ObjectionDetail = {
           id: obj.objectionId,
           caseId: obj.caseId,
           offerId: obj.offerId,
           caseTitle: obj.acquisitionCase?.caseTitle || "—",
-          submittedBy: obj.offerLetter?.landOwnership?.landOwner?.name || "—",
+          caseCreatedById: obj.acquisitionCase?.createdById,
+          offerCreatedById: obj.offerLetter?.createdById,
+          submittedBy,
           submittedById: obj.createdById || "—",
           submittedDate: obj.createdAt
             ? new Date(obj.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
@@ -123,8 +130,24 @@ export const ObjectionReview: React.FC = () => {
     fetchObjection();
   }, [activeObjectionId]);
 
+  const isResponsibleOfficer = Boolean(
+    (isOfficer && userId && (objection?.caseCreatedById === userId || objection?.offerCreatedById === userId)) ||
+    isSysAdmin
+  );
+  // Government Administrators are strictly disallowed from accepting or rejecting objections
+  const canReview = isResponsibleOfficer && !isGovAdmin;
+  const canEditOrDelete = (isMember || isSysAdmin) && (objection?.rawStatus === "SUBMITTED" || objection?.rawStatus === "UNDER_REVIEW");
+
   const handleApprove = async () => {
     if (!objection) return;
+    if (isGovAdmin) {
+      alert("Government Administrators are not permitted to accept or reject objections. This action must be performed by the assigned Government Officer.");
+      return;
+    }
+    if (!canReview) {
+      alert("Only the assigned Government Officer responsible for this case can approve this objection.");
+      return;
+    }
     if (!responseText.trim()) {
       setResponseError("Please provide review remarks before approving.");
       return;
@@ -133,7 +156,8 @@ export const ObjectionReview: React.FC = () => {
     setSubmitting(true);
     try {
       const revised = revisedAmount !== "" ? Number(revisedAmount) : objection.requestedAmount;
-      await compensationApi.approveObjection(objection.id, revised, responseText);
+      const res = await compensationApi.approveObjection(objection.id, revised, responseText, userId);
+      const updatedObj = res?.objection;
       setObjection((prev) =>
         prev
           ? {
@@ -144,7 +168,7 @@ export const ObjectionReview: React.FC = () => {
               revisedCompensation: revised,
               response: responseText,
               responseDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
-              respondedBy: "Government Officer",
+              respondedBy: updatedObj?.reviewedBy?.name || user?.name || "Government Officer",
             }
           : null
       );
@@ -158,6 +182,14 @@ export const ObjectionReview: React.FC = () => {
 
   const handleReject = async () => {
     if (!objection) return;
+    if (isGovAdmin) {
+      alert("Government Administrators are not permitted to accept or reject objections. This action must be performed by the assigned Government Officer.");
+      return;
+    }
+    if (!canReview) {
+      alert("Only the assigned Government Officer responsible for this case can reject this objection.");
+      return;
+    }
     if (!responseText.trim()) {
       setResponseError("Please provide review remarks before rejecting.");
       return;
@@ -165,7 +197,8 @@ export const ObjectionReview: React.FC = () => {
     setResponseError("");
     setSubmitting(true);
     try {
-      await compensationApi.rejectObjection(objection.id, responseText);
+      const res = await compensationApi.rejectObjection(objection.id, responseText, userId);
+      const updatedObj = res?.objection;
       setObjection((prev) =>
         prev
           ? {
@@ -175,7 +208,7 @@ export const ObjectionReview: React.FC = () => {
               statusClass: "status-obj-rejected",
               response: responseText,
               responseDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
-              respondedBy: "Government Officer",
+              respondedBy: updatedObj?.reviewedBy?.name || user?.name || "Government Officer",
             }
           : null
       );
@@ -278,9 +311,6 @@ export const ObjectionReview: React.FC = () => {
 
   const isActionable = objection.rawStatus === "SUBMITTED" || objection.rawStatus === "UNDER_REVIEW";
   const isResolved = objection.rawStatus === "APPROVED" || objection.rawStatus === "REJECTED";
-
-  const canReview = isOfficer || isAdmin;
-  const canEditOrDelete = (isMember || isAdmin) && (objection.rawStatus === "SUBMITTED" || objection.rawStatus === "UNDER_REVIEW");
 
   return (
     <>
@@ -522,7 +552,7 @@ export const ObjectionReview: React.FC = () => {
             {!isResolved && isActionable && (
               <>
                 {/* Officer / Admin Review UI */}
-                {canReview && (
+                {canReview ? (
                   <div className="mt-6 pt-6 border-t border-md-outline/10">
                     <div className="section-title text-base font-bold flex items-center gap-2 mb-4">
                       <Lucide.MessageSquare size={18} className="text-md-primary" /> Officer Review & Decision
@@ -562,7 +592,35 @@ export const ObjectionReview: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                )}
+                ) : isGovAdmin ? (
+                  <div className="mt-6 p-5 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-full bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
+                      <Lucide.ShieldAlert size={20} />
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-amber-900 dark:text-amber-300 mb-1">
+                        Government Administrator View-Only Access
+                      </div>
+                      <p className="text-xs text-md-on-surface-variant leading-relaxed">
+                        Government Administrators have supervisory access and cannot accept or reject Form N objections. Official determinations must be performed by the assigned Government Officer.
+                      </p>
+                    </div>
+                  </div>
+                ) : isOfficer ? (
+                  <div className="mt-6 p-5 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-full bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
+                      <Lucide.ShieldAlert size={20} />
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-amber-900 dark:text-amber-300 mb-1">
+                        Assigned Officer Review Only
+                      </div>
+                      <p className="text-xs text-md-on-surface-variant leading-relaxed">
+                        This acquisition case is supervised by another government officer. Only the assigned officer responsible for this case can perform approval or rejection determinations.
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
 
                 {/* Member Pending Information View */}
                 {isMember && (

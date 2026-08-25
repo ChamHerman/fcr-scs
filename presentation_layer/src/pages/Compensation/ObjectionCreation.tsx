@@ -56,7 +56,11 @@ export const CreateObjection: React.FC = () => {
     async function loadOffers() {
       setLoadingOffers(true);
       try {
-        const res = await compensationApi.getAllOfferLetters();
+        const activeMemberIc = isMember ? (user?.identificationNumber || "").trim() : undefined;
+        const res = await compensationApi.getAllOfferLetters({
+          ownerNric: activeMemberIc || undefined,
+          limit: 1000,
+        });
         const list: OfferOption[] = (res.offerLetters || []).map((o: any) => ({
           offerId: o.offerId,
           caseId: o.caseId,

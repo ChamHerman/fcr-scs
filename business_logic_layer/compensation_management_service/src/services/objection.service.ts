@@ -4,6 +4,10 @@ import { ObjectionStatus, Decision, Prisma } from "@prisma/client";
 export interface ObjectionFilters {
   status?: string;
   search?: string;
+  ownerNric?: string;
+  caseCreatedById?: string;
+  userRole?: string;
+  userId?: string;
   page?: number;
   limit?: number;
 }
@@ -27,10 +31,83 @@ export interface ReviewObjectionInput {
 export async function getAllObjections(filters: ObjectionFilters) {
   const page = filters.page || 1;
   const limit = filters.limit || 10;
-  const where: Prisma.ObjectionWhereInput = {};
+  const andConditions: Prisma.ObjectionWhereInput[] = [];
 
   if (filters.status) {
-    where.status = filters.status as ObjectionStatus;
+    andConditions.push({ status: filters.status as ObjectionStatus });
+  }
+
+  // 1. Government Officer Supervision: only objections under cases created/supervised by this officer
+  if (filters.caseCreatedById || (filters.userRole === "GOVERNMENT_OFFICER" && filters.userId) || (filters.userId && !filters.ownerNric && filters.userRole !== "DISPLACED_COMMUNITY_MEMBER")) {
+    const targetUserId = filters.caseCreatedById || filters.userId;
+    if (targetUserId) {
+      andConditions.push({
+        OR: [
+          { acquisitionCase: { createdById: targetUserId } },
+          { offerLetter: { createdById: targetUserId } },
+        ],
+      });
+    }
+  }
+
+  // 2. Displaced Community Member: objections created by themself OR by other owners associated with the same land
+  if (filters.userRole === "DISPLACED_COMMUNITY_MEMBER" || filters.ownerNric) {
+    const memberConditions: Prisma.ObjectionWhereInput[] = [];
+
+    // Objections created by themself
+    if (filters.userId) {
+      memberConditions.push({ createdById: filters.userId });
+    }
+
+    // Objections associated with the same land (direct ownership or co-owners)
+    if (filters.ownerNric) {
+      const rawNric = filters.ownerNric.trim();
+      const cleanNric = rawNric.replace(/[^a-zA-Z0-9]/g, "");
+      let formattedWithDashes = rawNric;
+      if (cleanNric.length === 12) {
+        formattedWithDashes = `${cleanNric.slice(0, 6)}-${cleanNric.slice(6, 8)}-${cleanNric.slice(8)}`;
+      }
+
+      const nricConditions: Prisma.LandOwnerWhereInput[] = [
+        { nric: { contains: rawNric, mode: "insensitive" } },
+      ];
+      if (cleanNric && cleanNric !== rawNric) {
+        nricConditions.push({ nric: { contains: cleanNric, mode: "insensitive" } });
+      }
+      if (formattedWithDashes && formattedWithDashes !== rawNric && formattedWithDashes !== cleanNric) {
+        nricConditions.push({ nric: { contains: formattedWithDashes, mode: "insensitive" } });
+      }
+
+      memberConditions.push({
+        offerLetter: {
+          landOwnership: {
+            landOwner: {
+              OR: nricConditions,
+            },
+          },
+        },
+      });
+
+      memberConditions.push({
+        acquisitionCase: {
+          landParcel: {
+            ownerships: {
+              some: {
+                landOwner: {
+                  OR: nricConditions,
+                },
+              },
+            },
+          },
+        },
+      });
+    }
+
+    if (memberConditions.length > 0) {
+      andConditions.push({
+        OR: memberConditions,
+      });
+    }
   }
 
   if (filters.search) {
@@ -39,21 +116,62 @@ export async function getAllObjections(filters: ObjectionFilters) {
 
     const orConditions: Prisma.ObjectionWhereInput[] = [
       { acquisitionCase: { caseTitle: { contains: term, mode: "insensitive" } } },
+      { objectionReason: { contains: term, mode: "insensitive" } },
+      { offerLetter: { offerReferenceNo: { contains: term, mode: "insensitive" } } },
+      { offerLetter: { landOwnership: { landOwner: { name: { contains: term, mode: "insensitive" } } } } },
+      {
+        acquisitionCase: {
+          landParcel: {
+            ownerships: {
+              some: {
+                landOwner: {
+                  name: { contains: term, mode: "insensitive" },
+                },
+              },
+            },
+          },
+        },
+      },
     ];
 
     if (isUuid) {
       orConditions.push({ objectionId: term });
+      orConditions.push({ offerId: term });
     }
 
-    where.OR = orConditions;
+    andConditions.push({ OR: orConditions });
   }
+
+  const where: Prisma.ObjectionWhereInput = andConditions.length > 0 ? { AND: andConditions } : {};
 
   const [objections, total] = await Promise.all([
     prisma.objection.findMany({
       where,
       include: {
-        acquisitionCase: { include: { project: true } },
-        offerLetter: { include: { landOwnership: { include: { landOwner: true } } } },
+        acquisitionCase: {
+          include: {
+            project: true,
+            landParcel: {
+              include: {
+                ownerships: {
+                  include: {
+                    landOwner: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        offerLetter: {
+          include: {
+            landOwnership: {
+              include: {
+                landOwner: true,
+                landParcel: true,
+              },
+            },
+          },
+        },
         objectionDocuments: true,
         reviewedBy: true,
       },
@@ -71,8 +189,30 @@ export async function getObjectionById(objectionId: string) {
   const objection = await prisma.objection.findUnique({
     where: { objectionId },
     include: {
-      acquisitionCase: { include: { project: true, landParcel: true } },
-      offerLetter: { include: { landOwnership: { include: { landOwner: true } } } },
+      acquisitionCase: {
+        include: {
+          project: true,
+          landParcel: {
+            include: {
+              ownerships: {
+                include: {
+                  landOwner: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      offerLetter: {
+        include: {
+          landOwnership: {
+            include: {
+              landOwner: true,
+              landParcel: true,
+            },
+          },
+        },
+      },
       objectionDocuments: true,
       reviewedBy: true,
     },
@@ -127,8 +267,32 @@ export async function createObjection(input: CreateObjectionInput) {
 export async function reviewObjection(input: ReviewObjectionInput) {
   const { objectionId, decision, revisedCompensation, reviewRemarks, reviewedById } = input;
 
-  const objection = await prisma.objection.findUnique({ where: { objectionId } });
+  const objection = await prisma.objection.findUnique({
+    where: { objectionId },
+    include: {
+      acquisitionCase: true,
+      offerLetter: true,
+    },
+  });
   if (!objection) throw new Error("Objection record not found");
+
+  // Validate reviewedById to prevent foreign key violation
+  let validReviewerId: string | null = reviewedById || null;
+  if (validReviewerId) {
+    const userExists = await prisma.user.findUnique({ where: { userId: validReviewerId } });
+    if (!userExists) {
+      validReviewerId = null;
+    }
+  }
+
+  if (!validReviewerId) {
+    // Fallback to case creator or first available admin
+    validReviewerId = objection.acquisitionCase?.createdById || objection.offerLetter?.createdById || null;
+    if (!validReviewerId) {
+      const defaultAdmin = await prisma.user.findFirst();
+      validReviewerId = defaultAdmin ? defaultAdmin.userId : null;
+    }
+  }
 
   const newStatus = decision === "REJECTED" ? ObjectionStatus.REJECTED : ObjectionStatus.APPROVED;
   const decisionEnum = decision as Decision;
@@ -142,11 +306,35 @@ export async function reviewObjection(input: ReviewObjectionInput) {
       reviewRemarks,
       reviewDate: new Date(),
       resolutionDate: new Date(),
-      reviewedById,
+      reviewedById: validReviewerId,
     },
     include: {
-      acquisitionCase: true,
-      offerLetter: true,
+      acquisitionCase: {
+        include: {
+          project: true,
+          landParcel: {
+            include: {
+              ownerships: {
+                include: {
+                  landOwner: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      offerLetter: {
+        include: {
+          landOwnership: {
+            include: {
+              landOwner: true,
+              landParcel: true,
+            },
+          },
+        },
+      },
+      objectionDocuments: true,
+      reviewedBy: true,
     },
   });
 

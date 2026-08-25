@@ -42,7 +42,7 @@ const statusLabelMap: Record<string, string> = {
 };
 
 export const ValuationReportReview: React.FC = () => {
-  const { user, userId, isAdmin, isOfficer } = useRole();
+  const { user, userId, isAdmin, isOfficer, isValuer } = useRole();
   const { reportId: paramReportId } = useParams<{ reportId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
@@ -353,6 +353,25 @@ export const ValuationReportReview: React.FC = () => {
                     </Button>
                   </div>
                 ) : null
+              )}
+
+              {report.status === "Rejected" && (isValuer || isAdmin) && (
+                <div className="action-bar flex items-center justify-between flex-wrap gap-4 mt-6 pt-4 border-t border-md-outline/10">
+                  <div className="flex items-start gap-2 max-w-lg">
+                    <Lucide.AlertCircle size={18} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="text-xs font-semibold text-amber-700 dark:text-amber-300">
+                        This valuation report was rejected.
+                      </div>
+                      <div className="text-xs text-md-on-surface-variant/80 mt-0.5">
+                        You can create a new revised valuation report. Submitting will assign a <strong>new Report ID</strong> and save as a new row in the database, preserving this rejected report in the history.
+                      </div>
+                    </div>
+                  </div>
+                  <Button variant="filled" onClick={() => navigate("/admin/case/valuation/create", { state: { caseId: report.caseId } })}>
+                    <Lucide.PlusCircle size={18} /> Create Revised Report (New Record)
+                  </Button>
+                </div>
               )}
             </div>
 

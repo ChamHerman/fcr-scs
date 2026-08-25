@@ -1,7 +1,17 @@
 import * as Lucide from "lucide-react";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { CheckCircle, XCircle, ArrowLeft, Loader2 } from "lucide-react";
+import {
+  CheckCircle,
+  XCircle,
+  ArrowLeft,
+  Loader2,
+  Clock,
+  User,
+  Users,
+  AlertTriangle,
+  FileCheck,
+} from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
 import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
@@ -10,6 +20,18 @@ import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
 import "../../style.css";
 import "./compensation.css";
+
+export type OwnerApprovalStatus = {
+  ownerId: string;
+  name: string;
+  nric: string;
+  contact: string;
+  address: string;
+  status: "ACCEPTED" | "REJECTED" | "PENDING";
+  remarks?: string;
+  respondedAt?: string;
+  isCurrentUser: boolean;
+};
 
 type OfferDetail = {
   id: string;
@@ -27,6 +49,20 @@ type OfferDetail = {
   statusClass: string;
   totalCompensation: number;
   paymentConditions: string;
+  remarks?: string;
+  rawOffer: any;
+  owners: OwnerApprovalStatus[];
+  isMultiOwner: boolean;
+  acceptedCount: number;
+  totalOwners: number;
+  hasRejectedOwner: boolean;
+  rejectedOwnerInfo: {
+    name: string;
+    nric: string;
+    remarks?: string;
+    respondedAt?: string;
+  } | null;
+  currentUserStatus: "ACCEPTED" | "REJECTED" | "PENDING" | null;
 };
 
 const statusClassMap: Record<string, string> = {
@@ -47,7 +83,8 @@ export const OfferLetterDetail: React.FC = () => {
   const { offerId: paramOfferId } = useParams<{ offerId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, isMember, isAdmin } = useRole();
+  const { user, isMember, isAdmin, isGovAdmin, isSysAdmin, isOfficer } = useRole();
+  const canRespondToOffer = (isMember || isSysAdmin) && !isGovAdmin && !isOfficer;
 
   const activeOfferId = location.state?.offerId || paramOfferId;
 
@@ -63,55 +100,175 @@ export const OfferLetterDetail: React.FC = () => {
   const [showObjectionPrompt, setShowObjectionPrompt] = useState(false);
   const [withdrawingObjection, setWithdrawingObjection] = useState(false);
 
-  useEffect(() => {
-    async function fetchOffer() {
-      if (!activeOfferId) {
-        setLoading(false);
-        return;
-      }
-      setLoading(true);
-      try {
-        const res = await compensationApi.getOfferLetterById(activeOfferId);
-        const o = res.offerLetter;
-
-        const formatted: OfferDetail = {
-          id: o.offerId,
-          offerReferenceNo: o.offerReferenceNo,
-          caseId: o.caseId,
-          caseTitle: o.acquisitionCase?.caseTitle || "—",
-          ownerName: o.landOwnership?.landOwner?.name || "—",
-          ownerIc: o.landOwnership?.landOwner?.nric || "—",
-          ownerAddress: o.landOwnership?.landOwner?.address || "—",
-          ownerPhone: o.landOwnership?.landOwner?.contact || "—",
-          landTitle: o.landOwnership?.landParcel?.landTitleNo || "—",
-          issueDate: o.offerDate
-            ? new Date(o.offerDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-            : "—",
-          expiryDate: o.expiryDate
-            ? new Date(o.expiryDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-            : "—",
-          status: statusLabelMap[o.status] || o.status,
-          statusClass: statusClassMap[o.status] || "status-offer-pending",
-          totalCompensation: Number(o.offerAmount || 0),
-          paymentConditions:
-            "Payment will be initiated upon formal acceptance. Funds will be transferred directly to the registered beneficiary bank account.",
-        };
-
-        setOffer(formatted);
-      } catch (err: any) {
-        console.error("Failed to load offer letter:", err);
-      } finally {
-        setLoading(false);
-      }
+  const fetchOffer = useCallback(async () => {
+    if (!activeOfferId) {
+      setLoading(false);
+      return;
     }
+    setLoading(true);
+    try {
+      const res = await compensationApi.getOfferLetterById(activeOfferId);
+      const o = res.offerLetter;
 
+      // Extract all owners from landParcel.ownerships
+      const parcelOwners =
+        o.acquisitionCase?.landParcel?.ownerships
+          ?.map((ow: any) => ow.landOwner)
+          .filter(Boolean) || [];
+      const allOwners =
+        parcelOwners.length > 0
+          ? parcelOwners
+          : o.landOwnership?.landOwner
+          ? [o.landOwnership.landOwner]
+          : [];
+
+      const userIcClean = (user?.identificationNumber || "").replace(/[^a-zA-Z0-9]/g, "");
+
+      const memberResponses: any[] = o.memberResponses || [];
+
+      // Map each owner to their individual response
+      const ownersList: OwnerApprovalStatus[] = allOwners.map((owner: any) => {
+        const oIcClean = (owner.nric || "").replace(/[^a-zA-Z0-9]/g, "");
+        const isCurrent =
+          isMember && Boolean(userIcClean) && (oIcClean === userIcClean || owner.ownerId === user?.userId);
+
+        const resp = memberResponses.find((r) => r.ownerId === owner.ownerId);
+
+        let status: "ACCEPTED" | "REJECTED" | "PENDING" = "PENDING";
+        if (resp) {
+          status = resp.status === "ACCEPTED" ? "ACCEPTED" : resp.status === "REJECTED" ? "REJECTED" : "PENDING";
+        } else if (o.status === "ACCEPTED" && allOwners.length === 1) {
+          status = "ACCEPTED";
+        } else if (o.status === "REJECTED" && allOwners.length === 1) {
+          status = "REJECTED";
+        }
+
+        return {
+          ownerId: owner.ownerId,
+          name: owner.name,
+          nric: owner.nric,
+          contact: owner.contact || "—",
+          address: owner.address || "—",
+          status,
+          remarks: resp?.remarks,
+          respondedAt: resp?.respondedAt
+            ? new Date(resp.respondedAt).toLocaleDateString("en-GB", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : undefined,
+          isCurrentUser: isCurrent,
+        };
+      });
+
+      const isMultiOwner = ownersList.length > 1;
+      const acceptedCount = ownersList.filter((ow) => ow.status === "ACCEPTED").length;
+      const rejectedOwner = ownersList.find((ow) => ow.status === "REJECTED");
+      const hasRejectedOwner = Boolean(rejectedOwner || o.status === "REJECTED");
+
+      const currentUserOwner = ownersList.find((ow) => ow.isCurrentUser);
+      const currentUserStatus = currentUserOwner ? currentUserOwner.status : null;
+
+      const ownerName =
+        parcelOwners.length > 0
+          ? parcelOwners.map((ow: any) => ow.name).join(", ")
+          : o.landOwnership?.landOwner?.name || "—";
+      const ownerIc =
+        parcelOwners.length > 0
+          ? parcelOwners.map((ow: any) => ow.nric).join(", ")
+          : o.landOwnership?.landOwner?.nric || "—";
+      const ownerAddress = o.landOwnership?.landOwner?.address || parcelOwners[0]?.address || "—";
+      const ownerPhone =
+        parcelOwners.length > 0
+          ? parcelOwners.map((ow: any) => ow.contact).filter(Boolean).join(", ")
+          : o.landOwnership?.landOwner?.contact || "—";
+
+      const formatted: OfferDetail = {
+        id: o.offerId,
+        offerReferenceNo: o.offerReferenceNo,
+        caseId: o.caseId,
+        caseTitle: o.acquisitionCase?.caseTitle || "—",
+        ownerName,
+        ownerIc,
+        ownerAddress,
+        ownerPhone,
+        landTitle:
+          o.landOwnership?.landParcel?.landTitleNo ||
+          o.acquisitionCase?.landParcel?.landTitleNo ||
+          "—",
+        issueDate: o.offerDate
+          ? new Date(o.offerDate).toLocaleDateString("en-GB", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            })
+          : "—",
+        expiryDate: o.expiryDate
+          ? new Date(o.expiryDate).toLocaleDateString("en-GB", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            })
+          : "—",
+        status: statusLabelMap[o.status] || o.status,
+        statusClass: statusClassMap[o.status] || "status-offer-pending",
+        totalCompensation: Number(o.offerAmount || 0),
+        paymentConditions:
+          "Payment will be initiated upon formal acceptance. Funds will be transferred directly to the registered beneficiary bank account.",
+        remarks: o.remarks,
+        rawOffer: o,
+        owners: ownersList,
+        isMultiOwner,
+        acceptedCount,
+        totalOwners: ownersList.length,
+        hasRejectedOwner,
+        rejectedOwnerInfo: rejectedOwner
+          ? {
+              name: rejectedOwner.name,
+              nric: rejectedOwner.nric,
+              remarks: rejectedOwner.remarks || o.remarks,
+              respondedAt: rejectedOwner.respondedAt,
+            }
+          : o.status === "REJECTED"
+          ? {
+              name: ownerName,
+              nric: ownerIc,
+              remarks: o.remarks,
+              respondedAt: o.rejectedAt
+                ? new Date(o.rejectedAt).toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : undefined,
+            }
+          : null,
+        currentUserStatus,
+      };
+
+      setOffer(formatted);
+    } catch (err: any) {
+      console.error("Failed to load offer letter:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeOfferId, user?.identificationNumber, user?.userId, isMember]);
+
+  useEffect(() => {
     fetchOffer();
-  }, [activeOfferId]);
+  }, [fetchOffer]);
 
   const handleAccept = async (force?: boolean) => {
     if (!offer) return;
-    if (!isMember && !isAdmin) {
-      alert("Only Displaced Community Members (Land Owners) and Administrators can accept this offer.");
+    if (!canRespondToOffer) {
+      alert(
+        "Government Administrators and Officers cannot accept offer letters. Only land owners (Displaced Community Members) can accept this offer."
+      );
       return;
     }
 
@@ -133,14 +290,21 @@ export const OfferLetterDetail: React.FC = () => {
 
     setSubmitting(true);
     try {
-      await compensationApi.acceptOffer(offer.id, undefined, force);
-      setOffer((prev) => (prev ? { ...prev, status: "Accepted", statusClass: "status-offer-accepted" } : null));
+      await compensationApi.acceptOffer(offer.id, undefined, force, {
+        ownerNric: user?.identificationNumber,
+        userId: user?.userId,
+      });
       setShowObjectionPrompt(false);
-      navigate("/admin/compensation/offer");
+      await fetchOffer();
     } catch (err: any) {
       console.error("Accept failed:", err);
       if (err.code === "ACTIVE_OBJECTION_EXISTS" || err.activeObjection) {
-        setActiveObjection(err.activeObjection || { objectionId: "OBJ-PENDING", objectionReason: "Active objection exists" });
+        setActiveObjection(
+          err.activeObjection || {
+            objectionId: "OBJ-PENDING",
+            objectionReason: "Active objection exists",
+          }
+        );
         setShowObjectionPrompt(true);
       } else {
         alert(`Accept Failed: ${err.message || err}`);
@@ -152,8 +316,8 @@ export const OfferLetterDetail: React.FC = () => {
 
   const handleWithdrawObjectionAndAccept = async () => {
     if (!activeObjection || !offer) return;
-    if (!isMember && !isAdmin) {
-      alert("Only Displaced Community Members (Land Owners) and Administrators can perform this action.");
+    if (!canRespondToOffer) {
+      alert("Only land owners (Displaced Community Members) can perform this action.");
       return;
     }
     setWithdrawingObjection(true);
@@ -177,17 +341,21 @@ export const OfferLetterDetail: React.FC = () => {
       return;
     }
     if (!offer) return;
-    if (!isMember && !isAdmin) {
-      alert("Only Displaced Community Members (Land Owners) and Administrators can reject this offer.");
+    if (!canRespondToOffer) {
+      alert(
+        "Government Administrators and Officers cannot reject offer letters. Only land owners (Displaced Community Members) can reject this offer."
+      );
       return;
     }
 
     setSubmitting(true);
     try {
-      await compensationApi.rejectOffer(offer.id, reason);
-      setOffer((prev) => (prev ? { ...prev, status: "Rejected", statusClass: "status-offer-rejected" } : null));
+      await compensationApi.rejectOffer(offer.id, reason, {
+        ownerNric: user?.identificationNumber,
+        userId: user?.userId,
+      });
       setShowRejectModal(false);
-      navigate("/admin/compensation/offer");
+      await fetchOffer();
     } catch (err: any) {
       console.error("Reject failed:", err);
       alert(`Reject Failed: ${err.message}`);
@@ -196,7 +364,8 @@ export const OfferLetterDetail: React.FC = () => {
     }
   };
 
-  const formatCurrency = (val: number) => `RM ${val.toLocaleString("en-MY", { minimumFractionDigits: 2 })}`;
+  const formatCurrency = (val: number) =>
+    `RM ${val.toLocaleString("en-MY", { minimumFractionDigits: 2 })}`;
 
   if (loading) {
     return (
@@ -224,6 +393,10 @@ export const OfferLetterDetail: React.FC = () => {
       </div>
     );
   }
+
+  // Multi-owner action availability check for current member
+  const currentMemberHasResponded =
+    isMember && (offer.currentUserStatus === "ACCEPTED" || offer.currentUserStatus === "REJECTED");
 
   return (
     <>
@@ -255,16 +428,22 @@ export const OfferLetterDetail: React.FC = () => {
           <div className="p-3 bg-md-surface-container rounded-xl text-xs flex flex-col gap-1 border border-md-outline/10">
             <div>
               <span className="text-md-on-surface-variant">Objection ID: </span>
-              <strong className="font-mono text-md-primary">{activeObjection?.objectionId || activeObjection?.id}</strong>
+              <strong className="font-mono text-md-primary">
+                {activeObjection?.objectionId || activeObjection?.id}
+              </strong>
             </div>
             <div>
               <span className="text-md-on-surface-variant">Reason: </span>
-              <em>"{activeObjection?.objectionReason || activeObjection?.reason || "Disagreement on valuation component"}"</em>
+              <em>
+                "{activeObjection?.objectionReason || activeObjection?.reason || "Disagreement on valuation component"}"
+              </em>
             </div>
             {activeObjection?.requestedAmount && (
               <div>
                 <span className="text-md-on-surface-variant">Requested Amount: </span>
-                <strong className="text-md-primary">RM {Number(activeObjection.requestedAmount).toLocaleString("en-MY")}</strong>
+                <strong className="text-md-primary">
+                  RM {Number(activeObjection.requestedAmount).toLocaleString("en-MY")}
+                </strong>
               </div>
             )}
           </div>
@@ -282,17 +461,18 @@ export const OfferLetterDetail: React.FC = () => {
             <Button variant="text" onClick={() => setShowRejectModal(false)}>
               Cancel
             </Button>
-            <Button
-              variant="danger"
-              onClick={handleRejectSubmit}
-              isLoading={submitting}
-            >
+            <Button variant="danger" onClick={handleRejectSubmit} isLoading={submitting}>
               Confirm Reject
             </Button>
           </>
         }
       >
         <div>
+          <p className="text-xs text-md-on-surface-variant mb-3">
+            {offer.isMultiOwner
+              ? "Please note: If any co-owner rejects this offer, the case will immediately be marked as 'OFFER_REJECTED' for all parties."
+              : "State the formal reason for rejecting this compensation offer."}
+          </p>
           <Textarea
             label="Reason for Rejection *"
             id="reason"
@@ -322,7 +502,11 @@ export const OfferLetterDetail: React.FC = () => {
             </Button>
             <span className="date-badge">
               <Lucide.Calendar size={16} className="inline mr-1" />
-              {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+              {new Date().toLocaleDateString("en-GB", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              })}
             </span>
             <div
               className="avatar"
@@ -343,15 +527,30 @@ export const OfferLetterDetail: React.FC = () => {
           </div>
         </div>
 
-        <div className="case-summary bg-md-surface-container p-5 rounded-2xl mb-6 flex justify-between items-center">
+        {/* Case Summary Header */}
+        <div className="case-summary bg-md-surface-container p-5 rounded-2xl mb-6 flex justify-between items-center flex-wrap gap-4">
           <div>
             <div className="flex items-center gap-2">
               <span className="case-id font-mono text-xs">Ref No: {offer.offerReferenceNo}</span>
               <CopyButton value={offer.offerReferenceNo} />
             </div>
             <h2 className="case-title text-lg font-bold my-1">{offer.caseTitle}</h2>
-            <div className="text-xs text-md-on-surface-variant">
-              Land Owner: <strong>{offer.ownerName}</strong> ({offer.ownerIc}) · Land Title: <strong>{offer.landTitle}</strong>
+            <div className="text-xs text-md-on-surface-variant flex items-center gap-2 flex-wrap">
+              <span>
+                Land Owner{offer.isMultiOwner ? "s" : ""}: <strong>{offer.ownerName}</strong> ({offer.ownerIc})
+              </span>
+              <span>·</span>
+              <span>
+                Land Title: <strong>{offer.landTitle}</strong>
+              </span>
+              {offer.isMultiOwner && (
+                <>
+                  <span>·</span>
+                  <span className="inline-flex items-center gap-1 font-semibold text-md-primary">
+                    <Users size={13} /> {offer.totalOwners} Co-Owners
+                  </span>
+                </>
+              )}
             </div>
           </div>
           <span className={`status-badge-lg ${offer.statusClass}`}>
@@ -359,11 +558,72 @@ export const OfferLetterDetail: React.FC = () => {
           </span>
         </div>
 
+        {/* Multi-Owner Rejection Notice Banner */}
+        {offer.isMultiOwner && offer.hasRejectedOwner && offer.rejectedOwnerInfo && (
+          <div className="p-4 rounded-2xl mb-6 bg-rose-500/10 border border-rose-500/30 text-rose-800 dark:text-rose-200 flex items-start gap-3.5 shadow-sm">
+            <XCircle size={24} className="shrink-0 text-rose-500 mt-0.5" />
+            <div className="flex-1">
+              <div className="font-bold text-sm text-rose-600 dark:text-rose-400">
+                Offer Rejected by {offer.rejectedOwnerInfo.name} ({offer.rejectedOwnerInfo.nric})
+              </div>
+              <p className="text-xs mt-1 text-md-on-surface-variant leading-relaxed">
+                {offer.rejectedOwnerInfo.remarks ? (
+                  <>
+                    <strong>Reason:</strong> "{offer.rejectedOwnerInfo.remarks}"
+                  </>
+                ) : (
+                  "A co-owner has rejected this compensation offer. The case has been marked as OFFER_REJECTED."
+                )}
+                {offer.rejectedOwnerInfo.respondedAt && (
+                  <span className="ml-2 text-md-on-surface-variant/70">
+                    · Recorded on {offer.rejectedOwnerInfo.respondedAt}
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Multi-Owner All Accepted Banner */}
+        {offer.isMultiOwner && offer.status === "Accepted" && (
+          <div className="p-4 rounded-2xl mb-6 bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-200 flex items-start gap-3.5 shadow-sm">
+            <CheckCircle size={24} className="shrink-0 text-emerald-500 mt-0.5" />
+            <div className="flex-1">
+              <div className="font-bold text-sm text-emerald-600 dark:text-emerald-400">
+                All Co-Owners Have Accepted
+              </div>
+              <p className="text-xs mt-1 text-md-on-surface-variant leading-relaxed">
+                All {offer.totalOwners} registered co-owners have formally agreed to this award. The case status has progressed to <strong>OFFER_ACCEPTED</strong> and is ready for payment initiation.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Multi-Owner Pending Banner for Current Member who Accepted */}
+        {offer.isMultiOwner &&
+          offer.status === "Pending" &&
+          offer.currentUserStatus === "ACCEPTED" && (
+            <div className="p-4 rounded-2xl mb-6 bg-blue-500/10 border border-blue-500/30 text-blue-800 dark:text-blue-200 flex items-start gap-3.5 shadow-sm">
+              <FileCheck size={24} className="shrink-0 text-blue-500 mt-0.5" />
+              <div className="flex-1">
+                <div className="font-bold text-sm text-blue-600 dark:text-blue-400">
+                  Your Acceptance Recorded
+                </div>
+                <p className="text-xs mt-1 text-md-on-surface-variant leading-relaxed">
+                  You have accepted this compensation offer. Waiting for remaining {offer.totalOwners - offer.acceptedCount} co-owner(s) to accept before the case can proceed to payment.
+                </p>
+              </div>
+            </div>
+          )}
+
+        {/* Award Details Card */}
         <div className="report-card bg-md-surface-container p-6 rounded-2xl mb-6">
           <h3 className="text-base font-bold mb-4">Award Details</h3>
 
           <div className="p-5 bg-md-primary/5 rounded-xl mb-6">
-            <span className="label text-xs text-md-on-surface-variant font-semibold">Total Award Amount:</span>
+            <span className="label text-xs text-md-on-surface-variant font-semibold">
+              Total Award Amount:
+            </span>
             <div className="text-2xl font-bold text-md-primary mt-1">
               {formatCurrency(offer.totalCompensation)}
             </div>
@@ -373,11 +633,86 @@ export const OfferLetterDetail: React.FC = () => {
           </div>
 
           <div className="mb-6">
-            <span className="label text-xs text-md-on-surface-variant font-semibold">Terms & Payment Conditions:</span>
-            <p className="mt-1 text-sm text-md-on-surface leading-relaxed">{offer.paymentConditions}</p>
+            <span className="label text-xs text-md-on-surface-variant font-semibold">
+              Terms & Payment Conditions:
+            </span>
+            <p className="mt-1 text-sm text-md-on-surface leading-relaxed">
+              {offer.paymentConditions}
+            </p>
           </div>
 
-          {(isMember || isAdmin) ? (
+          {/* Co-Owners Approval Section (Only for >1 owner) */}
+          {offer.isMultiOwner && (
+            <div className="mb-6 p-5 bg-md-surface-container-low rounded-xl border border-md-outline/10">
+              <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
+                <div>
+                  <h4 className="text-sm font-bold text-md-on-surface flex items-center gap-2">
+                    <Users size={16} className="text-md-primary" /> Co-Owners Approval Status
+                  </h4>
+                  <p className="text-xs text-md-on-surface-variant mt-0.5">
+                    All {offer.totalOwners} registered co-owners must accept the offer before the case advances to payment with status "OFFER_ACCEPTED".
+                  </p>
+                </div>
+                <span className="text-xs font-semibold px-3 py-1 rounded-full bg-md-primary/10 text-md-primary font-mono">
+                  {offer.acceptedCount}/{offer.totalOwners} Accepted
+                </span>
+              </div>
+
+              <div className="divide-y divide-md-outline/10 border-t border-b border-md-outline/10">
+                {offer.owners.map((ow, idx) => (
+                  <div
+                    key={ow.ownerId || idx}
+                    className="py-3.5 flex justify-between items-center flex-wrap gap-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-md-surface-container-high flex items-center justify-center text-md-on-surface-variant">
+                        <User size={15} />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-md-on-surface flex items-center gap-2">
+                          <span>{ow.name}</span>
+                          {ow.isCurrentUser && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-md-primary text-white">
+                              You
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-md-on-surface-variant mt-0.5">
+                          IC: <span className="font-mono">{ow.nric}</span> · Contact: {ow.contact}
+                        </div>
+                        {ow.status === "REJECTED" && ow.remarks && (
+                          <div className="text-[11px] text-rose-500 mt-1 font-medium">
+                            Rejection Reason: "{ow.remarks}"
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {ow.status === "ACCEPTED" ? (
+                        <span className="inline-flex items-center gap-1 text-xs px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold border border-emerald-500/20">
+                          <CheckCircle size={14} /> Accepted
+                          {ow.respondedAt ? ` (${ow.respondedAt})` : ""}
+                        </span>
+                      ) : ow.status === "REJECTED" ? (
+                        <span className="inline-flex items-center gap-1 text-xs px-3 py-1 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 font-semibold border border-rose-500/20">
+                          <XCircle size={14} /> Rejected
+                          {ow.respondedAt ? ` (${ow.respondedAt})` : ""}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium border border-amber-500/20">
+                          <Clock size={14} /> Awaiting Response
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          {canRespondToOffer ? (
             <div className="flex gap-3 justify-end flex-wrap items-center pt-4 border-t border-md-outline/10">
               <Button
                 variant="outlined"
@@ -385,16 +720,36 @@ export const OfferLetterDetail: React.FC = () => {
               >
                 <Lucide.AlertCircle size={18} /> Submit Objection (Form N)
               </Button>
+
               {offer.status === "Pending" && (
                 <>
-                  <Button variant="danger" onClick={() => setShowRejectModal(true)} isLoading={submitting}>
-                    <XCircle size={18} /> Reject Offer
-                  </Button>
-                  <Button variant="filled" onClick={() => handleAccept()} isLoading={submitting}>
-                    <CheckCircle size={18} /> Accept Offer
-                  </Button>
+                  {offer.isMultiOwner && currentMemberHasResponded ? (
+                    <div className="text-xs text-md-on-surface-variant font-medium italic">
+                      Your response has been submitted ({offer.currentUserStatus}).
+                    </div>
+                  ) : (
+                    <>
+                      <Button
+                        variant="danger"
+                        onClick={() => setShowRejectModal(true)}
+                        isLoading={submitting}
+                      >
+                        <XCircle size={18} /> Reject Offer
+                      </Button>
+                      <Button variant="filled" onClick={() => handleAccept()} isLoading={submitting}>
+                        <CheckCircle size={18} /> Accept Offer
+                      </Button>
+                    </>
+                  )}
                 </>
               )}
+            </div>
+          ) : isGovAdmin ? (
+            <div className="mt-4 p-4 rounded-xl bg-md-surface-container-low border border-md-outline/10 text-xs text-md-on-surface-variant flex items-center justify-between">
+              <span>
+                Government Administrators have view-only access to compensation award notices.
+                Acceptance or rejection determinations must be decided directly by the registered land owner(s).
+              </span>
             </div>
           ) : null}
         </div>

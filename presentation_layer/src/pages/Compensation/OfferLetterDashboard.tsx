@@ -24,6 +24,9 @@ type OfferItem = {
   status: string;
   statusClass: string;
   offerReferenceNo: string;
+  isMultiOwner?: boolean;
+  acceptedCount?: number;
+  totalOwners?: number;
 };
 
 const statusClassMap: Record<string, string> = {
@@ -52,10 +55,10 @@ const normalizeIc = (ic?: string) => (ic || "").replace(/[^a-zA-Z0-9]/g, "").toL
 
 export const OfferLetterDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { user, isMember } = useRole();
+  const { user, isMember, isOfficer, isValuer, isAdmin, userId, role } = useRole();
   const [userIc, setUserIc] = useState<string>(() => user?.identificationNumber || "");
+  const [allScopedOffers, setAllScopedOffers] = useState<OfferItem[]>([]);
   const [offerLetters, setOfferLetters] = useState<OfferItem[]>([]);
-  const [allMemberOffersForStats, setAllMemberOffersForStats] = useState<OfferItem[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -87,80 +90,63 @@ export const OfferLetterDashboard: React.FC = () => {
     }
   }, [user, isMember]);
 
-  const loadOfferLetters = useCallback(async () => {
+  // 1. Fetch all offer letters in user's scope
+  const loadScopedOfferLetters = useCallback(async () => {
+    if (isValuer) {
+      setAllScopedOffers([]);
+      setOfferLetters([]);
+      setTotalCount(0);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
+      const activeMemberIc = isMember ? (userIc || user?.identificationNumber || "").trim() : undefined;
+      const scopeParams: any = {
+        limit: 1000,
+        userRole: role,
+      };
+
       if (isMember) {
-        // For members: fetch all offer letters, then strictly filter by matching IC
-        const res = await compensationApi.getAllOfferLetters({
-          limit: 1000,
-        });
+        scopeParams.ownerNric = activeMemberIc || undefined;
+      } else if (isOfficer && !isAdmin && userId) {
+        scopeParams.userId = userId;
+        scopeParams.userRole = "GOVERNMENT_OFFICER";
+        scopeParams.caseCreatedById = userId;
+      }
 
-        const activeMemberIc = normalizeIc(userIc || user?.identificationNumber);
+      const res = await compensationApi.getAllOfferLetters(scopeParams);
+      const rawOffers = res.offerLetters || [];
 
-        // Filter: ONLY retain cases where land owner's IC matches the member's IC
-        const matchingOffers: OfferItem[] = (res.offerLetters || [])
-          .filter((o: any) => {
-            const rawOwnerNric = o.landOwnership?.landOwner?.nric || "";
-            const ownerIc = normalizeIc(rawOwnerNric);
-            return activeMemberIc ? ownerIc === activeMemberIc : false;
-          })
-          .map((o: any) => ({
-            id: o.offerId,
-            offerReferenceNo: o.offerReferenceNo,
-            caseId: o.caseId,
-            caseTitle: o.acquisitionCase?.caseTitle || "—",
-            ownerName: o.landOwnership?.landOwner?.name || "—",
-            ownerNric: o.landOwnership?.landOwner?.nric || "—",
-            offerAmount: Number(o.offerAmount || 0),
-            offerDate: o.offerDate
-              ? new Date(o.offerDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-              : "—",
-            expiryDate: o.expiryDate
-              ? new Date(o.expiryDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-              : "—",
-            status: statusLabelMap[o.status] || o.status,
-            statusClass: statusClassMap[o.status] || "status-offer-pending",
-          }));
-
-        setAllMemberOffersForStats(matchingOffers);
-
-        // Apply local search and status filtering on the member's matching cases
-        let filtered = matchingOffers;
-        if (searchTerm) {
-          const term = searchTerm.toLowerCase();
-          filtered = filtered.filter(
-            (o) =>
-              o.offerReferenceNo.toLowerCase().includes(term) ||
-              o.caseTitle.toLowerCase().includes(term) ||
-              o.ownerName.toLowerCase().includes(term)
-          );
+      // Defensive client-side check for officer and valuer
+      const scopedOffers = rawOffers.filter((o: any) => {
+        if (isValuer) return false;
+        if (isAdmin) return true;
+        if (isOfficer && userId) {
+          return o.createdById === userId || o.acquisitionCase?.createdById === userId;
         }
+        return true;
+      });
 
-        if (statusFilter) {
-          const expectedLabel = statusLabelMap[statusFilter] || statusFilter;
-          filtered = filtered.filter((o) => o.status === expectedLabel || o.status === statusFilter);
-        }
+      const formatted: OfferItem[] = scopedOffers.map((o: any) => {
+        const parcelOwners = o.acquisitionCase?.landParcel?.ownerships?.map((ow: any) => ow.landOwner).filter(Boolean) || [];
+        const ownerName = parcelOwners.length > 0 ? parcelOwners.map((ow: any) => ow.name).join(", ") : (o.landOwnership?.landOwner?.name || "—");
+        const ownerNric = parcelOwners.length > 0 ? parcelOwners.map((ow: any) => ow.nric).join(", ") : (o.landOwnership?.landOwner?.nric || "—");
 
-        setTotalCount(filtered.length);
-        const startIndex = (currentPage - 1) * itemsPerPage;
-        setOfferLetters(filtered.slice(startIndex, startIndex + itemsPerPage));
-      } else {
-        // Non-member roles: view all cases
-        const res = await compensationApi.getAllOfferLetters({
-          search: searchTerm || undefined,
-          status: statusFilter || undefined,
-          page: currentPage,
-          limit: itemsPerPage,
-        });
+        const isMultiOwner = parcelOwners.length > 1;
+        const memberResponses: any[] = o.memberResponses || [];
+        const acceptedCount = parcelOwners.filter((owner: any) =>
+          memberResponses.some((r) => r.ownerId === owner.ownerId && r.status === "ACCEPTED")
+        ).length;
 
-        const formatted: OfferItem[] = (res.offerLetters || []).map((o: any) => ({
+        return {
           id: o.offerId,
           offerReferenceNo: o.offerReferenceNo,
           caseId: o.caseId,
           caseTitle: o.acquisitionCase?.caseTitle || "—",
-          ownerName: o.landOwnership?.landOwner?.name || "—",
-          ownerNric: o.landOwnership?.landOwner?.nric || "—",
+          ownerName,
+          ownerNric,
           offerAmount: Number(o.offerAmount || 0),
           offerDate: o.offerDate
             ? new Date(o.offerDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
@@ -170,21 +156,53 @@ export const OfferLetterDashboard: React.FC = () => {
             : "—",
           status: statusLabelMap[o.status] || o.status,
           statusClass: statusClassMap[o.status] || "status-offer-pending",
-        }));
+          isMultiOwner,
+          acceptedCount,
+          totalOwners: parcelOwners.length,
+        };
+      });
 
-        setOfferLetters(formatted);
-        setTotalCount(res.total || 0);
-      }
+      setAllScopedOffers(formatted);
     } catch (err: any) {
       console.error("Failed to load offer letters:", err);
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, statusFilter, currentPage, isMember, userIc, user?.identificationNumber]);
+  }, [isMember, isOfficer, isAdmin, userId, userIc, user?.identificationNumber]);
 
   useEffect(() => {
-    loadOfferLetters();
-  }, [loadOfferLetters]);
+    loadScopedOfferLetters();
+  }, [loadScopedOfferLetters]);
+
+  // 2. Filter data based on search and status
+  const filteredOffers = React.useMemo(() => {
+    let list = allScopedOffers;
+
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      list = list.filter(
+        (o) =>
+          o.offerReferenceNo.toLowerCase().includes(term) ||
+          o.caseTitle.toLowerCase().includes(term) ||
+          o.ownerName.toLowerCase().includes(term) ||
+          o.ownerNric.toLowerCase().includes(term)
+      );
+    }
+
+    if (statusFilter) {
+      const expectedLabel = statusLabelMap[statusFilter] || statusFilter;
+      list = list.filter((o) => o.status === expectedLabel || o.status === statusFilter);
+    }
+
+    return list;
+  }, [allScopedOffers, searchTerm, statusFilter]);
+
+  // 3. Paginate the filtered data for table display
+  useEffect(() => {
+    setTotalCount(filteredOffers.length);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    setOfferLetters(filteredOffers.slice(startIndex, startIndex + itemsPerPage));
+  }, [filteredOffers, currentPage, itemsPerPage]);
 
   const handleView = (offerId: string) => {
     navigate("/admin/compensation/offer/review", { state: { offerId } });
@@ -194,24 +212,22 @@ export const OfferLetterDashboard: React.FC = () => {
     return "RM " + val.toLocaleString("en-MY", { minimumFractionDigits: 2 });
   };
 
-  const statsDataSource = isMember ? allMemberOffersForStats : offerLetters;
-  const statsTotalCount = isMember ? allMemberOffersForStats.length : totalCount;
-
+  // 4. Metrics dynamically derived directly from filtered data
   const stats = [
-    { label: "Total Offer Letters", value: statsTotalCount, icon: <Lucide.Mail size={16} className="inline mr-1" /> },
+    { label: "Total Offer Letters", value: filteredOffers.length, icon: <Lucide.Mail size={16} className="inline mr-1" /> },
     {
       label: "Accepted",
-      value: statsDataSource.filter((o) => o.status === "Accepted").length,
+      value: filteredOffers.filter((o) => o.status === "Accepted").length,
       icon: <Lucide.CheckCircle size={16} className="inline mr-1" />,
     },
     {
       label: "Pending Response",
-      value: statsDataSource.filter((o) => o.status === "Pending Response" || o.status === "Pending").length,
+      value: filteredOffers.filter((o) => o.status === "Pending Response" || o.status === "Pending").length,
       icon: <Lucide.Clock size={16} className="inline mr-1" />,
     },
     {
       label: "Rejected",
-      value: statsDataSource.filter((o) => o.status === "Rejected").length,
+      value: filteredOffers.filter((o) => o.status === "Rejected").length,
       icon: <Lucide.XCircle size={16} className="inline mr-1" />,
     },
   ];
@@ -344,9 +360,16 @@ export const OfferLetterDashboard: React.FC = () => {
                     <td><strong>{formatCurrency(o.offerAmount)}</strong></td>
                     <td>{o.expiryDate}</td>
                     <td>
-                      <span className={`status-badge ${o.statusClass}`}>
-                        <span className="dot"></span> {o.status}
-                      </span>
+                      <div className="flex flex-col items-start gap-1">
+                        <span className={`status-badge ${o.statusClass}`}>
+                          <span className="dot"></span> {o.status}
+                        </span>
+                        {o.isMultiOwner && (o.status === "Pending Response" || o.status === "Pending") && (
+                          <span className="text-[10px] font-semibold text-md-primary/80 font-mono">
+                            {o.acceptedCount}/{o.totalOwners} Accepted
+                          </span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
