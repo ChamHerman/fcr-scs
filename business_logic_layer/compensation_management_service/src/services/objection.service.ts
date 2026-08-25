@@ -452,13 +452,63 @@ export async function updateObjection(input: UpdateObjectionInput) {
 }
 
 export async function deleteObjection(objectionId: string) {
-  const existing = await prisma.objection.findUnique({ where: { objectionId } });
+  const existing = await prisma.objection.findUnique({
+    where: { objectionId },
+    include: {
+      offerLetter: true,
+      acquisitionCase: true,
+    },
+  });
   if (!existing) throw new Error("Objection record not found");
 
-  // Delete associated objection documents first
-  await prisma.objectionDocument.deleteMany({ where: { objectionId } });
+  const targetOfferId =
+    existing.offerId ||
+    (existing.caseId
+      ? (await prisma.offerLetter.findFirst({ where: { caseId: existing.caseId } }))?.offerId
+      : null);
 
-  await prisma.objection.delete({ where: { objectionId } });
-  return { success: true, message: "Objection deleted successfully" };
+  const result = await prisma.$transaction(async (tx) => {
+    // 1. Delete associated objection documents first
+    await tx.objectionDocument.deleteMany({ where: { objectionId } });
+
+    // 2. Delete the objection record
+    await tx.objection.delete({ where: { objectionId } });
+
+    // 3. Revert offer letter status to PENDING and reset remarks/rejections
+    if (targetOfferId) {
+      await tx.offerLetter.update({
+        where: { offerId: targetOfferId },
+        data: {
+          status: OfferStatus.PENDING,
+          rejectedAt: null,
+          remarks: "Form N objection withdrawn/deleted. Offer status reset to Pending.",
+        },
+      });
+
+      // Reset member responses
+      await tx.offerMemberResponse.updateMany({
+        where: { offerId: targetOfferId },
+        data: {
+          status: OfferStatus.PENDING,
+          remarks: null,
+        },
+      });
+
+      // 4. Revert case status to OFFER_ISSUED
+      const caseIdToUpdate = existing.caseId || existing.offerLetter?.caseId;
+      if (caseIdToUpdate) {
+        await tx.acquisitionCase.update({
+          where: { caseId: caseIdToUpdate },
+          data: {
+            status: CaseStatus.OFFER_ISSUED,
+          },
+        });
+      }
+    }
+
+    return { success: true, message: "Objection deleted successfully and offer letter status reset to Pending" };
+  });
+
+  return result;
 }
 

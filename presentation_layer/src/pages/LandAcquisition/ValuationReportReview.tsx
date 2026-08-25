@@ -9,6 +9,7 @@ import { Input } from "../../components/ui/Input";
 import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
+import { useNotification } from "../../components/ui/NotificationSystem";
 import "../../style.css";
 import "./valuation_report.css";
 
@@ -47,6 +48,7 @@ export const ValuationReportReview: React.FC = () => {
   const { reportId: paramReportId } = useParams<{ reportId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
+  const { notify } = useNotification();
 
   const activeReportId = location.state?.reportId || paramReportId;
 
@@ -75,26 +77,25 @@ export const ValuationReportReview: React.FC = () => {
         const res = await landAcquisitionApi.getValuationReportById(activeReportId);
         const rep = res.report;
 
+        const rawStatus = rep.reportStatus || rep.status || "PENDING";
         const formatted: ReportDetail = {
           id: rep.reportId,
           caseId: rep.caseId,
           caseTitle: rep.acquisitionCase?.caseTitle || "—",
           caseCreatedById: rep.acquisitionCase?.createdById,
-          valuer: rep.valuer?.name || "Unassigned",
+          valuer: rep.valuer?.name || "Valuer",
           valuerId: rep.valuerId || "",
           valuationDate: rep.valuationDate
             ? new Date(rep.valuationDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
             : "—",
           valuationMethod: rep.valuationMethod || "—",
-          marketValue: rep.marketValue ? `RM ${Number(rep.marketValue).toLocaleString()}` : "—",
-          recommendedCompensation: rep.recommendedCompensation
-            ? `RM ${Number(rep.recommendedCompensation).toLocaleString()}`
-            : "—",
+          marketValue: `RM ${Number(rep.marketValue || 0).toLocaleString("en-MY")}`,
+          recommendedCompensation: `RM ${Number(rep.recommendedCompensation || 0).toLocaleString("en-MY")}`,
           remarks: rep.remarks || "No remarks provided.",
-          buildingAssessment: "building_assessment_report.pdf",
-          siteInspection: "site_inspection_notes.pdf",
-          status: statusLabelMap[rep.reportStatus] || rep.reportStatus,
-          statusClass: statusClassMap[rep.reportStatus] || "status-pending-valuation",
+          buildingAssessment: rep.documents?.find((d: any) => d.documentType === "Building Assessment")?.fileName || "Not uploaded",
+          siteInspection: rep.documents?.find((d: any) => d.documentType === "Site Inspection")?.fileName || "Not uploaded",
+          status: statusLabelMap[rawStatus] || rawStatus,
+          statusClass: statusClassMap[rawStatus] || "status-pending-valuation",
         };
 
         setReport(formatted);
@@ -111,22 +112,38 @@ export const ValuationReportReview: React.FC = () => {
   const handleAccept = async () => {
     if (!report) return;
     if (!canApproveOrReject) {
-      alert("Only the Government Officer who created this case can approve this valuation report.");
+      notify({
+        type: 'error',
+        title: 'Access Denied',
+        message: 'Only the Government Officer who created this case can approve this valuation report.',
+      });
       return;
     }
     try {
       await landAcquisitionApi.approveValuationReport(report.id, userId);
-      alert("Valuation Report Approved!\n\nCase status updated to 'VALUATION_APPROVED'.");
+      notify({
+        type: 'success',
+        title: 'Report Approved',
+        message: "Case status updated to 'VALUATION_APPROVED'.",
+      });
       navigate("/admin/case/valuation");
     } catch (err: any) {
       console.error("Failed to approve report:", err);
-      alert(`Approval Failed: ${err.message}`);
+      notify({
+        type: 'error',
+        title: 'Approval Failed',
+        message: err.message,
+      });
     }
   };
 
   const openRejectModal = () => {
     if (!canApproveOrReject) {
-      alert("Only the Government Officer who created this case can reject this valuation report.");
+      notify({
+        type: 'error',
+        title: 'Access Denied',
+        message: 'Only the Government Officer who created this case can reject this valuation report.',
+      });
       return;
     }
     setShowRejectModal(true);
@@ -142,7 +159,11 @@ export const ValuationReportReview: React.FC = () => {
 
   const handleRejectSubmit = async () => {
     if (!canApproveOrReject) {
-      alert("Only the Government Officer who created this case can reject this valuation report.");
+      notify({
+        type: 'error',
+        title: 'Access Denied',
+        message: 'Only the Government Officer who created this case can reject this valuation report.',
+      });
       return;
     }
     let valid = true;
@@ -163,12 +184,20 @@ export const ValuationReportReview: React.FC = () => {
     setSubmitting(true);
     try {
       await landAcquisitionApi.rejectValuationReport(report.id, reason, parseInt(acceptanceDays, 10), userId);
-      alert(`Valuation Report Rejected!\n\nReason: ${reason}\nCase status updated to 'VALUATION_REJECTED'.`);
+      notify({
+        type: 'success',
+        title: 'Report Rejected',
+        message: `Reason: ${reason}`,
+      });
       setShowRejectModal(false);
       navigate("/admin/case/valuation");
     } catch (err: any) {
       console.error("Failed to reject report:", err);
-      alert(`Rejection Failed: ${err.message}`);
+      notify({
+        type: 'error',
+        title: 'Rejection Failed',
+        message: err.message,
+      });
     } finally {
       setSubmitting(false);
     }

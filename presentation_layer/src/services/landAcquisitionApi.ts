@@ -12,6 +12,7 @@ export interface CaseFilterParams {
   assignedToId?: string;
   userRole?: string;
   userId?: string;
+  ownerNric?: string;
 }
 
 export interface ValuationFilterParams {
@@ -38,18 +39,20 @@ export const landAcquisitionApi = {
     if (params?.assignedToId) query.append("assignedToId", params.assignedToId);
     if (params?.userRole) query.append("userRole", params.userRole);
     if (params?.userId) query.append("userId", params.userId);
+    if (params?.ownerNric) query.append("ownerNric", params.ownerNric);
 
     const queryString = query.toString();
     const url = `/api/land-acquisition/cases${queryString ? `?${queryString}` : ""}`;
     return fetchJSON(LAND_ACQUISITION_BASE + url);
   },
 
-  getCaseStats: async (params?: { createdById?: string; assignedToId?: string; userRole?: string; userId?: string }) => {
+  getCaseStats: async (params?: { createdById?: string; assignedToId?: string; userRole?: string; userId?: string; ownerNric?: string }) => {
     const query = new URLSearchParams();
     if (params?.createdById) query.append("createdById", params.createdById);
     if (params?.assignedToId) query.append("assignedToId", params.assignedToId);
     if (params?.userRole) query.append("userRole", params.userRole);
     if (params?.userId) query.append("userId", params.userId);
+    if (params?.ownerNric) query.append("ownerNric", params.ownerNric);
 
     const queryString = query.toString();
     const url = `/api/land-acquisition/cases/stats${queryString ? `?${queryString}` : ""}`;

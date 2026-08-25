@@ -12,6 +12,7 @@ import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { Pagination } from "../../components/ui/Pagination";
 import { useRole } from "../../hooks/useRole";
+import { useNotification } from "../../components/ui/NotificationSystem";
 import "../../style.css";
 import "./compensation.css";
 
@@ -50,6 +51,7 @@ const STATUS_OPTIONS: SelectOption[] = [
 export const ObjectionDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { user, isMember, isOfficer, isValuer, isAdmin, isSysAdmin, userId, role } = useRole();
+  const { notify } = useNotification();
   const [userIc, setUserIc] = useState<string>(() => user?.identificationNumber || "");
   const [allScopedObjections, setAllScopedObjections] = useState<ObjectionItem[]>([]);
   const [objections, setObjections] = useState<ObjectionItem[]>([]);
@@ -216,7 +218,11 @@ export const ObjectionDashboard: React.FC = () => {
 
   const handleCreate = () => {
     if (!isMember && !isSysAdmin) {
-      alert("Only Displaced Community Members (Land Owners) can submit compensation objections.");
+      notify({
+        type: 'error',
+        title: 'Access Denied',
+        message: 'Only Displaced Community Members (Land Owners) can submit compensation objections.',
+      });
       return;
     }
     navigate("/admin/compensation/objection/create");
@@ -231,7 +237,11 @@ export const ObjectionDashboard: React.FC = () => {
   const handleSaveEdit = async () => {
     if (!editItem) return;
     if (typeof editAmount === "number" && editAmount <= 0) {
-      alert("Requested amount must be greater than 0.");
+      notify({
+        type: 'general',
+        title: 'Invalid Amount',
+        message: 'Requested amount must be greater than 0.',
+      });
       return;
     }
     setIsUpdating(true);
@@ -244,7 +254,11 @@ export const ObjectionDashboard: React.FC = () => {
       await loadScopedObjections();
     } catch (err: any) {
       console.error("Failed to update objection:", err);
-      alert(`Update failed: ${err.message}`);
+      notify({
+        type: 'error',
+        title: 'Update Failed',
+        message: err.message,
+      });
     } finally {
       setIsUpdating(false);
     }
@@ -256,10 +270,19 @@ export const ObjectionDashboard: React.FC = () => {
     try {
       await compensationApi.deleteObjection(deleteId);
       setDeleteId(null);
+      notify({
+        type: 'success',
+        title: 'Objection Deleted',
+        message: 'The Form N objection has been deleted and the compensation offer letter status has been reset to Pending.',
+      });
       await loadScopedObjections();
     } catch (err: any) {
       console.error("Failed to delete objection:", err);
-      alert(`Delete failed: ${err.message}`);
+      notify({
+        type: 'error',
+        title: 'Delete Failed',
+        message: err.message,
+      });
     } finally {
       setIsDeleting(false);
     }

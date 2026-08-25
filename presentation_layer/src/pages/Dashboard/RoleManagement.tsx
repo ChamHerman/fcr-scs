@@ -56,6 +56,18 @@ export const RoleManagement: React.FC = () => {
     }));
   };
 
+  const handleToggleCategory = (categoryPages: AdminPageInfo[]) => {
+    if (selectedRole === 'SYSTEM_ADMINISTRATOR') return;
+    const allEnabled = categoryPages.every(page => !!permissions[page.path]);
+    setPermissions(prev => {
+      const updated = { ...prev };
+      categoryPages.forEach(page => {
+        updated[page.path] = !allEnabled;
+      });
+      return updated;
+    });
+  };
+
   const handleSave = async () => {
     if (selectedRole === 'SYSTEM_ADMINISTRATOR') return;
     
@@ -133,53 +145,75 @@ export const RoleManagement: React.FC = () => {
       )}
 
       <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
-        {Object.entries(groupedPages).map(([category, pages]) => (
-          <div key={category} className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 mb-2 pb-2 border-b border-md-outline/10">
-              <div className="w-2 h-6 bg-md-primary rounded-full"></div>
-              <h3 className="font-semibold text-sm tracking-wide text-md-on-surface uppercase opacity-80">{category}</h3>
-            </div>
-            
-            <div className="flex flex-col gap-3">
-              {pages.map(page => {
-                const checked = isSysAdmin ? true : !!permissions[page.path];
-                return (
-                  <label 
-                    key={page.path} 
-                    className={`group relative flex items-center justify-between p-4 rounded-2xl transition-all duration-300 border
-                      ${checked 
-                        ? 'bg-md-primary-container/20 border-md-primary/20 shadow-sm' 
-                        : 'bg-md-surface hover:bg-md-surface-variant/10 border-md-outline/10'} 
-                      ${!isSysAdmin ? 'cursor-pointer hover:shadow-md' : 'opacity-70 cursor-not-allowed'}`}
-                  >
-                    <div className="flex flex-col pr-4">
-                      <span className={`text-sm font-semibold transition-colors ${checked ? 'text-md-on-surface' : 'text-md-on-surface-variant'}`}>
-                        {page.name}
-                      </span>
-                      <span className="text-xs font-medium text-md-on-surface-variant/70 mt-1 truncate max-w-[200px]" title={page.path}>
-                        {page.path}
-                      </span>
-                    </div>
+        {Object.entries(groupedPages).map(([category, pages]) => {
+          const allChecked = isSysAdmin ? true : pages.every(p => !!permissions[p.path]);
 
-                    <div className="flex-shrink-0">
-                      <div className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border-2 transition-colors duration-200 ease-in-out ${checked ? 'bg-md-primary border-md-primary' : 'bg-transparent border-md-outline/50 group-hover:border-md-outline'}`}>
-                        <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full transition duration-200 ease-in-out shadow-sm ${checked ? 'translate-x-[22px] bg-white' : 'translate-x-0.5 bg-md-outline/60 group-hover:bg-md-outline'}`} />
+          return (
+            <div key={category} className="flex flex-col gap-3">
+              <div className="flex items-center justify-between mb-2 pb-2 border-b border-md-outline/10">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-6 bg-md-primary rounded-full"></div>
+                  <h3 className="font-semibold text-sm tracking-wide text-md-on-surface uppercase opacity-80">{category}</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleCategory(pages)}
+                  disabled={isSysAdmin}
+                  title={allChecked ? `Deselect all in ${category}` : `Select all in ${category}`}
+                  className={`text-xs px-3 py-1 rounded-full font-medium transition-all duration-200 border flex items-center gap-1.5 ${
+                    isSysAdmin
+                      ? 'opacity-40 cursor-not-allowed border-transparent text-md-on-surface-variant'
+                      : allChecked
+                      ? 'bg-md-primary/10 text-md-primary border-md-primary/30 hover:bg-md-primary/20'
+                      : 'bg-md-surface-variant/40 text-md-on-surface-variant border-md-outline/20 hover:bg-md-surface-variant hover:text-md-on-surface active:scale-95'
+                  }`}
+                >
+                  <Check size={13} className={allChecked ? "opacity-100 text-md-primary" : "opacity-40"} />
+                  <span>{allChecked ? 'Deselect All' : 'Select All'}</span>
+                </button>
+              </div>
+              
+              <div className="flex flex-col gap-3">
+                {pages.map(page => {
+                  const checked = isSysAdmin ? true : !!permissions[page.path];
+                  return (
+                    <label 
+                      key={page.path} 
+                      className={`group relative flex items-center justify-between p-4 rounded-2xl transition-all duration-300 border
+                        ${checked 
+                          ? 'bg-md-primary-container/20 border-md-primary/20 shadow-sm' 
+                          : 'bg-md-surface hover:bg-md-surface-variant/10 border-md-outline/10'} 
+                        ${!isSysAdmin ? 'cursor-pointer hover:shadow-md' : 'opacity-70 cursor-not-allowed'}`}
+                    >
+                      <div className="flex flex-col pr-4">
+                        <span className={`text-sm font-semibold transition-colors ${checked ? 'text-md-on-surface' : 'text-md-on-surface-variant'}`}>
+                          {page.name}
+                        </span>
+                        <span className="text-xs font-medium text-md-on-surface-variant/70 mt-1 truncate max-w-[200px]" title={page.path}>
+                          {page.path}
+                        </span>
                       </div>
-                    </div>
-                    
-                    <input 
-                      type="checkbox" 
-                      className="sr-only"
-                      checked={checked}
-                      onChange={() => handleToggle(page.path)}
-                      disabled={isSysAdmin}
-                    />
-                  </label>
-                );
-              })}
+
+                      <div className="flex-shrink-0">
+                        <div className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border-2 transition-colors duration-200 ease-in-out ${checked ? 'bg-md-primary border-md-primary' : 'bg-transparent border-md-outline/50 group-hover:border-md-outline'}`}>
+                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full transition duration-200 ease-in-out shadow-sm ${checked ? 'translate-x-[22px] bg-white' : 'translate-x-0.5 bg-md-outline/60 group-hover:bg-md-outline'}`} />
+                        </div>
+                      </div>
+                      
+                      <input 
+                        type="checkbox" 
+                        className="sr-only"
+                        checked={checked}
+                        onChange={() => handleToggle(page.path)}
+                        disabled={isSysAdmin}
+                      />
+                    </label>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       </MD3Card>
     </div>

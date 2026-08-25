@@ -6,6 +6,7 @@ import { Button } from "../../components/ui/Button";
 import { Select, type SelectOption } from "../../components/ui/Select";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useAuth } from "../../context/AuthContext";
+import { useNotification } from "../../components/ui/NotificationSystem";
 import "../../style.css";
 import "./comparison.css";
 
@@ -169,6 +170,7 @@ export const CompensationComparisonCreate: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { notify } = useNotification();
   const [selectedCase1, setSelectedCase1] = useState<string>("");
   const [selectedCase2, setSelectedCase2] = useState<string>("");
   const [case1Data, setCase1Data] = useState<CaseFull | null>(null);
@@ -194,7 +196,11 @@ export const CompensationComparisonCreate: React.FC = () => {
   const handleCompare = () => {
     if (!selectedCase1 || !selectedCase2) return;
     if (selectedCase1 === selectedCase2) {
-      alert("Please select two different cases.");
+      notify({
+        type: 'general',
+        title: 'Invalid Selection',
+        message: 'Please select two different cases.',
+      });
       return;
     }
     const c1 = mockCases.find((c) => c.id === selectedCase1);
