@@ -16,7 +16,7 @@ import { useRole } from "../../hooks/useRole";
  *   - Whole-case edit calls each section endpoint sequentially (same as create flow)
  */
 export const CaseEdit: React.FC = () => {
-  const { user, canEditCaseDetails, isAdmin } = useRole();
+  const { user, canEditCaseDetails, isOfficer, isSysAdmin, isGovAdmin } = useRole();
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams<{ caseId?: string }>();
@@ -77,9 +77,12 @@ export const CaseEdit: React.FC = () => {
 
         setCaseCreatedById(c.createdById || null);
 
-        // Creator / Admin check
-        if (!isAdmin && user?.userId && c.createdById && c.createdById !== user.userId) {
-          throw new Error("Access Denied: Only the person who created this case or an Administrator can edit it.");
+        // Creator check: Only the Government Officer who created this case (or System Administrator) can edit
+        if (isGovAdmin) {
+          throw new Error("Access Denied: Government Administrators cannot edit case details.");
+        }
+        if (!isSysAdmin && user?.userId && c.createdById && c.createdById !== user.userId) {
+          throw new Error("Access Denied: Only the Government Officer who created this case can edit it.");
         }
 
         const project = c.project || {};
@@ -240,13 +243,13 @@ export const CaseEdit: React.FC = () => {
   };
 
   // ── Render: Access Check ──────────────────────────────────────────────────
-  if (!canEditCaseDetails || (user?.userId && caseCreatedById && caseCreatedById !== user.userId)) {
+  if (!canEditCaseDetails || (!isSysAdmin && user?.userId && caseCreatedById && caseCreatedById !== user.userId)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-md-background">
         <div className="text-center p-8 bg-md-surface-container rounded-2xl shadow-sm border border-md-outline/10 max-w-md">
           <div className="text-lg font-semibold text-md-error mb-2">Access Denied</div>
           <div className="text-sm text-md-on-surface-variant mb-6">
-            Only the person who created this case can edit it.
+            Only the Government Officer who created this case can edit it.
           </div>
           <Button
             onClick={() => navigate("/admin/case/details", { state: { caseId } })}

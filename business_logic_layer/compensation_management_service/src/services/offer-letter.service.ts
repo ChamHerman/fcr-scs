@@ -303,7 +303,7 @@ export async function acceptOffer(
 
   // Check for active (unresolved) objections related to this offer/case
   const activeObjections = (offer.objections || []).filter(
-    (o) => o.status === ObjectionStatus.SUBMITTED || o.status === ObjectionStatus.UNDER_REVIEW
+    (o) => o.status === ObjectionStatus.PENDING
   );
 
   if (activeObjections.length > 0 && !forceAccept) {
@@ -482,6 +482,108 @@ export async function rejectOffer(
       where: { caseId: offer.caseId },
       data: { status: CaseStatus.OFFER_REJECTED },
     });
+
+    return updatedOffer;
+  });
+
+  return result;
+}
+
+export async function cancelAcceptance(
+  offerId: string,
+  options?: RespondOfferOptions
+) {
+  const offer = await prisma.offerLetter.findUnique({
+    where: { offerId },
+    include: {
+      acquisitionCase: {
+        include: {
+          landParcel: {
+            include: {
+              ownerships: {
+                include: { landOwner: true },
+              },
+            },
+          },
+        },
+      },
+      landOwnership: { include: { landOwner: true } },
+      memberResponses: { include: { landOwner: true } },
+    },
+  });
+  if (!offer) throw new Error("Offer letter not found");
+
+  // Extract all parcel owners
+  const parcelOwnerships = offer.acquisitionCase?.landParcel?.ownerships || [];
+  const parcelOwners = parcelOwnerships.map((ow) => ow.landOwner).filter(Boolean);
+  const allOwners = parcelOwners.length > 0
+    ? parcelOwners
+    : (offer.landOwnership?.landOwner ? [offer.landOwnership.landOwner] : []);
+
+  const matchingOwner = findMatchingOwner(allOwners, options);
+
+  // Check 1-day (24 hour) cancellation window
+  const memberResp = matchingOwner
+    ? offer.memberResponses.find((r) => r.ownerId === matchingOwner.ownerId)
+    : null;
+
+  const acceptanceTime = memberResp?.respondedAt || offer.acceptedAt;
+  if (!acceptanceTime) {
+    throw new Error("No formal acceptance record found to cancel");
+  }
+
+  const now = new Date();
+  const diffHours = (now.getTime() - new Date(acceptanceTime).getTime()) / (1000 * 60 * 60);
+
+  if (diffHours > 24) {
+    throw new Error(
+      "The 1-day cancellation period has expired. Approvals cannot be cancelled or modified after 24 hours."
+    );
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    if (matchingOwner) {
+      await tx.offerMemberResponse.upsert({
+        where: {
+          offerId_ownerId: {
+            offerId,
+            ownerId: matchingOwner.ownerId,
+          },
+        },
+        create: {
+          offerId,
+          ownerId: matchingOwner.ownerId,
+          status: OfferStatus.PENDING,
+          remarks: "Approval cancelled within 1-day grace period",
+          respondedAt: new Date(),
+        },
+        update: {
+          status: OfferStatus.PENDING,
+          remarks: "Approval cancelled within 1-day grace period",
+          respondedAt: new Date(),
+        },
+      });
+    }
+
+    const updatedOffer = await tx.offerLetter.update({
+      where: { offerId },
+      data: {
+        status: OfferStatus.PENDING,
+        acceptedAt: null,
+        remarks: "Approval cancelled by land owner within 24-hour grace window",
+      },
+      include: {
+        acquisitionCase: true,
+        memberResponses: { include: { landOwner: true } },
+      },
+    });
+
+    if (offer.caseId) {
+      await tx.acquisitionCase.update({
+        where: { caseId: offer.caseId },
+        data: { status: CaseStatus.OFFER_ISSUED },
+      });
+    }
 
     return updatedOffer;
   });

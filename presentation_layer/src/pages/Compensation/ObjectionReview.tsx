@@ -36,16 +36,14 @@ type ObjectionDetail = {
 };
 
 const statusClassMap: Record<string, string> = {
-  SUBMITTED: "status-objection-review",
-  UNDER_REVIEW: "status-objection-review",
+  PENDING: "status-objection-review",
   APPROVED: "status-obj-approved",
   REJECTED: "status-obj-rejected",
 };
 
 const statusLabelMap: Record<string, string> = {
-  SUBMITTED: "Submitted",
-  UNDER_REVIEW: "Under Review",
-  APPROVED: "Approved / Revised",
+  PENDING: "Pending Review",
+  APPROVED: "Approved",
   REJECTED: "Rejected",
 };
 
@@ -136,7 +134,7 @@ export const ObjectionReview: React.FC = () => {
   );
   // Government Administrators are strictly disallowed from accepting or rejecting objections
   const canReview = isResponsibleOfficer && !isGovAdmin;
-  const canEditOrDelete = (isMember || isSysAdmin) && (objection?.rawStatus === "SUBMITTED" || objection?.rawStatus === "UNDER_REVIEW");
+  const canEditOrDelete = (isMember || isSysAdmin) && objection?.rawStatus === "PENDING";
 
   const handleApprove = async () => {
     if (!objection) return;
@@ -162,7 +160,7 @@ export const ObjectionReview: React.FC = () => {
         prev
           ? {
               ...prev,
-              status: "Approved / Revised",
+              status: "Approved",
               rawStatus: "APPROVED",
               statusClass: "status-obj-approved",
               revisedCompensation: revised,
@@ -172,6 +170,7 @@ export const ObjectionReview: React.FC = () => {
             }
           : null
       );
+      alert(`Objection approved successfully.\n\nThe compensation offer letter award amount has been updated to RM ${Number(revised).toLocaleString("en-MY")}, and the offer status has been reset to "Pending" for community member review and re-approval.`);
     } catch (err: any) {
       console.error("Approve failed:", err);
       alert(`Approve failed: ${err.message}`);
@@ -309,7 +308,7 @@ export const ObjectionReview: React.FC = () => {
     );
   }
 
-  const isActionable = objection.rawStatus === "SUBMITTED" || objection.rawStatus === "UNDER_REVIEW";
+  const isActionable = objection.rawStatus === "PENDING";
   const isResolved = objection.rawStatus === "APPROVED" || objection.rawStatus === "REJECTED";
 
   return (

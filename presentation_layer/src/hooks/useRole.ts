@@ -31,20 +31,21 @@ export const useRole = () => {
   const canViewCreatedCasesOnly = isOfficer;
   const canViewAssignedCasesOnly = isValuer;
 
-  // 2. Add: Only Government Officer and Government Administrator (and System Admin)
-  const canAddCase = isOfficer || isGovAdmin || isSysAdmin;
+  // 2. Add: Only Government Officer (and System Admin)
+  const canAddCase = isOfficer || isSysAdmin;
 
-  // 3. Edit: Both Government Officer and Government Admin (and System Admin) can edit case details
-  const canEditCaseDetails = isOfficer || isGovAdmin || isSysAdmin;
+  // 3. Edit: Only Government Officer (own case) or System Administrator
+  const canEditCaseDetails = isOfficer || isSysAdmin;
 
   // 4. Assign Valuer: Only Government Admin (and System Admin)
   const canAssignValuer = isGovAdmin || isSysAdmin;
 
-  // 5. Delete: Person who created the case, or System Administrator / Admin
+  // 5. Delete: Only Government Officer who created the case (or System Administrator)
   const canDeleteCase = (caseItem: { createdById?: string; status?: string } | null | undefined) => {
     if (!user?.userId || !caseItem) return false;
-    if (isAdmin) return true;
-    return caseItem.createdById === user.userId;
+    if (isSysAdmin) return true;
+    if (isGovAdmin) return false;
+    return isOfficer && caseItem.createdById === user.userId;
   };
 
   return {

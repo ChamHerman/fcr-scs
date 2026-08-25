@@ -9,6 +9,7 @@ import { Select, type SelectOption } from "../../components/ui/Select";
 import { SearchInput } from "../../components/ui/SearchInput";
 import { Input } from "../../components/ui/Input";
 import { CopyButton } from "../../components/ui/CopyButton";
+import { useRole } from "../../hooks/useRole";
 import "../../style.css";
 import "./case_management.css";
 
@@ -39,6 +40,7 @@ type AssignmentRecord = {
 };
 
 export const CaseAssignment: React.FC = () => {
+  const { user, canAssignValuer, isAdmin } = useRole();
   // --- State ---
   const [unassignedCases, setUnassignedCases] = useState<UnassignedCase[]>([]);
   const [valuers, setValuers] = useState<ValuerStaff[]>([]);
@@ -121,6 +123,10 @@ export const CaseAssignment: React.FC = () => {
   };
 
   const handleConfirmAssignment = async () => {
+    if (!canAssignValuer) {
+      alert("Access Denied: Only Government Administrators can assign land valuers to cases.");
+      return;
+    }
     if (!selectedCaseId) {
       alert("Please select a case to assign.");
       return;

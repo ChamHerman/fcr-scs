@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Send, X, File, Upload, ArrowLeft, Loader2 } from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
 import { Button } from "../../components/ui/Button";
+import { Modal } from "../../components/ui/Modal";
 import { Select, type SelectOption } from "../../components/ui/Select";
 import { Input } from "../../components/ui/Input";
 import { Textarea } from "../../components/ui/Textarea";
@@ -49,6 +50,7 @@ export const CreateObjection: React.FC = () => {
   const [files, setFiles] = useState<FileAttachment[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
@@ -140,9 +142,13 @@ export const CreateObjection: React.FC = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async () => {
+  const handlePreSubmit = () => {
     if (!validate()) return;
+    setShowConfirmModal(true);
+  };
 
+  const handleConfirmSubmit = async () => {
+    setShowConfirmModal(false);
     const selectedOffer = offers.find((o) => o.offerId === selectedOfferId);
     if (!selectedOffer) {
       alert("Invalid offer selected.");
@@ -447,7 +453,7 @@ export const CreateObjection: React.FC = () => {
                 </Button>
                 <Button
                   variant="filled"
-                  onClick={handleSubmit}
+                  onClick={handlePreSubmit}
                   isLoading={submitting}
                 >
                   <Send size={16} /> Submit Objection (Form N)
@@ -455,6 +461,45 @@ export const CreateObjection: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Modal to confirm submitting objection */}
+          <Modal
+            isOpen={showConfirmModal}
+            onClose={() => setShowConfirmModal(false)}
+            title="Confirm Objection Submission"
+            subtitle="Please review the impact on your compensation offer status"
+            footer={
+              <>
+                <Button variant="text" onClick={() => setShowConfirmModal(false)}>
+                  Go Back
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={handleConfirmSubmit}
+                  isLoading={submitting}
+                >
+                  <Lucide.AlertTriangle size={16} /> Yes, Submit Objection & Reject Offer
+                </Button>
+              </>
+            }
+          >
+            <div className="space-y-3 py-2 text-sm text-md-on-surface-variant">
+              <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-900 dark:text-amber-200">
+                <div className="font-bold flex items-center gap-2 mb-1 text-amber-700 dark:text-amber-300">
+                  <Lucide.AlertCircle size={18} /> Important Notice on Offer Status
+                </div>
+                <p className="text-xs leading-relaxed">
+                  Submitting a formal Form N objection indicates that you dispute the current compensation assessment.
+                </p>
+                <p className="text-xs font-semibold mt-2">
+                  Once submitted, the offer letter status will automatically become <strong>"Rejected"</strong>, and the acquisition case status will change to <strong>"OFFER_REJECTED"</strong> while the Valuation & Compensation department reviews your requested amount.
+                </p>
+              </div>
+              <p className="text-xs text-md-on-surface-variant/80">
+                If the Government Officer approves your objection, a revised compensation offer will be generated for your re-approval.
+              </p>
+            </div>
+          </Modal>
 
           <div
             style={{

@@ -12,11 +12,10 @@ export const CaseRegistration: React.FC = () => {
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Authorised roles for case registration: Government Officers, Government Administrators, System Administrators
+  // Authorised roles for case registration: Government Officers, System Administrators
   const isAuthorized =
     !user ||
     user.role === "GOVERNMENT_OFFICER" ||
-    user.role === "GOVERNMENT_ADMINISTRATOR" ||
     user.role === "SYSTEM_ADMINISTRATOR";
 
   if (user && !isAuthorized) {
@@ -28,7 +27,7 @@ export const CaseRegistration: React.FC = () => {
           </div>
           <h2 className="text-xl font-bold text-md-on-surface mb-2">Access Restricted</h2>
           <p className="text-sm text-md-on-surface-variant mb-6">
-            Only authorised Government Officers and Government Administrators can create new land acquisition cases.
+            Only authorised Government Officers can create new land acquisition cases. Government Administrators have supervisory and assignment access.
           </p>
           <Button variant="filled" onClick={() => navigate("/admin/case")}>
             Return to Case Management
