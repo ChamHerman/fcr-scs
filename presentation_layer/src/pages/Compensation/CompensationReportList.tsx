@@ -50,6 +50,7 @@ export const CompensationReportList: React.FC = () => {
   const navigate = useNavigate();
   const { user, userId, role, isAdmin, isOfficer, isGovAdmin, isSysAdmin } = useRole();
   const { notify } = useNotification();
+  const [allScopedReports, setAllScopedReports] = useState<ReportItem[]>([]);
   const [reports, setReports] = useState<ReportItem[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
@@ -59,14 +60,12 @@ export const CompensationReportList: React.FC = () => {
   const [isCaseModalOpen, setIsCaseModalOpen] = useState(false);
   const itemsPerPage = 10;
 
+  // 1. Fetch all compensation reports within user's role scope
   const loadReports = useCallback(async () => {
     setLoading(true);
     try {
       const scopeParams: any = {
-        search: searchTerm || undefined,
-        status: statusFilter || undefined,
-        page: currentPage,
-        limit: itemsPerPage,
+        limit: 1000,
       };
 
       if (isOfficer && !isAdmin && userId) {
@@ -108,18 +107,47 @@ export const CompensationReportList: React.FC = () => {
         offerLetterGenerated: (r.acquisitionCase?.offerLetters || []).length > 0,
       }));
 
-      setReports(formatted);
-      setTotalCount(res.total || formatted.length);
+      setAllScopedReports(formatted);
     } catch (err: any) {
       console.error("Failed to load compensation reports:", err);
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, statusFilter, currentPage, isAdmin, isOfficer, userId, role]);
+  }, [isAdmin, isOfficer, userId, role]);
 
   useEffect(() => {
     loadReports();
   }, [loadReports]);
+
+  // 2. Filter data based on search and status
+  const filteredReports = React.useMemo(() => {
+    let list = allScopedReports;
+
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      list = list.filter(
+        (r) =>
+          r.caseId.toLowerCase().includes(term) ||
+          r.caseTitle.toLowerCase().includes(term) ||
+          r.owner.toLowerCase().includes(term) ||
+          r.id.toLowerCase().includes(term)
+      );
+    }
+
+    if (statusFilter) {
+      const expectedLabel = statusLabelMap[statusFilter] || statusFilter;
+      list = list.filter((r) => r.status === expectedLabel || r.status === statusFilter);
+    }
+
+    return list;
+  }, [allScopedReports, searchTerm, statusFilter]);
+
+  // 3. Paginate the filtered data for table display
+  useEffect(() => {
+    setTotalCount(filteredReports.length);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    setReports(filteredReports.slice(startIndex, startIndex + itemsPerPage));
+  }, [filteredReports, currentPage, itemsPerPage]);
 
   const handleView = (reportId: string) => {
     navigate("/admin/compensation/report/review", { state: { reportId } });
@@ -154,21 +182,22 @@ export const CompensationReportList: React.FC = () => {
     return "RM " + val.toLocaleString("en-MY", { minimumFractionDigits: 2 });
   };
 
+  // 4. Metrics dynamically derived directly from user-scoped filtered data
   const stats = [
-    { label: "Total Reports", value: totalCount, icon: <FileText size={16} className="inline mr-1" /> },
+    { label: "Total Reports", value: filteredReports.length, icon: <FileText size={16} className="inline mr-1" /> },
     {
       label: "Approved",
-      value: reports.filter((r) => r.status === "Approved").length,
+      value: filteredReports.filter((r) => r.status === "Approved").length,
       icon: <Lucide.CheckCircle size={16} className="inline mr-1" />,
     },
     {
       label: "Pending Approval",
-      value: reports.filter((r) => r.status === "Pending Approval").length,
+      value: filteredReports.filter((r) => r.status === "Pending Approval").length,
       icon: <Lucide.Clock size={16} className="inline mr-1" />,
     },
     {
       label: "Rejected",
-      value: reports.filter((r) => r.status === "Rejected").length,
+      value: filteredReports.filter((r) => r.status === "Rejected").length,
       icon: <Lucide.XCircle size={16} className="inline mr-1" />,
     },
   ];

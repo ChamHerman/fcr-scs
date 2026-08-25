@@ -7,7 +7,7 @@ import crypto from "crypto";
 
 export async function getAllCases(req: Request, res: Response): Promise<void> {
   try {
-    const { search, status, projectType, page, limit, createdById, assignedToId, userRole, userId } = req.query;
+    const { search, status, projectType, page, limit, createdById, assignedToId, userRole, userId, ownerNric } = req.query;
     const result = await caseService.getAllCases({
       search: search as string,
       status: status as string,
@@ -18,6 +18,7 @@ export async function getAllCases(req: Request, res: Response): Promise<void> {
       assignedToId: assignedToId as string,
       userRole: userRole as string,
       userId: userId as string,
+      ownerNric: ownerNric as string,
     });
     res.json(result);
   } catch (e: unknown) {
@@ -46,12 +47,13 @@ export async function getCaseById(req: Request, res: Response): Promise<void> {
 
 export async function getCaseStats(req: Request, res: Response): Promise<void> {
   try {
-    const { createdById, assignedToId, userRole, userId } = req.query;
+    const { createdById, assignedToId, userRole, userId, ownerNric } = req.query;
     const stats = await caseService.getCaseStats({
       createdById: createdById as string,
       assignedToId: assignedToId as string,
       userRole: userRole as string,
       userId: userId as string,
+      ownerNric: ownerNric as string,
     });
     res.json(stats);
   } catch (e: unknown) {

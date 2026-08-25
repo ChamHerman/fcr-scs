@@ -1,8 +1,3 @@
-// How to Run:
-// 1. Open CMD / GitBash
-// 2. cd "D:\Siew Feng\CD_Assignment\_docs"
-// 3. node z_database_data_removal.js
-
 const fs = require('fs');
 const path = require('path');
 

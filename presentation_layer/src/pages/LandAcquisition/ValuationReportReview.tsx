@@ -77,6 +77,7 @@ export const ValuationReportReview: React.FC = () => {
         const res = await landAcquisitionApi.getValuationReportById(activeReportId);
         const rep = res.report;
 
+        const rawStatus = rep.reportStatus || rep.status || "PENDING";
         const formatted: ReportDetail = {
           id: rep.reportId,
           caseId: rep.caseId,
@@ -87,14 +88,14 @@ export const ValuationReportReview: React.FC = () => {
           valuationDate: rep.valuationDate
             ? new Date(rep.valuationDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
             : "—",
-          valuationMethod: rep.valuationMethod,
-          marketValue: `RM ${Number(rep.marketValue).toLocaleString("en-MY")}`,
-          recommendedCompensation: `RM ${Number(rep.recommendedCompensation).toLocaleString("en-MY")}`,
+          valuationMethod: rep.valuationMethod || "—",
+          marketValue: `RM ${Number(rep.marketValue || 0).toLocaleString("en-MY")}`,
+          recommendedCompensation: `RM ${Number(rep.recommendedCompensation || 0).toLocaleString("en-MY")}`,
           remarks: rep.remarks || "No remarks provided.",
           buildingAssessment: rep.documents?.find((d: any) => d.documentType === "Building Assessment")?.fileName || "Not uploaded",
           siteInspection: rep.documents?.find((d: any) => d.documentType === "Site Inspection")?.fileName || "Not uploaded",
-          status: statusLabelMap[rep.status] || rep.status,
-          statusClass: statusClassMap[rep.status] || "status-pending-valuation",
+          status: statusLabelMap[rawStatus] || rawStatus,
+          statusClass: statusClassMap[rawStatus] || "status-pending-valuation",
         };
 
         setReport(formatted);
