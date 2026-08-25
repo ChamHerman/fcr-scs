@@ -6,10 +6,12 @@ import { landAcquisitionApi } from "../../services/landAcquisitionApi";
 import { Button } from "../../components/ui/Button";
 import { Select, type SelectOption } from "../../components/ui/Select";
 import { CopyButton } from "../../components/ui/CopyButton";
+import { useNotification } from "../../components/ui/NotificationSystem";
 import "../../style.css";
 import "./comparison.css";
 
 export const CompensationComparisonList: React.FC = () => {
+  const { notify } = useNotification();
   const [cases, setCases] = useState<any[]>([]);
   const [selectedCase1, setSelectedCase1] = useState<string>("");
   const [selectedCase2, setSelectedCase2] = useState<string>("");
@@ -39,11 +41,19 @@ export const CompensationComparisonList: React.FC = () => {
 
   const handleRunComparison = async () => {
     if (!selectedCase1 || !selectedCase2) {
-      alert("Please select two cases to compare.");
+      notify({
+        type: 'general',
+        title: 'Selection Required',
+        message: 'Please select two cases to compare.',
+      });
       return;
     }
     if (selectedCase1 === selectedCase2) {
-      alert("Please select two different cases for comparison.");
+      notify({
+        type: 'general',
+        title: 'Invalid Selection',
+        message: 'Please select two different cases for comparison.',
+      });
       return;
     }
 
@@ -53,7 +63,11 @@ export const CompensationComparisonList: React.FC = () => {
       setComparisonResult(res.comparison || []);
     } catch (err: any) {
       console.error("Comparison failed:", err);
-      alert(`Comparison Failed: ${err.message}`);
+      notify({
+        type: 'error',
+        title: 'Comparison Failed',
+        message: err.message,
+      });
     } finally {
       setComparing(false);
     }

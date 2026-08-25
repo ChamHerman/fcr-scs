@@ -5,6 +5,7 @@ import { CaseForm } from "../../components/CaseForm";
 import type { CaseFormData, Owner, Document } from "../../components/CaseForm";
 import { Button } from "../../components/ui/Button";
 import { useRole } from "../../hooks/useRole";
+import { useNotification } from "../../components/ui/NotificationSystem";
 
 /**
  * CaseEdit – Handles both:
@@ -17,6 +18,7 @@ import { useRole } from "../../hooks/useRole";
  */
 export const CaseEdit: React.FC = () => {
   const { user, canEditCaseDetails, isOfficer, isSysAdmin, isGovAdmin } = useRole();
+  const { notify } = useNotification();
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams<{ caseId?: string }>();
@@ -204,7 +206,11 @@ export const CaseEdit: React.FC = () => {
         // Document section: only upload NEW files (those with a File object)
         const newDocs = data.documents.filter((d) => d.file && d.type);
         if (newDocs.length === 0) {
-          alert("No new documents selected. Please choose a file to upload.");
+          notify({
+            type: 'general',
+            title: 'No File Selected',
+            message: 'No new documents selected. Please choose a file to upload.',
+          });
           setIsSubmitting(false);
           return;
         }
@@ -230,13 +236,21 @@ export const CaseEdit: React.FC = () => {
 
       // ── Navigate back to case details with a success highlight ────────────
       const updatedSection = sectionParam || "project";
-      alert(`Case updated successfully!\nCase ID: ${caseId}`);
+      notify({
+        type: 'success',
+        title: 'Case Updated',
+        message: `Case ID: ${caseId}`,
+      });
       navigate("/admin/case/details", {
         state: { caseId, updatedSection },
       });
     } catch (err: any) {
       console.error("[CaseEdit] Update failed:", err);
-      alert(`Update Failed: ${err.message || "Could not update case. Please try again."}`);
+      notify({
+        type: 'error',
+        title: 'Update Failed',
+        message: err.message || "Could not update case. Please try again.",
+      });
     } finally {
       setIsSubmitting(false);
     }

@@ -11,6 +11,7 @@ import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { IconButton } from "../../components/ui/IconButton";
 import { useRole } from "../../hooks/useRole";
+import { useNotification } from "../../components/ui/NotificationSystem";
 import "../../style.css";
 import "./objection.css";
 
@@ -38,6 +39,7 @@ export const CreateObjection: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, userId, isMember } = useRole();
+  const { notify } = useNotification();
   const paramOfferId = searchParams.get("offerId") || "";
 
   const [offers, setOffers] = useState<OfferOption[]>([]);
@@ -84,6 +86,7 @@ export const CreateObjection: React.FC = () => {
         setLoadingOffers(false);
       }
     }
+
     loadOffers();
   }, [paramOfferId]);
 
@@ -108,7 +111,11 @@ export const CreateObjection: React.FC = () => {
     for (let i = 0; i < fileList.length; i++) {
       const file = fileList[i];
       if (file.size > 10 * 1024 * 1024) {
-        alert("File size exceeds 10MB limit.");
+        notify({
+          type: 'error',
+          title: 'File Too Large',
+          message: 'File size exceeds 10MB limit.',
+        });
         continue;
       }
       const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
@@ -151,7 +158,11 @@ export const CreateObjection: React.FC = () => {
     setShowConfirmModal(false);
     const selectedOffer = offers.find((o) => o.offerId === selectedOfferId);
     if (!selectedOffer) {
-      alert("Invalid offer selected.");
+      notify({
+        type: 'error',
+        title: 'Invalid Selection',
+        message: 'Invalid offer selected.',
+      });
       return;
     }
 
@@ -171,7 +182,11 @@ export const CreateObjection: React.FC = () => {
       setSubmitted(true);
     } catch (err: any) {
       console.error("Objection creation failed:", err);
-      alert(`Submission failed: ${err.message}`);
+      notify({
+        type: 'error',
+        title: 'Submission Failed',
+        message: err.message,
+      });
       setSubmitting(false);
     }
   };

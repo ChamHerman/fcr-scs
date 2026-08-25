@@ -13,6 +13,7 @@ import { CopyButton } from "../../components/ui/CopyButton";
 import { Modal } from "../../components/ui/Modal";
 import { Input } from "../../components/ui/Input";
 import { useRole } from "../../hooks/useRole";
+import { useNotification } from "../../components/ui/NotificationSystem";
 import "../../style.css";
 import "./case_management.css";
 
@@ -81,6 +82,7 @@ const PROJECT_TYPE_OPTIONS: SelectOption[] = [
 export const CaseManagementDashboard: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const { notify } = useNotification();
 
   // Role Based Access Control Hook
   const {
@@ -124,7 +126,11 @@ export const CaseManagementDashboard: React.FC = () => {
   // Open Valuer Assignment Modal
   const handleOpenAssignModal = async (caseItem: any) => {
     if (!canAssignValuer) {
-      alert("Only Government Administrators can assign land valuers.");
+      notify({
+        type: 'error',
+        title: 'Access Denied',
+        message: 'Only Government Administrators can assign land valuers.',
+      });
       return;
     }
 
@@ -175,7 +181,11 @@ export const CaseManagementDashboard: React.FC = () => {
         assignedById: user?.userId,
       });
 
-      alert(`Land Valuer assigned successfully to case: ${selectedCaseToAssign.caseId}`);
+      notify({
+        type: 'success',
+        title: 'Valuer Assigned',
+        message: `Land Valuer assigned successfully to case: ${selectedCaseToAssign.caseId}`,
+      });
       setIsAssignModalOpen(false);
       setSelectedCaseToAssign(null);
       await loadDashboardData();

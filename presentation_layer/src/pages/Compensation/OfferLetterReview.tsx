@@ -18,6 +18,7 @@ import { Button } from "../../components/ui/Button";
 import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
+import { useNotification } from "../../components/ui/NotificationSystem";
 import "../../style.css";
 import "./compensation.css";
 
@@ -88,6 +89,7 @@ export const OfferLetterDetail: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isMember, isAdmin, isGovAdmin, isSysAdmin, isOfficer } = useRole();
+  const { notify } = useNotification();
   const canRespondToOffer = (isMember || isSysAdmin) && !isGovAdmin && !isOfficer;
 
   const activeOfferId = location.state?.offerId || paramOfferId;
@@ -288,9 +290,12 @@ export const OfferLetterDetail: React.FC = () => {
   const handleAcceptClick = () => {
     if (!offer) return;
     if (!canRespondToOffer) {
-      alert(
-        "Government Administrators and Officers cannot accept offer letters. Only land owners (Displaced Community Members) can accept this offer."
-      );
+      notify({
+        type: 'error',
+        title: 'Access Denied',
+        message:
+          'Government Administrators and Officers cannot accept offer letters. Only land owners (Displaced Community Members) can accept this offer.',
+      });
       return;
     }
     setShowAcceptConfirmModal(true);
@@ -304,9 +309,12 @@ export const OfferLetterDetail: React.FC = () => {
   const handleAccept = async (force?: boolean) => {
     if (!offer) return;
     if (!canRespondToOffer) {
-      alert(
-        "Government Administrators and Officers cannot accept offer letters. Only land owners (Displaced Community Members) can accept this offer."
-      );
+      notify({
+        type: 'error',
+        title: 'Access Denied',
+        message:
+          'Government Administrators and Officers cannot accept offer letters. Only land owners (Displaced Community Members) can accept this offer.',
+      });
       return;
     }
 
@@ -345,7 +353,11 @@ export const OfferLetterDetail: React.FC = () => {
         );
         setShowObjectionPrompt(true);
       } else {
-        alert(`Accept Failed: ${err.message || err}`);
+        notify({
+          type: 'error',
+          title: 'Accept Failed',
+          message: err.message || err,
+        });
       }
     } finally {
       setSubmitting(false);
@@ -355,7 +367,11 @@ export const OfferLetterDetail: React.FC = () => {
   const handleCancelAcceptanceSubmit = async () => {
     if (!offer) return;
     if (!canRespondToOffer) {
-      alert("Only land owners (Displaced Community Members) can cancel offer approvals.");
+      notify({
+        type: 'error',
+        title: 'Access Denied',
+        message: 'Only land owners (Displaced Community Members) can cancel offer approvals.',
+      });
       return;
     }
 
@@ -367,10 +383,18 @@ export const OfferLetterDetail: React.FC = () => {
       });
       setShowCancelApprovalModal(false);
       await fetchOffer();
-      alert("Your approval has been cancelled. You can now re-evaluate or submit a Form N objection if needed.");
+      notify({
+        type: 'success',
+        title: 'Approval Cancelled',
+        message: 'Your approval has been cancelled. You can now re-evaluate or submit a Form N objection if needed.',
+      });
     } catch (err: any) {
       console.error("Cancel approval failed:", err);
-      alert(`Cancellation failed: ${err.message || err}`);
+      notify({
+        type: 'error',
+        title: 'Cancellation Failed',
+        message: err.message || err,
+      });
     } finally {
       setCancellingApproval(false);
     }
@@ -379,7 +403,11 @@ export const OfferLetterDetail: React.FC = () => {
   const handleWithdrawObjectionAndAccept = async () => {
     if (!activeObjection || !offer) return;
     if (!canRespondToOffer) {
-      alert("Only land owners (Displaced Community Members) can perform this action.");
+      notify({
+        type: 'error',
+        title: 'Access Denied',
+        message: 'Only land owners (Displaced Community Members) can perform this action.',
+      });
       return;
     }
     setWithdrawingObjection(true);
@@ -391,7 +419,11 @@ export const OfferLetterDetail: React.FC = () => {
       await handleAccept(true);
     } catch (err: any) {
       console.error("Failed to withdraw objection:", err);
-      alert(`Could not withdraw objection: ${err.message || err}`);
+      notify({
+        type: 'error',
+        title: 'Withdrawal Failed',
+        message: `Could not withdraw objection: ${err.message || err}`,
+      });
     } finally {
       setWithdrawingObjection(false);
     }
@@ -404,9 +436,12 @@ export const OfferLetterDetail: React.FC = () => {
     }
     if (!offer) return;
     if (!canRespondToOffer) {
-      alert(
-        "Government Administrators and Officers cannot reject offer letters. Only land owners (Displaced Community Members) can reject this offer."
-      );
+      notify({
+        type: 'error',
+        title: 'Access Denied',
+        message:
+          'Government Administrators and Officers cannot reject offer letters. Only land owners (Displaced Community Members) can reject this offer.',
+      });
       return;
     }
 
@@ -420,7 +455,11 @@ export const OfferLetterDetail: React.FC = () => {
       await fetchOffer();
     } catch (err: any) {
       console.error("Reject failed:", err);
-      alert(`Reject Failed: ${err.message}`);
+      notify({
+        type: 'error',
+        title: 'Rejection Failed',
+        message: err.message,
+      });
     } finally {
       setSubmitting(false);
     }

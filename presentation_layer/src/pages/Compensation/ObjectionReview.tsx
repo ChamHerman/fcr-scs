@@ -9,6 +9,7 @@ import { Input } from "../../components/ui/Input";
 import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
+import { useNotification } from "../../components/ui/NotificationSystem";
 import "../../style.css";
 import "./objection.css";
 
@@ -52,6 +53,7 @@ export const ObjectionReview: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, userId, isOfficer, isMember, isAdmin, isGovAdmin, isSysAdmin } = useRole();
+  const { notify } = useNotification();
 
   const activeObjectionId = paramId || location.state?.objectionId;
 
@@ -82,44 +84,47 @@ export const ObjectionReview: React.FC = () => {
       try {
         const res = await compensationApi.getObjectionById(activeObjectionId);
         const obj = res.objection;
-
-        const parcelOwners = obj.acquisitionCase?.landParcel?.ownerships?.map((ow: any) => ow.landOwner).filter(Boolean) || [];
-        const submittedBy = parcelOwners.length > 0 ? parcelOwners.map((ow: any) => ow.name).join(", ") : (obj.offerLetter?.landOwnership?.landOwner?.name || "—");
+        const offer = obj.offerLetter;
+        const caseItem = offer?.acquisitionCase;
+        const submitter = obj.submittedBy;
+        const attachmentsList = (obj.documents || []).map((d: any) => ({
+          fileName: d.fileName || d.name,
+          name: d.fileName || d.name,
+          fileSize: d.fileSize || d.size || "Unknown Size",
+        }));
 
         const formatted: ObjectionDetail = {
           id: obj.objectionId,
-          caseId: obj.caseId,
+          caseId: obj.caseId || caseItem?.caseId || "—",
           offerId: obj.offerId,
-          caseTitle: obj.acquisitionCase?.caseTitle || "—",
-          caseCreatedById: obj.acquisitionCase?.createdById,
-          offerCreatedById: obj.offerLetter?.createdById,
-          submittedBy,
-          submittedById: obj.createdById || "—",
-          submittedDate: obj.createdAt
-            ? new Date(obj.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-            : "—",
+          caseTitle: caseItem?.caseTitle || "—",
+          caseCreatedById: caseItem?.createdById,
+          offerCreatedById: offer?.createdById,
+          submittedBy: submitter?.name || "Displaced Community Member",
+          submittedById: obj.submittedById,
+          submittedDate: new Date(obj.submittedAt || obj.createdAt).toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          }),
           type: "Form N",
           status: statusLabelMap[obj.status] || obj.status,
           rawStatus: obj.status,
           statusClass: statusClassMap[obj.status] || "status-objection-review",
-          objectionText: obj.objectionReason || "—",
+          objectionText: obj.objectionReason || "No explanation provided.",
           requestedAmount: Number(obj.requestedAmount || 0),
-          revisedCompensation: obj.revisedCompensation ? Number(obj.revisedCompensation) : undefined,
-          attachments: (obj.objectionDocuments || []).map((doc: any) => ({
-            name: doc.fileName || doc.documentType || "Document",
-            size: doc.fileSize || "1.2 MB",
-          })),
-          response: obj.reviewRemarks || undefined,
-          responseDate: obj.reviewDate
-            ? new Date(obj.reviewDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+          revisedCompensation: obj.revisedAmount ? Number(obj.revisedAmount) : undefined,
+          attachments: attachmentsList,
+          response: obj.responseNotes,
+          responseDate: obj.reviewedAt
+            ? new Date(obj.reviewedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
             : undefined,
-          respondedBy: obj.reviewedBy?.name || "Government Officer",
+          respondedBy: obj.reviewedBy?.name || (obj.reviewedById ? "Government Officer" : undefined),
         };
 
         setObjection(formatted);
-        setRevisedAmount(formatted.requestedAmount);
       } catch (err: any) {
-        console.error("Failed to load objection:", err);
+        console.error("Failed to load objection details:", err);
       } finally {
         setLoading(false);
       }
@@ -129,8 +134,10 @@ export const ObjectionReview: React.FC = () => {
   }, [activeObjectionId]);
 
   const isResponsibleOfficer = Boolean(
-    (isOfficer && userId && (objection?.caseCreatedById === userId || objection?.offerCreatedById === userId)) ||
-    isSysAdmin
+    isSysAdmin ||
+      (isOfficer &&
+        userId &&
+        (objection?.caseCreatedById === userId || objection?.offerCreatedById === userId))
   );
   // Government Administrators are strictly disallowed from accepting or rejecting objections
   const canReview = isResponsibleOfficer && !isGovAdmin;
@@ -139,11 +146,19 @@ export const ObjectionReview: React.FC = () => {
   const handleApprove = async () => {
     if (!objection) return;
     if (isGovAdmin) {
-      alert("Government Administrators are not permitted to accept or reject objections. This action must be performed by the assigned Government Officer.");
+      notify({
+        type: 'error',
+        title: 'Access Denied',
+        message: 'Government Administrators are not permitted to accept or reject objections. This action must be performed by the assigned Government Officer.',
+      });
       return;
     }
     if (!canReview) {
-      alert("Only the assigned Government Officer responsible for this case can approve this objection.");
+      notify({
+        type: 'error',
+        title: 'Access Denied',
+        message: 'Only the assigned Government Officer responsible for this case can approve this objection.',
+      });
       return;
     }
     if (!responseText.trim()) {
@@ -170,10 +185,18 @@ export const ObjectionReview: React.FC = () => {
             }
           : null
       );
-      alert(`Objection approved successfully.\n\nThe compensation offer letter award amount has been updated to RM ${Number(revised).toLocaleString("en-MY")}, and the offer status has been reset to "Pending" for community member review and re-approval.`);
+      notify({
+        type: 'success',
+        title: 'Objection Approved',
+        message: `Award amount updated to RM ${Number(revised).toLocaleString("en-MY")}, status reset to Pending.`,
+      });
     } catch (err: any) {
       console.error("Approve failed:", err);
-      alert(`Approve failed: ${err.message}`);
+      notify({
+        type: 'error',
+        title: 'Approval Failed',
+        message: err.message,
+      });
     } finally {
       setSubmitting(false);
     }
@@ -182,11 +205,19 @@ export const ObjectionReview: React.FC = () => {
   const handleReject = async () => {
     if (!objection) return;
     if (isGovAdmin) {
-      alert("Government Administrators are not permitted to accept or reject objections. This action must be performed by the assigned Government Officer.");
+      notify({
+        type: 'error',
+        title: 'Access Denied',
+        message: 'Government Administrators are not permitted to accept or reject objections. This action must be performed by the assigned Government Officer.',
+      });
       return;
     }
     if (!canReview) {
-      alert("Only the assigned Government Officer responsible for this case can reject this objection.");
+      notify({
+        type: 'error',
+        title: 'Access Denied',
+        message: 'Only the assigned Government Officer responsible for this case can reject this objection.',
+      });
       return;
     }
     if (!responseText.trim()) {
@@ -213,7 +244,11 @@ export const ObjectionReview: React.FC = () => {
       );
     } catch (err: any) {
       console.error("Reject failed:", err);
-      alert(`Reject failed: ${err.message}`);
+      notify({
+        type: 'error',
+        title: 'Rejection Failed',
+        message: err.message,
+      });
     } finally {
       setSubmitting(false);
     }
@@ -229,7 +264,11 @@ export const ObjectionReview: React.FC = () => {
   const handleSaveEdit = async () => {
     if (!objection) return;
     if (typeof editAmount === "number" && editAmount <= 0) {
-      alert("Requested amount must be greater than 0.");
+      notify({
+        type: 'general',
+        title: 'Invalid Amount',
+        message: 'Requested amount must be greater than 0.',
+      });
       return;
     }
     setUpdating(true);
@@ -250,7 +289,11 @@ export const ObjectionReview: React.FC = () => {
       setShowEditModal(false);
     } catch (err: any) {
       console.error("Update failed:", err);
-      alert(`Update failed: ${err.message}`);
+      notify({
+        type: 'error',
+        title: 'Update Failed',
+        message: err.message,
+      });
     } finally {
       setUpdating(false);
     }
@@ -261,10 +304,19 @@ export const ObjectionReview: React.FC = () => {
     setDeleting(true);
     try {
       await compensationApi.deleteObjection(objection.id);
+      notify({
+        type: 'success',
+        title: 'Objection Deleted',
+        message: 'The Form N objection has been deleted and the compensation offer status has been reset to Pending.',
+      });
       navigate("/admin/compensation/objection");
     } catch (err: any) {
       console.error("Delete failed:", err);
-      alert(`Delete failed: ${err.message}`);
+      notify({
+        type: 'error',
+        title: 'Delete Failed',
+        message: err.message,
+      });
       setDeleting(false);
     }
   };

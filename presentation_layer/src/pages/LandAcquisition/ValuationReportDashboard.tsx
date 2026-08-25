@@ -9,6 +9,7 @@ import { Select, type SelectOption } from "../../components/ui/Select";
 import { SearchInput } from "../../components/ui/SearchInput";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
+import { useNotification } from "../../components/ui/NotificationSystem";
 import "../../style.css";
 import "./valuation_report.css";
 
@@ -50,6 +51,7 @@ const STATUS_OPTIONS: SelectOption[] = [
 export const ValuationReportList: React.FC = () => {
   const navigate = useNavigate();
   const { user, role, userId, isAdmin, isOfficer, isValuer, isSysAdmin } = useRole();
+  const { notify } = useNotification();
 
   const [reports, setReports] = useState<Report[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
@@ -148,7 +150,11 @@ export const ValuationReportList: React.FC = () => {
 
   const handleCreate = () => {
     if (!isValuer && !isAdmin) {
-      alert("Only Land Valuers can create valuation reports for assigned cases.");
+      notify({
+        type: 'error',
+        title: 'Access Denied',
+        message: 'Only Land Valuers can create valuation reports for assigned cases.',
+      });
       return;
     }
     setIsCaseModalOpen(true);

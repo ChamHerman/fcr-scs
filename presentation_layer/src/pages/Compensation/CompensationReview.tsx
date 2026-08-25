@@ -8,6 +8,7 @@ import { Button } from "../../components/ui/Button";
 import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
+import { useNotification } from "../../components/ui/NotificationSystem";
 import "../../style.css";
 import "./compensation.css";
 
@@ -64,6 +65,7 @@ export const CompensationApproval: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, userId, isGovAdmin, isAdmin } = useRole();
+  const { notify } = useNotification();
   const canApproveOrReject = isGovAdmin || isAdmin;
 
   const activeReportId = location.state?.reportId || paramReportId;
@@ -85,49 +87,53 @@ export const CompensationApproval: React.FC = () => {
       setLoading(true);
       try {
         const res = await compensationApi.getReportById(activeReportId);
-        const r = res.report;
-
-        const o = r.offerLetters?.[0] || r.acquisitionCase?.offerLetters?.[0];
-        const offerObj = o
-          ? {
-              id: o.offerId,
-              offerReferenceNo: o.offerReferenceNo,
-              offerAmount: Number(o.offerAmount || 0),
-              status: statusLabelMap[o.status] || o.status,
-            }
-          : null;
+        const rep = res.report;
+        const c = rep.acquisitionCase;
+        const ownerInfo = c?.landParcel?.ownerships?.[0]?.landOwner;
+        const comps = rep.compensationComponents?.[0] || {};
+        const vr = rep.valuationReport;
+        const generatedOffer = rep.offerLetters?.[0];
 
         const formatted: CompensationDetail = {
-          id: r.compensationReportId,
-          caseId: r.caseId,
-          caseTitle: r.acquisitionCase?.caseTitle || "—",
-          owner: r.acquisitionCase?.landParcel?.ownerships?.[0]?.landOwner?.name || "—",
-          ownerIc: r.acquisitionCase?.landParcel?.ownerships?.[0]?.landOwner?.nric || r.acquisitionCase?.landParcel?.ownerships?.[0]?.landOwner?.icNumber || "—",
-          ownerAddress: r.acquisitionCase?.landParcel?.address || r.acquisitionCase?.landParcel?.ownerships?.[0]?.landOwner?.address || "—",
-          ownerPhone: r.acquisitionCase?.landParcel?.ownerships?.[0]?.landOwner?.contact || "—",
-          landTitle: r.acquisitionCase?.landParcel?.landTitleNo || "—",
-          project: r.acquisitionCase?.project?.projectName || "—",
-          status: statusLabelMap[r.status] || r.status,
-          statusClass: statusClassMap[r.status] || "status-pending-comp",
-          generatedDate: r.createdAt
-            ? new Date(r.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-            : "—",
-          totalAmount: Number(r.totalCompensation || 0),
+          id: rep.reportId,
+          caseId: rep.caseId,
+          caseTitle: c?.caseTitle || "—",
+          owner: ownerInfo?.name || "—",
+          ownerIc: ownerInfo?.nric || ownerInfo?.icNumber || "—",
+          ownerAddress: c?.landParcel?.address || ownerInfo?.address || "—",
+          ownerPhone: ownerInfo?.contact || "—",
+          landTitle: c?.landParcel?.landTitleNo || "—",
+          project: c?.project?.projectName || "—",
+          status: statusLabelMap[rep.reportStatus] || rep.reportStatus,
+          statusClass: statusClassMap[rep.reportStatus] || "status-pending-comp",
+          generatedDate: new Date(rep.generatedDate).toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          }),
+          totalAmount: Number(rep.totalCompensation || 0),
           components: {
-            landValue: Number(r.totalCompensation || 0) * 0.7,
-            buildingValue: Number(r.totalCompensation || 0) * 0.15,
-            cropValue: 0,
-            businessDisruption: Number(r.totalCompensation || 0) * 0.05,
-            disturbanceCompensation: Number(r.totalCompensation || 0) * 0.05,
-            relocationAllowance: Number(r.totalCompensation || 0) * 0.05,
-            otherEligible: 0,
+            landValue: Number(comps.landValue || 0),
+            buildingValue: Number(comps.buildingValue || 0),
+            cropValue: Number(comps.cropValue || 0),
+            businessDisruption: Number(comps.businessDisruption || 0),
+            disturbanceCompensation: Number(comps.disturbanceCompensation || 0),
+            relocationAllowance: Number(comps.relocationAllowance || 0),
+            otherEligible: Number(comps.otherEligible || 0),
           },
-          valuer: r.valuationReport?.valuer?.name || "Senior Valuer",
-          valuationMethod: r.valuationReport?.valuationMethod || "Comparison Method",
-          marketValue: Number(r.valuationReport?.marketValue || 0),
-          recommendedCompensation: Number(r.valuationReport?.recommendedCompensation || 0),
-          remarks: r.remarks || "No remarks provided.",
-          offerLetter: offerObj,
+          valuer: vr?.valuer?.name || "Valuer",
+          valuationMethod: vr?.valuationMethod || "Comparison Method",
+          marketValue: Number(vr?.marketValue || 0),
+          recommendedCompensation: Number(vr?.recommendedCompensation || 0),
+          remarks: rep.notes || vr?.remarks || "No remarks provided.",
+          offerLetter: generatedOffer
+            ? {
+                id: generatedOffer.offerId,
+                offerReferenceNo: generatedOffer.offerReferenceNo,
+                offerAmount: Number(generatedOffer.offerAmount || rep.totalCompensation),
+                status: generatedOffer.status,
+              }
+            : undefined,
         };
 
         setReport(formatted);
@@ -144,7 +150,11 @@ export const CompensationApproval: React.FC = () => {
   const confirmApprove = async () => {
     if (!report) return;
     if (!canApproveOrReject) {
-      alert("Only Government Administrators can approve compensation reports.");
+      notify({
+        type: 'error',
+        title: 'Access Denied',
+        message: 'Only Government Administrators can approve compensation reports.',
+      });
       return;
     }
     setSubmitting(true);
@@ -172,7 +182,11 @@ export const CompensationApproval: React.FC = () => {
       );
     } catch (err: any) {
       console.error("Approve failed:", err);
-      alert(`Approval Failed: ${err.message}`);
+      notify({
+        type: 'error',
+        title: 'Approval Failed',
+        message: err.message,
+      });
     } finally {
       setSubmitting(false);
     }
@@ -185,7 +199,11 @@ export const CompensationApproval: React.FC = () => {
     }
     if (!report) return;
     if (!canApproveOrReject) {
-      alert("Only Government Administrators can reject compensation reports.");
+      notify({
+        type: 'error',
+        title: 'Access Denied',
+        message: 'Only Government Administrators can reject compensation reports.',
+      });
       return;
     }
 
@@ -196,7 +214,11 @@ export const CompensationApproval: React.FC = () => {
       navigate("/admin/compensation/report");
     } catch (err: any) {
       console.error("Reject failed:", err);
-      alert(`Rejection Failed: ${err.message}`);
+      notify({
+        type: 'error',
+        title: 'Rejection Failed',
+        message: err.message,
+      });
     } finally {
       setSubmitting(false);
     }

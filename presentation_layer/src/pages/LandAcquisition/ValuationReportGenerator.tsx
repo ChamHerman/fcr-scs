@@ -11,6 +11,7 @@ import { Input } from "../../components/ui/Input";
 import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useAuth } from "../../context/AuthContext";
+import { useNotification } from "../../components/ui/NotificationSystem";
 import "../../style.css";
 import "./valuation_report.css";
 
@@ -73,6 +74,7 @@ export const ValuationReportGenerator: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { notify } = useNotification();
 
   // Retrieve pre-selected caseId if passed from router navigation
   const initialCaseId = location.state?.caseId as string | undefined;
@@ -185,7 +187,11 @@ export const ValuationReportGenerator: React.FC = () => {
   const validateForm = (): boolean => {
     const errors: { [key: string]: string } = {};
     if (!caseData) {
-      alert("Please select a case before generating the report.");
+      notify({
+        type: 'general',
+        title: 'No Case Selected',
+        message: 'Please select a case before generating the report.',
+      });
       return false;
     }
     if (!formData.valuationMethod.trim()) {
@@ -216,7 +222,11 @@ export const ValuationReportGenerator: React.FC = () => {
 
   const handleConfirmSave = async () => {
     if (!caseData) {
-      alert("No case selected.");
+      notify({
+        type: 'general',
+        title: 'No Case Selected',
+        message: 'No case selected.',
+      });
       return;
     }
 
@@ -273,7 +283,11 @@ export const ValuationReportGenerator: React.FC = () => {
       setIsEditMode(false);
     } catch (err: any) {
       console.error("Failed to save valuation report:", err);
-      alert(`Report Save Failed: ${err.message || "Could not reach backend"}`);
+      notify({
+        type: 'error',
+        title: 'Save Failed',
+        message: err.message || "Could not reach backend",
+      });
     } finally {
       setIsSaving(false);
     }
