@@ -23,3 +23,10 @@ dist/
 /.zcode
 /.playwright-mcp
 package-lock.json
+
+# Python bytecode (AI valuation sidecar)
+__pycache__/
+*.pyc
+
+# AI valuation: copies of datasets uploaded via the Retrain page (written on every retrain)
+data_layer/ai_model_repository/datasets/uploads/

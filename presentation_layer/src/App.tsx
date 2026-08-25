@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { AdminLayout } from './components/layout/AdminLayout';
@@ -65,12 +65,8 @@ import { ObjectionReview } from './pages/Compensation/ObjectionReview';
 import { CompensationComparisonCreate } from './pages/Compensation/ComparisonCreation';
 import { CompensationComparisonList } from './pages/Compensation/ComparisonDashboard';
 import { Placeholder } from './pages/Placeholder';
-import { ProcessAIValuation } from './pages/PredictionDashboard/ProcessAIValuation';
-import { ReviewAIValuation } from './pages/PredictionDashboard/ReviewAIValuation';
 import { RetrainAIModel } from './pages/PredictionDashboard/RetrainAIModel';
-import { ViewValuationResults } from './pages/PredictionDashboard/ViewValuationResults';
-import { PredictionDashboard } from './pages/PredictionDashboard/PredictionDashboard';
-import { ViewValuationHistory } from './pages/PredictionDashboard/ViewValuationHistory';
+import { GenerateAIValuation } from './pages/PredictionDashboard/GenerateAIValuation';
 import { GenerateReports } from './pages/Reports/GenerateReports';
 import { ViewReports } from './pages/Reports/ViewReports';
 import { ScheduleReportsGeneration } from './pages/Reports/ScheduleReportsGeneration';
@@ -155,13 +151,8 @@ function App() {
               <Route path="reports/generate" element={<GenerateReports />} />
               <Route path="reports/view/:reportId" element={<ViewReports />} />
               <Route path="reports/schedule" element={<ScheduleReportsGeneration />} />
-              <Route path="prediction" element={<PredictionDashboard />} />
-              <Route path="prediction/process" element={<ProcessAIValuation />} />
-              <Route path="prediction/review" element={<ReviewAIValuation />} />
+              <Route path="prediction" element={<GenerateAIValuation />} />
               <Route path="prediction/retrain" element={<RetrainAIModel />} />
-              <Route path="prediction/results" element={<ViewValuationResults />} />
-              <Route path="prediction/history" element={<ViewValuationHistory />} />
-              <Route path="prediction/history" element={<ViewValuationHistory />} />
               <Route path="settings" element={<SettingsPage />} />
 
               {/* Payment Routes */}
