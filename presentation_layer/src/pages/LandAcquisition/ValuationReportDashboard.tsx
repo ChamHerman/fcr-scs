@@ -49,7 +49,7 @@ const STATUS_OPTIONS: SelectOption[] = [
 
 export const ValuationReportList: React.FC = () => {
   const navigate = useNavigate();
-  const { user, role, userId, isAdmin, isOfficer, isValuer } = useRole();
+  const { user, role, userId, isAdmin, isOfficer, isValuer, isSysAdmin } = useRole();
 
   const [reports, setReports] = useState<Report[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
@@ -263,7 +263,7 @@ export const ValuationReportList: React.FC = () => {
           </span>
         </div>
 
-        {(isValuer || isAdmin) && (
+        {(isValuer || isSysAdmin) && (
           <div className="right">
             <Button variant="filled" onClick={handleCreate}>
               <Lucide.Plus size={16} /> New Report

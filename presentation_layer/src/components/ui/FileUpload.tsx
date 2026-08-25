@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useId } from 'react';
 import classNames from 'classnames';
 import { Upload, Trash2 } from 'lucide-react';
 import { IconButton } from './IconButton';
@@ -29,7 +29,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   onClear,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
-  const inputId = id || `file-upload-${label.replace(/\s+/g, '-').toLowerCase()}`;
+  const reactId = useId();
+  const inputId = id || `file-upload-${reactId.replace(/:/g, '')}`;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;

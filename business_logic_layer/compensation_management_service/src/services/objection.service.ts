@@ -1,5 +1,5 @@
 import { prisma } from "../prisma";
-import { ObjectionStatus, Decision, Prisma } from "@prisma/client";
+import { ObjectionStatus, Decision, OfferStatus, CaseStatus, Prisma } from "@prisma/client";
 
 export interface ObjectionFilters {
   status?: string;
@@ -246,19 +246,43 @@ export async function createObjection(input: CreateObjectionInput) {
     validUserId = defaultUser.userId;
   }
 
-  const objection = await prisma.objection.create({
-    data: {
-      offerId,
-      caseId,
-      objectionReason,
-      requestedAmount,
-      status: ObjectionStatus.SUBMITTED,
-      createdById: validUserId,
-    },
-    include: {
-      acquisitionCase: true,
-      offerLetter: true,
-    },
+  const objection = await prisma.$transaction(async (tx) => {
+    const createdObj = await tx.objection.create({
+      data: {
+        offerId,
+        caseId,
+        objectionReason,
+        requestedAmount,
+        status: ObjectionStatus.PENDING,
+        createdById: validUserId,
+      },
+      include: {
+        acquisitionCase: true,
+        offerLetter: true,
+      },
+    });
+
+    // Business Logic: Submitting a Form N objection disputes the award.
+    // Update the offer letter status to REJECTED and the case status to OFFER_REJECTED.
+    await tx.offerLetter.update({
+      where: { offerId },
+      data: {
+        status: OfferStatus.REJECTED,
+        rejectedAt: new Date(),
+        remarks: `Disputed via Form N Objection (${createdObj.objectionId}): ${objectionReason.slice(0, 100)}`,
+      },
+    });
+
+    if (caseId) {
+      await tx.acquisitionCase.update({
+        where: { caseId },
+        data: {
+          status: CaseStatus.OFFER_REJECTED,
+        },
+      });
+    }
+
+    return createdObj;
   });
 
   return objection;
@@ -296,46 +320,103 @@ export async function reviewObjection(input: ReviewObjectionInput) {
 
   const newStatus = decision === "REJECTED" ? ObjectionStatus.REJECTED : ObjectionStatus.APPROVED;
   const decisionEnum = decision as Decision;
+  const finalRevisedAmount = revisedCompensation !== undefined ? revisedCompensation : objection.requestedAmount;
 
-  const updated = await prisma.objection.update({
-    where: { objectionId },
-    data: {
-      status: newStatus,
-      decision: decisionEnum,
-      revisedCompensation: revisedCompensation !== undefined ? revisedCompensation : objection.requestedAmount,
-      reviewRemarks,
-      reviewDate: new Date(),
-      resolutionDate: new Date(),
-      reviewedById: validReviewerId,
-    },
-    include: {
-      acquisitionCase: {
-        include: {
-          project: true,
-          landParcel: {
-            include: {
-              ownerships: {
-                include: {
-                  landOwner: true,
+  const updated = await prisma.$transaction(async (tx) => {
+    const updatedObj = await tx.objection.update({
+      where: { objectionId },
+      data: {
+        status: newStatus,
+        decision: decisionEnum,
+        revisedCompensation: finalRevisedAmount,
+        reviewRemarks,
+        reviewDate: new Date(),
+        resolutionDate: new Date(),
+        reviewedById: validReviewerId,
+      },
+      include: {
+        acquisitionCase: {
+          include: {
+            project: true,
+            landParcel: {
+              include: {
+                ownerships: {
+                  include: {
+                    landOwner: true,
+                  },
                 },
               },
             },
           },
         },
-      },
-      offerLetter: {
-        include: {
-          landOwnership: {
-            include: {
-              landOwner: true,
-              landParcel: true,
+        offerLetter: {
+          include: {
+            landOwnership: {
+              include: {
+                landOwner: true,
+                landParcel: true,
+              },
             },
           },
         },
+        objectionDocuments: true,
+        reviewedBy: true,
       },
-      objectionDocuments: true,
-      reviewedBy: true,
-    },
+    });
+
+    // Business Logic: If objection is APPROVED (or revised/accepted), update the offer letter amount to the revised compensation
+    // and reset the offer letter status and member responses back to PENDING so the member can approve again.
+    const targetOfferId =
+      objection.offerId ||
+      (objection.caseId
+        ? (await tx.offerLetter.findFirst({ where: { caseId: objection.caseId } }))?.offerId
+        : null);
+
+    if (decision !== "REJECTED" && targetOfferId) {
+      const updatedOffer = await tx.offerLetter.update({
+        where: { offerId: targetOfferId },
+        data: {
+          offerAmount: finalRevisedAmount || objection.offerLetter?.offerAmount || 0,
+          status: OfferStatus.PENDING,
+          acceptedAt: null,
+          rejectedAt: null,
+          remarks: `Compensation revised via Form N Objection (${objectionId}). Please review and approve revised offer.`,
+        },
+      });
+
+      // Also update linked compensation report total compensation if exists
+      if (updatedOffer.compensationReportId) {
+        await tx.compensationReport.update({
+          where: { compensationReportId: updatedOffer.compensationReportId },
+          data: {
+            totalCompensation: finalRevisedAmount,
+            remarks: `Revised via approved Form N Objection (${objectionId})`,
+          },
+        });
+      }
+
+      // Reset member responses to PENDING
+      await tx.offerMemberResponse.updateMany({
+        where: { offerId: targetOfferId },
+        data: {
+          status: OfferStatus.PENDING,
+          remarks: null,
+        },
+      });
+
+      // Update case status to OFFER_ISSUED
+      const caseIdToUpdate = objection.caseId || updatedOffer.caseId;
+      if (caseIdToUpdate) {
+        await tx.acquisitionCase.update({
+          where: { caseId: caseIdToUpdate },
+          data: {
+            status: CaseStatus.OFFER_ISSUED,
+          },
+        });
+      }
+    }
+
+    return updatedObj;
   });
 
   return updated;

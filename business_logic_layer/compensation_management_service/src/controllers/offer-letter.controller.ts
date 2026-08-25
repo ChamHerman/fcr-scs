@@ -138,3 +138,29 @@ export async function rejectOffer(req: Request, res: Response): Promise<void> {
     }
   }
 }
+
+export async function cancelAcceptance(req: Request, res: Response): Promise<void> {
+  const offerId = req.params.offerId as string;
+  const { ownerNric, ownerId, userId } = req.body;
+
+  if (!offerId) {
+    res.status(400).json({ error: "offerId is required" });
+    return;
+  }
+
+  try {
+    const offer = await offerService.cancelAcceptance(offerId, {
+      ownerNric,
+      ownerId,
+      userId,
+    });
+    res.json({ offerLetter: offer });
+  } catch (e: unknown) {
+    const msg = (e as Error).message;
+    if (msg.toLowerCase().includes("not found")) {
+      res.status(404).json({ error: msg });
+    } else {
+      res.status(400).json({ error: msg });
+    }
+  }
+}

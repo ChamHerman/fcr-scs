@@ -198,7 +198,7 @@ async function main() {
               caseId: dbCase.caseId,
               objectionReason: 'Disagreement on agricultural crop valuation component.',
               requestedAmount: 3200000,
-              status: ObjectionStatus.SUBMITTED,
+              status: ObjectionStatus.PENDING,
               createdById: defaultAdmin.userId,
             },
           });

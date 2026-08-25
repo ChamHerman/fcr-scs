@@ -349,3 +349,274 @@ code {
 .btn-primary:active {
   transform: scale(0.95);
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   GLOBAL STATUS BADGES DESIGN SYSTEM (Light & Dark Mode)
+   ════════════════════════════════════════════════════════════════════════════ */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px;
+  border-radius: var(--radius-full, 9999px);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+  line-height: 1.4;
+  box-sizing: border-box;
+}
+
+.status-badge .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.status-badge-lg {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 18px;
+  border-radius: var(--radius-full, 9999px);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+  line-height: 1.4;
+  box-sizing: border-box;
+}
+
+.status-badge-lg .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+/* 1. Registered / Info (Blue) */
+.status-case-registered,
+.status-registered {
+  background: #E0F2FE;
+  color: #075985;
+}
+.status-case-registered .dot,
+.status-registered .dot {
+  background: #0284C7;
+}
+
+/* 2. Pending / Review / Waiting (Amber/Yellow) */
+.status-valuer-assigned,
+.status-valuation-progress,
+.status-pending-valuation,
+.status-pending-comp,
+.status-objection-review,
+.status-offer-pending,
+.status-payment-progress {
+  background: #FEF9C3;
+  color: #854D0E;
+}
+.status-valuer-assigned .dot,
+.status-valuation-progress .dot,
+.status-pending-valuation .dot,
+.status-pending-comp .dot,
+.status-objection-review .dot,
+.status-offer-pending .dot,
+.status-payment-progress .dot {
+  background: #CA8A04;
+}
+
+/* 3. Approved / Accepted / Completed (Green) */
+.status-valuation-approved,
+.status-comp-approved,
+.status-obj-approved,
+.status-offer-accepted,
+.status-offer-issued,
+.status-payment-completed,
+.status-approved,
+.status-accepted {
+  background: #E8F5E9;
+  color: #1B5E20;
+}
+.status-valuation-approved .dot,
+.status-comp-approved .dot,
+.status-obj-approved .dot,
+.status-offer-accepted .dot,
+.status-offer-issued .dot,
+.status-payment-completed .dot,
+.status-approved .dot,
+.status-accepted .dot {
+  background: #2E7D32;
+}
+
+/* 4. Rejected / Denied / Error (Red) */
+.status-valuation-rejected,
+.status-comp-rejected,
+.status-obj-rejected,
+.status-offer-rejected,
+.status-rejected {
+  background: #FFEBEE;
+  color: #B71C1C;
+}
+.status-valuation-rejected .dot,
+.status-comp-rejected .dot,
+.status-obj-rejected .dot,
+.status-offer-rejected .dot,
+.status-rejected .dot {
+  background: #C62828;
+}
+
+/* 5. Closed / Neutral / Expired (Slate/Grey) */
+.status-case-closed,
+.status-expired,
+.status-closed {
+  background: #F1F5F9;
+  color: #475569;
+}
+.status-case-closed .dot,
+.status-expired .dot,
+.status-closed .dot {
+  background: #64748B;
+}
+
+/* ── Dark Mode Overrides ── */
+@media (prefers-color-scheme: dark) {
+  .status-case-registered,
+  .status-registered {
+    background: rgba(2, 132, 199, 0.22);
+    color: #7DD3FC;
+  }
+  .status-case-registered .dot,
+  .status-registered .dot {
+    background: #38BDF8;
+  }
+
+  .status-valuer-assigned,
+  .status-valuation-progress,
+  .status-pending-valuation,
+  .status-pending-comp,
+  .status-objection-review,
+  .status-offer-pending,
+  .status-payment-progress {
+    background: rgba(202, 138, 4, 0.22);
+    color: #FEF08A;
+  }
+  .status-valuer-assigned .dot,
+  .status-valuation-progress .dot,
+  .status-pending-valuation .dot,
+  .status-pending-comp .dot,
+  .status-objection-review .dot,
+  .status-offer-pending .dot,
+  .status-payment-progress .dot {
+    background: #FACC15;
+  }
+
+  .status-valuation-approved,
+  .status-comp-approved,
+  .status-obj-approved,
+  .status-offer-accepted,
+  .status-offer-issued,
+  .status-payment-completed,
+  .status-approved,
+  .status-accepted {
+    background: rgba(46, 125, 50, 0.22);
+    color: #A5D6A7;
+  }
+  .status-valuation-approved .dot,
+  .status-comp-approved .dot,
+  .status-obj-approved .dot,
+  .status-offer-accepted .dot,
+  .status-offer-issued .dot,
+  .status-payment-completed .dot,
+  .status-approved .dot,
+  .status-accepted .dot {
+    background: #81C784;
+  }
+
+  .status-valuation-rejected,
+  .status-comp-rejected,
+  .status-obj-rejected,
+  .status-offer-rejected,
+  .status-rejected {
+    background: rgba(198, 40, 40, 0.25);
+    color: #FFCDD2;
+  }
+  .status-valuation-rejected .dot,
+  .status-comp-rejected .dot,
+  .status-obj-rejected .dot,
+  .status-offer-rejected .dot,
+  .status-rejected .dot {
+    background: #E57373;
+  }
+
+  .status-case-closed,
+  .status-expired,
+  .status-closed {
+    background: rgba(100, 116, 139, 0.25);
+    color: #CBD5E1;
+  }
+  .status-case-closed .dot,
+  .status-expired .dot,
+  .status-closed .dot {
+    background: #94A3B8;
+  }
+}
+
+[data-theme="dark"] .status-case-registered,
+.dark .status-case-registered { background: rgba(2, 132, 199, 0.22); color: #7DD3FC; }
+[data-theme="dark"] .status-case-registered .dot,
+.dark .status-case-registered .dot { background: #38BDF8; }
+
+[data-theme="dark"] .status-objection-review,
+[data-theme="dark"] .status-pending-valuation,
+[data-theme="dark"] .status-pending-comp,
+[data-theme="dark"] .status-offer-pending,
+.dark .status-objection-review,
+.dark .status-pending-valuation,
+.dark .status-pending-comp,
+.dark .status-offer-pending { background: rgba(202, 138, 4, 0.22); color: #FEF08A; }
+[data-theme="dark"] .status-objection-review .dot,
+[data-theme="dark"] .status-pending-valuation .dot,
+[data-theme="dark"] .status-pending-comp .dot,
+[data-theme="dark"] .status-offer-pending .dot,
+.dark .status-objection-review .dot,
+.dark .status-pending-valuation .dot,
+.dark .status-pending-comp .dot,
+.dark .status-offer-pending .dot { background: #FACC15; }
+
+[data-theme="dark"] .status-obj-approved,
+[data-theme="dark"] .status-comp-approved,
+[data-theme="dark"] .status-valuation-approved,
+[data-theme="dark"] .status-offer-accepted,
+.dark .status-obj-approved,
+.dark .status-comp-approved,
+.dark .status-valuation-approved,
+.dark .status-offer-accepted { background: rgba(46, 125, 50, 0.22); color: #A5D6A7; }
+[data-theme="dark"] .status-obj-approved .dot,
+[data-theme="dark"] .status-comp-approved .dot,
+[data-theme="dark"] .status-valuation-approved .dot,
+[data-theme="dark"] .status-offer-accepted .dot,
+.dark .status-obj-approved .dot,
+.dark .status-comp-approved .dot,
+.dark .status-valuation-approved .dot,
+.dark .status-offer-accepted .dot { background: #81C784; }
+
+[data-theme="dark"] .status-obj-rejected,
+[data-theme="dark"] .status-comp-rejected,
+[data-theme="dark"] .status-valuation-rejected,
+[data-theme="dark"] .status-offer-rejected,
+.dark .status-obj-rejected,
+.dark .status-comp-rejected,
+.dark .status-valuation-rejected,
+.dark .status-offer-rejected { background: rgba(198, 40, 40, 0.25); color: #FFCDD2; }
+[data-theme="dark"] .status-obj-rejected .dot,
+[data-theme="dark"] .status-comp-rejected .dot,
+[data-theme="dark"] .status-valuation-rejected .dot,
+[data-theme="dark"] .status-offer-rejected .dot,
+.dark .status-obj-rejected .dot,
+.dark .status-comp-rejected .dot,
+.dark .status-valuation-rejected .dot,
+.dark .status-offer-rejected .dot { background: #E57373; }
