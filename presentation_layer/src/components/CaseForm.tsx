@@ -207,13 +207,13 @@ export const CaseForm: React.FC<CaseFormProps> = ({
   };
 
   const handleFileUpload = (id: string, file: File | null) => {
-    if (file) {
-      setDocuments(
-        documents.map((d) =>
-          d.id === id ? { ...d, file, fileName: file.name } : d
-        )
-      );
-    }
+    setDocuments(
+      documents.map((d) =>
+        d.id === id
+          ? { ...d, file, fileName: file ? file.name : "" }
+          : d
+      )
+    );
   };
 
   const isStepValid = (stepIndex: number): boolean => {
@@ -641,6 +641,7 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                   </div>
                   <div>
                     <FileUpload
+                      id={`case-doc-upload-${doc.id}`}
                       label="Upload File *"
                       fileName={doc.fileName}
                       onChange={(file) => handleFileUpload(doc.id, file)}

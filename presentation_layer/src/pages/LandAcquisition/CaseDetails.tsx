@@ -108,7 +108,7 @@ export const CaseView: React.FC = () => {
   const [searchParams] = useSearchParams();
   const stateCaseId = params.caseId || searchParams.get("caseId") || location.state?.caseId;
 
-  const { user, canEditCaseDetails, isAdmin } = useRole();
+  const { user, canEditCaseDetails, canDeleteCase, isOfficer, isSysAdmin, isAdmin } = useRole();
 
   const [caseData, setCaseData] = useState<CaseData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -423,8 +423,13 @@ export const CaseView: React.FC = () => {
     caseData?.createdById &&
     caseData.createdById === user.userId
   );
-  const canEdit = isCreator || isAdmin || canEditCaseDetails;
-  const canDelete = (isCreator || isAdmin) && caseData?.rawStatus === "CASE_REGISTERED";
+  const canEdit = Boolean(
+    canEditCaseDetails && (isSysAdmin || (isOfficer && isCreator))
+  );
+  const canDelete = Boolean(
+    canDeleteCase({ createdById: caseData?.createdById, status: caseData?.rawStatus }) &&
+    caseData?.rawStatus === "CASE_REGISTERED"
+  );
 
   return (
     <div>

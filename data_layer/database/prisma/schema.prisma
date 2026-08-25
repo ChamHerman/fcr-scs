@@ -38,9 +38,8 @@ enum ReportStatus {
 }
 
 enum ObjectionStatus {
-  SUBMITTED
-  UNDER_REVIEW
   APPROVED
+  PENDING
   REJECTED
 }
 

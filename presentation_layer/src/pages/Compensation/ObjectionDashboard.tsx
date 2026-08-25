@@ -29,30 +29,27 @@ type ObjectionItem = {
 };
 
 const statusClassMap: Record<string, string> = {
-  SUBMITTED: "status-objection-review",
-  UNDER_REVIEW: "status-objection-review",
+  PENDING: "status-objection-review",
   APPROVED: "status-obj-approved",
   REJECTED: "status-obj-rejected",
 };
 
 const statusLabelMap: Record<string, string> = {
-  SUBMITTED: "Submitted",
-  UNDER_REVIEW: "Under Review",
-  APPROVED: "Approved / Revised",
+  PENDING: "Pending Review",
+  APPROVED: "Approved",
   REJECTED: "Rejected",
 };
 
 const STATUS_OPTIONS: SelectOption[] = [
   { value: "", label: "All Status" },
-  { value: "SUBMITTED", label: "Submitted" },
-  { value: "UNDER_REVIEW", label: "Under Review" },
-  { value: "APPROVED", label: "Approved / Revised" },
+  { value: "PENDING", label: "Pending Review" },
+  { value: "APPROVED", label: "Approved" },
   { value: "REJECTED", label: "Rejected" },
 ];
 
 export const ObjectionDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { user, isMember, isOfficer, isValuer, isAdmin, userId, role } = useRole();
+  const { user, isMember, isOfficer, isValuer, isAdmin, isSysAdmin, userId, role } = useRole();
   const [userIc, setUserIc] = useState<string>(() => user?.identificationNumber || "");
   const [allScopedObjections, setAllScopedObjections] = useState<ObjectionItem[]>([]);
   const [objections, setObjections] = useState<ObjectionItem[]>([]);
@@ -218,8 +215,8 @@ export const ObjectionDashboard: React.FC = () => {
   };
 
   const handleCreate = () => {
-    if (!isMember && !isAdmin) {
-      alert("Only Displaced Community Members (Land Owners) and Administrators can submit compensation objections.");
+    if (!isMember && !isSysAdmin) {
+      alert("Only Displaced Community Members (Land Owners) can submit compensation objections.");
       return;
     }
     navigate("/admin/compensation/objection/create");
@@ -276,18 +273,18 @@ export const ObjectionDashboard: React.FC = () => {
   const stats = [
     { label: "Total Objections", value: filteredObjections.length, icon: <Lucide.AlertCircle size={16} className="inline mr-1" /> },
     {
-      label: "Under Review",
-      value: filteredObjections.filter((o) => o.status === "Submitted" || o.status === "Under Review" || o.rawStatus === "SUBMITTED" || o.rawStatus === "UNDER_REVIEW").length,
+      label: "Pending Review",
+      value: filteredObjections.filter((o) => o.rawStatus === "PENDING" || o.status === "Pending Review").length,
       icon: <Lucide.Clock size={16} className="inline mr-1" />,
     },
     {
-      label: "Approved / Revised",
-      value: filteredObjections.filter((o) => o.status === "Approved / Revised" || o.rawStatus === "APPROVED").length,
+      label: "Approved",
+      value: filteredObjections.filter((o) => o.rawStatus === "APPROVED" || o.status === "Approved").length,
       icon: <Lucide.CheckCircle size={16} className="inline mr-1" />,
     },
     {
       label: "Rejected",
-      value: filteredObjections.filter((o) => o.status === "Rejected" || o.rawStatus === "REJECTED").length,
+      value: filteredObjections.filter((o) => o.rawStatus === "REJECTED" || o.status === "Rejected").length,
       icon: <Lucide.XCircle size={16} className="inline mr-1" />,
     },
   ];
@@ -441,7 +438,7 @@ export const ObjectionDashboard: React.FC = () => {
           </span>
         </div>
 
-        {(isMember || isAdmin) && (
+        {(isMember || isSysAdmin) && (
           <div className="right">
             <Button variant="filled" onClick={handleCreate}>
               <Plus size={16} /> New Objection

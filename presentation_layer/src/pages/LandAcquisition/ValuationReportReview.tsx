@@ -16,6 +16,7 @@ type ReportDetail = {
   id: string;
   caseId: string;
   caseTitle: string;
+  caseCreatedById?: string;
   valuer: string;
   valuerId: string;
   valuationDate: string;
@@ -42,7 +43,7 @@ const statusLabelMap: Record<string, string> = {
 };
 
 export const ValuationReportReview: React.FC = () => {
-  const { user, userId, isAdmin, isOfficer, isValuer } = useRole();
+  const { user, userId, isSysAdmin, isAdmin, isOfficer, isValuer } = useRole();
   const { reportId: paramReportId } = useParams<{ reportId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
@@ -58,8 +59,10 @@ export const ValuationReportReview: React.FC = () => {
   const [daysError, setDaysError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Only Government Officer (and Admin) can approve or reject
-  const canApproveOrReject = isOfficer || isAdmin;
+  // Only the Government Officer who created the case (or System Administrator) can approve or reject
+  const canApproveOrReject = Boolean(
+    isSysAdmin || (isOfficer && userId && report?.caseCreatedById === userId)
+  );
 
   useEffect(() => {
     async function fetchReport() {
@@ -76,6 +79,7 @@ export const ValuationReportReview: React.FC = () => {
           id: rep.reportId,
           caseId: rep.caseId,
           caseTitle: rep.acquisitionCase?.caseTitle || "—",
+          caseCreatedById: rep.acquisitionCase?.createdById,
           valuer: rep.valuer?.name || "Unassigned",
           valuerId: rep.valuerId || "",
           valuationDate: rep.valuationDate
@@ -107,7 +111,7 @@ export const ValuationReportReview: React.FC = () => {
   const handleAccept = async () => {
     if (!report) return;
     if (!canApproveOrReject) {
-      alert("Only Government Officers are authorized to approve valuation reports.");
+      alert("Only the Government Officer who created this case can approve this valuation report.");
       return;
     }
     try {
@@ -122,7 +126,7 @@ export const ValuationReportReview: React.FC = () => {
 
   const openRejectModal = () => {
     if (!canApproveOrReject) {
-      alert("Only Government Officers are authorized to reject valuation reports.");
+      alert("Only the Government Officer who created this case can reject this valuation report.");
       return;
     }
     setShowRejectModal(true);
@@ -138,7 +142,7 @@ export const ValuationReportReview: React.FC = () => {
 
   const handleRejectSubmit = async () => {
     if (!canApproveOrReject) {
-      alert("Only Government Officers are authorized to reject valuation reports.");
+      alert("Only the Government Officer who created this case can reject this valuation report.");
       return;
     }
     let valid = true;

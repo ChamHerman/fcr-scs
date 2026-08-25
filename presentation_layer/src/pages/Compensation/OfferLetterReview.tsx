@@ -30,6 +30,7 @@ export type OwnerApprovalStatus = {
   status: "ACCEPTED" | "REJECTED" | "PENDING";
   remarks?: string;
   respondedAt?: string;
+  respondedAtDate?: Date | null;
   isCurrentUser: boolean;
 };
 
@@ -56,6 +57,9 @@ type OfferDetail = {
   acceptedCount: number;
   totalOwners: number;
   hasRejectedOwner: boolean;
+  acceptedAtDate?: Date | null;
+  currentUserAcceptedAtDate?: Date | null;
+  isWithinOneDay?: boolean;
   rejectedOwnerInfo: {
     name: string;
     nric: string;
@@ -91,6 +95,9 @@ export const OfferLetterDetail: React.FC = () => {
   const [offer, setOffer] = useState<OfferDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showAcceptConfirmModal, setShowAcceptConfirmModal] = useState(false);
+  const [showCancelApprovalModal, setShowCancelApprovalModal] = useState(false);
+  const [cancellingApproval, setCancellingApproval] = useState(false);
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -160,6 +167,7 @@ export const OfferLetterDetail: React.FC = () => {
                 minute: "2-digit",
               })
             : undefined,
+          respondedAtDate: resp?.respondedAt ? new Date(resp.respondedAt) : null,
           isCurrentUser: isCurrent,
         };
       });
@@ -171,6 +179,17 @@ export const OfferLetterDetail: React.FC = () => {
 
       const currentUserOwner = ownersList.find((ow) => ow.isCurrentUser);
       const currentUserStatus = currentUserOwner ? currentUserOwner.status : null;
+
+      // 1-day grace period computation:
+      const acceptedDate = isMultiOwner && currentUserOwner?.respondedAtDate
+        ? currentUserOwner.respondedAtDate
+        : o.acceptedAt
+        ? new Date(o.acceptedAt)
+        : null;
+
+      const isWithinOneDay = acceptedDate
+        ? (new Date().getTime() - acceptedDate.getTime()) <= (24 * 60 * 60 * 1000)
+        : false;
 
       const ownerName =
         parcelOwners.length > 0
@@ -225,6 +244,9 @@ export const OfferLetterDetail: React.FC = () => {
         acceptedCount,
         totalOwners: ownersList.length,
         hasRejectedOwner,
+        acceptedAtDate: o.acceptedAt ? new Date(o.acceptedAt) : null,
+        currentUserAcceptedAtDate: acceptedDate,
+        isWithinOneDay,
         rejectedOwnerInfo: rejectedOwner
           ? {
               name: rejectedOwner.name,
@@ -263,6 +285,22 @@ export const OfferLetterDetail: React.FC = () => {
     fetchOffer();
   }, [fetchOffer]);
 
+  const handleAcceptClick = () => {
+    if (!offer) return;
+    if (!canRespondToOffer) {
+      alert(
+        "Government Administrators and Officers cannot accept offer letters. Only land owners (Displaced Community Members) can accept this offer."
+      );
+      return;
+    }
+    setShowAcceptConfirmModal(true);
+  };
+
+  const handleConfirmAccept = async (force?: boolean) => {
+    setShowAcceptConfirmModal(false);
+    await handleAccept(force);
+  };
+
   const handleAccept = async (force?: boolean) => {
     if (!offer) return;
     if (!canRespondToOffer) {
@@ -276,7 +314,7 @@ export const OfferLetterDetail: React.FC = () => {
       try {
         const objRes = await compensationApi.getAllObjections({ search: offer.id });
         const list = objRes.objections || [];
-        const pending = list.find((o: any) => o.status === "SUBMITTED" || o.status === "UNDER_REVIEW");
+        const pending = list.find((o: any) => o.status === "PENDING" || o.status === "Pending Review" || o.rawStatus === "PENDING");
 
         if (pending) {
           setActiveObjection(pending);
@@ -311,6 +349,30 @@ export const OfferLetterDetail: React.FC = () => {
       }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleCancelAcceptanceSubmit = async () => {
+    if (!offer) return;
+    if (!canRespondToOffer) {
+      alert("Only land owners (Displaced Community Members) can cancel offer approvals.");
+      return;
+    }
+
+    setCancellingApproval(true);
+    try {
+      await compensationApi.cancelOfferAcceptance(offer.id, {
+        ownerNric: user?.identificationNumber,
+        userId: user?.userId,
+      });
+      setShowCancelApprovalModal(false);
+      await fetchOffer();
+      alert("Your approval has been cancelled. You can now re-evaluate or submit a Form N objection if needed.");
+    } catch (err: any) {
+      console.error("Cancel approval failed:", err);
+      alert(`Cancellation failed: ${err.message || err}`);
+    } finally {
+      setCancellingApproval(false);
     }
   };
 
@@ -400,6 +462,78 @@ export const OfferLetterDetail: React.FC = () => {
 
   return (
     <>
+      {/* Accept Confirmation Modal (1-Day Rule Notice) */}
+      <Modal
+        isOpen={showAcceptConfirmModal}
+        onClose={() => setShowAcceptConfirmModal(false)}
+        title="Confirm Formal Acceptance"
+        subtitle="1-Day Grace Period Policy Notice"
+        footer={
+          <>
+            <Button variant="text" onClick={() => setShowAcceptConfirmModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="filled"
+              onClick={() => handleConfirmAccept()}
+              isLoading={submitting}
+            >
+              <CheckCircle size={16} /> Confirm & Accept Award
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4 py-2 text-sm text-md-on-surface-variant">
+          <p>
+            You are formally accepting the compensation award of{" "}
+            <strong className="text-md-primary font-bold">{formatCurrency(offer.totalCompensation)}</strong>.
+          </p>
+
+          <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-900 dark:text-amber-200">
+            <div className="font-bold flex items-center gap-2 mb-1.5 text-amber-700 dark:text-amber-300">
+              <Lucide.AlertCircle size={18} /> Important: 1-Day Approval Policy
+            </div>
+            <p className="text-xs leading-relaxed">
+              Once you confirm acceptance, you have a <strong>1-day (24-hour) window</strong> to cancel this approval if needed.
+            </p>
+            <p className="text-xs font-semibold mt-2 text-amber-800 dark:text-amber-200">
+              After 1 day, your approval is permanently finalized. No further objections or changes will be permitted under the Land Acquisition Act.
+            </p>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Cancel Approval Modal */}
+      <Modal
+        isOpen={showCancelApprovalModal}
+        onClose={() => setShowCancelApprovalModal(false)}
+        title="Cancel Compensation Approval"
+        subtitle="Withdraw your formal acceptance within the 1-day grace period"
+        footer={
+          <>
+            <Button variant="text" onClick={() => setShowCancelApprovalModal(false)}>
+              Keep Approved
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleCancelAcceptanceSubmit}
+              isLoading={cancellingApproval}
+            >
+              <XCircle size={16} /> Yes, Cancel Approval
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3 py-2 text-sm text-md-on-surface-variant">
+          <p>
+            Are you sure you want to cancel your previous acceptance of this compensation offer?
+          </p>
+          <div className="p-3.5 bg-blue-500/10 border border-blue-500/25 rounded-xl text-xs text-blue-800 dark:text-blue-200">
+            Cancelling your approval will reset your status to <strong>Pending</strong>, allowing you to re-evaluate the offer or submit a Form N objection.
+          </div>
+        </div>
+      </Modal>
+
       {/* Active Objection Warning Modal */}
       <Modal
         isOpen={Boolean(showObjectionPrompt && activeObjection)}
@@ -616,6 +750,25 @@ export const OfferLetterDetail: React.FC = () => {
             </div>
           )}
 
+        {/* Revised Compensation Notice Banner */}
+        {offer.remarks && (offer.remarks.includes("Objection") || offer.remarks.includes("revised") || offer.remarks.includes("Revised")) && (
+          <div className="p-4 rounded-2xl mb-6 bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex items-start gap-3.5 shadow-sm">
+            <Lucide.Sparkles size={24} className="shrink-0 text-amber-600 mt-0.5" />
+            <div className="flex-1">
+              <div className="font-bold text-sm text-amber-700 dark:text-amber-300">
+                Compensation Award Revised via Approved Form N Objection
+              </div>
+              <p className="text-xs mt-1 text-md-on-surface-variant leading-relaxed">
+                The total compensation award has been updated to <strong>{formatCurrency(offer.totalCompensation)}</strong> following official Government Officer determination.
+                All registered land owner(s) are required to review and formally approve this revised award notice.
+              </p>
+              <div className="text-[11px] text-md-on-surface-variant/80 mt-1 italic">
+                Note: {offer.remarks}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Award Details Card */}
         <div className="report-card bg-md-surface-container p-6 rounded-2xl mb-6">
           <h3 className="text-base font-bold mb-4">Award Details</h3>
@@ -714,12 +867,40 @@ export const OfferLetterDetail: React.FC = () => {
           {/* Action Buttons */}
           {canRespondToOffer ? (
             <div className="flex gap-3 justify-end flex-wrap items-center pt-4 border-t border-md-outline/10">
-              <Button
-                variant="outlined"
-                onClick={() => navigate(`/admin/compensation/objection/create?offerId=${offer.id}`)}
-              >
-                <Lucide.AlertCircle size={18} /> Submit Objection (Form N)
-              </Button>
+              {/* If already accepted within 1 day, provide option to Cancel Approval */}
+              {((offer.status === "Accepted" && (offer.isWithinOneDay || !offer.isMultiOwner && offer.isWithinOneDay)) ||
+                (offer.isMultiOwner && offer.currentUserStatus === "ACCEPTED" && offer.isWithinOneDay)) && (
+                <div className="flex items-center gap-3">
+                  <div className="text-xs text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-xl font-medium">
+                    <Clock size={13} className="inline mr-1 -mt-0.5" /> 1-Day Grace Period Active
+                  </div>
+                  <Button
+                    variant="danger"
+                    onClick={() => setShowCancelApprovalModal(true)}
+                    isLoading={cancellingApproval}
+                  >
+                    <XCircle size={16} /> Cancel Approval
+                  </Button>
+                </div>
+              )}
+
+              {/* Notice if accepted and 1-day period has passed */}
+              {((offer.status === "Accepted" && !offer.isWithinOneDay) ||
+                (offer.isMultiOwner && offer.currentUserStatus === "ACCEPTED" && !offer.isWithinOneDay)) && (
+                <div className="text-xs text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 px-3.5 py-2 rounded-xl font-medium flex items-center gap-1.5">
+                  <CheckCircle size={14} /> Formal approval finalized (1-day cancellation window has ended).
+                </div>
+              )}
+
+              {/* Submit objection button: available when pending or within 1 day if not finalized */}
+              {(offer.status === "Pending" || (offer.status !== "Accepted" && offer.status !== "Rejected")) && (
+                <Button
+                  variant="outlined"
+                  onClick={() => navigate(`/admin/compensation/objection/create?offerId=${offer.id}`)}
+                >
+                  <Lucide.AlertCircle size={18} /> Submit Objection (Form N)
+                </Button>
+              )}
 
               {offer.status === "Pending" && (
                 <>
@@ -736,7 +917,7 @@ export const OfferLetterDetail: React.FC = () => {
                       >
                         <XCircle size={18} /> Reject Offer
                       </Button>
-                      <Button variant="filled" onClick={() => handleAccept()} isLoading={submitting}>
+                      <Button variant="filled" onClick={handleAcceptClick} isLoading={submitting}>
                         <CheckCircle size={18} /> Accept Offer
                       </Button>
                     </>

@@ -128,6 +128,16 @@ export const compensationApi = {
     });
   },
 
+  cancelOfferAcceptance: async (
+    offerId: string,
+    options?: { ownerNric?: string; ownerId?: string; userId?: string }
+  ) => {
+    return fetchJSON(COMPENSATION_BASE + `/api/compensation/offer-letters/${encodeURIComponent(offerId)}/cancel-acceptance`, {
+      method: "POST",
+      body: JSON.stringify(options || {}),
+    });
+  },
+
   // ─── Objections (Phase 7) ───────────────────────────────────────────────────
   getAllObjections: async (params?: CompensationFilterParams) => {
     const query = new URLSearchParams();
