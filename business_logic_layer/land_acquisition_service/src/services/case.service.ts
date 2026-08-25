@@ -11,6 +11,10 @@ export interface CaseFilters {
   projectType?: string;
   page?: number;
   limit?: number;
+  createdById?: string;
+  assignedToId?: string;
+  userRole?: string;
+  userId?: string;
 }
 
 export interface CreateCaseInput {
@@ -116,6 +120,28 @@ function buildWhereClause(filters: CaseFilters): Prisma.AcquisitionCaseWhereInpu
     };
   }
 
+  // 1. Direct createdById filter or via userRole = GOVERNMENT_OFFICER
+  if (filters.createdById) {
+    where.createdById = filters.createdById;
+  } else if (filters.userRole === "GOVERNMENT_OFFICER" && filters.userId) {
+    where.createdById = filters.userId;
+  }
+
+  // 2. Direct assignedToId filter or via userRole = LAND_VALUER
+  if (filters.assignedToId) {
+    where.caseAssignments = {
+      some: {
+        assignedToId: filters.assignedToId,
+      },
+    };
+  } else if (filters.userRole === "LAND_VALUER" && filters.userId) {
+    where.caseAssignments = {
+      some: {
+        assignedToId: filters.userId,
+      },
+    };
+  }
+
   return where;
 }
 
@@ -198,9 +224,12 @@ export async function getCaseById(caseId: string) {
   return caseData;
 }
 
-export async function getCaseStats() {
+export async function getCaseStats(filters?: CaseFilters) {
+  const where = filters ? buildWhereClause(filters) : {};
+
   const statusCounts = await prisma.acquisitionCase.groupBy({
     by: ["status"],
+    where,
     _count: { _all: true },
   });
 
@@ -218,9 +247,17 @@ export async function getCaseStats() {
     .filter((g) => CaseStateMachine.isPendingAction(g.status))
     .reduce((sum, g) => sum + g._count._all, 0);
 
+  // Filter compensation aggregate with cases in scope if any where conditions exist
+  const compensationWhere: Prisma.CompensationReportWhereInput = {
+    status: "APPROVED",
+  };
+  if (where.createdById || where.caseAssignments) {
+    compensationWhere.acquisitionCase = where;
+  }
+
   const compensationAgg = await prisma.compensationReport.aggregate({
     _sum: { totalCompensation: true },
-    where: { status: "APPROVED" },
+    where: compensationWhere,
   });
 
   return {

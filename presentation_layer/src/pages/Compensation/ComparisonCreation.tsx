@@ -5,6 +5,7 @@ import { Save, X, GitCompare } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Select, type SelectOption } from "../../components/ui/Select";
 import { CopyButton } from "../../components/ui/CopyButton";
+import { useAuth } from "../../context/AuthContext";
 import "../../style.css";
 import "./comparison.css";
 
@@ -165,6 +166,7 @@ const mockSavedComparisons: SavedComparison[] = [
 const formatCurrency = (val: number) => `RM ${val.toLocaleString()}`;
 
 export const CompensationComparisonCreate: React.FC = () => {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [selectedCase1, setSelectedCase1] = useState<string>("");
@@ -305,18 +307,37 @@ export const CompensationComparisonCreate: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen" style={{ background: "var(--md-background)", color: "var(--md-on-surface)" }}>
-      <main className="main blur-shape-bg w-full p-6">
-        <div className="compensation-dashboard">
-          <div className="topbar" style={{ marginBottom: "20px" }}>
+    <div className="main blur-shape-bg">
+      <div className="compensation-dashboard">
+        <div className="topbar" style={{ marginBottom: "20px" }}>
             <div className="topbar-left">
               <h1 style={{ marginBottom: 0 }}>Create Case Comparison</h1>
               <div className="sub">Select two cases to compare compensation metrics side-by-side</div>
             </div>
-            <div className="topbar-right">
+            <div className="topbar-right flex items-center gap-3">
               <Button variant="outlined" size="sm" onClick={handleClose}>
-                <Lucide.ArrowLeft size={16} /> Back to Comparison List
+                <Lucide.ArrowLeft size={16} /> Back
               </Button>
+              <span className="date-badge">
+                <Lucide.Calendar size={16} className="inline mr-1" />
+                {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+              </span>
+              <div
+                className="avatar"
+                title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
+              >
+                {user?.name ? (
+                  <span className="text-xs font-bold uppercase">
+                    {user.name
+                      .split(/\s+/)
+                      .map((n: string) => n[0])
+                      .slice(0, 2)
+                      .join("")}
+                  </span>
+                ) : (
+                  <Lucide.User size={16} />
+                )}
+              </div>
             </div>
           </div>
 
@@ -384,7 +405,6 @@ export const CompensationComparisonCreate: React.FC = () => {
             FCR-SCS · Compensation Comparison · For Government Officers
           </div>
         </div>
-      </main>
-    </div>
+      </div>
   );
 };

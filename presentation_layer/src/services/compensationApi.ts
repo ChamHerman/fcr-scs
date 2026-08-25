@@ -5,8 +5,12 @@ export const COMPENSATION_BASE = BASE_URL;
 export interface CompensationFilterParams {
   search?: string;
   status?: string;
+  ownerNric?: string;
   page?: number;
   limit?: number;
+  caseCreatedById?: string;
+  userRole?: string;
+  userId?: string;
 }
 
 export const compensationApi = {
@@ -17,6 +21,9 @@ export const compensationApi = {
     if (params?.status) query.append("status", params.status);
     if (params?.page) query.append("page", params.page.toString());
     if (params?.limit) query.append("limit", params.limit.toString());
+    if (params?.caseCreatedById) query.append("caseCreatedById", params.caseCreatedById);
+    if (params?.userRole) query.append("userRole", params.userRole);
+    if (params?.userId) query.append("userId", params.userId);
 
     const queryString = query.toString();
     const url = `/api/compensation/reports${queryString ? `?${queryString}` : ""}`;
@@ -40,6 +47,7 @@ export const compensationApi = {
       otherEligible: number;
     };
     remarks?: string;
+    createdById?: string;
   }) => {
     return fetchJSON(COMPENSATION_BASE + "/api/compensation/reports", {
       method: "POST",
@@ -66,6 +74,7 @@ export const compensationApi = {
     const query = new URLSearchParams();
     if (params?.search) query.append("search", params.search);
     if (params?.status) query.append("status", params.status);
+    if (params?.ownerNric) query.append("ownerNric", params.ownerNric);
     if (params?.page) query.append("page", params.page.toString());
     if (params?.limit) query.append("limit", params.limit.toString());
 
@@ -130,6 +139,7 @@ export const compensationApi = {
     caseId: string;
     objectionReason: string;
     requestedAmount: number;
+    createdById?: string;
   }) => {
     return fetchJSON(COMPENSATION_BASE + "/api/compensation/objections", {
       method: "POST",

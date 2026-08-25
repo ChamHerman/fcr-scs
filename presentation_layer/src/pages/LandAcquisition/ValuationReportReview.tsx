@@ -8,6 +8,7 @@ import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
+import { useRole } from "../../hooks/useRole";
 import "../../style.css";
 import "./valuation_report.css";
 
@@ -41,6 +42,7 @@ const statusLabelMap: Record<string, string> = {
 };
 
 export const ValuationReportReview: React.FC = () => {
+  const { user, userId, isAdmin, isOfficer } = useRole();
   const { reportId: paramReportId } = useParams<{ reportId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
@@ -55,6 +57,9 @@ export const ValuationReportReview: React.FC = () => {
   const [reasonError, setReasonError] = useState("");
   const [daysError, setDaysError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Only Government Officer (and Admin) can approve or reject
+  const canApproveOrReject = isOfficer || isAdmin;
 
   useEffect(() => {
     async function fetchReport() {
@@ -101,8 +106,12 @@ export const ValuationReportReview: React.FC = () => {
 
   const handleAccept = async () => {
     if (!report) return;
+    if (!canApproveOrReject) {
+      alert("Only Government Officers are authorized to approve valuation reports.");
+      return;
+    }
     try {
-      await landAcquisitionApi.approveValuationReport(report.id);
+      await landAcquisitionApi.approveValuationReport(report.id, userId);
       alert("Valuation Report Approved!\n\nCase status updated to 'VALUATION_APPROVED'.");
       navigate("/admin/case/valuation");
     } catch (err: any) {
@@ -112,6 +121,10 @@ export const ValuationReportReview: React.FC = () => {
   };
 
   const openRejectModal = () => {
+    if (!canApproveOrReject) {
+      alert("Only Government Officers are authorized to reject valuation reports.");
+      return;
+    }
     setShowRejectModal(true);
     setReason("");
     setAcceptanceDays("7");
@@ -124,6 +137,10 @@ export const ValuationReportReview: React.FC = () => {
   };
 
   const handleRejectSubmit = async () => {
+    if (!canApproveOrReject) {
+      alert("Only Government Officers are authorized to reject valuation reports.");
+      return;
+    }
     let valid = true;
     if (!reason.trim()) {
       setReasonError("Reason is required.");
@@ -141,7 +158,7 @@ export const ValuationReportReview: React.FC = () => {
 
     setSubmitting(true);
     try {
-      await landAcquisitionApi.rejectValuationReport(report.id, reason, parseInt(acceptanceDays, 10));
+      await landAcquisitionApi.rejectValuationReport(report.id, reason, parseInt(acceptanceDays, 10), userId);
       alert(`Valuation Report Rejected!\n\nReason: ${reason}\nCase status updated to 'VALUATION_REJECTED'.`);
       setShowRejectModal(false);
       navigate("/admin/case/valuation");
@@ -237,12 +254,8 @@ export const ValuationReportReview: React.FC = () => {
         </div>
       </Modal>
 
-      <div
-        className="flex min-h-screen"
-        style={{ background: "var(--md-background)", color: "var(--md-on-surface)" }}
-      >
-        <main className="main blur-shape-bg w-full">
-          <div className="review-container">
+      <div className="main blur-shape-bg">
+        <div className="review-container">
             <div className="topbar" style={{ marginBottom: "16px" }}>
               <div className="topbar-left">
                 <h1 style={{ marginBottom: 0 }}>Review Valuation Report</h1>
@@ -251,14 +264,29 @@ export const ValuationReportReview: React.FC = () => {
                 </div>
               </div>
               <div className="topbar-right flex items-center gap-3">
+                <Button variant="outlined" size="sm" onClick={() => navigate("/admin/case/valuation")}>
+                  <Lucide.ArrowLeft size={16} /> Back
+                </Button>
                 <span className="date-badge">
                   <Lucide.Calendar size={16} className="inline mr-1" />
                   {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
                 </span>
-                <Button variant="outlined" size="sm" onClick={() => navigate("/admin/case/valuation")}>
-                  <Lucide.ArrowLeft size={16} /> Back to List
-                </Button>
-                <div className="avatar">AO</div>
+                <div
+                  className="avatar"
+                  title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
+                >
+                  {user?.name ? (
+                    <span className="text-xs font-bold uppercase">
+                      {user.name
+                        .split(/\s+/)
+                        .map((n: string) => n[0])
+                        .slice(0, 2)
+                        .join("")}
+                    </span>
+                  ) : (
+                    <Lucide.User size={16} />
+                  )}
+                </div>
               </div>
             </div>
 
@@ -315,14 +343,16 @@ export const ValuationReportReview: React.FC = () => {
               </div>
 
               {report.status === "Pending Review" && (
-                <div className="action-bar flex items-center justify-end gap-3 mt-6 pt-4 border-t border-md-outline/10">
-                  <Button variant="danger" onClick={openRejectModal}>
-                    <XCircle size={18} /> Reject
-                  </Button>
-                  <Button variant="filled" onClick={handleAccept}>
-                    <CheckCircle size={18} /> Accept & Approve
-                  </Button>
-                </div>
+                canApproveOrReject ? (
+                  <div className="action-bar flex items-center justify-end gap-3 mt-6 pt-4 border-t border-md-outline/10">
+                    <Button variant="danger" onClick={openRejectModal}>
+                      <XCircle size={18} /> Reject
+                    </Button>
+                    <Button variant="filled" onClick={handleAccept}>
+                      <CheckCircle size={18} /> Accept & Approve
+                    </Button>
+                  </div>
+                ) : null
               )}
             </div>
 
@@ -340,8 +370,7 @@ export const ValuationReportReview: React.FC = () => {
               FCR-SCS · Valuation Report Review · Connected to Live Backend Service
             </div>
           </div>
-        </main>
-      </div>
+        </div>
     </>
   );
 };

@@ -16,6 +16,7 @@ import { landAcquisitionApi } from "../../services/landAcquisitionApi";
 import { Button } from "../../components/ui/Button";
 import { Modal } from "../../components/ui/Modal";
 import { CopyButton } from "../../components/ui/CopyButton";
+import { useRole } from "../../hooks/useRole";
 import "../../style.css";
 import "./case_management.css";
 
@@ -40,6 +41,8 @@ type CaseData = {
   id: string;
   title: string;
   status: string;
+  rawStatus: string;
+  createdById?: string;
   statusClass: string;
   registrationDate: string;
   // Project
@@ -105,6 +108,8 @@ export const CaseView: React.FC = () => {
   const [searchParams] = useSearchParams();
   const stateCaseId = params.caseId || searchParams.get("caseId") || location.state?.caseId;
 
+  const { user, canEditCaseDetails, isAdmin } = useRole();
+
   const [caseData, setCaseData] = useState<CaseData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -134,6 +139,8 @@ export const CaseView: React.FC = () => {
           id: c.caseId,
           title: c.caseTitle,
           status: statusLabelMap[c.status] || c.status,
+          rawStatus: c.status,
+          createdById: c.createdById,
           statusClass: statusClassMap[c.status] || "registered",
           registrationDate: c.registrationDate
             ? new Date(c.registrationDate).toLocaleDateString("en-GB", {
@@ -411,6 +418,14 @@ export const CaseView: React.FC = () => {
     },
   ];
 
+  const isCreator = Boolean(
+    user?.userId &&
+    caseData?.createdById &&
+    caseData.createdById === user.userId
+  );
+  const canEdit = isCreator || isAdmin || canEditCaseDetails;
+  const canDelete = (isCreator || isAdmin) && caseData?.rawStatus === "CASE_REGISTERED";
+
   return (
     <div>
       <div className="main blur-shape-bg">
@@ -422,10 +437,30 @@ export const CaseView: React.FC = () => {
                 Live case record from backend database
               </div>
             </div>
-            <div className="topbar-right">
+            <div className="topbar-right flex items-center gap-3">
               <Button variant="outlined" size="sm" onClick={() => navigate("/admin/case")}>
-                <Lucide.ArrowLeft size={16} /> Back to List
+                <Lucide.ArrowLeft size={16} /> Back
               </Button>
+              <span className="date-badge">
+                <Lucide.Calendar size={16} className="inline mr-1" />
+                {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+              </span>
+              <div
+                className="avatar"
+                title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
+              >
+                {user?.name ? (
+                  <span className="text-xs font-bold uppercase">
+                    {user.name
+                      .split(/\s+/)
+                      .map((n: string) => n[0])
+                      .slice(0, 2)
+                      .join("")}
+                  </span>
+                ) : (
+                  <Lucide.User size={16} />
+                )}
+              </div>
             </div>
           </div>
 
@@ -446,12 +481,16 @@ export const CaseView: React.FC = () => {
               </div>
             </div>
             <div className="case-header-actions flex items-center gap-3">
-              <Button variant="filled" onClick={() => handleEdit()}>
-                <Edit size={16} /> Edit Case
-              </Button>
-              <Button variant="danger" onClick={() => setShowDeleteModal(true)}>
-                <Trash2 size={16} /> Delete Case
-              </Button>
+              {canEdit && (
+                <Button variant="filled" onClick={() => handleEdit()}>
+                  <Edit size={16} /> Edit Case
+                </Button>
+              )}
+              {canDelete && (
+                <Button variant="danger" onClick={() => setShowDeleteModal(true)}>
+                  <Trash2 size={16} /> Delete Case
+                </Button>
+              )}
             </div>
           </div>
 
@@ -475,16 +514,18 @@ export const CaseView: React.FC = () => {
                       {section.title}
                     </div>
                     <div className="section-actions flex items-center gap-2">
-                      <Button
-                        variant="outlined"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEdit(section.key);
-                        }}
-                      >
-                        <Edit size={14} /> Edit
-                      </Button>
+                      {canEdit && (
+                        <Button
+                          variant="outlined"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(section.key);
+                          }}
+                        >
+                          <Edit size={14} /> Edit
+                        </Button>
+                      )}
                       <ChevronDown
                         size={20}
                         className={`toggle-icon ${expandedSections[section.key] ? "open" : ""}`}

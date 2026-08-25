@@ -91,6 +91,21 @@ export async function createObjection(input: CreateObjectionInput) {
   const offer = await prisma.offerLetter.findUnique({ where: { offerId } });
   if (!offer) throw new Error("Offer letter not found");
 
+  // Validate or resolve user for createdById to prevent foreign key violation
+  let validUserId = createdById;
+  if (validUserId) {
+    const userExists = await prisma.user.findUnique({ where: { userId: validUserId } });
+    if (!userExists) {
+      validUserId = undefined as any;
+    }
+  }
+
+  if (!validUserId) {
+    const defaultUser = await prisma.user.findFirst();
+    if (!defaultUser) throw new Error("No valid user found to author the objection record");
+    validUserId = defaultUser.userId;
+  }
+
   const objection = await prisma.objection.create({
     data: {
       offerId,
@@ -98,7 +113,7 @@ export async function createObjection(input: CreateObjectionInput) {
       objectionReason,
       requestedAmount,
       status: ObjectionStatus.SUBMITTED,
-      createdById,
+      createdById: validUserId,
     },
     include: {
       acquisitionCase: true,

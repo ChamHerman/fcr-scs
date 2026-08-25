@@ -3,10 +3,11 @@ import * as offerService from "../services/offer-letter.service";
 
 export async function getAllOfferLetters(req: Request, res: Response): Promise<void> {
   try {
-    const { status, search, page, limit } = req.query;
+    const { status, search, ownerNric, page, limit } = req.query;
     const result = await offerService.getAllOfferLetters({
       status: status as string,
       search: search as string,
+      ownerNric: ownerNric as string,
       page: page ? parseInt(page as string, 10) : undefined,
       limit: limit ? parseInt(limit as string, 10) : undefined,
     });

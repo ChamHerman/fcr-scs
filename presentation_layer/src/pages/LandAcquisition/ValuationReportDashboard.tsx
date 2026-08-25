@@ -1,13 +1,14 @@
 import * as Lucide from "lucide-react";
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
 import { Pagination } from "../../components/ui/Pagination";
 import { Button } from "../../components/ui/Button";
 import { Select, type SelectOption } from "../../components/ui/Select";
 import { SearchInput } from "../../components/ui/SearchInput";
 import { CopyButton } from "../../components/ui/CopyButton";
+import { useRole } from "../../hooks/useRole";
 import "../../style.css";
 import "./valuation_report.css";
 
@@ -17,7 +18,9 @@ type Report = {
   id: string;
   caseId: string;
   caseTitle: string;
+  caseCreatedById?: string;
   valuer: string;
+  valuerId?: string;
   valuationDate: string;
   method: string;
   recommendedCompensation: string;
@@ -46,6 +49,8 @@ const STATUS_OPTIONS: SelectOption[] = [
 
 export const ValuationReportList: React.FC = () => {
   const navigate = useNavigate();
+  const { user, role, userId, isAdmin, isOfficer, isValuer } = useRole();
+
   const [reports, setReports] = useState<Report[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
@@ -58,18 +63,61 @@ export const ValuationReportList: React.FC = () => {
   const loadReports = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await landAcquisitionApi.getAllValuationReports({
+      const scopeParams: any = {
         search: searchTerm || undefined,
         status: statusFilter || undefined,
         page: currentPage,
         limit: itemsPerPage,
+      };
+
+      // Role-Based scoping parameters for backend API
+      if (isOfficer && !isAdmin && userId) {
+        scopeParams.caseCreatedById = userId;
+        scopeParams.userRole = "GOVERNMENT_OFFICER";
+        scopeParams.userId = userId;
+      } else if (isValuer && !isAdmin && userId) {
+        scopeParams.valuerId = userId;
+        scopeParams.userRole = "LAND_VALUER";
+        scopeParams.userId = userId;
+      } else if (isAdmin) {
+        scopeParams.userRole = role || "ADMINISTRATOR";
+      }
+
+      const res = await landAcquisitionApi.getAllValuationReports(scopeParams);
+      const fetchedList = res.reports || [];
+
+      // Defensive client-side RBAC filter
+      const filteredList = fetchedList.filter((r: any) => {
+        // 1. System Admin and Government Administrator can view all records
+        if (isAdmin) return true;
+
+        // 2. Government Officer can only view reports under cases they created
+        if (isOfficer) {
+          return r.acquisitionCase?.createdById === userId;
+        }
+
+        // 3. Land Valuer can view reports evaluated by them or for cases assigned to them
+        if (isValuer) {
+          return (
+            r.valuerId === userId ||
+            r.valuer?.userId === userId ||
+            r.createdById === userId ||
+            r.acquisitionCase?.caseAssignments?.some(
+              (a: any) => a.assignedToId === userId || a.assignedTo?.userId === userId
+            )
+          );
+        }
+
+        return false;
       });
 
-      const formatted: Report[] = (res.reports || []).map((r: any) => ({
+      const formatted: Report[] = filteredList.map((r: any) => ({
         id: r.reportId,
         caseId: r.caseId,
         caseTitle: r.acquisitionCase?.caseTitle || "—",
+        caseCreatedById: r.acquisitionCase?.createdById,
         valuer: r.valuer?.name || "Unassigned",
+        valuerId: r.valuerId,
         valuationDate: r.valuationDate
           ? new Date(r.valuationDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
           : "—",
@@ -82,13 +130,13 @@ export const ValuationReportList: React.FC = () => {
       }));
 
       setReports(formatted);
-      setTotalCount(res.total || 0);
+      setTotalCount(res.total || formatted.length);
     } catch (err: any) {
       console.error("Failed to load valuation reports:", err);
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, statusFilter, currentPage]);
+  }, [searchTerm, statusFilter, currentPage, isAdmin, isOfficer, isValuer, userId, role]);
 
   useEffect(() => {
     loadReports();
@@ -99,6 +147,10 @@ export const ValuationReportList: React.FC = () => {
   };
 
   const handleCreate = () => {
+    if (!isValuer && !isAdmin) {
+      alert("Only Land Valuers can create valuation reports for assigned cases.");
+      return;
+    }
     setIsCaseModalOpen(true);
   };
 
@@ -132,7 +184,13 @@ export const ValuationReportList: React.FC = () => {
         <div className="topbar-left">
           <h1 style={{ marginBottom: 0 }}>Valuation Reports</h1>
           <div className="sub">
-            Review and manage all submitted valuation reports
+            {isAdmin
+              ? "Review and manage all submitted valuation reports across the system"
+              : isOfficer
+              ? "Review valuation reports for land acquisition cases created by your department account"
+              : isValuer
+              ? "Manage and submit valuation reports for your assigned acquisition cases"
+              : "Review and manage submitted valuation reports"}
           </div>
         </div>
         <div className="topbar-right" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -140,10 +198,22 @@ export const ValuationReportList: React.FC = () => {
             <Lucide.Calendar size={16} className="inline mr-1" />
             {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
           </span>
-          <Button variant="filled" onClick={handleCreate}>
-            <Lucide.Plus size={16} /> Create Report
-          </Button>
-          <div className="avatar">AO</div>
+          <div
+            className="avatar"
+            title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
+          >
+            {user?.name ? (
+              <span className="text-xs font-bold uppercase">
+                {user.name
+                  .split(/\s+/)
+                  .map((n: string) => n[0])
+                  .slice(0, 2)
+                  .join("")}
+              </span>
+            ) : (
+              <Lucide.User size={16} />
+            )}
+          </div>
         </div>
       </div>
 
@@ -182,6 +252,26 @@ export const ValuationReportList: React.FC = () => {
         </div>
       </div>
 
+      {/* Action Bar */}
+      <div className="action-bar">
+        <div className="left">
+          <span className="count">{totalCount}</span> reports found
+          <span style={{ opacity: 0.4, margin: "0 4px" }}>·</span>
+          <span style={{ fontSize: "13px" }}>
+            Showing {reports.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}–
+            {Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount}
+          </span>
+        </div>
+
+        {(isValuer || isAdmin) && (
+          <div className="right">
+            <Button variant="filled" onClick={handleCreate}>
+              <Lucide.Plus size={16} /> New Report
+            </Button>
+          </div>
+        )}
+      </div>
+
       <div className="table-wrap">
         <div className="table-scroll md-scroll-thin">
           <table>
@@ -193,28 +283,32 @@ export const ValuationReportList: React.FC = () => {
                 <th>Valuer</th>
                 <th>Date</th>
                 <th>Status</th>
-                <th style={{ textAlign: "center" }}>Action</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)" }}>
+                  <td colSpan={6} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)" }}>
                     <Loader2 size={24} className="inline animate-spin mr-2" /> Loading reports from database...
                   </td>
                 </tr>
               ) : reports.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)", opacity: 0.6 }}>
+                  <td colSpan={6} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)", opacity: 0.6 }}>
                     No valuation reports found in database.
                   </td>
                 </tr>
               ) : (
                 reports.map((r) => (
-                  <tr key={r.id}>
+                  <tr
+                    key={r.id}
+                    onClick={() => handleView(r.id)}
+                    className="cursor-pointer hover:bg-md-primary/5 transition-colors"
+                    title="Click to view report details"
+                  >
                     <td>
                       <div className="flex items-center gap-1.5">
-                        <span className="case-id font-mono text-xs">{r.id}</span>
+                        <span className="case-id font-mono text-xs font-semibold text-md-primary">{r.id}</span>
                         <CopyButton value={r.id} />
                       </div>
                     </td>
@@ -224,18 +318,13 @@ export const ValuationReportList: React.FC = () => {
                         <CopyButton value={r.caseId} />
                       </div>
                     </td>
-                    <td className="case-title">{r.caseTitle}</td>
+                    <td className="case-title font-medium text-md-on-surface">{r.caseTitle}</td>
                     <td>{r.valuer}</td>
                     <td>{r.valuationDate}</td>
                     <td>
                       <span className={`status-badge ${r.statusClass}`}>
                         <span className="dot"></span> {r.status}
                       </span>
-                    </td>
-                    <td style={{ textAlign: "center" }}>
-                      <Button variant="tonal" size="sm" onClick={() => handleView(r.id)}>
-                        <Eye size={14} /> View
-                      </Button>
                     </td>
                   </tr>
                 ))

@@ -5,6 +5,7 @@ import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
 import { SearchInput } from "../../components/ui/SearchInput";
 import { CopyButton } from "../../components/ui/CopyButton";
+import { useRole } from "../../hooks/useRole";
 import "../../style.css";
 import "./valuation_report.css";
 
@@ -24,31 +25,70 @@ export const CaseSelectionModal: React.FC<CaseSelectionModalProps> = ({
   onSelectCase,
   allowedStatuses = ["VALUER_ASSIGNED", "VALUATION_IN_PROGRESS", "VALUATION_REJECTED"],
   title = "Select Case for Valuation Report",
-  subtitle = "Click directly on any case card below to select it for the report generator.",
-  emptyMessage = "No cases available matching criteria.",
+  subtitle = "Select a case assigned to you to generate the valuation report.",
+  emptyMessage,
 }) => {
+  const { user, userId, isValuer, isOfficer, isAdmin } = useRole();
   const [cases, setCases] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>("");
 
   const statusKey = allowedStatuses.join(",");
 
+  const defaultEmptyMsg = isOfficer
+    ? "No eligible cases created by you are currently ready for this action."
+    : isValuer
+    ? "No cases assigned to you are currently ready for valuation."
+    : "No available cases found matching criteria.";
+
   const fetchCases = useCallback(async () => {
     if (!isOpen) return;
     setLoading(true);
     try {
-      const res = await landAcquisitionApi.getAllCases({ limit: 100 });
+      const scopeParams: any = { limit: 100 };
+      if (isOfficer && !isAdmin && userId) {
+        scopeParams.createdById = userId;
+        scopeParams.userRole = "GOVERNMENT_OFFICER";
+        scopeParams.userId = userId;
+      } else if (isValuer && !isAdmin && userId) {
+        scopeParams.assignedToId = userId;
+        scopeParams.userRole = "LAND_VALUER";
+        scopeParams.userId = userId;
+      }
+
+      const res = await landAcquisitionApi.getAllCases(scopeParams);
       const targetStatuses = statusKey ? statusKey.split(",") : [];
-      const filtered = (res.cases || []).filter((c: any) =>
-        targetStatuses.includes(c.status)
-      );
+
+      const filtered = (res.cases || []).filter((c: any) => {
+        // Status check
+        const matchesStatus = targetStatuses.length === 0 || targetStatuses.includes(c.status);
+        if (!matchesStatus) return false;
+
+        // 1. Government Officer: Only cases created by self
+        if (isOfficer && !isAdmin && userId) {
+          return c.createdById === userId;
+        }
+
+        // 2. Valuer assignment check: Only assigned cases
+        if (isValuer && !isAdmin && userId) {
+          return c.caseAssignments?.some(
+            (a: any) => a.assignedToId === userId || a.assignedTo?.userId === userId
+          );
+        }
+
+        // 3. Administrators can see all matching cases
+        if (isAdmin) return true;
+
+        return false;
+      });
+
       setCases(filtered);
     } catch (err) {
       console.error("Failed to fetch cases for selection:", err);
     } finally {
       setLoading(false);
     }
-  }, [isOpen, statusKey]);
+  }, [isOpen, statusKey, isOfficer, isValuer, isAdmin, userId]);
 
   useEffect(() => {
     fetchCases();
@@ -76,14 +116,14 @@ export const CaseSelectionModal: React.FC<CaseSelectionModalProps> = ({
         </Button>
       }
     >
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 p-4">
         <SearchInput
           placeholder="Filter cases by title or ID..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
 
-        <div className="max-h-[420px] overflow-y-auto pr-1 md-scroll-thin">
+        <div className="max-h-[420px] overflow-y-auto p-2 md-scroll-thin">
           {loading ? (
             <div className="text-center py-12 text-md-on-surface-variant">
               <Lucide.Loader2 size={28} className="inline animate-spin mb-2" />
@@ -91,7 +131,7 @@ export const CaseSelectionModal: React.FC<CaseSelectionModalProps> = ({
             </div>
           ) : filteredCases.length === 0 ? (
             <div className="text-center py-12 text-md-on-surface-variant/70 text-sm">
-              {emptyMessage}
+              {emptyMessage || defaultEmptyMsg}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">

@@ -7,6 +7,7 @@ import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
 import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
+import { useRole } from "../../hooks/useRole";
 import "../../style.css";
 import "./compensation.css";
 
@@ -62,6 +63,8 @@ export const CompensationApproval: React.FC = () => {
   const { reportId: paramReportId } = useParams<{ reportId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, userId, isGovAdmin, isAdmin } = useRole();
+  const canApproveOrReject = isGovAdmin || isAdmin;
 
   const activeReportId = location.state?.reportId || paramReportId;
 
@@ -140,9 +143,13 @@ export const CompensationApproval: React.FC = () => {
 
   const confirmApprove = async () => {
     if (!report) return;
+    if (!canApproveOrReject) {
+      alert("Only Government Administrators can approve compensation reports.");
+      return;
+    }
     setSubmitting(true);
     try {
-      const res = await compensationApi.approveReport(report.id);
+      const res = await compensationApi.approveReport(report.id, userId);
       const generatedOffer = res.offerLetter || res.report?.offerLetters?.[0];
       setShowApproveModal(false);
 
@@ -177,10 +184,14 @@ export const CompensationApproval: React.FC = () => {
       return;
     }
     if (!report) return;
+    if (!canApproveOrReject) {
+      alert("Only Government Administrators can reject compensation reports.");
+      return;
+    }
 
     setSubmitting(true);
     try {
-      await compensationApi.rejectReport(report.id, rejectReason);
+      await compensationApi.rejectReport(report.id, rejectReason, userId);
       setShowRejectModal(false);
       navigate("/admin/compensation/report");
     } catch (err: any) {
@@ -292,10 +303,30 @@ export const CompensationApproval: React.FC = () => {
               Review calculation components and approve or reject report
             </div>
           </div>
-          <div className="topbar-right">
+          <div className="topbar-right flex items-center gap-3">
             <Button variant="outlined" size="sm" onClick={() => navigate("/admin/compensation/report")}>
               <ArrowLeft size={16} /> Back
             </Button>
+            <span className="date-badge">
+              <Lucide.Calendar size={16} className="inline mr-1" />
+              {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+            </span>
+            <div
+              className="avatar"
+              title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
+            >
+              {user?.name ? (
+                <span className="text-xs font-bold uppercase">
+                  {user.name
+                    .split(/\s+/)
+                    .map((n: string) => n[0])
+                    .slice(0, 2)
+                    .join("")}
+                </span>
+              ) : (
+                <Lucide.User size={16} />
+              )}
+            </div>
           </div>
         </div>
 
@@ -369,7 +400,7 @@ export const CompensationApproval: React.FC = () => {
             </div>
           )}
 
-          {report.status === "Pending Approval" && (
+          {report.status === "Pending Approval" && canApproveOrReject ? (
             <div className="flex gap-3 justify-end items-center mt-6 pt-4 border-t border-md-outline/10">
               <Button
                 variant="danger"
@@ -385,7 +416,7 @@ export const CompensationApproval: React.FC = () => {
                 <CheckCircle size={18} /> Approve Report
               </Button>
             </div>
-          )}
+          ) : null}
         </div>
 
         <div

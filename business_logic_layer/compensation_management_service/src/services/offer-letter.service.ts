@@ -5,6 +5,7 @@ import { CaseStatus, OfferStatus, ObjectionStatus, Prisma } from "@prisma/client
 export interface OfferLetterFilters {
   status?: string;
   search?: string;
+  ownerNric?: string;
   page?: number;
   limit?: number;
 }
@@ -27,6 +28,17 @@ export async function getAllOfferLetters(filters: OfferLetterFilters) {
 
   if (filters.status) {
     where.status = filters.status as OfferStatus;
+  }
+
+  if (filters.ownerNric) {
+    where.landOwnership = {
+      landOwner: {
+        nric: {
+          contains: filters.ownerNric,
+          mode: "insensitive",
+        },
+      },
+    };
   }
 
   if (filters.search) {

@@ -3,12 +3,16 @@ import * as valuationService from "../services/valuation.service";
 
 export async function getAllReports(req: Request, res: Response): Promise<void> {
   try {
-    const { status, search, page, limit } = req.query;
+    const { status, search, page, limit, caseCreatedById, valuerId, userRole, userId } = req.query;
     const result = await valuationService.getAllReports({
       status: status as string,
       search: search as string,
       page: page ? parseInt(page as string, 10) : undefined,
       limit: limit ? parseInt(limit as string, 10) : undefined,
+      caseCreatedById: caseCreatedById as string,
+      valuerId: valuerId as string,
+      userRole: userRole as string,
+      userId: userId as string,
     });
     res.json(result);
   } catch (e: unknown) {

@@ -746,6 +746,16 @@ table tbody tr.row-clickable:hover {
   color: white;
   border-color: var(--md-primary, var(--md-primary));
 }
+.step-circle.locked {
+  background: var(--md-surface-container-low, #f7f2fa);
+  color: var(--md-outline, #79747e);
+  border-color: rgba(121, 116, 126, 0.3);
+  opacity: 0.7;
+}
+.step-item.locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 .step-label {
   font-size: 12px;
   font-weight: 500;
@@ -770,8 +780,7 @@ table tbody tr.row-clickable:hover {
 
 /* Case Management*/
 .case-view-container {
-  max-width: 1000px;
-  margin: 0 auto;
+  width: 100%;
 }
 
 .case-header {

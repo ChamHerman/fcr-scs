@@ -59,10 +59,40 @@ export async function login(req: Request, res: Response): Promise<void> {
         name: user.name,
         email: user.email,
         role: user.role,
+        identificationNumber: user.identificationNumber,
+        contactNumber: user.contactNumber,
       },
     });
   } catch (error) {
     console.error('[Login Error]', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function getUserById(req: Request, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const user = await prisma.user.findUnique({
+      where: { userId: id },
+      select: {
+        userId: true,
+        name: true,
+        email: true,
+        contactNumber: true,
+        identificationNumber: true,
+        role: true,
+        isActive: true,
+      },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    res.json({ success: true, data: user });
+  } catch (error) {
+    console.error('[Get User By Id Error]', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 }

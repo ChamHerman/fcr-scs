@@ -8,6 +8,7 @@ import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
+import { useRole } from "../../hooks/useRole";
 import "../../style.css";
 import "./objection.css";
 
@@ -50,6 +51,7 @@ export const ObjectionReview: React.FC = () => {
   const { objectionId: paramId } = useParams<{ objectionId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, userId, isOfficer, isMember, isAdmin } = useRole();
 
   const activeObjectionId = paramId || location.state?.objectionId;
 
@@ -277,8 +279,11 @@ export const ObjectionReview: React.FC = () => {
   const isActionable = objection.rawStatus === "SUBMITTED" || objection.rawStatus === "UNDER_REVIEW";
   const isResolved = objection.rawStatus === "APPROVED" || objection.rawStatus === "REJECTED";
 
+  const canReview = isOfficer || isAdmin;
+  const canEditOrDelete = (isMember || isAdmin) && (objection.rawStatus === "SUBMITTED" || objection.rawStatus === "UNDER_REVIEW");
+
   return (
-    <div className="flex min-h-screen" style={{ background: "var(--md-background)", color: "var(--md-on-surface)" }}>
+    <>
       {/* Edit Modal */}
       <Modal
         isOpen={showEditModal}
@@ -342,56 +347,90 @@ export const ObjectionReview: React.FC = () => {
         </p>
       </Modal>
 
-      <main className="main blur-shape-bg w-full p-6">
+      <div className="main blur-shape-bg">
         <div className="objection-review">
-          <div className="header-card flex justify-between items-center p-6 rounded-2xl mb-6 bg-md-surface-container">
+          {/* Topbar */}
+          <div className="topbar flex justify-between items-center mb-6 flex-wrap gap-4">
+            <div className="topbar-left">
+              <h1 className="text-2xl font-bold mb-1">Form N — Objection Assessment</h1>
+              <div className="text-xs md:text-sm text-md-on-surface-variant">
+                Objection Ref: <span className="font-mono font-bold text-md-primary">{objection.id}</span>
+              </div>
+            </div>
+            <div className="topbar-right flex items-center gap-3">
+              <Button variant="outlined" size="sm" onClick={() => navigate("/admin/compensation/objection")}>
+                <ArrowLeft size={16} /> Back
+              </Button>
+              <span className="date-badge">
+                <Lucide.Calendar size={16} className="inline mr-1" />
+                {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+              </span>
+              <div
+                className="avatar"
+                title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
+              >
+                {user?.name ? (
+                  <span className="text-xs font-bold uppercase">
+                    {user.name
+                      .split(/\s+/)
+                      .map((n: string) => n[0])
+                      .slice(0, 2)
+                      .join("")}
+                  </span>
+                ) : (
+                  <Lucide.User size={16} />
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="header-card flex justify-between items-center p-6 rounded-2xl mb-6 bg-md-surface-container shadow-sm flex-wrap gap-4">
             <div className="left">
               <div className="flex items-center gap-2 mb-1">
-                <span className="objection-id font-mono text-sm">{objection.id}</span>
+                <span className="objection-id font-mono text-sm font-bold text-md-primary">{objection.id}</span>
                 <CopyButton value={objection.id} />
               </div>
-              <div className="title text-xl font-bold mb-2">{objection.caseTitle}</div>
-              <div className="meta flex gap-4 text-xs text-md-on-surface-variant">
+              <div className="title text-lg md:text-xl font-bold mb-2">{objection.caseTitle}</div>
+              <div className="meta flex gap-4 text-xs text-md-on-surface-variant flex-wrap">
                 <span><Lucide.FolderOpen size={14} className="inline mr-1" /> {objection.caseId}</span>
                 <span><Lucide.User size={14} className="inline mr-1" /> {objection.submittedBy}</span>
                 <span><Lucide.Calendar size={14} className="inline mr-1" /> {objection.submittedDate}</span>
                 <span><Lucide.FileText size={14} className="inline mr-1" /> {objection.type}</span>
               </div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <Button variant="outlined" size="sm" onClick={() => navigate("/admin/compensation/objection")}>
-                <ArrowLeft size={16} /> Back
-              </Button>
+            <div className="flex items-center gap-3">
               <span className={`status-badge-lg ${objection.statusClass}`}>
                 <span className="dot"></span> {objection.status}
               </span>
             </div>
           </div>
 
-          <div className="content-card bg-md-surface-container p-6 rounded-2xl mb-6">
+          <div className="content-card bg-md-surface-container p-6 md:p-8 rounded-2xl mb-6 shadow-sm">
             <div className="flex justify-between items-center mb-4">
               <div className="section-title text-base font-bold flex items-center gap-2 m-0">
-                <Lucide.ClipboardList size={18} /> Objection Details
+                <Lucide.ClipboardList size={18} className="text-md-primary" /> Objection Submission Details
               </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outlined"
-                  size="sm"
-                  onClick={handleOpenEdit}
-                >
-                  <Edit2 size={14} /> Edit
-                </Button>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => setShowDeleteModal(true)}
-                >
-                  <Trash2 size={14} /> Delete
-                </Button>
-              </div>
+              {canEditOrDelete && (
+                <div className="flex gap-2">
+                  <Button
+                    variant="outlined"
+                    size="sm"
+                    onClick={handleOpenEdit}
+                  >
+                    <Edit2 size={14} /> Edit
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => setShowDeleteModal(true)}
+                  >
+                    <Trash2 size={14} /> Delete
+                  </Button>
+                </div>
+              )}
             </div>
 
-            <div className="detail-grid grid grid-cols-1 md:grid-cols-4 gap-4 p-4 rounded-xl bg-md-surface-container-low mb-6">
+            <div className="detail-grid grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-xl bg-md-surface-container-low mb-6 border border-md-outline/10">
               <div className="detail-item flex flex-col gap-1">
                 <span className="label text-xs text-md-on-surface-variant">Submitted By</span>
                 <span className="value text-sm font-semibold">{objection.submittedBy}</span>
@@ -413,8 +452,8 @@ export const ObjectionReview: React.FC = () => {
             </div>
 
             <div className="objection-text mb-6">
-              <div className="label text-xs text-md-on-surface-variant font-semibold uppercase mb-2">Objection Statement</div>
-              <div className="text text-sm p-4 rounded-xl bg-md-surface-container-low leading-relaxed">{objection.objectionText}</div>
+              <div className="label text-xs text-md-on-surface-variant font-semibold uppercase mb-2">Objection Grounds & Statement</div>
+              <div className="text text-sm p-4 rounded-xl bg-md-surface-container-low leading-relaxed border border-md-outline/10">{objection.objectionText}</div>
             </div>
 
             {/* Link references */}
@@ -438,12 +477,12 @@ export const ObjectionReview: React.FC = () => {
             {objection.attachments.length > 0 && (
               <>
                 <div className="section-title text-base font-bold flex items-center gap-2 mt-6 mb-3">
-                  <Lucide.Paperclip size={18} /> Attachments
+                  <Lucide.Paperclip size={18} className="text-md-primary" /> Supporting Documents
                 </div>
                 <div className="file-list flex flex-col gap-2">
                   {objection.attachments.map((a, i) => (
-                    <div key={i} className="file-item flex items-center gap-2 p-2.5 rounded-xl bg-md-surface-container-low">
-                      <Lucide.FileText size={14} className="text-md-primary" />
+                    <div key={i} className="file-item flex items-center gap-2 p-2.5 rounded-xl bg-md-surface-container-low border border-md-outline/10 text-xs">
+                      <Lucide.FileText size={16} className="text-md-primary" />
                       <span className="text-sm font-medium">{a.name || a.fileName || "Document"}</span>
                       <span className="text-xs text-md-on-surface-variant opacity-60 ml-2">
                         ({a.size || a.fileSize || "1.2 MB"})
@@ -454,70 +493,95 @@ export const ObjectionReview: React.FC = () => {
               </>
             )}
 
+            {/* Resolved Decision Card (Visible when review is completed) */}
             {isResolved && objection.response && (
-              <div className="response-section mt-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+              <div className="response-section mt-6 p-5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
                 <div className="section-title font-bold text-sm text-emerald-800 dark:text-emerald-300 mb-2 flex items-center gap-1.5">
-                  <Lucide.Pin size={16} /> Review Decision
+                  <Lucide.CheckCircle size={18} /> Official Officer Determination & Decision
                 </div>
                 <div className="response-text text-sm">
                   <div className="label text-xs opacity-75 mb-1">
                     Reviewed by {objection.respondedBy || "Government Officer"}
                   </div>
                   {objection.revisedCompensation && (
-                    <div className="mb-2 font-bold text-emerald-700 dark:text-emerald-400">
-                      Approved Revised Amount: {formatCurrency(objection.revisedCompensation)}
+                    <div className="mb-2 text-base font-bold text-emerald-700 dark:text-emerald-400">
+                      Approved Revised Compensation: {formatCurrency(objection.revisedCompensation)}
                     </div>
                   )}
-                  <div className="text leading-relaxed">{objection.response}</div>
+                  <div className="p-3 bg-md-surface-container/60 rounded-xl leading-relaxed mt-2 text-sm">{objection.response}</div>
                   {objection.responseDate && (
                     <div className="text-xs opacity-60 mt-2">
-                      Decision Date: {objection.responseDate}
+                      Determination Recorded Date: {objection.responseDate}
                     </div>
                   )}
                 </div>
               </div>
             )}
 
-            {isActionable && (
-              <div className="mt-6 pt-6 border-t border-md-outline/10">
-                <div className="section-title text-base font-bold flex items-center gap-2 mb-4">
-                  <Lucide.MessageSquare size={18} /> Officer Review & Decision
-                </div>
+            {/* If Pending / Under Review */}
+            {!isResolved && isActionable && (
+              <>
+                {/* Officer / Admin Review UI */}
+                {canReview && (
+                  <div className="mt-6 pt-6 border-t border-md-outline/10">
+                    <div className="section-title text-base font-bold flex items-center gap-2 mb-4">
+                      <Lucide.MessageSquare size={18} className="text-md-primary" /> Officer Review & Decision
+                    </div>
 
-                <div className="flex flex-col gap-4">
-                  <div>
-                    <Input
-                      label="Revised Compensation Amount (RM)"
-                      id="revisedAmount"
-                      type="number"
-                      value={revisedAmount === "" ? "" : String(revisedAmount)}
-                      onChange={(e) => setRevisedAmount(e.target.value === "" ? "" : Number(e.target.value))}
-                      placeholder="Enter revised compensation if approving with revision"
-                    />
-                  </div>
+                    <div className="flex flex-col gap-4">
+                      <div>
+                        <Input
+                          label="Revised Compensation Amount (RM)"
+                          id="revisedAmount"
+                          type="number"
+                          value={revisedAmount === "" ? "" : String(revisedAmount)}
+                          onChange={(e) => setRevisedAmount(e.target.value === "" ? "" : Number(e.target.value))}
+                          placeholder="Enter revised compensation if approving with revision"
+                        />
+                      </div>
 
-                  <div>
-                    <Textarea
-                      label="Review Remarks & Justification *"
-                      id="responseText"
-                      rows={4}
-                      placeholder="Provide detailed justification for your decision..."
-                      value={responseText}
-                      onChange={(e) => setResponseText(e.target.value)}
-                    />
-                    {responseError && <div className="text-xs text-md-error pl-2 mt-1">{responseError}</div>}
-                  </div>
+                      <div>
+                        <Textarea
+                          label="Review Remarks & Justification *"
+                          id="responseText"
+                          rows={4}
+                          placeholder="Provide detailed justification for your decision..."
+                          value={responseText}
+                          onChange={(e) => setResponseText(e.target.value)}
+                        />
+                        {responseError && <div className="text-xs text-md-error pl-2 mt-1">{responseError}</div>}
+                      </div>
 
-                  <div className="action-bar flex justify-end gap-3 pt-4">
-                    <Button variant="danger" onClick={handleReject} isLoading={submitting}>
-                      <XCircle size={18} /> Reject Objection
-                    </Button>
-                    <Button variant="filled" onClick={handleApprove} isLoading={submitting}>
-                      <CheckCircle size={18} /> Approve Objection
-                    </Button>
+                      <div className="action-bar flex justify-end gap-3 pt-4 border-t border-md-outline/10">
+                        <Button variant="danger" onClick={handleReject} isLoading={submitting}>
+                          <XCircle size={18} /> Reject Objection
+                        </Button>
+                        <Button variant="filled" onClick={handleApprove} isLoading={submitting}>
+                          <CheckCircle size={18} /> Approve Objection
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                )}
+
+                {/* Member Pending Information View */}
+                {isMember && (
+                  <div className="mt-6 p-5 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-full bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
+                      <Lucide.Clock size={20} />
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-amber-900 dark:text-amber-300 mb-1">
+                        Awaiting Government Officer Evaluation
+                      </div>
+                      <p className="text-xs text-md-on-surface-variant leading-relaxed">
+                        Your Form N objection has been received and is currently under active assessment by the assigned Land Acquisition Government Officer.
+                        Once an official determination is made, the remarks and any approved revised compensation award will appear here.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -532,11 +596,11 @@ export const ObjectionReview: React.FC = () => {
               paddingTop: "18px",
             }}
           >
-            FCR-SCS · Objection Review · For Government Officers
+            FCR-SCS · Form N Objection Assessment · Connected to Backend Service
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </>
   );
 };
 

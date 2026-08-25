@@ -7,6 +7,7 @@ import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
 import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
+import { useRole } from "../../hooks/useRole";
 import "../../style.css";
 import "./compensation.css";
 
@@ -46,6 +47,7 @@ export const OfferLetterDetail: React.FC = () => {
   const { offerId: paramOfferId } = useParams<{ offerId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, isMember, isAdmin } = useRole();
 
   const activeOfferId = location.state?.offerId || paramOfferId;
 
@@ -106,8 +108,12 @@ export const OfferLetterDetail: React.FC = () => {
     fetchOffer();
   }, [activeOfferId]);
 
-  const handleAccept = async (force: boolean = false) => {
+  const handleAccept = async (force?: boolean) => {
     if (!offer) return;
+    if (!isMember && !isAdmin) {
+      alert("Only Displaced Community Members (Land Owners) and Administrators can accept this offer.");
+      return;
+    }
 
     if (!force) {
       try {
@@ -146,6 +152,10 @@ export const OfferLetterDetail: React.FC = () => {
 
   const handleWithdrawObjectionAndAccept = async () => {
     if (!activeObjection || !offer) return;
+    if (!isMember && !isAdmin) {
+      alert("Only Displaced Community Members (Land Owners) and Administrators can perform this action.");
+      return;
+    }
     setWithdrawingObjection(true);
     try {
       if (activeObjection.objectionId) {
@@ -167,6 +177,10 @@ export const OfferLetterDetail: React.FC = () => {
       return;
     }
     if (!offer) return;
+    if (!isMember && !isAdmin) {
+      alert("Only Displaced Community Members (Land Owners) and Administrators can reject this offer.");
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -218,35 +232,27 @@ export const OfferLetterDetail: React.FC = () => {
         isOpen={Boolean(showObjectionPrompt && activeObjection)}
         onClose={() => setShowObjectionPrompt(false)}
         title="Active Objection Detected"
-        subtitle="Form N pending review"
+        subtitle="Cannot accept offer while an active Form N objection is under review"
         footer={
-          <div className="flex justify-between items-center w-full flex-wrap gap-2">
+          <>
+            <Button variant="text" onClick={() => setShowObjectionPrompt(false)}>
+              Keep Objection
+            </Button>
             <Button
-              variant="danger"
+              variant="filled"
               onClick={handleWithdrawObjectionAndAccept}
               isLoading={withdrawingObjection}
             >
-              Withdraw Objection & Accept
+              Withdraw Objection & Accept Offer
             </Button>
-            <div className="flex gap-2">
-              <Button
-                variant="outlined"
-                onClick={() => navigate(`/admin/compensation/objection/review/${activeObjection.objectionId || activeObjection.id}`)}
-              >
-                Review Objection
-              </Button>
-              <Button variant="text" onClick={() => setShowObjectionPrompt(false)}>
-                Close
-              </Button>
-            </div>
-          </div>
+          </>
         }
       >
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 py-2">
           <p className="text-sm text-md-on-surface-variant">
-            An active formal objection (Form N) is currently linked to this case/offer letter. You must review or withdraw the objection before accepting this offer.
+            You currently have a pending objection submitted for this case:
           </p>
-          <div className="p-3 bg-md-surface-container-low rounded-xl text-xs space-y-1">
+          <div className="p-3 bg-md-surface-container rounded-xl text-xs flex flex-col gap-1 border border-md-outline/10">
             <div>
               <span className="text-md-on-surface-variant">Objection ID: </span>
               <strong className="font-mono text-md-primary">{activeObjection?.objectionId || activeObjection?.id}</strong>
@@ -302,7 +308,7 @@ export const OfferLetterDetail: React.FC = () => {
         </div>
       </Modal>
 
-      <div className="main blur-shape-bg w-full p-6">
+      <div className="main blur-shape-bg">
         <div className="topbar" style={{ marginBottom: "20px" }}>
           <div className="topbar-left">
             <h1 style={{ marginBottom: 0 }}>Form H — Notice of Award & Offer</h1>
@@ -310,10 +316,30 @@ export const OfferLetterDetail: React.FC = () => {
               Formal Compensation Offer (Ref: {offer.offerReferenceNo})
             </div>
           </div>
-          <div className="topbar-right">
+          <div className="topbar-right flex items-center gap-3">
             <Button variant="outlined" size="sm" onClick={() => navigate("/admin/compensation/offer")}>
               <ArrowLeft size={16} /> Back
             </Button>
+            <span className="date-badge">
+              <Lucide.Calendar size={16} className="inline mr-1" />
+              {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+            </span>
+            <div
+              className="avatar"
+              title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
+            >
+              {user?.name ? (
+                <span className="text-xs font-bold uppercase">
+                  {user.name
+                    .split(/\s+/)
+                    .map((n: string) => n[0])
+                    .slice(0, 2)
+                    .join("")}
+                </span>
+              ) : (
+                <Lucide.User size={16} />
+              )}
+            </div>
           </div>
         </div>
 
@@ -351,24 +377,26 @@ export const OfferLetterDetail: React.FC = () => {
             <p className="mt-1 text-sm text-md-on-surface leading-relaxed">{offer.paymentConditions}</p>
           </div>
 
-          <div className="flex gap-3 justify-end flex-wrap items-center pt-4 border-t border-md-outline/10">
-            <Button
-              variant="outlined"
-              onClick={() => navigate(`/admin/compensation/objection/create?offerId=${offer.id}`)}
-            >
-              <Lucide.AlertCircle size={18} /> Submit Objection (Form N)
-            </Button>
-            {offer.status === "Pending" && (
-              <>
-                <Button variant="danger" onClick={() => setShowRejectModal(true)} isLoading={submitting}>
-                  <XCircle size={18} /> Reject Offer
-                </Button>
-                <Button variant="filled" onClick={() => handleAccept()} isLoading={submitting}>
-                  <CheckCircle size={18} /> Accept Offer
-                </Button>
-              </>
-            )}
-          </div>
+          {(isMember || isAdmin) ? (
+            <div className="flex gap-3 justify-end flex-wrap items-center pt-4 border-t border-md-outline/10">
+              <Button
+                variant="outlined"
+                onClick={() => navigate(`/admin/compensation/objection/create?offerId=${offer.id}`)}
+              >
+                <Lucide.AlertCircle size={18} /> Submit Objection (Form N)
+              </Button>
+              {offer.status === "Pending" && (
+                <>
+                  <Button variant="danger" onClick={() => setShowRejectModal(true)} isLoading={submitting}>
+                    <XCircle size={18} /> Reject Offer
+                  </Button>
+                  <Button variant="filled" onClick={() => handleAccept()} isLoading={submitting}>
+                    <CheckCircle size={18} /> Accept Offer
+                  </Button>
+                </>
+              )}
+            </div>
+          ) : null}
         </div>
 
         <div

@@ -4,6 +4,7 @@ import { landAcquisitionApi } from "../../services/landAcquisitionApi";
 import { CaseForm } from "../../components/CaseForm";
 import type { CaseFormData, Owner, Document } from "../../components/CaseForm";
 import { Button } from "../../components/ui/Button";
+import { useRole } from "../../hooks/useRole";
 
 /**
  * CaseEdit – Handles both:
@@ -15,6 +16,7 @@ import { Button } from "../../components/ui/Button";
  *   - Whole-case edit calls each section endpoint sequentially (same as create flow)
  */
 export const CaseEdit: React.FC = () => {
+  const { user, canEditCaseDetails, isAdmin } = useRole();
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams<{ caseId?: string }>();
@@ -45,6 +47,7 @@ export const CaseEdit: React.FC = () => {
   // ── Component State ──────────────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [caseCreatedById, setCaseCreatedById] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [initialValues, setInitialValues] = useState<{
     formData: CaseFormData;
@@ -71,6 +74,13 @@ export const CaseEdit: React.FC = () => {
 
         const c = res.case;
         if (!c) throw new Error("Case record was not found in the response.");
+
+        setCaseCreatedById(c.createdById || null);
+
+        // Creator / Admin check
+        if (!isAdmin && user?.userId && c.createdById && c.createdById !== user.userId) {
+          throw new Error("Access Denied: Only the person who created this case or an Administrator can edit it.");
+        }
 
         const project = c.project || {};
         const land = c.landParcel || {};
@@ -196,7 +206,7 @@ export const CaseEdit: React.FC = () => {
           return;
         }
         for (const doc of newDocs) {
-          await landAcquisitionApi.uploadDocument(caseId, doc.file!, doc.type);
+          await landAcquisitionApi.uploadDocument(caseId, doc.file!, doc.type, user?.userId);
         }
       } else {
         // ── Whole-case edit: update each section sequentially ───────────────
@@ -208,7 +218,7 @@ export const CaseEdit: React.FC = () => {
         const newDocs = data.documents.filter((d) => d.file && d.type);
         for (const doc of newDocs) {
           try {
-            await landAcquisitionApi.uploadDocument(caseId, doc.file!, doc.type);
+            await landAcquisitionApi.uploadDocument(caseId, doc.file!, doc.type, user?.userId);
           } catch (docErr: any) {
             console.warn("[CaseEdit] Document upload warning:", docErr.message);
           }
@@ -228,6 +238,26 @@ export const CaseEdit: React.FC = () => {
       setIsSubmitting(false);
     }
   };
+
+  // ── Render: Access Check ──────────────────────────────────────────────────
+  if (!canEditCaseDetails || (user?.userId && caseCreatedById && caseCreatedById !== user.userId)) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-md-background">
+        <div className="text-center p-8 bg-md-surface-container rounded-2xl shadow-sm border border-md-outline/10 max-w-md">
+          <div className="text-lg font-semibold text-md-error mb-2">Access Denied</div>
+          <div className="text-sm text-md-on-surface-variant mb-6">
+            Only the person who created this case can edit it.
+          </div>
+          <Button
+            onClick={() => navigate("/admin/case/details", { state: { caseId } })}
+            variant="filled"
+          >
+            Return to Case Details
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   // ── Render: Loading ───────────────────────────────────────────────────────
   if (loading) {

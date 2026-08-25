@@ -11,6 +11,7 @@ import { Input } from "../../components/ui/Input";
 import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { Pagination } from "../../components/ui/Pagination";
+import { useRole } from "../../hooks/useRole";
 import "../../style.css";
 import "./compensation.css";
 
@@ -51,6 +52,7 @@ const STATUS_OPTIONS: SelectOption[] = [
 
 export const ObjectionDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { user, isMember, isAdmin } = useRole();
   const [objections, setObjections] = useState<ObjectionItem[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
@@ -112,6 +114,10 @@ export const ObjectionDashboard: React.FC = () => {
   };
 
   const handleCreate = () => {
+    if (!isMember && !isAdmin) {
+      alert("Only Displaced Community Members (Land Owners) and Administrators can submit compensation objections.");
+      return;
+    }
     navigate("/admin/compensation/objection/create");
   };
 
@@ -261,10 +267,26 @@ export const ObjectionDashboard: React.FC = () => {
           </div>
         </div>
         <div className="topbar-right" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <Button variant="filled" onClick={handleCreate}>
-            <Plus size={16} /> Submit Objection
-          </Button>
-          <div className="avatar">AO</div>
+          <span className="date-badge">
+            <Lucide.Calendar size={16} className="inline mr-1" />
+            {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+          </span>
+          <div
+            className="avatar"
+            title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
+          >
+            {user?.name ? (
+              <span className="text-xs font-bold uppercase">
+                {user.name
+                  .split(/\s+/)
+                  .map((n: string) => n[0])
+                  .slice(0, 2)
+                  .join("")}
+              </span>
+            ) : (
+              <Lucide.User size={16} />
+            )}
+          </div>
         </div>
       </div>
 
@@ -303,6 +325,26 @@ export const ObjectionDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Action Bar */}
+      <div className="action-bar">
+        <div className="left">
+          <span className="count">{totalCount}</span> objections found
+          <span style={{ opacity: 0.4, margin: "0 4px" }}>·</span>
+          <span style={{ fontSize: "13px" }}>
+            Showing {objections.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}–
+            {Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount}
+          </span>
+        </div>
+
+        {(isMember || isAdmin) && (
+          <div className="right">
+            <Button variant="filled" onClick={handleCreate}>
+              <Plus size={16} /> New Objection
+            </Button>
+          </div>
+        )}
+      </div>
+
       <div className="table-wrap">
         <div className="table-scroll md-scroll-thin">
           <table>
@@ -314,29 +356,34 @@ export const ObjectionDashboard: React.FC = () => {
                 <th>Requested Amount</th>
                 <th>Date</th>
                 <th>Status</th>
-                <th style={{ textAlign: "center" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)" }}>
+                  <td colSpan={6} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)" }}>
                     <Loader2 size={24} className="inline animate-spin mr-2" /> Loading objections from database...
                   </td>
                 </tr>
               ) : objections.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)", opacity: 0.6 }}>
+                  <td colSpan={6} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)", opacity: 0.6 }}>
                     No objections found in database.
                   </td>
                 </tr>
               ) : (
                 objections.map((o) => (
-                  <tr key={o.id}>
+                  <tr
+                    key={o.id}
+                    onClick={() => handleView(o.id)}
+                    className="cursor-pointer hover:bg-md-primary/5 transition-colors"
+                  >
                     <td>
                       <div className="flex items-center gap-1.5">
                         <span className="case-id font-mono text-xs">{o.id}</span>
-                        <CopyButton value={o.id} />
+                        <span onClick={(e) => e.stopPropagation()}>
+                          <CopyButton value={o.id} />
+                        </span>
                       </div>
                     </td>
                     <td className="case-title">{o.caseTitle}</td>
@@ -347,29 +394,6 @@ export const ObjectionDashboard: React.FC = () => {
                       <span className={`status-badge ${o.statusClass}`}>
                         <span className="dot"></span> {o.status}
                       </span>
-                    </td>
-                    <td style={{ textAlign: "center" }}>
-                      <div className="inline-flex gap-1.5 items-center justify-center">
-                        <Button variant="tonal" size="sm" onClick={() => handleView(o.id)} title="Review Objection">
-                          <Eye size={14} /> Review
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          size="sm"
-                          onClick={() => handleOpenEdit(o)}
-                          title="Edit Objection"
-                        >
-                          <Edit2 size={13} />
-                        </Button>
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() => setDeleteId(o.id)}
-                          title="Delete Objection"
-                        >
-                          <Trash2 size={13} />
-                        </Button>
-                      </div>
                     </td>
                   </tr>
                 ))
