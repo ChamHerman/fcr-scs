@@ -1,8 +1,21 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BrainCircuit, TrendingUp, RotateCcw, AlertTriangle, Link2, X, CheckCircle2, PencilLine, Send } from 'lucide-react';
-import '../../style.css';
-import './predictionDashboard.css';
+import {
+  BrainCircuit,
+  TrendingUp,
+  RotateCcw,
+  AlertTriangle,
+  Link2,
+  X,
+  CheckCircle2,
+  PencilLine,
+  Send,
+} from 'lucide-react';
+import { Card } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
+import { Select } from '../../components/ui/Select';
+import { Textarea } from '../../components/ui/Textarea';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { CaseSelectionModal } from '../LandAcquisition/CaseSelectionModal';
 import { landAcquisitionApi } from '../../services/landAcquisitionApi';
@@ -24,6 +37,11 @@ const EMPTY_FORM: Record<keyof ValuationInput, string> = {
 };
 
 const formatRM = (value: number) => `RM ${Math.round(value).toLocaleString('en-US')}`;
+
+const toOptions = (values: string[], placeholder: string) => [
+  { value: '', label: placeholder },
+  ...values.map((v) => ({ value: v, label: v.replace(/_/g, ' ') })),
+];
 
 export const GenerateAIValuation: React.FC = () => {
   const { notify } = useNotification();
@@ -173,226 +191,216 @@ export const GenerateAIValuation: React.FC = () => {
   };
 
   return (
-    <div className="pd-page">
-      <div className="pd-shell">
-        <div className="pd-header">
-          <div>
-            <h1 className="pd-title">Generate AI Valuation</h1>
-            <p className="pd-subtitle">
-              Enter the property attributes and the AI model will estimate the market value and
-              recommended compensation. Link an acquisition case to accept the price, adjust it
-              manually, and send it into the standard valuation approval flow.
-            </p>
-          </div>
-          <span className="pd-badge">Admin console</span>
-        </div>
-
-        <div className="pd-card pd-case-link-bar">
-          <Link2 size={16} />
-          <div>
-            <div className="pd-breakdown-label">Acquisition case</div>
-            {selectedCaseId ? (
-              <div className="pd-subtitle">Report will be submitted under <code>{selectedCaseId}</code>.</div>
-            ) : (
-              <div className="pd-subtitle">Optional — required only to submit the valuation for approval.</div>
-            )}
-          </div>
-          {selectedCaseId && (
-            <span className="pd-case-chip">
-              {selectedCaseId}
-              <button type="button" aria-label="Clear case" onClick={() => { setSelectedCaseId(null); setSubmittedReportId(null); }}>
-                <X size={13} />
-              </button>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl md:text-3xl font-bold">Generate AI Valuation</h1>
+            <span className="px-2 py-1 rounded-lg bg-md-primary/15 text-md-primary font-bold text-xs whitespace-nowrap">
+              Admin console
             </span>
-          )}
-          <button className="pd-btn-secondary" style={{ marginLeft: 'auto', padding: '8px 14px' }} onClick={() => setCaseModalOpen(true)}>
-            {selectedCaseId ? 'Change Case' : 'Select Case'}
-          </button>
+          </div>
+          <p className="text-md-on-surface-variant mt-1 max-w-3xl">
+            Enter the property attributes and the AI model will estimate the market value and recommended
+            compensation. Link an acquisition case to accept the price, adjust it manually, and send it into
+            the standard valuation approval flow.
+          </p>
         </div>
-
-        <div className="pd-card" style={{ padding: 24 }}>
-          <div className="pd-form-grid" style={{ marginTop: 0 }}>
-            <div className="pd-grid-two">
-              <div>
-                <label className="pd-label" htmlFor="pd-state">State</label>
-                <select id="pd-state" className="pd-select" style={{ marginTop: 6 }} value={form.state} onChange={(e) => updateField('state', e.target.value)}>
-                  <option value="">Select state</option>
-                  {VALUATION_OPTIONS.states.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="pd-label" htmlFor="pd-category">Land Category</label>
-                <select id="pd-category" className="pd-select" style={{ marginTop: 6 }} value={form.land_category} onChange={(e) => updateField('land_category', e.target.value)}>
-                  <option value="">Select category</option>
-                  {VALUATION_OPTIONS.landCategories.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="pd-label" htmlFor="pd-location">Location Type</label>
-                <select id="pd-location" className="pd-select" style={{ marginTop: 6 }} value={form.location_type} onChange={(e) => updateField('location_type', e.target.value)}>
-                  <option value="">Select location type</option>
-                  {VALUATION_OPTIONS.locationTypes.map((l) => <option key={l} value={l}>{l.replace('_', ' ')}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="pd-label" htmlFor="pd-tenure">Tenure Type</label>
-                <select id="pd-tenure" className="pd-select" style={{ marginTop: 6 }} value={form.tenure_type} onChange={(e) => updateField('tenure_type', e.target.value)}>
-                  <option value="">Select tenure</option>
-                  {VALUATION_OPTIONS.tenureTypes.map((t) => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="pd-label" htmlFor="pd-condition">Building Condition</label>
-                <select id="pd-condition" className="pd-select" style={{ marginTop: 6 }} value={form.building_condition} onChange={(e) => updateField('building_condition', e.target.value)}>
-                  <option value="">Select condition</option>
-                  {VALUATION_OPTIONS.buildingConditions.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="pd-label" htmlFor="pd-age">Building Age (years)</label>
-                <input id="pd-age" className="pd-input" style={{ marginTop: 6 }} type="number" min={0} max={120} placeholder="e.g. 12" value={form.building_age_years} onChange={(e) => updateField('building_age_years', e.target.value)} />
-              </div>
-              <div>
-                <label className="pd-label" htmlFor="pd-land-area">Land Area (sq ft)</label>
-                <input id="pd-land-area" className="pd-input" style={{ marginTop: 6 }} type="number" min={1} placeholder="e.g. 2400" value={form.land_area_sqft} onChange={(e) => updateField('land_area_sqft', e.target.value)} />
-              </div>
-              <div>
-                <label className="pd-label" htmlFor="pd-built-up">Built-up Area (sq ft)</label>
-                <input id="pd-built-up" className="pd-input" style={{ marginTop: 6 }} type="number" min={0} placeholder="e.g. 1800 (0 for vacant land)" value={form.built_up_area_sqft} onChange={(e) => updateField('built_up_area_sqft', e.target.value)} />
-              </div>
-            </div>
-
-            <div className="pd-cta-row">
-              <button className="pd-btn-secondary" onClick={handleReset} disabled={loading}>
-                <RotateCcw size={15} /> Reset
-              </button>
-              <button className="pd-btn-primary" onClick={handleSubmit} disabled={loading}>
-                <BrainCircuit size={16} /> {loading ? 'Evaluating…' : 'Generate Valuation'}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {submitError && (
-          <div className="pd-error-banner" style={{ marginTop: 16 }}>
-            <AlertTriangle size={18} />
-            <div>
-              <div className="pd-breakdown-label">Valuation could not be generated</div>
-              <div className="pd-breakdown-sub">{submitError}</div>
-            </div>
-          </div>
-        )}
-
-        {result && (
-          <div className="pd-card pd-result-panel">
-            <div className="pd-header">
-              <div>
-                <h2 className="pd-title" style={{ fontSize: 18 }}>Valuation Result</h2>
-                <p className="pd-subtitle">AI estimate based on the current trained model.</p>
-              </div>
-              <span className="pd-badge">Model {result.modelVersion ?? 'n/a'}</span>
-            </div>
-
-            <div className="pd-result-headline">
-              <TrendingUp size={20} />
-              Recommended Compensation
-              <span className="pd-result-amount">{formatRM(result.recommendedCompensationMyr)}</span>
-            </div>
-
-            <div className="pd-breakdown">
-              <div className="pd-breakdown-row">
-                <div>
-                  <div className="pd-breakdown-label">Market Value Estimate</div>
-                  <div className="pd-breakdown-sub">
-                    Likely range {formatRM(result.estimateRangeLowMyr)} – {formatRM(result.estimateRangeHighMyr)}
-                  </div>
-                </div>
-                <div className="pd-breakdown-value">{formatRM(result.marketValueMyr)}</div>
-              </div>
-              <div className="pd-breakdown-row">
-                <div>
-                  <div className="pd-breakdown-label">Statutory Solatium</div>
-                  <div className="pd-breakdown-sub">15% disturbance allowance under LAA 1960</div>
-                </div>
-                <div className="pd-breakdown-value">{formatRM(result.statutoryDisturbanceMyr)}</div>
-              </div>
-              <div className="pd-breakdown-row">
-                <div>
-                  <div className="pd-breakdown-label">Relocation Allowance</div>
-                  <div className="pd-breakdown-sub">Fixed allowance{result.relocationAllowanceMyr >= 8000 ? ' (built-up structure present)' : ' (vacant land)'}</div>
-                </div>
-                <div className="pd-breakdown-value">{formatRM(result.relocationAllowanceMyr)}</div>
-              </div>
-            </div>
-
-            {submittedReportId ? (
-              <div className="pd-verdict-banner pd-verdict-better" style={{ marginTop: 16 }}>
-                <CheckCircle2 size={18} />
-                <span>
-                  Valuation report <code>{submittedReportId}</code> submitted for case {selectedCaseId} and is
-                  pending approval in the Valuation module.
-                </span>
-                <button
-                  className="pd-btn-secondary"
-                  style={{ marginLeft: 'auto', padding: '8px 14px' }}
-                  onClick={() => navigate('/admin/case/valuation/review', { state: { reportId: submittedReportId } })}
-                >
-                  Open in Valuation Module
-                </button>
-              </div>
-            ) : (
-              <>
-                <p className="pd-disclaimer">
-                  This is an AI-generated estimate for reference only. Final compensation is subject to
-                  verification by a licensed valuer and approval by the relevant authority.
-                </p>
-
-                <div className="pd-action-block">
-                  {!selectedCaseId ? (
-                    <div className="pd-subtitle">
-                      Link an acquisition case above to <strong>accept</strong> this valuation or{' '}
-                      <strong>set the price manually</strong> and submit it into the standard approval flow.
-                    </div>
-                  ) : overrideMode ? (
-                    <>
-                      <div className="pd-label" style={{ marginBottom: 10 }}>Manual price adjustment</div>
-                      <div className="pd-grid-two">
-                        <div>
-                          <label className="pd-label" htmlFor="pd-override-market">Market Value (RM)</label>
-                          <input id="pd-override-market" className="pd-input" style={{ marginTop: 6 }} type="number" min={1} value={overrideMarketValue} onChange={(e) => setOverrideMarketValue(e.target.value)} />
-                        </div>
-                        <div>
-                          <label className="pd-label" htmlFor="pd-override-comp">Recommended Compensation (RM)</label>
-                          <input id="pd-override-comp" className="pd-input" style={{ marginTop: 6 }} type="number" min={1} value={overrideCompensation} onChange={(e) => setOverrideCompensation(e.target.value)} />
-                        </div>
-                      </div>
-                      <div style={{ marginTop: 12 }}>
-                        <label className="pd-label" htmlFor="pd-override-remarks">Remarks</label>
-                        <textarea id="pd-override-remarks" className="pd-textarea" style={{ marginTop: 6, minHeight: 70 }} value={overrideRemarks} onChange={(e) => setOverrideRemarks(e.target.value)} />
-                      </div>
-                      <div className="pd-cta-row">
-                        <button className="pd-btn-secondary" onClick={() => setOverrideMode(false)} disabled={submitting}>Cancel</button>
-                        <button className="pd-btn-primary" onClick={() => submitToValuationFlow(true)} disabled={submitting}>
-                          <Send size={15} /> {submitting ? 'Submitting…' : 'Submit for Approval'}
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="pd-cta-row" style={{ justifyContent: 'flex-start' }}>
-                      <button className="pd-btn-primary" onClick={() => submitToValuationFlow(false)} disabled={submitting}>
-                        <CheckCircle2 size={16} /> {submitting ? 'Submitting…' : 'Accept AI Valuation'}
-                      </button>
-                      <button className="pd-btn-secondary" onClick={startOverride} disabled={submitting}>
-                        <PencilLine size={15} /> Set Price Manually
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        )}
       </div>
+
+      {/* Case linkage */}
+      <Card interactive={false} className="flex flex-wrap items-center gap-3 !p-4">
+        <Link2 size={18} className="text-md-primary shrink-0" />
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-md-on-surface">Acquisition case</div>
+          <div className="text-xs text-md-on-surface-variant mt-0.5">
+            {selectedCaseId
+              ? <>Report will be submitted under <code className="font-mono font-semibold text-md-primary">{selectedCaseId}</code>.</>
+              : 'Optional — required only to submit the valuation for approval.'}
+          </div>
+        </div>
+        {selectedCaseId && (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-md-secondary-container text-md-on-secondary-container font-mono text-xs font-bold">
+            {selectedCaseId}
+            <button
+              type="button"
+              aria-label="Clear case"
+              className="hover:opacity-70"
+              onClick={() => { setSelectedCaseId(null); setSubmittedReportId(null); }}
+            >
+              <X size={13} />
+            </button>
+          </span>
+        )}
+        <Button variant="outlined" size="sm" className="ml-auto" onClick={() => setCaseModalOpen(true)}>
+          {selectedCaseId ? 'Change Case' : 'Select Case'}
+        </Button>
+      </Card>
+
+      {/* Attribute form */}
+      <Card interactive={false}>
+        <h2 className="text-lg font-semibold mb-1">Property Attributes</h2>
+        <p className="text-sm text-md-on-surface-variant mb-5">
+          The 8 valuation attributes used by the trained model.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Select label="State" options={toOptions(VALUATION_OPTIONS.states, 'Select state')} value={form.state} onChange={(v) => updateField('state', v)} placeholder="Select state" />
+          <Select label="Land Category" options={toOptions(VALUATION_OPTIONS.landCategories, 'Select category')} value={form.land_category} onChange={(v) => updateField('land_category', v)} placeholder="Select category" />
+          <Select label="Location Type" options={toOptions(VALUATION_OPTIONS.locationTypes, 'Select location type')} value={form.location_type} onChange={(v) => updateField('location_type', v)} placeholder="Select location type" />
+          <Select label="Tenure Type" options={toOptions(VALUATION_OPTIONS.tenureTypes, 'Select tenure')} value={form.tenure_type} onChange={(v) => updateField('tenure_type', v)} placeholder="Select tenure" />
+          <Select label="Building Condition" options={toOptions(VALUATION_OPTIONS.buildingConditions, 'Select condition')} value={form.building_condition} onChange={(v) => updateField('building_condition', v)} placeholder="Select condition" />
+          <Input label="Building Age (years)" type="number" min={0} max={120} placeholder="e.g. 12" value={form.building_age_years} onChange={(e) => updateField('building_age_years', e.target.value)} />
+          <Input label="Land Area (sq ft)" type="number" min={1} placeholder="e.g. 2400" value={form.land_area_sqft} onChange={(e) => updateField('land_area_sqft', e.target.value)} />
+          <Input label="Built-up Area (sq ft)" type="number" min={0} placeholder="e.g. 1800 (0 for vacant land)" value={form.built_up_area_sqft} onChange={(e) => updateField('built_up_area_sqft', e.target.value)} />
+        </div>
+        <div className="flex justify-end gap-3 mt-6">
+          <Button variant="outlined" onClick={handleReset} disabled={loading}>
+            <RotateCcw size={15} /> Reset
+          </Button>
+          <Button variant="filled" onClick={handleSubmit} isLoading={loading}>
+            <BrainCircuit size={16} /> Generate Valuation
+          </Button>
+        </div>
+      </Card>
+
+      {/* Service error */}
+      {submitError && (
+        <div className="flex items-center gap-3 p-4 rounded-xl bg-md-error/10 border border-md-error/20 text-md-error">
+          <AlertTriangle size={18} className="shrink-0" />
+          <div>
+            <div className="text-sm font-semibold">Valuation could not be generated</div>
+            <div className="text-xs opacity-80 mt-0.5">{submitError}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Result */}
+      {result && (
+        <Card interactive={false} className="border-l-4 !border-l-md-primary">
+          <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-lg font-semibold">Valuation Result</h2>
+              <p className="text-sm text-md-on-surface-variant">AI estimate based on the current trained model.</p>
+            </div>
+            <span className="px-2 py-1 rounded-lg bg-md-primary/15 text-md-primary font-bold text-xs whitespace-nowrap">
+              Model {result.modelVersion ?? 'n/a'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap p-4 rounded-xl bg-md-primary/10 border border-md-primary/20">
+            <TrendingUp size={20} className="text-md-primary" />
+            <span className="font-semibold text-md-on-surface">Recommended Compensation</span>
+            <span className="ml-auto text-2xl font-bold text-md-primary tracking-tight">
+              {formatRM(result.recommendedCompensationMyr)}
+            </span>
+          </div>
+
+          <div className="grid gap-3 mt-4">
+            <div className="flex justify-between items-center gap-3 p-3.5 rounded-lg bg-md-surface-container-low">
+              <div>
+                <div className="text-sm font-semibold text-md-on-surface">Market Value Estimate</div>
+                <div className="text-xs text-md-on-surface-variant mt-0.5">
+                  Likely range {formatRM(result.estimateRangeLowMyr)} – {formatRM(result.estimateRangeHighMyr)}
+                </div>
+              </div>
+              <div className="font-bold whitespace-nowrap">{formatRM(result.marketValueMyr)}</div>
+            </div>
+            <div className="flex justify-between items-center gap-3 p-3.5 rounded-lg bg-md-surface-container-low">
+              <div>
+                <div className="text-sm font-semibold text-md-on-surface">Statutory Solatium</div>
+                <div className="text-xs text-md-on-surface-variant mt-0.5">15% disturbance allowance under LAA 1960</div>
+              </div>
+              <div className="font-bold whitespace-nowrap">{formatRM(result.statutoryDisturbanceMyr)}</div>
+            </div>
+            <div className="flex justify-between items-center gap-3 p-3.5 rounded-lg bg-md-surface-container-low">
+              <div>
+                <div className="text-sm font-semibold text-md-on-surface">Relocation Allowance</div>
+                <div className="text-xs text-md-on-surface-variant mt-0.5">
+                  Fixed allowance{result.relocationAllowanceMyr >= 8000 ? ' (built-up structure present)' : ' (vacant land)'}
+                </div>
+              </div>
+              <div className="font-bold whitespace-nowrap">{formatRM(result.relocationAllowanceMyr)}</div>
+            </div>
+          </div>
+
+          {submittedReportId ? (
+            <div className="flex flex-wrap items-center gap-3 mt-5 p-4 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-300">
+              <CheckCircle2 size={18} className="shrink-0" />
+              <span className="text-sm font-medium">
+                Valuation report <code className="font-mono font-bold">{submittedReportId}</code> submitted for case{' '}
+                {selectedCaseId} and is pending approval in the Valuation module.
+              </span>
+              <Button
+                variant="outlined"
+                size="sm"
+                className="ml-auto"
+                onClick={() => navigate('/admin/case/valuation/review', { state: { reportId: submittedReportId } })}
+              >
+                Open in Valuation Module
+              </Button>
+            </div>
+          ) : (
+            <>
+              <p className="text-xs text-md-on-surface-variant mt-4">
+                This is an AI-generated estimate for reference only. Final compensation is subject to verification
+                by a licensed valuer and approval by the relevant authority.
+              </p>
+
+              <div className="mt-4 p-4 rounded-xl bg-md-surface-container-low">
+                {!selectedCaseId ? (
+                  <p className="text-sm text-md-on-surface-variant">
+                    Link an acquisition case above to <strong className="text-md-on-surface">accept</strong> this
+                    valuation or <strong className="text-md-on-surface">set the price manually</strong> and submit
+                    it into the standard approval flow.
+                  </p>
+                ) : overrideMode ? (
+                  <div className="space-y-4">
+                    <div className="text-sm font-semibold text-md-on-surface">Manual price adjustment</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <Input
+                        label="Market Value (RM)"
+                        type="number"
+                        min={1}
+                        value={overrideMarketValue}
+                        onChange={(e) => setOverrideMarketValue(e.target.value)}
+                      />
+                      <Input
+                        label="Recommended Compensation (RM)"
+                        type="number"
+                        min={1}
+                        value={overrideCompensation}
+                        onChange={(e) => setOverrideCompensation(e.target.value)}
+                      />
+                    </div>
+                    <Textarea
+                      label="Remarks"
+                      className="min-h-[80px]"
+                      value={overrideRemarks}
+                      onChange={(e) => setOverrideRemarks(e.target.value)}
+                    />
+                    <div className="flex justify-end gap-3">
+                      <Button variant="text" onClick={() => setOverrideMode(false)} disabled={submitting}>Cancel</Button>
+                      <Button variant="filled" onClick={() => submitToValuationFlow(true)} isLoading={submitting}>
+                        <Send size={15} /> Submit for Approval
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-3">
+                    <Button variant="filled" onClick={() => submitToValuationFlow(false)} isLoading={submitting}>
+                      <CheckCircle2 size={16} /> Accept AI Valuation
+                    </Button>
+                    <Button variant="tonal" onClick={startOverride} disabled={submitting}>
+                      <PencilLine size={15} /> Set Price Manually
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </Card>
+      )}
 
       <CaseSelectionModal
         isOpen={caseModalOpen}
