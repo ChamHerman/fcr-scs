@@ -383,12 +383,6 @@ export const AdminLayout: React.FC = () => {
                       {!isCollapsed && <span>Report</span>}
                     </NavLink>
                   )}
-                  {(allowedPages.includes('*') || allowedPages.includes('/admin/compensation/compare')) && (
-                    <NavLink to="/admin/compensation/compare" className="nav-item" title={isCollapsed ? "Compare" : ""}>
-                      <Scale size={22} className="nav-icon" />
-                      {!isCollapsed && <span>Compare</span>}
-                    </NavLink>
-                  )}
                   {(allowedPages.includes('*') || allowedPages.includes('/admin/compensation/offer')) && (
                     <NavLink to="/admin/compensation/offer" className="nav-item" title={isCollapsed ? "Offer" : ""}>
                       <Mail size={22} className="nav-icon" />

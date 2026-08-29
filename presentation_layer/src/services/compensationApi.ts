@@ -198,13 +198,4 @@ export const compensationApi = {
       method: "DELETE",
     });
   },
-
-
-  // ─── Comparisons (Phase 8) ──────────────────────────────────────────────────
-  compareCases: async (caseIds: string[]) => {
-    return fetchJSON(COMPENSATION_BASE + "/api/compensation/comparisons", {
-      method: "POST",
-      body: JSON.stringify({ caseIds }),
-    });
-  },
 };
