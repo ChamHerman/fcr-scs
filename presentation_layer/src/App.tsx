@@ -62,8 +62,6 @@ import { OfferLetterDetail } from './pages/Compensation/OfferLetterReview';
 import { ObjectionList } from './pages/Compensation/ObjectionDashboard';
 import { CreateObjection } from './pages/Compensation/ObjectionCreation';
 import { ObjectionReview } from './pages/Compensation/ObjectionReview';
-import { CompensationComparisonCreate } from './pages/Compensation/ComparisonCreation';
-import { CompensationComparisonList } from './pages/Compensation/ComparisonDashboard';
 import { Placeholder } from './pages/Placeholder';
 import { RetrainAIModel } from './pages/PredictionDashboard/RetrainAIModel';
 import { GenerateAIValuation } from './pages/PredictionDashboard/GenerateAIValuation';
@@ -119,8 +117,6 @@ function App() {
               <Route path="compensation/generator" element={<CompensationReportGenerator />} />
               <Route path="compensation/report/review" element={<CompensationApproval />} />
               <Route path="compensation/review" element={<CompensationApproval />} />
-              <Route path="compensation/compare" element={<CompensationComparisonList />} />
-              <Route path="compensation/compare/create" element={<CompensationComparisonCreate />} />
               <Route path="compensation/offer" element={<OfferLetterDashboard />} />
               <Route path="compensation/offer/review" element={<OfferLetterDetail />} />
               <Route path="compensation/objection" element={<ObjectionList />} />

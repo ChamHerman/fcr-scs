@@ -13,7 +13,6 @@ export const ADMIN_PAGES: AdminPageInfo[] = [
   { path: '/admin/case/valuation', name: 'Valuation', category: 'Land Acquisition' },
 
   { path: '/admin/compensation/report', name: 'Compensation Report', category: 'Compensation' },
-  { path: '/admin/compensation/compare', name: 'Compensation Compare', category: 'Compensation' },
   { path: '/admin/compensation/offer', name: 'Compensation Offer', category: 'Compensation' },
   { path: '/admin/compensation/objection', name: 'Compensation Objection', category: 'Compensation' },
 

@@ -41,11 +41,4 @@ describe("Compensation Management API - Phase 5 to 8 Tests", () => {
       expect(Array.isArray(res.body.objections)).toBe(true);
     });
   });
-
-  describe("Phase 8: Comparisons", () => {
-    it("POST /api/compensation/comparisons - should require at least 2 case IDs", async () => {
-      const res = await request.post("/api/compensation/comparisons").send({ caseIds: ["1"] });
-      expect(res.status).toBe(400);
-    });
-  });
 });
