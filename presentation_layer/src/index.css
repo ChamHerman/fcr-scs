@@ -278,3 +278,9 @@
     user-select: none;
   }
 }
+
+@layer utilities {
+  .text-md-error {
+    color: var(--md-error-text) !important;
+  }
+}

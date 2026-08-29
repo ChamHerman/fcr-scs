@@ -56,6 +56,10 @@ Defined in `tailwind.config.js` and `index.css`.
 - **`md-surface-container-low`**: Light `#E7E0EC` / Dark `#1D1B20`
 - **`md-outline`**: Light `#79747E` / Dark `#938F99`
 - **`md-on-surface-variant`**: Light `#49454F` / Dark `#CAC4D0`
+- **`--md-error`** (`bg-md-error`): `#fce8e6` (defined in `style.css`) — background color for error containers, banners, and badges (`bg-md-error`).
+- **`--md-error-text`** (`.text-md-error`): `#b3261e` (defined in `style.css`) — high-contrast font color applied to `.text-md-error`, validation messages, error labels, and invalid input focus outlines.
+- **`--md-success`**: `#e6f4ea` / **`--md-success-text`**: `#1e7b4a` (defined in `style.css`)
+- **`--md-warning`**: `#fef7e0` / **`--md-warning-text`**: `#8d6e00` (defined in `style.css`)
 - **`--md-shimmer`**: Light `rgba(255,255,255,0.22)` / Dark `rgba(255,255,255,0.10)`
 - **`--md-scrollbar-thumb`**: Light `rgba(121,116,126,0.4)` / Dark `rgba(147,143,153,0.45)` — used by `.md-scroll-thin`
 
@@ -109,6 +113,11 @@ Dropdowns are the one deliberate exception to the all-4-corners rule: **the bott
 - Keyboard: ↑↓ traversal, Home/End, Enter/Space to commit, Escape to dismiss, and type-ahead. Closes on outside click and on outside scroll.
 - `onChange` hands back the **value string**, not a `ChangeEvent` — there is no native element to source one from. Pass `name` to get a hidden mirrored input for native form posts.
 - Raw `<select>` elements still present in feature pages are not this component. They inherit only the squared-bottom field shape from the global `select` rule in `index.css`; their popup stays OS-drawn.
+
+### 3b. Malaysia States & Districts Standard
+Land acquisition case management uses standard Malaysian administrative geographic mappings:
+- **13 States & 3 Federal Territories** (`MALAYSIA_STATES`): Johor, Kedah, Kelantan, Melaka, Negeri Sembilan, Pahang, Perak, Perlis, Pulau Pinang, Sabah, Sarawak, Selangor, Terengganu, Wilayah Persekutuan Kuala Lumpur, Wilayah Persekutuan Labuan, Wilayah Persekutuan Putrajaya.
+- **Bi-directional Auto-Completion**: Selecting a district automatically infers and populates its corresponding state (`DISTRICT_TO_STATE_MAP`). Selecting a state filters the district selector to that state's districts (`MALAYSIA_DISTRICTS_MAP`).
 
 ### 4. Modal (`Modal.tsx`)
 - Standard portal component mounting to `document.body` with `.md-modal-overlay` and `.md-modal-content`.

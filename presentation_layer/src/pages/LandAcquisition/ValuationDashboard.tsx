@@ -10,6 +10,7 @@ import { SearchInput } from "../../components/ui/SearchInput";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
+import { formatCurrencyRM } from "../../utils/currency";
 import "../../style.css";
 import "./valuation_report.css";
 
@@ -48,7 +49,7 @@ const STATUS_OPTIONS: SelectOption[] = [
   { value: "REJECTED", label: "Rejected" },
 ];
 
-export const ValuationReportList: React.FC = () => {
+export const ValuationDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { user, role, userId, isAdmin, isOfficer, isValuer, isSysAdmin } = useRole();
   const { notify } = useNotification();
@@ -124,7 +125,7 @@ export const ValuationReportList: React.FC = () => {
           : "—",
         method: r.valuationMethod || "—",
         recommendedCompensation: r.recommendedCompensation
-          ? `RM ${Number(r.recommendedCompensation).toLocaleString()}`
+          ? formatCurrencyRM(r.recommendedCompensation)
           : "—",
         status: statusLabelMap[r.reportStatus] || r.reportStatus || "Pending",
         statusClass: statusClassMap[r.reportStatus] || "status-pending-valuation",
@@ -217,7 +218,7 @@ export const ValuationReportList: React.FC = () => {
     <div className="valuation-report-dashboard">
       <div className="topbar" style={{ marginBottom: "20px" }}>
         <div className="topbar-left">
-          <h1 style={{ marginBottom: 0 }}>Valuation Reports</h1>
+          <h1 style={{ marginBottom: 0 }}>Valuation Report Dashboard</h1>
           <div className="sub">
             {isAdmin
               ? "Review and manage all submitted valuation reports across the system"
@@ -400,3 +401,5 @@ export const ValuationReportList: React.FC = () => {
     </div>
   );
 };
+
+export const ValuationReportList = ValuationDashboard;

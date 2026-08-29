@@ -2,7 +2,6 @@ import { Router } from "express";
 import reportRouter from "./report.routes";
 import offerRouter from "./offer.routes";
 import objectionRouter from "./objection.routes";
-import comparisonRouter from "./comparison.routes";
 
 const router = Router();
 
@@ -10,6 +9,5 @@ const router = Router();
 router.use(reportRouter);
 router.use(offerRouter);
 router.use(objectionRouter);
-router.use(comparisonRouter);
 
 export default router;

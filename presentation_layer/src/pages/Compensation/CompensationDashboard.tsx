@@ -46,7 +46,7 @@ const STATUS_OPTIONS: SelectOption[] = [
   { value: "REJECTED", label: "Rejected" },
 ];
 
-export const CompensationReportList: React.FC = () => {
+export const CompensationDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { user, userId, role, isAdmin, isOfficer, isGovAdmin, isSysAdmin } = useRole();
   const { notify } = useNotification();
@@ -179,7 +179,7 @@ export const CompensationReportList: React.FC = () => {
   };
 
   const formatCurrency = (val: number) => {
-    return "RM " + val.toLocaleString("en-MY", { minimumFractionDigits: 2 });
+    return "RM " + val.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
   // 4. Metrics dynamically derived directly from user-scoped filtered data
@@ -218,7 +218,7 @@ export const CompensationReportList: React.FC = () => {
       <div className="compensation-dashboard">
         <div className="topbar" style={{ marginBottom: "20px" }}>
           <div className="topbar-left">
-            <h1 style={{ marginBottom: 0 }}>Compensation Reports</h1>
+            <h1 style={{ marginBottom: 0 }}>Compensation Report Dashboard</h1>
             <div className="sub">
               {isAdmin
                 ? "Review and manage all compensation calculation reports across the system"
@@ -390,3 +390,5 @@ export const CompensationReportList: React.FC = () => {
     </>
   );
 };
+
+export const CompensationReportList = CompensationDashboard;

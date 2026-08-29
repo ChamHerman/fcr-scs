@@ -53,7 +53,7 @@ const STATUS_OPTIONS: SelectOption[] = [
 
 const normalizeIc = (ic?: string) => (ic || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase().trim();
 
-export const OfferLetterDashboard: React.FC = () => {
+export const OfferDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { user, isMember, isOfficer, isValuer, isAdmin, userId, role } = useRole();
   const [userIc, setUserIc] = useState<string>(() => user?.identificationNumber || "");
@@ -209,7 +209,7 @@ export const OfferLetterDashboard: React.FC = () => {
   };
 
   const formatCurrency = (val: number) => {
-    return "RM " + val.toLocaleString("en-MY", { minimumFractionDigits: 2 });
+    return "RM " + val.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
   // 4. Metrics dynamically derived directly from filtered data
@@ -404,3 +404,5 @@ export const OfferLetterDashboard: React.FC = () => {
     </div>
   );
 };
+
+export const OfferLetterDashboard = OfferDashboard;

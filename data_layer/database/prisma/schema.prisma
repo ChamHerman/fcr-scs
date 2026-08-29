@@ -219,13 +219,19 @@ model ReceiverBankDetails {
   @@map("receiver_bank_details")
 }
 
+enum FundingSource {
+  GOVERNMENT
+  PRIVATE
+  OTHERS
+}
+
 model Project {
   projectId     String            @id @default(uuid()) @db.Uuid @map("project_id")
   projectName   String            @unique @db.VarChar(255) @map("project_name")
   projectType   String            @db.VarChar(100) @map("project_type")
   purpose       String
   budget        Decimal           @db.Decimal(20, 2)
-  fundingSource String            @db.VarChar(255) @map("funding_source")
+  fundingSource FundingSource     @default(GOVERNMENT) @map("funding_source")
   cases         AcquisitionCase[]
   createdAt     DateTime          @default(now()) @map("created_at")
   updatedAt     DateTime          @updatedAt @map("updated_at")
@@ -262,19 +268,31 @@ model AcquisitionCase {
   @@map("acquisition_case")
 }
 
+enum LandCategory {
+  AGRICULTURE
+  BUILDING
+  INDUSTRY
+}
+
+enum TenureType {
+  FREEHOLD
+  LEASEHOLD
+  MALAY_RESERVE
+}
+
 model LandParcel {
   landId          String          @id @default(uuid()) @db.Uuid @map("land_id")
   caseId          String          @unique @db.VarChar(255) @map("case_id")
   landTitleNo     String          @unique @db.VarChar(255) @map("land_title_no")
   lotNo           String          @db.VarChar(100) @map("lot_no")
+  tempat          String?         @db.VarChar(255)
   mukim           String          @db.VarChar(255)
   district        String          @db.VarChar(255)
   state           String          @db.VarChar(100)
   area            Decimal         @db.Decimal(12, 2)
   areaUnit        AreaUnit        @map("area_unit")
-  category        String          @db.VarChar(100)
-  longitude       Decimal         @db.Decimal(10, 7)
-  latitude        Decimal         @db.Decimal(10, 7)
+  category        LandCategory    @default(AGRICULTURE) @map("category")
+  tenureType      TenureType      @default(FREEHOLD) @map("tenure_type")
   acquisitionCase AcquisitionCase @relation("AcquisitionCaseToLandParcel", fields: [caseId], references: [caseId])
   ownerships      LandOwnership[]
   createdAt       DateTime        @default(now()) @map("created_at")
@@ -289,19 +307,28 @@ model LandParcel {
   @@map("land_parcel")
 }
 
+enum OwnershipType {
+  INDIVIDUAL_CITIZEN
+  JOINT_OWNERSHIP
+  CORPORATE_ENTITY
+  ESTATE_OF_DECEASED
+  TRUSTEE
+}
+
 model LandOwner {
-  ownerId     String          @id @default(uuid()) @db.Uuid @map("owner_id")
-  name        String          @db.VarChar(255)
-  nric        String          @db.VarChar(100)
-  address     String
-  contact     String          @db.VarChar(100)
+  ownerId        String                @id @default(uuid()) @db.Uuid @map("owner_id")
+  name           String                @db.VarChar(255)
+  nric           String                @db.VarChar(100)
+  address        String
+  contact        String                @db.VarChar(100)
+  email          String?               @db.VarChar(255)
   ownerships     LandOwnership[]
   offerResponses OfferMemberResponse[]
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt   DateTime        @updatedAt @map("updated_at")
-  deletedAt   DateTime?       @map("deleted_at")
-  createdById String          @db.Uuid @map("created_by_id")
-  createdBy   User            @relation("LandOwnerCreatedBy", fields: [createdById], references: [userId])
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  deletedAt      DateTime?             @map("deleted_at")
+  createdById    String                @db.Uuid @map("created_by_id")
+  createdBy      User                  @relation("LandOwnerCreatedBy", fields: [createdById], references: [userId])
 
   @@map("land_owner")
 }
@@ -310,7 +337,8 @@ model LandOwnership {
   ownershipId    String        @id @default(uuid()) @db.Uuid @map("ownership_id")
   landId         String        @db.Uuid @map("land_id")
   ownerId        String        @db.Uuid @map("owner_id")
-  ownershipType  String        @db.VarChar(100) @map("ownership_type")
+  ownershipType  OwnershipType @default(INDIVIDUAL_CITIZEN) @map("ownership_type")
+  share          String?       @db.VarChar(50) @map("share")
   ownershipStart DateTime?     @map("ownership_start")
   ownershipEnd   DateTime?     @map("ownership_end")
   isCurrent      Boolean       @default(true) @map("is_current")

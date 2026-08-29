@@ -25,6 +25,7 @@ export interface SelectProps {
   /** When set, a hidden input mirrors the value so native form posts still work. */
   name?: string;
   className?: string;
+  error?: string;
 }
 
 const PANEL_MAX_HEIGHT = 280;
@@ -41,6 +42,7 @@ export const Select: React.FC<SelectProps> = ({
   id,
   name,
   className,
+  error,
 }) => {
   const selectId = id || `select-${label.replace(/\s+/g, '-').toLowerCase()}`;
   const labelId = `${selectId}-label`;
@@ -58,110 +60,111 @@ export const Select: React.FC<SelectProps> = ({
   const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
   const [activeIndex, setActiveIndex] = useState(-1);
 
-  const selectedIndex = options.findIndex((opt) => opt.value === value);
-  const selectedOption = selectedIndex >= 0 ? options[selectedIndex] : undefined;
+  // Sync internal active index when value prop changes
+  useEffect(() => {
+    const idx = options.findIndex((opt) => opt.value === value);
+    setActiveIndex(idx);
+  }, [value, options]);
 
-  /**
-   * Anchors the panel to the trigger in document coordinates and decides which
-   * way it opens. Flipping uses an estimate rather than the real height because
-   * the panel has not rendered yet; `translateY(-100%)` does the exact alignment.
-   */
-  const position = useCallback(() => {
-    const el = triggerRef.current;
-    if (!el) return;
+  const selectedOption = options.find((opt) => opt.value === value);
 
-    const rect = el.getBoundingClientRect();
-    const estimatedHeight = Math.min(PANEL_MAX_HEIGHT, options.length * ESTIMATED_ROW_HEIGHT + 8);
-    const roomBelow = window.innerHeight - rect.bottom;
-    const flip = roomBelow < estimatedHeight && rect.top > roomBelow;
-
-    setDropUp(flip);
+  const updateCoords = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const shouldDropUp = spaceBelow < PANEL_MAX_HEIGHT && spaceAbove > spaceBelow;
+    setDropUp(shouldDropUp);
     setCoords({
-      top: (flip ? rect.top : rect.bottom) + window.scrollY,
+      top: (shouldDropUp ? rect.top : rect.bottom) + window.scrollY,
       left: rect.left + window.scrollX,
       width: rect.width,
     });
-  }, [options.length]);
-
-  const open = useCallback(() => {
-    if (disabled) return;
-    position();
-    setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
-    setIsOpen(true);
-  }, [disabled, position, selectedIndex]);
-
-  const close = useCallback(() => {
-    setIsOpen(false);
-    setActiveIndex(-1);
-    typeAhead.current = { query: '', at: 0 };
   }, []);
 
-  const commit = useCallback(
-    (index: number) => {
-      const option = options[index];
-      if (option) onChange?.(option.value);
-      close();
-      triggerRef.current?.focus();
-    },
-    [close, onChange, options]
-  );
+  const open = () => {
+    if (disabled) return;
+    updateCoords();
+    setIsOpen(true);
+  };
 
-  // Outside click, scroll, and resize handling while open.
+  const close = () => {
+    setIsOpen(false);
+  };
+
+  const commit = (index: number) => {
+    const opt = options[index];
+    if (opt && onChange) {
+      onChange(opt.value);
+    }
+    close();
+  };
+
+  // Close on outside click
   useEffect(() => {
     if (!isOpen) return;
 
-    const isInside = (target: Node) =>
-      Boolean(triggerRef.current?.contains(target) || panelRef.current?.contains(target));
-
-    const handlePointerDown = (e: MouseEvent) => {
-      if (!isInside(e.target as Node)) close();
-    };
-    const handleScroll = (e: Event) => {
-      // Scrolling the list itself must not dismiss it.
-      if (listRef.current?.contains(e.target as Node)) return;
+    const onDocClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (triggerRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
       close();
     };
 
-    document.addEventListener('mousedown', handlePointerDown);
-    window.addEventListener('scroll', handleScroll, true);
-    window.addEventListener('resize', position);
+    const onScrollOrResize = () => {
+      updateCoords();
+    };
+
+    window.addEventListener('mousedown', onDocClick);
+    window.addEventListener('scroll', onScrollOrResize, true);
+    window.addEventListener('resize', onScrollOrResize);
 
     return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      window.removeEventListener('scroll', handleScroll, true);
-      window.removeEventListener('resize', position);
+      window.removeEventListener('mousedown', onDocClick);
+      window.removeEventListener('scroll', onScrollOrResize, true);
+      window.removeEventListener('resize', onScrollOrResize);
     };
-  }, [isOpen, close, position]);
+  }, [isOpen, updateCoords]);
 
-  // Keep the active row visible during keyboard traversal.
-  useEffect(() => {
-    if (!isOpen || activeIndex < 0) return;
-    optionRefs.current[activeIndex]?.scrollIntoView({ block: 'nearest' });
-  }, [isOpen, activeIndex]);
-
+  // GSAP animation for panel open/close
   useGSAP(
     () => {
       if (!isOpen || !panelRef.current) return;
       gsap.fromTo(
         panelRef.current,
-        { opacity: 0, scaleY: 0.96, y: dropUp ? 6 : -6 },
+        {
+          opacity: 0,
+          scaleY: 0.85,
+          transformOrigin: dropUp ? 'bottom center' : 'top center',
+        },
         {
           opacity: 1,
           scaleY: 1,
-          y: 0,
-          duration: 0.22,
-          ease: 'back.out(1.6)',
-          transformOrigin: dropUp ? 'bottom center' : 'top center',
+          duration: 0.18,
+          ease: 'power2.out',
         }
       );
     },
-    { dependencies: [isOpen, dropUp] }
+    { dependencies: [isOpen, dropUp], scope: panelRef }
   );
 
+  // Scroll active option into view when navigating
+  useEffect(() => {
+    if (!isOpen || activeIndex < 0) return;
+    const el = optionRefs.current[activeIndex];
+    if (el && listRef.current) {
+      el.scrollIntoView({ block: 'nearest' });
+    }
+  }, [isOpen, activeIndex]);
+
   const moveActive = (delta: number) => {
+    if (options.length === 0) return;
+    if (!isOpen) {
+      open();
+      return;
+    }
     setActiveIndex((prev) => {
-      const from = prev < 0 ? selectedIndex : prev;
-      const next = from + delta;
+      const next = prev + delta;
       if (next < 0) return options.length - 1;
       if (next >= options.length) return 0;
       return next;
@@ -170,23 +173,32 @@ export const Select: React.FC<SelectProps> = ({
 
   const searchByTypeAhead = (char: string) => {
     const now = Date.now();
-    const query =
-      now - typeAhead.current.at > TYPE_AHEAD_RESET_MS
-        ? char.toLowerCase()
-        : typeAhead.current.query + char.toLowerCase();
+    const isContinuing = now - typeAhead.current.at < TYPE_AHEAD_RESET_MS;
+    const query = (isContinuing ? typeAhead.current.query : '') + char.toLowerCase();
     typeAhead.current = { query, at: now };
 
-    const match = options.findIndex((opt) => opt.label.toLowerCase().startsWith(query));
-    if (match >= 0) setActiveIndex(match);
+    const matchIndex = options.findIndex((opt) =>
+      opt.label.toLowerCase().startsWith(query)
+    );
+    if (matchIndex >= 0) {
+      setActiveIndex(matchIndex);
+      if (!isOpen) {
+        commit(matchIndex);
+      }
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (disabled) return;
 
     if (!isOpen) {
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ') {
+      if (['ArrowDown', 'ArrowUp', 'Enter', ' ', 'Home', 'End'].includes(e.key)) {
         e.preventDefault();
         open();
+        return;
+      }
+      if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        searchByTypeAhead(e.key);
       }
       return;
     }
@@ -232,7 +244,10 @@ export const Select: React.FC<SelectProps> = ({
       <label
         id={labelId}
         htmlFor={selectId}
-        className="text-xs text-md-on-surface-variant font-medium absolute top-2 left-5 z-10 pointer-events-none"
+        className={classNames(
+          'text-xs font-medium absolute top-2 left-5 z-10 pointer-events-none transition-colors',
+          error ? 'text-md-error' : 'text-md-on-surface-variant'
+        )}
       >
         {label}
       </label>
@@ -246,7 +261,6 @@ export const Select: React.FC<SelectProps> = ({
           aria-haspopup="listbox"
           aria-expanded={isOpen}
           aria-controls={isOpen ? listboxId : undefined}
-          // Label *and* current value, so assistive tech announces both.
           aria-labelledby={`${labelId} ${valueId}`}
           aria-activedescendant={
             isOpen && activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined
@@ -256,12 +270,15 @@ export const Select: React.FC<SelectProps> = ({
           onKeyDown={handleKeyDown}
           className={classNames(
             'appearance-none bg-md-surface-container-low text-md-on-surface w-full h-14 pt-5 pb-1 px-5 pr-12 text-left text-sm',
-            'border border-md-outline/30 focus:outline-none transition-all duration-200 ease-md-bouncy',
-            // Bottom corners square off while the list is joined below (mirrored when it flips above).
+            'border focus:outline-none transition-all duration-200 ease-md-bouncy',
             'rounded-xl',
             isOpen && !dropUp && 'rounded-b-none',
             isOpen && dropUp && 'rounded-t-none',
-            isOpen ? 'border-md-primary' : 'focus-visible:border-md-primary',
+            error
+              ? 'border-md-error ring-1 ring-md-error/50'
+              : isOpen
+              ? 'border-md-primary'
+              : 'border-md-outline/30 focus-visible:border-md-primary',
             disabled ? 'grayscale opacity-60 cursor-not-allowed' : 'cursor-pointer'
           )}
         >
@@ -281,6 +298,10 @@ export const Select: React.FC<SelectProps> = ({
           size={20}
         />
       </div>
+
+      {error && (
+        <span className="text-xs text-md-error mt-1 pl-[1.2rem] font-medium">{error}</span>
+      )}
 
       {name && <input type="hidden" name={name} value={value ?? ''} />}
 

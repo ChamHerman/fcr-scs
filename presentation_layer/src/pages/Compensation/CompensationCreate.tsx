@@ -7,10 +7,12 @@ import { CaseSelectionModal } from "../LandAcquisition/CaseSelectionModal";
 import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
+import { CurrencyInput } from "../../components/ui/CurrencyInput";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { Calculator, FileText, CheckCircle, AlertTriangle } from "lucide-react";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
+import { parseCurrencyToNumber } from "../../utils/currency";
 import "../../style.css";
 import "./compensation.css";
 
@@ -50,7 +52,7 @@ type CompensationComponents = {
   otherEligible: number;
 };
 
-export const CompensationReportGenerator: React.FC = () => {
+export const CompensationCreate: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, userId, isOfficer, isAdmin } = useRole();
@@ -166,8 +168,8 @@ export const CompensationReportGenerator: React.FC = () => {
     setCalculatedTotal(null);
   };
 
-  const handleComponentChange = (field: keyof CompensationComponents, value: string) => {
-    const num = parseFloat(value) || 0;
+  const handleComponentChange = (field: keyof CompensationComponents, value: string | number) => {
+    const num = typeof value === "number" ? value : parseCurrencyToNumber(value);
     setComponents((prev) => ({ ...prev, [field]: num }));
   };
 
@@ -301,13 +303,13 @@ export const CompensationReportGenerator: React.FC = () => {
             <div className="text-sm">
               <p className="font-semibold text-amber-700 dark:text-amber-400 mb-1">High Variance Detected</p>
               <p className="text-md-on-surface-variant">
-                Calculated total (<strong>RM {calculatedTotal?.toLocaleString()}</strong>) differs by{" "}
+                Calculated total (<strong>{formatCurrency(calculatedTotal || 0)}</strong>) differs by{" "}
                 <strong>
                   {aiPredicted > 0 && calculatedTotal !== null
                     ? `${((Math.abs(calculatedTotal - aiPredicted) / aiPredicted) * 100).toFixed(1)}%`
                     : "N/A"}
                 </strong>{" "}
-                from the AI-recommended compensation (<strong>RM {aiPredicted.toLocaleString()}</strong>).
+                from the AI-recommended compensation (<strong>{formatCurrency(aiPredicted || 0)}</strong>).
               </p>
             </div>
           </div>
@@ -439,67 +441,67 @@ export const CompensationReportGenerator: React.FC = () => {
 
                     <div className="comp-grid">
                       <div className="comp-group">
-                        <Input
-                          label="Land Value *"
+                        <CurrencyInput
+                          label="Land Value (RM) *"
                           id="landValue"
-                          type="number"
-                          value={String(components.landValue)}
-                          onChange={(e) => handleComponentChange("landValue", e.target.value)}
+                          value={components.landValue}
+                          onValueChange={(_formatted, num) => handleComponentChange("landValue", num)}
+                          placeholder="0.00"
                         />
                         <div className="helper">Pre-filled from valuation</div>
                       </div>
                       <div className="comp-group">
-                        <Input
-                          label="Building/Structure Value *"
+                        <CurrencyInput
+                          label="Building/Structure Value (RM) *"
                           id="buildingValue"
-                          type="number"
-                          value={String(components.buildingValue)}
-                          onChange={(e) => handleComponentChange("buildingValue", e.target.value)}
+                          value={components.buildingValue}
+                          onValueChange={(_formatted, num) => handleComponentChange("buildingValue", num)}
+                          placeholder="0.00"
                         />
                       </div>
                       <div className="comp-group">
-                        <Input
-                          label="Crop/Plantation Value *"
+                        <CurrencyInput
+                          label="Crop/Plantation Value (RM) *"
                           id="cropValue"
-                          type="number"
-                          value={String(components.cropValue)}
-                          onChange={(e) => handleComponentChange("cropValue", e.target.value)}
+                          value={components.cropValue}
+                          onValueChange={(_formatted, num) => handleComponentChange("cropValue", num)}
+                          placeholder="0.00"
                         />
                       </div>
                       <div className="comp-group">
-                        <Input
-                          label="Business Disruption"
+                        <CurrencyInput
+                          label="Business Disruption (RM)"
                           id="businessDisruption"
-                          type="number"
-                          value={String(components.businessDisruption)}
-                          onChange={(e) => handleComponentChange("businessDisruption", e.target.value)}
+                          value={components.businessDisruption}
+                          onValueChange={(_formatted, num) => handleComponentChange("businessDisruption", num)}
+                          placeholder="0.00"
                         />
                       </div>
                       <div className="comp-group">
-                        <Input
-                          label="Disturbance Compensation"
+                        <CurrencyInput
+                          label="Disturbance Compensation (RM)"
                           id="disturbance"
-                          type="number"
-                          value={String(components.disturbanceCompensation)}
-                          onChange={(e) => handleComponentChange("disturbanceCompensation", e.target.value)}
+                          value={components.disturbanceCompensation}
+                          onValueChange={(_formatted, num) => handleComponentChange("disturbanceCompensation", num)}
+                          placeholder="0.00"
                         />
                       </div>
                       <div className="comp-group">
-                        <Input
-                          label="Relocation Allowance"
+                        <CurrencyInput
+                          label="Relocation Allowance (RM)"
                           id="relocation"
-                          type="number"
-                          value={String(components.relocationAllowance)}
-                          onChange={(e) => handleComponentChange("relocationAllowance", e.target.value)}
+                          value={components.relocationAllowance}
+                          onValueChange={(_formatted, num) => handleComponentChange("relocationAllowance", num)}
+                          placeholder="0.00"
                         />
                       </div>
                       <div className="comp-group" style={{ gridColumn: "1 / -1" }}>
-                        <Input
-                          label="Other Eligible Items (Special Damages)"
+                        <CurrencyInput
+                          label="Other Eligible Items (Special Damages) (RM)"
                           id="otherEligible"
-                          type="number"
-                          value={String(components.otherEligible)}
-                          onChange={(e) => handleComponentChange("otherEligible", e.target.value)}
+                          value={components.otherEligible}
+                          onValueChange={(_formatted, num) => handleComponentChange("otherEligible", num)}
+                          placeholder="0.00"
                         />
                       </div>
                     </div>
@@ -622,3 +624,5 @@ export const CompensationReportGenerator: React.FC = () => {
     </>
   );
 };
+
+export const CompensationReportGenerator = CompensationCreate;

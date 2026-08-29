@@ -58,6 +58,11 @@ app.use(express.json());
 // Global RBAC enforcement for page access
 app.use(enforcePageAccess);
 
+// Serve static documents from document_storage
+const documentStorageDir = path.resolve(__dirname, "../data_layer/document_storage");
+app.use("/document_storage", express.static(documentStorageDir));
+app.use("/api/document_storage", express.static(documentStorageDir));
+
 // Health Check
 app.get("/health", (req, res) => {
   res.json({

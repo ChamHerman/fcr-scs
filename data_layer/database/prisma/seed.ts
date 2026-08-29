@@ -9,6 +9,10 @@ import {
   OfferStatus,
   ObjectionStatus,
   AreaUnit,
+  FundingSource,
+  LandCategory,
+  TenureType,
+  OwnershipType,
   UserRole,
   PaymentStatus,
 } from '@prisma/client';
@@ -63,6 +67,49 @@ const generateContactNumber = (): string => `01${generateRandomDigits(8)}`;
 
 // 12-digit identification number
 const generateIdentificationNumber = (): string => `${generateRandomDigits(12)}`;
+
+function createMockPdfBuffer(title: string, caseId: string): Buffer {
+  const content = `%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 120 >>
+stream
+BT
+/F1 18 Tf
+50 700 Td
+(${title} - ${caseId}) Tj
+/F1 12 Tf
+0 -30 Td
+(Official Case Document - Federal Land Acquisition System) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000010 00000 n 
+0000000060 00000 n 
+0000000117 00000 n 
+0000000240 00000 n 
+0000000410 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+485
+%%EOF`;
+  return Buffer.from(content, 'utf-8');
+}
 
 async function main() {
   console.log('🚀 Starting database seeding...');
@@ -234,21 +281,24 @@ async function main() {
       projectType: 'Urban Redevelopment',
       purpose: 'Mixed-use commercial development',
       budget: 45000000,
+      fundingSource: FundingSource.GOVERNMENT,
       caseTitle: 'Kampung Baru Urban Renewal - Parcel 1',
       status: CaseStatus.CASE_REGISTERED,
       landTitleNo: 'PN 12340',
       lotNo: 'Lot 5670',
-      mukim: 'Mukim Kuala Lumpur',
-      district: 'Kuala Lumpur',
+      tempat: 'Kampung Baru',
+      mukim: 'Bandar Kuala Lumpur',
+      district: 'Titiwangsa',
       state: 'Wilayah Persekutuan Kuala Lumpur',
-      area: 2.5,
-      latitude: 3.139,
-      longitude: 101.6869,
+      area: 2500,
+      category: LandCategory.BUILDING,
+      tenureType: TenureType.MALAY_RESERVE,
       members: [
         {
           memberUser: m1,
           address: 'No. 101, Jalan Ampang, Kampung Baru, 50450 Kuala Lumpur',
-          ownershipType: 'Individual',
+          ownershipType: OwnershipType.INDIVIDUAL_CITIZEN,
+          share: '100',
         },
       ],
       hasValuation: false,
@@ -263,26 +313,30 @@ async function main() {
       projectType: 'Transportation Development',
       purpose: 'Public rail transit line extension',
       budget: 120000000,
+      fundingSource: FundingSource.GOVERNMENT,
       caseTitle: 'KL Sentral Railway Expansion - Parcel 2',
       status: CaseStatus.VALUER_ASSIGNED,
       landTitleNo: 'PN 12341',
       lotNo: 'Lot 5671',
-      mukim: 'Mukim Kuala Lumpur',
-      district: 'Kuala Lumpur',
+      tempat: 'Brickfields',
+      mukim: 'Bandar Kuala Lumpur',
+      district: 'Lembah Pantai',
       state: 'Wilayah Persekutuan Kuala Lumpur',
-      area: 3.5,
-      latitude: 3.149,
-      longitude: 101.6969,
+      area: 3500,
+      category: LandCategory.BUILDING,
+      tenureType: TenureType.FREEHOLD,
       members: [
         {
           memberUser: m2,
           address: 'No. 202, Jalan Travers, Brickfields, 50470 Kuala Lumpur',
-          ownershipType: 'Joint / Multiple Ownership',
+          ownershipType: OwnershipType.JOINT_OWNERSHIP,
+          share: '50',
         },
         {
           memberUser: m3,
           address: 'No. 203, Jalan Tun Sambanthan, Brickfields, 50470 Kuala Lumpur',
-          ownershipType: 'Joint / Multiple Ownership',
+          ownershipType: OwnershipType.JOINT_OWNERSHIP,
+          share: '50',
         },
       ],
       hasValuation: false,
@@ -297,21 +351,24 @@ async function main() {
       projectType: 'Public Amenities',
       purpose: 'River deepening and drainage upgrade',
       budget: 18000000,
+      fundingSource: FundingSource.GOVERNMENT,
       caseTitle: 'Desa Melati Flood Mitigation - Parcel 3',
       status: CaseStatus.OFFER_ACCEPTED,
       landTitleNo: 'PN 12342',
       lotNo: 'Lot 5672',
-      mukim: 'Mukim Kuala Lumpur',
-      district: 'Kuala Lumpur',
+      tempat: 'Desa Melati',
+      mukim: 'Mukim Setapak',
+      district: 'Wangsa Maju',
       state: 'Wilayah Persekutuan Kuala Lumpur',
-      area: 4.5,
-      latitude: 3.159,
-      longitude: 101.7069,
+      area: 4500,
+      category: LandCategory.AGRICULTURE,
+      tenureType: TenureType.FREEHOLD,
       members: [
         {
           memberUser: m4,
           address: 'No. 404, Jalan Melati 2, Desa Melati, 43000 Kuala Lumpur',
-          ownershipType: 'Individual',
+          ownershipType: OwnershipType.INDIVIDUAL_CITIZEN,
+          share: '100',
         },
       ],
       hasValuation: true,
@@ -329,21 +386,24 @@ async function main() {
       projectType: 'Tourism Development',
       purpose: 'Coastal promenade and public park',
       budget: 25000000,
+      fundingSource: FundingSource.PRIVATE,
       caseTitle: 'Sitiawan Tourism Waterfront - Parcel 4',
       status: CaseStatus.OFFER_ISSUED,
       landTitleNo: 'PN 12343',
       lotNo: 'Lot 5673',
+      tempat: 'Teluk Batik',
       mukim: 'Mukim Sitiawan',
       district: 'Manjung',
       state: 'Perak',
-      area: 5.5,
-      latitude: 4.219,
-      longitude: 100.6969,
+      area: 5500,
+      category: LandCategory.AGRICULTURE,
+      tenureType: TenureType.LEASEHOLD,
       members: [
         {
           memberUser: m5,
           address: 'No. 505, Jalan Persiaran Pantai, 32000 Sitiawan, Perak',
-          ownershipType: 'Individual',
+          ownershipType: OwnershipType.INDIVIDUAL_CITIZEN,
+          share: '100',
         },
       ],
       hasValuation: true,
@@ -363,21 +423,24 @@ async function main() {
       projectType: 'Infrastructure Development',
       purpose: 'Coastal highway reinforcement and revetment works',
       budget: 85000000,
+      fundingSource: FundingSource.GOVERNMENT,
       caseTitle: 'Penang Coastal Infrastructure Upgrade - Parcel 5',
       status: CaseStatus.PENDING_VALUATION_APPROVAL,
       landTitleNo: 'PN 12344',
       lotNo: 'Lot 5674',
+      tempat: 'Bayan Lepas',
       mukim: 'Mukim 12',
       district: 'Barat Daya',
       state: 'Pulau Pinang',
-      area: 3.0,
-      latitude: 5.319,
-      longitude: 100.2869,
+      area: 3000,
+      category: LandCategory.INDUSTRY,
+      tenureType: TenureType.FREEHOLD,
       members: [
         {
           memberUser: m3,
           address: 'No. 303, Jalan Tun Sambanthan, Brickfields, 50470 Kuala Lumpur',
-          ownershipType: 'Individual',
+          ownershipType: OwnershipType.CORPORATE_ENTITY,
+          share: '100',
         },
       ],
       hasValuation: true,
@@ -394,6 +457,7 @@ async function main() {
     const dbProj = await prisma.project.upsert({
       where: { projectName: cDef.projectName },
       update: {
+        fundingSource: cDef.fundingSource,
         createdById: govOfficer1.userId,
       },
       create: {
@@ -401,7 +465,7 @@ async function main() {
         projectType: cDef.projectType,
         purpose: cDef.purpose,
         budget: cDef.budget,
-        fundingSource: 'Government (Federal Budget)',
+        fundingSource: cDef.fundingSource,
         createdById: govOfficer1.userId,
       },
     });
@@ -430,14 +494,14 @@ async function main() {
           caseId: dbCase.caseId,
           landTitleNo: cDef.landTitleNo,
           lotNo: cDef.lotNo,
+          tempat: cDef.tempat,
           mukim: cDef.mukim,
           district: cDef.district,
           state: cDef.state,
           area: cDef.area,
-          areaUnit: AreaUnit.HECTARE,
-          category: 'Commercial / Residential',
-          latitude: cDef.latitude,
-          longitude: cDef.longitude,
+          areaUnit: AreaUnit.SQUARE_METER,
+          category: cDef.category,
+          tenureType: cDef.tenureType,
           createdById: govOfficer1.userId,
         },
       });
@@ -451,6 +515,7 @@ async function main() {
             nric: mInfo.memberUser.identificationNumber,
             address: mInfo.address,
             contact: mInfo.memberUser.contactNumber,
+            email: mInfo.memberUser.email,
             createdById: govOfficer1.userId,
           },
         });
@@ -460,6 +525,7 @@ async function main() {
             landId: landParcel.landId,
             ownerId: owner.ownerId,
             ownershipType: mInfo.ownershipType,
+            share: mInfo.share,
             createdById: govOfficer1.userId,
           },
         });
@@ -550,10 +616,90 @@ async function main() {
         }
       }
 
+      // Seed 4 Mandatory Supporting Documents for this case
+      await prisma.caseDocument.deleteMany({
+        where: { caseId: dbCase.caseId },
+      });
+
+      const docStorageDir = path.resolve(__dirname, '../../document_storage/case_document', dbCase.caseId);
+      if (!fs.existsSync(docStorageDir)) {
+        fs.mkdirSync(docStorageDir, { recursive: true });
+      }
+
+      const seedDocs = [
+        { type: 'Acquisition Plan', file: 'Acquisition_Plan.pdf' },
+        { type: 'Official Title Search', file: 'Official_Title_Search.pdf' },
+        { type: 'Proof of Financial Allocation', file: 'Proof_of_Financial_Allocation.pdf' },
+        { type: 'Project Proposal', file: 'Project_Proposal.pdf' },
+      ];
+
+      for (const sDoc of seedDocs) {
+        const filePathOnDisk = path.join(docStorageDir, sDoc.file);
+        const pdfBuf = createMockPdfBuffer(sDoc.type, dbCase.caseId);
+        fs.writeFileSync(filePathOnDisk, pdfBuf);
+
+        const checksum = crypto.createHash('sha256').update(pdfBuf).digest('hex');
+        const dbPath = `document_storage/case_document/${dbCase.caseId}/${sDoc.file}`;
+
+        await prisma.caseDocument.create({
+          data: {
+            caseId: dbCase.caseId,
+            documentType: sDoc.type,
+            fileName: sDoc.file,
+            fileSize: pdfBuf.length,
+            filePath: dbPath,
+            mimeType: 'application/pdf',
+            checksum,
+            createdById: govOfficer1.userId,
+          },
+        });
+      }
+
       console.log(
         `✅ Seeded Land Acquisition Case: ${dbCase.caseTitle} (${dbCase.status}) | Owner(s): ${cDef.members.map(m => m.memberUser.name).join(', ')}`
       );
     }
+
+    // Seed/refresh 4 Mandatory Supporting Documents for every case
+    await prisma.caseDocument.deleteMany({
+      where: { caseId: dbCase.caseId },
+    });
+
+    const docStorageDir = path.resolve(__dirname, '../../document_storage/case_document', dbCase.caseId);
+    if (!fs.existsSync(docStorageDir)) {
+      fs.mkdirSync(docStorageDir, { recursive: true });
+    }
+
+    const seedDocs = [
+      { type: 'Acquisition Plan', file: 'Acquisition_Plan.pdf' },
+      { type: 'Official Title Search', file: 'Official_Title_Search.pdf' },
+      { type: 'Proof of Financial Allocation', file: 'Proof_of_Financial_Allocation.pdf' },
+      { type: 'Project Proposal', file: 'Project_Proposal.pdf' },
+    ];
+
+    for (const sDoc of seedDocs) {
+      const filePathOnDisk = path.join(docStorageDir, sDoc.file);
+      const pdfBuf = createMockPdfBuffer(sDoc.type, dbCase.caseId);
+      fs.writeFileSync(filePathOnDisk, pdfBuf);
+
+      const checksum = crypto.createHash('sha256').update(pdfBuf).digest('hex');
+      const dbPath = `document_storage/case_document/${dbCase.caseId}/${sDoc.file}`;
+
+      await prisma.caseDocument.create({
+        data: {
+          caseId: dbCase.caseId,
+          documentType: sDoc.type,
+          fileName: sDoc.file,
+          fileSize: pdfBuf.length,
+          filePath: dbPath,
+          mimeType: 'application/pdf',
+          checksum,
+          createdById: govOfficer1.userId,
+        },
+      });
+    }
+
+    console.log(`📄 Seeded 4 Mandatory Supporting Documents for ${dbCase.caseId} (${dbCase.caseTitle})`);
   }
 
   // ===========================================================================

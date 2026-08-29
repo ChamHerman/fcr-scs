@@ -813,6 +813,32 @@ table tbody tr.row-clickable:hover {
   color: var(--md-on-surface);
   letter-spacing: -0.4px;
   margin: 0;
+  transition: color 0.15s ease;
+}
+
+.case-header-left .case-title-edit-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.case-header-left .case-title-input {
+  font-family: inherit;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--md-on-surface);
+  background: var(--md-surface-container);
+  border: 2px solid var(--md-primary);
+  border-radius: 14px;
+  padding: 6px 14px;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(103, 80, 164, 0.15);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.case-header-left .case-title-input:focus {
+  border-color: var(--md-primary);
+  box-shadow: 0 0 0 4px rgba(103, 80, 164, 0.25);
 }
 
 .case-header-left .case-meta {
@@ -946,18 +972,21 @@ table tbody tr.row-clickable:hover {
   padding: 20px;
 }
 
+.detail-grid,
 .case-section-content .detail-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px 32px;
 }
 
+.detail-item,
 .case-section-content .detail-item {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
+.detail-item .label,
 .case-section-content .detail-item .label {
   font-size: 12px;
   font-weight: 500;
@@ -967,6 +996,7 @@ table tbody tr.row-clickable:hover {
   opacity: 0.6;
 }
 
+.detail-item .value,
 .case-section-content .detail-item .value {
   font-size: 15px;
   font-weight: 500;

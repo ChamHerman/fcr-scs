@@ -11,8 +11,10 @@ import {
   FolderOpen,
   File,
   Loader2,
+  ExternalLink,
 } from "lucide-react";
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
+import { BASE_URL } from "../../services/api";
 import { Button } from "../../components/ui/Button";
 import { Modal } from "../../components/ui/Modal";
 import { CopyButton } from "../../components/ui/CopyButton";
@@ -28,6 +30,8 @@ type Owner = {
   icNumber: string;
   address: string;
   phone: string;
+  email: string;
+  share: string;
   ownershipType: string;
 };
 
@@ -35,6 +39,7 @@ type Document = {
   id: string;
   type: string;
   fileName: string;
+  filePath?: string;
   fileSize?: string;
 };
 
@@ -55,13 +60,13 @@ type CaseData = {
   // Land
   landTitleNumber: string;
   lotNumber: string;
+  tempat: string;
   mukim: string;
   district: string;
   state: string;
   landArea: string;
   landCategory: string;
-  gpsLatitude: string;
-  gpsLongitude: string;
+  tenureType: string;
   // Owners
   owners: Owner[];
   // Documents
@@ -154,29 +159,46 @@ export const CaseView: React.FC = () => {
           projectName: c.project?.projectName || "—",
           projectType: c.project?.projectType || "—",
           projectPurpose: c.project?.purpose || "—",
-          projectBudget: c.project?.budget ? `RM ${Number(c.project.budget).toLocaleString()}` : "—",
-          fundingSource: c.project?.fundingSource || "—",
+          projectBudget: c.project?.budget != null
+            ? `RM ${Number(c.project.budget).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : "—",
+          fundingSource: c.project?.fundingSource === "GOVERNMENT" ? "Government" : c.project?.fundingSource === "PRIVATE" ? "Private" : c.project?.fundingSource === "OTHERS" ? "Others" : c.project?.fundingSource || "—",
           landTitleNumber: c.landParcel?.landTitleNo || "—",
           lotNumber: c.landParcel?.lotNo || "—",
+          tempat: c.landParcel?.tempat || "—",
           mukim: c.landParcel?.mukim || "—",
           district: c.landParcel?.district || "—",
           state: c.landParcel?.state || "—",
-          landArea: c.landParcel?.area ? `${c.landParcel.area} ${c.landParcel.areaUnit}` : "—",
-          landCategory: c.landParcel?.category || "—",
-          gpsLatitude: c.landParcel?.latitude?.toString() || "—",
-          gpsLongitude: c.landParcel?.longitude?.toString() || "—",
+          landArea: c.landParcel?.area
+            ? `${c.landParcel.area} ${c.landParcel.areaUnit === "SQUARE_METER" ? "m²" : c.landParcel.areaUnit === "HECTARE" ? "hectares" : c.landParcel.areaUnit === "ACRE" ? "acres" : c.landParcel.areaUnit || "m²"}`
+            : "—",
+          landCategory: c.landParcel?.category === "AGRICULTURE" ? "Agriculture" : c.landParcel?.category === "BUILDING" ? "Building" : c.landParcel?.category === "INDUSTRY" ? "Industry" : (c.landParcel?.category || "—"),
+          tenureType: c.landParcel?.tenureType === "FREEHOLD" ? "Freehold" : c.landParcel?.tenureType === "LEASEHOLD" ? "Leasehold" : c.landParcel?.tenureType === "MALAY_RESERVE" ? "Malay Reserve" : (c.landParcel?.tenureType || "—"),
           owners: (c.landParcel?.ownerships || []).map((o: any, idx: number) => ({
             id: o.landOwner?.ownerId || idx.toString(),
             name: o.landOwner?.name || "—",
             icNumber: o.landOwner?.nric || "—",
             address: o.landOwner?.address || "—",
             phone: o.landOwner?.contact || "—",
-            ownershipType: o.ownershipType || "Individual",
+            email: o.landOwner?.email || "—",
+            share: o.share || "—",
+            ownershipType: o.ownershipType === "JOINT_OWNERSHIP"
+              ? "Joint Ownership"
+              : o.ownershipType === "CORPORATE_ENTITY"
+              ? "Corporate Entity"
+              : o.ownershipType === "ESTATE_OF_DECEASED"
+              ? "Estate of Deceased"
+              : o.ownershipType === "TRUSTEE"
+              ? "Trustee"
+              : o.ownershipType === "INDIVIDUAL_CITIZEN"
+              ? "Individual Citizen"
+              : (o.ownershipType || "Individual Citizen"),
           })),
           documents: (c.caseDocuments || []).map((d: any) => ({
             id: d.documentId,
             type: d.documentType,
             fileName: d.fileName,
+            filePath: d.filePath,
             fileSize: `${(d.fileSize / 1024 / 1024).toFixed(2)} MB`,
           })),
         };
@@ -226,8 +248,97 @@ export const CaseView: React.FC = () => {
     }));
   };
 
-  const handleEdit = (sectionKey?: string) => {
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editingTitleValue, setEditingTitleValue] = useState("");
+  const [isSavingTitle, setIsSavingTitle] = useState(false);
+  const titleInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleStartEditTitle = () => {
     if (!caseData) return;
+    if (!canEdit) {
+      if (!isCaseEditableStatus) {
+        notify({
+          type: 'general',
+          title: 'Case Locked',
+          message: `This case is in '${caseData.status}' status and cannot be modified.`,
+        });
+      } else if (!isSysAdmin && !isOfficer) {
+        notify({
+          type: 'error',
+          title: 'Access Restricted',
+          message: 'Only Government Officers and System Administrators can edit the case name.',
+        });
+      } else if (isOfficer && !isCreator && caseData.createdById) {
+        notify({
+          type: 'error',
+          title: 'Access Restricted',
+          message: 'Only the Government Officer who created this case (or System Administrator) can edit it.',
+        });
+      }
+      return;
+    }
+    setEditingTitleValue(caseData.title);
+    setIsEditingTitle(true);
+  };
+
+  useEffect(() => {
+    if (isEditingTitle && titleInputRef.current) {
+      titleInputRef.current.focus();
+      titleInputRef.current.select();
+    }
+  }, [isEditingTitle]);
+
+  const handleSaveTitle = async () => {
+    if (!caseData || isSavingTitle) return;
+    const trimmed = editingTitleValue.trim();
+    if (!trimmed) {
+      notify({
+        type: 'error',
+        title: 'Validation Error',
+        message: 'Case title cannot be empty.',
+      });
+      return;
+    }
+    if (trimmed === caseData.title) {
+      setIsEditingTitle(false);
+      return;
+    }
+
+    setIsSavingTitle(true);
+    try {
+      await landAcquisitionApi.updateCaseTitle(caseData.id, trimmed);
+      setCaseData((prev) => (prev ? { ...prev, title: trimmed } : null));
+      notify({
+        type: 'success',
+        title: 'Case Title Updated',
+        message: `Case title updated to "${trimmed}".`,
+      });
+      setIsEditingTitle(false);
+    } catch (err: any) {
+      console.error("Failed to update case title:", err);
+      notify({
+        type: 'error',
+        title: 'Update Failed',
+        message: err.message || 'Could not update case title in database.',
+      });
+    } finally {
+      setIsSavingTitle(false);
+    }
+  };
+
+  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSaveTitle();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setIsEditingTitle(false);
+      setEditingTitleValue(caseData?.title || "");
+    }
+  };
+
+  const handleEdit = (sectionKey?: string) => {
+    if (!caseData || !canEdit) return;
     const url = sectionKey
       ? `/admin/case/${encodeURIComponent(caseData.id)}/edit?section=${encodeURIComponent(sectionKey)}`
       : `/admin/case/${encodeURIComponent(caseData.id)}/edit`;
@@ -335,6 +446,10 @@ export const CaseView: React.FC = () => {
             <span className="value">{caseData.lotNumber}</span>
           </div>
           <div className="detail-item">
+            <span className="label">Tempat</span>
+            <span className="value">{caseData.tempat}</span>
+          </div>
+          <div className="detail-item">
             <span className="label">Mukim</span>
             <span className="value">{caseData.mukim}</span>
           </div>
@@ -355,10 +470,8 @@ export const CaseView: React.FC = () => {
             <span className="value">{caseData.landCategory}</span>
           </div>
           <div className="detail-item">
-            <span className="label">GPS Coordinates</span>
-            <span className="value">
-              {caseData.gpsLatitude}, {caseData.gpsLongitude}
-            </span>
+            <span className="label">Tenure Type</span>
+            <span className="value">{caseData.tenureType}</span>
           </div>
         </div>
       ),
@@ -376,15 +489,21 @@ export const CaseView: React.FC = () => {
               </div>
               <div className="owner-details">
                 <span className="detail-text">
-                  <strong>IC Number:</strong> {owner.icNumber}
+                  <strong>Identification Number:</strong> {owner.icNumber}
                 </span>
                 <span className="detail-text">
                   <strong>Phone:</strong> {owner.phone}
                 </span>
+                <span className="detail-text">
+                  <strong>Email:</strong> {owner.email}
+                </span>
+                <span className="detail-text">
+                  <strong>Ownership Share:</strong> {owner.share}
+                </span>
                 <span className="detail-text" style={{ gridColumn: "1 / -1" }}>
                   <strong>Address:</strong> {owner.address}
                 </span>
-                <span className="detail-text">
+                <span className="detail-text" style={{ gridColumn: "1 / -1" }}>
                   <strong>Ownership Type:</strong> {owner.ownershipType}
                 </span>
               </div>
@@ -401,19 +520,51 @@ export const CaseView: React.FC = () => {
       title: "Supporting Documents",
       icon: <FileText size={20} />,
       content: (
-        <div>
-          {caseData.documents.map((doc) => (
-            <div key={doc.id} className="doc-item">
-              <File size={18} className="doc-icon" />
-              <span className="doc-name">{doc.fileName}</span>
-              <span className="doc-type">{doc.type}</span>
-              {doc.fileSize && (
-                <span style={{ fontSize: "12px", opacity: 0.6 }}>
-                  {doc.fileSize}
-                </span>
-              )}
-            </div>
-          ))}
+        <div className="space-y-3">
+          {caseData.documents.map((doc) => {
+            const fileUrl = doc.filePath ? `${BASE_URL}/${doc.filePath.replace(/^\//, '')}` : "";
+            return (
+              <div
+                key={doc.id}
+                className="doc-item flex items-center justify-between p-3.5 bg-md-surface-container rounded-xl border border-md-outline/10 hover:border-md-primary/40 transition-colors cursor-pointer group"
+                onClick={() => {
+                  if (fileUrl) {
+                    window.open(fileUrl, "_blank", "noopener,noreferrer");
+                  }
+                }}
+                title={fileUrl ? `Click to view ${doc.fileName} in new browser tab` : undefined}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <File size={18} className="text-md-primary flex-shrink-0" />
+                  <span className="doc-name font-medium text-sm text-md-on-surface group-hover:text-md-primary transition-colors truncate">
+                    {doc.fileName}
+                  </span>
+                  <span className="doc-type text-xs px-2.5 py-0.5 rounded-full bg-md-primary/10 text-md-primary font-semibold flex-shrink-0">
+                    {doc.type}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  {doc.fileSize && (
+                    <span style={{ fontSize: "12px", opacity: 0.6 }}>
+                      {doc.fileSize}
+                    </span>
+                  )}
+                  {fileUrl && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.open(fileUrl, "_blank", "noopener,noreferrer");
+                      }}
+                      className="text-xs text-md-primary hover:underline flex items-center gap-1 font-semibold"
+                    >
+                      <ExternalLink size={14} /> View
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
           {caseData.documents.length === 0 && (
             <p style={{ fontStyle: "italic", opacity: 0.6 }}>
               No supporting documents uploaded for this case.
@@ -429,9 +580,15 @@ export const CaseView: React.FC = () => {
     caseData?.createdById &&
     caseData.createdById === user.userId
   );
-  const canEdit = Boolean(
-    canEditCaseDetails && (isSysAdmin || (isOfficer && isCreator))
+  const isAuthorizedRole = Boolean(
+    isSysAdmin || (isOfficer && (isCreator || !caseData?.createdById))
   );
+  // Status check: Backend CaseStateMachine allows editing only in CASE_REGISTERED and VALUER_ASSIGNED
+  const isCaseEditableStatus = Boolean(
+    caseData?.rawStatus && ["CASE_REGISTERED", "VALUER_ASSIGNED"].includes(caseData.rawStatus)
+  );
+  // Both role authorization AND case status editability must be satisfied
+  const canEdit = isAuthorizedRole && isCaseEditableStatus;
   const canDelete = Boolean(
     canDeleteCase({ createdById: caseData?.createdById, status: caseData?.rawStatus }) &&
     caseData?.rawStatus === "CASE_REGISTERED"
@@ -481,7 +638,47 @@ export const CaseView: React.FC = () => {
                 <span className="case-id font-mono text-sm">{caseData.id}</span>
                 <CopyButton value={caseData.id} />
               </div>
-              <h2 className="case-title">{caseData.title}</h2>
+              {isEditingTitle ? (
+                <div className="case-title-edit-container my-1">
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={titleInputRef}
+                      type="text"
+                      value={editingTitleValue}
+                      onChange={(e) => setEditingTitleValue(e.target.value)}
+                      onKeyDown={handleTitleKeyDown}
+                      disabled={isSavingTitle}
+                      className="case-title-input px-3 py-1.5 text-2xl font-bold rounded-xl border-2 border-md-primary bg-md-surface-container text-md-on-surface focus:outline-none w-full max-w-xl transition-all shadow-sm"
+                      placeholder="Enter case name / title"
+                    />
+                    {isSavingTitle && <Loader2 size={20} className="animate-spin text-md-primary flex-shrink-0" />}
+                  </div>
+                  <div className="text-xs text-md-on-surface-variant mt-1.5 flex items-center gap-1.5">
+                    <span className="inline-block px-1.5 py-0.5 bg-md-primary/10 text-md-primary rounded font-mono font-medium text-[11px]">Enter</span> to save
+                    <span className="mx-1 opacity-40">•</span>
+                    <span className="inline-block px-1.5 py-0.5 bg-md-outline/10 text-md-on-surface-variant rounded font-mono font-medium text-[11px]">Esc</span> to cancel
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className={`group relative inline-flex items-center gap-2.5 ${canEdit ? 'cursor-pointer' : ''}`}
+                  onDoubleClick={handleStartEditTitle}
+                  title={canEdit ? "Double-click to edit case name" : undefined}
+                >
+                  <h2 className="case-title m-0">
+                    {caseData.title}
+                  </h2>
+                  {canEdit && (
+                    <span
+                      onClick={handleStartEditTitle}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-md-on-surface-variant hover:text-md-primary hover:bg-md-primary/10 rounded-full cursor-pointer"
+                      title="Click or double-click to edit case name"
+                    >
+                      <Edit size={16} />
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="case-meta">
                 <span className="meta-item">
                   <strong>Registered:</strong> {caseData.registrationDate}
