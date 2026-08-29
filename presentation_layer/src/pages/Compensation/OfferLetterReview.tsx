@@ -615,7 +615,7 @@ export const OfferLetterDetail: React.FC = () => {
               <div>
                 <span className="text-md-on-surface-variant">Requested Amount: </span>
                 <strong className="text-md-primary">
-                  RM {Number(activeObjection.requestedAmount).toLocaleString("en-MY")}
+                  RM {Number(activeObjection.requestedAmount).toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </strong>
               </div>
             )}

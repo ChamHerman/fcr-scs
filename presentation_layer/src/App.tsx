@@ -47,20 +47,20 @@ import SubmitBankDetails from './pages/Member/SubmitBankDetails';
 import MemberPaymentStatus from './pages/Member/MemberPaymentStatus';
 import VerifyAuditTrail from './pages/Member/VerifyAuditTrail';
 import { CaseManagementDashboard } from './pages/LandAcquisition/CaseDashboard';
-import { CaseRegistration } from './pages/LandAcquisition/CaseRegistration';
+import { CaseCreate } from './pages/LandAcquisition/CaseCreate';
 import { CaseEdit } from './pages/LandAcquisition/CaseEdit';
 import { CaseView } from './pages/LandAcquisition/CaseDetails';
 import { CaseAssignment } from './pages/LandAcquisition/CaseAssignment';
-import { ValuationReportGenerator } from './pages/LandAcquisition/ValuationReportGenerator';
-import { ValuationReportReview } from './pages/LandAcquisition/ValuationReportReview';
-import { ValuationReportList } from './pages/LandAcquisition/ValuationReportDashboard';
-import { CompensationReportGenerator } from './pages/Compensation/CompensationReportGenerator';
+import { ValuationCreate } from './pages/LandAcquisition/ValuationCreate';
+import { ValuationReview } from './pages/LandAcquisition/ValuationReview';
+import { ValuationDashboard } from './pages/LandAcquisition/ValuationDashboard';
+import { CompensationCreate } from './pages/Compensation/CompensationCreate';
 import { CompensationApproval } from './pages/Compensation/CompensationReview';
-import { CompensationReportList } from './pages/Compensation/CompensationReportList';
-import { OfferLetterDashboard } from './pages/Compensation/OfferLetterDashboard';
+import { CompensationDashboard } from './pages/Compensation/CompensationDashboard';
+import { OfferDashboard } from './pages/Compensation/OfferDashboard';
 import { OfferLetterDetail } from './pages/Compensation/OfferLetterReview';
 import { ObjectionList } from './pages/Compensation/ObjectionDashboard';
-import { CreateObjection } from './pages/Compensation/ObjectionCreation';
+import { ObjectionCreate } from './pages/Compensation/ObjectionCreate';
 import { ObjectionReview } from './pages/Compensation/ObjectionReview';
 import { Placeholder } from './pages/Placeholder';
 import { RetrainAIModel } from './pages/PredictionDashboard/RetrainAIModel';
@@ -100,27 +100,27 @@ function App() {
 
               {/* Case Management */}
               <Route path="case" element={<CaseManagementDashboard />} />
-              <Route path="case/register" element={<CaseRegistration />} />
+              <Route path="case/register" element={<CaseCreate />} />
               <Route path="case/edit" element={<CaseEdit />} />
               <Route path="case/:caseId/edit" element={<CaseEdit />} />
               <Route path="case/details" element={<CaseView />} />
               <Route path="case/details/:caseId" element={<CaseView />} />
               <Route path="case/assign" element={<CaseAssignment />} />
-              <Route path="case/valuation" element={<ValuationReportList />} />
-              <Route path="case/valuation/create" element={<ValuationReportGenerator />} />
-              <Route path="case/valuation/review" element={<ValuationReportReview />} />
+              <Route path="case/valuation" element={<ValuationDashboard />} />
+              <Route path="case/valuation/create" element={<ValuationCreate />} />
+              <Route path="case/valuation/review" element={<ValuationReview />} />
 
               {/* Compensation Management */}
-              <Route path="compensation" element={<CompensationReportList />} />
-              <Route path="compensation/report" element={<CompensationReportList />} />
-              <Route path="compensation/report/create" element={<CompensationReportGenerator />} />
-              <Route path="compensation/generator" element={<CompensationReportGenerator />} />
+              <Route path="compensation" element={<CompensationDashboard />} />
+              <Route path="compensation/report" element={<CompensationDashboard />} />
+              <Route path="compensation/report/create" element={<CompensationCreate />} />
+              <Route path="compensation/generator" element={<CompensationCreate />} />
               <Route path="compensation/report/review" element={<CompensationApproval />} />
               <Route path="compensation/review" element={<CompensationApproval />} />
-              <Route path="compensation/offer" element={<OfferLetterDashboard />} />
+              <Route path="compensation/offer" element={<OfferDashboard />} />
               <Route path="compensation/offer/review" element={<OfferLetterDetail />} />
               <Route path="compensation/objection" element={<ObjectionList />} />
-              <Route path="compensation/objection/create" element={<CreateObjection />} />
+              <Route path="compensation/objection/create" element={<ObjectionCreate />} />
               <Route path="compensation/objection/review" element={<ObjectionReview />} />
               <Route path="compensation/objection/review/:objectionId" element={<ObjectionReview />} />
 

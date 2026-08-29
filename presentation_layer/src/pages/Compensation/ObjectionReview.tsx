@@ -6,6 +6,7 @@ import { compensationApi } from "../../services/compensationApi";
 import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
+import { CurrencyInput } from "../../components/ui/CurrencyInput";
 import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
@@ -188,7 +189,7 @@ export const ObjectionReview: React.FC = () => {
       notify({
         type: 'success',
         title: 'Objection Approved',
-        message: `Award amount updated to RM ${Number(revised).toLocaleString("en-MY")}, status reset to Pending.`,
+        message: `Award amount updated to RM ${Number(revised).toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}, status reset to Pending.`,
       });
     } catch (err: any) {
       console.error("Approve failed:", err);
@@ -387,11 +388,12 @@ export const ObjectionReview: React.FC = () => {
         }
       >
         <div className="flex flex-col gap-4">
-          <Input
+          <CurrencyInput
             label="Requested Amount (RM) *"
-            type="number"
-            value={editAmount === "" ? "" : String(editAmount)}
-            onChange={(e) => setEditAmount(e.target.value === "" ? "" : Number(e.target.value))}
+            id="editAmount"
+            placeholder="0.00"
+            value={editAmount}
+            onValueChange={(_formatted, num) => setEditAmount(num > 0 ? num : "")}
           />
           <Textarea
             label="Objection Statement *"
@@ -433,7 +435,7 @@ export const ObjectionReview: React.FC = () => {
           {/* Topbar */}
           <div className="topbar flex justify-between items-center mb-6 flex-wrap gap-4">
             <div className="topbar-left">
-              <h1 className="text-2xl font-bold mb-1">Form N — Objection Assessment</h1>
+              <h1 className="text-2xl font-bold mb-1">Objection Details</h1>
               <div className="text-xs md:text-sm text-md-on-surface-variant">
                 Objection Ref: <span className="font-mono font-bold text-md-primary">{objection.id}</span>
               </div>
@@ -611,13 +613,12 @@ export const ObjectionReview: React.FC = () => {
 
                     <div className="flex flex-col gap-4">
                       <div>
-                        <Input
+                        <CurrencyInput
                           label="Revised Compensation Amount (RM)"
                           id="revisedAmount"
-                          type="number"
-                          value={revisedAmount === "" ? "" : String(revisedAmount)}
-                          onChange={(e) => setRevisedAmount(e.target.value === "" ? "" : Number(e.target.value))}
-                          placeholder="Enter revised compensation if approving with revision"
+                          value={revisedAmount}
+                          placeholder="0.00"
+                          onValueChange={(_formatted, num) => setRevisedAmount(num > 0 ? num : "")}
                         />
                       </div>
 

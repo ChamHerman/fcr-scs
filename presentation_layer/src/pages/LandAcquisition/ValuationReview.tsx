@@ -10,6 +10,7 @@ import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
+import { formatCurrencyRM } from "../../utils/currency";
 import "../../style.css";
 import "./valuation_report.css";
 
@@ -43,7 +44,7 @@ const statusLabelMap: Record<string, string> = {
   REJECTED: "Rejected",
 };
 
-export const ValuationReportReview: React.FC = () => {
+export const ValuationReview: React.FC = () => {
   const { user, userId, isSysAdmin, isAdmin, isOfficer, isValuer } = useRole();
   const { reportId: paramReportId } = useParams<{ reportId: string }>();
   const location = useLocation();
@@ -89,8 +90,8 @@ export const ValuationReportReview: React.FC = () => {
             ? new Date(rep.valuationDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
             : "—",
           valuationMethod: rep.valuationMethod || "—",
-          marketValue: `RM ${Number(rep.marketValue || 0).toLocaleString("en-MY")}`,
-          recommendedCompensation: `RM ${Number(rep.recommendedCompensation || 0).toLocaleString("en-MY")}`,
+          marketValue: formatCurrencyRM(rep.marketValue),
+          recommendedCompensation: formatCurrencyRM(rep.recommendedCompensation),
           remarks: rep.remarks || "No remarks provided.",
           buildingAssessment: rep.documents?.find((d: any) => d.documentType === "Building Assessment")?.fileName || "Not uploaded",
           siteInspection: rep.documents?.find((d: any) => d.documentType === "Site Inspection")?.fileName || "Not uploaded",
@@ -426,3 +427,5 @@ export const ValuationReportReview: React.FC = () => {
     </>
   );
 };
+
+export const ValuationReportReview = ValuationReview;

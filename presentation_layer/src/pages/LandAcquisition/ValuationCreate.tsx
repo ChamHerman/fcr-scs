@@ -8,10 +8,12 @@ import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
 import { Select, type SelectOption } from "../../components/ui/Select";
 import { Input } from "../../components/ui/Input";
+import { CurrencyInput } from "../../components/ui/CurrencyInput";
 import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../components/ui/NotificationSystem";
+import { formatCurrencyWithDecimals, formatCurrencyRM } from "../../utils/currency";
 import "../../style.css";
 import "./valuation_report.css";
 
@@ -70,7 +72,7 @@ const VALUATION_METHOD_OPTIONS: SelectOption[] = [
   { value: "Other", label: "Other" },
 ];
 
-export const ValuationReportGenerator: React.FC = () => {
+export const ValuationCreate: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -212,6 +214,11 @@ export const ValuationReportGenerator: React.FC = () => {
 
   const handleGeneratePreview = () => {
     if (!validateForm()) return;
+    setFormData((prev) => ({
+      ...prev,
+      marketValue: formatCurrencyWithDecimals(prev.marketValue),
+      recommendedCompensation: formatCurrencyWithDecimals(prev.recommendedCompensation),
+    }));
     setShowPreview(true);
   };
 
@@ -270,8 +277,8 @@ export const ValuationReportGenerator: React.FC = () => {
           year: "numeric",
         }),
         valuationMethod: formData.valuationMethod,
-        marketValue: formData.marketValue,
-        recommendedCompensation: formData.recommendedCompensation,
+        marketValue: formatCurrencyWithDecimals(formData.marketValue),
+        recommendedCompensation: formatCurrencyWithDecimals(formData.recommendedCompensation),
         remarks: formData.remarks,
         buildingAssessment: formData.buildingAssessment ? formData.buildingAssessment.name : "Not uploaded",
         siteInspection: formData.siteInspection ? formData.siteInspection.name : "Not uploaded",
@@ -362,11 +369,11 @@ export const ValuationReportGenerator: React.FC = () => {
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">Market Value</span>
-            <span className="text-sm font-semibold text-md-primary">RM {formData.marketValue}</span>
+            <span className="text-sm font-semibold text-md-primary">{formatCurrencyRM(formData.marketValue)}</span>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">Recommended Compensation</span>
-            <span className="text-sm font-semibold text-md-primary">RM {formData.recommendedCompensation}</span>
+            <span className="text-sm font-semibold text-md-primary">{formatCurrencyRM(formData.recommendedCompensation)}</span>
           </div>
           <div className="flex flex-col gap-1 md:col-span-2">
             <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">Remarks</span>
@@ -423,8 +430,8 @@ export const ValuationReportGenerator: React.FC = () => {
             <CopyButton value={savedReport?.reportId || ""} />
           </div>
           <div>
-            <strong>Recommended Compensation:</strong> RM{" "}
-            {savedReport?.recommendedCompensation}
+            <strong>Recommended Compensation:</strong>{" "}
+            {formatCurrencyRM(savedReport?.recommendedCompensation)}
           </div>
           <div className="text-xs text-md-on-surface-variant/70 mt-3 max-w-md mx-auto">
             This report was saved as a brand-new row in the database. All previous report history for case <strong>{savedReport?.caseId}</strong> remains fully preserved and traceable.
@@ -619,13 +626,13 @@ export const ValuationReportGenerator: React.FC = () => {
 
                   {/* Market Value */}
                   <div>
-                    <Input
+                    <CurrencyInput
                       label="Market Value (RM) *"
                       id="marketValue"
                       name="marketValue"
                       value={formData.marketValue}
                       onChange={handleInputChange}
-                      placeholder="e.g., 1,500,000"
+                      placeholder="0.00"
                     />
                     {validationErrors.marketValue && (
                       <div className="text-xs text-md-error pl-2 mt-1">
@@ -636,13 +643,13 @@ export const ValuationReportGenerator: React.FC = () => {
 
                   {/* Recommended Compensation */}
                   <div>
-                    <Input
+                    <CurrencyInput
                       label="Recommended Compensation (RM) *"
                       id="recommendedCompensation"
                       name="recommendedCompensation"
                       value={formData.recommendedCompensation}
                       onChange={handleInputChange}
-                      placeholder="e.g., 2,200,000"
+                      placeholder="0.00"
                     />
                     {validationErrors.recommendedCompensation && (
                       <div className="text-xs text-md-error pl-2 mt-1">
@@ -729,3 +736,5 @@ export const ValuationReportGenerator: React.FC = () => {
     </>
   );
 };
+
+export const ValuationReportGenerator = ValuationCreate;

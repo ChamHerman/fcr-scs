@@ -8,7 +8,7 @@ import { useAuth } from "../../context/AuthContext";
 import { Button } from "../../components/ui/Button";
 import { useNotification } from "../../components/ui/NotificationSystem";
 
-export const CaseRegistration: React.FC = () => {
+export const CaseCreate: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { notify } = useNotification();
@@ -121,3 +121,5 @@ export const CaseRegistration: React.FC = () => {
     />
   );
 };
+
+export const CaseRegistration = CaseCreate;
