@@ -6,6 +6,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 const caseRouter = Router();
 
 // GET Endpoints (Read Operations)
+caseRouter.get("/projects", caseCtrl.getAllProjects);
 caseRouter.get("/cases", caseCtrl.getAllCases);
 caseRouter.get("/cases/stats", caseCtrl.getCaseStats);
 caseRouter.get("/cases/unassigned", caseCtrl.getUnassignedCases);
@@ -16,6 +17,10 @@ caseRouter.get("/cases/:caseId", caseCtrl.getCaseById);
 caseRouter.post("/cases", caseCtrl.createCase);
 
 // Specific Section Update Endpoints (Placed BEFORE generic /cases/:caseId to prevent route swallowing)
+caseRouter.post("/cases/:caseId/title", caseCtrl.updateCaseTitle);
+caseRouter.put("/cases/:caseId/title", caseCtrl.updateCaseTitle);
+caseRouter.patch("/cases/:caseId/title", caseCtrl.updateCaseTitle);
+
 caseRouter.post("/cases/:caseId/project", caseCtrl.updateProjectInformation);
 caseRouter.put("/cases/:caseId/project", caseCtrl.updateProjectInformation);
 

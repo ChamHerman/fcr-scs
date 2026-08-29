@@ -87,26 +87,47 @@ export const CaseEdit: React.FC = () => {
           throw new Error("Access Denied: Only the Government Officer who created this case can edit it.");
         }
 
+        // Status check: Only cases in CASE_REGISTERED or VALUER_ASSIGNED status can be edited
+        const EDITABLE_STATUSES = ["CASE_REGISTERED", "VALUER_ASSIGNED"];
+        if (!EDITABLE_STATUSES.includes(c.status)) {
+          const readableStatus = c.status.replace(/_/g, " ");
+          throw new Error(`This case is currently in '${readableStatus}' status and can no longer be edited.`);
+        }
+
         const project = c.project || {};
         const land = c.landParcel || {};
         const ownerships: any[] = land.ownerships || [];
         const docs: any[] = c.caseDocuments || [];
 
         const formData: CaseFormData = {
+          caseTitle: c.caseTitle || "",
           projectName: project.projectName || "",
           projectType: project.projectType || "",
           projectPurpose: project.purpose || "",
-          projectBudget: project.budget != null ? String(project.budget) : "",
-          fundingSource: project.fundingSource || "",
+          projectBudget: project.budget != null
+            ? Number(project.budget).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            : "",
+          fundingSource: project.fundingSource === "GOVERNMENT" ? "Government" : project.fundingSource === "PRIVATE" ? "Private" : project.fundingSource === "OTHERS" ? "Others" : (project.fundingSource || "Government"),
           landTitleNumber: land.landTitleNo || "",
           lotNumber: land.lotNo || "",
+          tempat: land.tempat || "",
           mukim: land.mukim || "",
           district: land.district || "",
           state: land.state || "",
           landArea: land.area != null ? String(land.area) : "",
-          landCategory: land.category || "",
-          gpsLatitude: land.latitude != null ? String(land.latitude) : "",
-          gpsLongitude: land.longitude != null ? String(land.longitude) : "",
+          landCategory: land.category === "AGRICULTURE" ? "Agriculture" : land.category === "BUILDING" ? "Building" : land.category === "INDUSTRY" ? "Industry" : (land.category || "Agriculture"),
+          tenureType: land.tenureType === "FREEHOLD" ? "Freehold" : land.tenureType === "LEASEHOLD" ? "Leasehold" : land.tenureType === "MALAY_RESERVE" ? "Malay Reserve" : (land.tenureType || "Freehold"),
+          ownershipType: ownerships[0]?.ownershipType
+            ? (ownerships[0].ownershipType === "JOINT_OWNERSHIP"
+                ? "Joint Ownership"
+                : ownerships[0].ownershipType === "CORPORATE_ENTITY"
+                ? "Corporate Entity"
+                : ownerships[0].ownershipType === "ESTATE_OF_DECEASED"
+                ? "Estate of Deceased"
+                : ownerships[0].ownershipType === "TRUSTEE"
+                ? "Trustee"
+                : "Individual Citizen")
+            : "Individual Citizen",
         };
 
         const owners: Owner[] = ownerships.length > 0
@@ -116,18 +137,27 @@ export const CaseEdit: React.FC = () => {
               icNumber: o.landOwner?.nric || "",
               address: o.landOwner?.address || "",
               phone: o.landOwner?.contact || "",
-              ownershipType: o.ownershipType || "Individual",
+              email: o.landOwner?.email || "",
+              share: o.share || "100",
+              ownershipType: o.ownershipType || "Individual Citizen",
             }))
-          : [{ id: "1", name: "", icNumber: "", address: "", phone: "", ownershipType: "" }];
+          : [{ id: "1", name: "", icNumber: "", address: "", phone: "", email: "", share: "100" }];
 
-        const documents: Document[] = docs.length > 0
-          ? docs.map((d: any, idx: number) => ({
-              id: d.documentId || String(idx + 1),
-              type: d.documentType || "Supporting Document",
-              file: null,
-              fileName: d.fileName || "Uploaded Document",
-            }))
-          : [{ id: "1", type: "", file: null, fileName: "" }];
+        const documents: Document[] = [
+          "Acquisition Plan",
+          "Official Title Search",
+          "Proof of Financial Allocation",
+          "Project Proposal",
+        ].map((type, idx) => {
+          const matched = docs.find((d: any) => d.documentType === type);
+          return {
+            id: matched?.documentId || String(idx + 1),
+            type,
+            file: null,
+            fileName: matched?.fileName || "",
+            filePath: matched?.filePath || "",
+          };
+        });
 
         setInitialValues({ formData, owners, documents });
       } catch (err: any) {
@@ -177,13 +207,13 @@ export const CaseEdit: React.FC = () => {
     const landPayload = {
       landTitleNo: data.formData.landTitleNumber,
       lotNo: data.formData.lotNumber,
+      tempat: data.formData.tempat,
       mukim: data.formData.mukim,
       district: data.formData.district,
       state: data.formData.state,
       area: parseNum(data.formData.landArea),
       category: data.formData.landCategory,
-      latitude: parseNum(data.formData.gpsLatitude),
-      longitude: parseNum(data.formData.gpsLongitude),
+      tenureType: data.formData.tenureType,
     };
 
     const ownersPayload = data.owners.map((o) => ({
@@ -191,12 +221,17 @@ export const CaseEdit: React.FC = () => {
       nric: o.icNumber,
       address: o.address,
       contact: o.phone,
-      ownershipType: o.ownershipType || "Individual",
+      email: o.email || undefined,
+      ownershipType: data.formData.ownershipType || o.ownershipType || "Individual Citizen",
+      share: o.share || "1/1",
     }));
 
     try {
       // ── Section-only edit ─────────────────────────────────────────────────
       if (sectionParam === "project") {
+        if (data.formData.caseTitle?.trim()) {
+          await landAcquisitionApi.updateCaseTitle(caseId, data.formData.caseTitle.trim());
+        }
         await landAcquisitionApi.updateProjectInfo(caseId, projectPayload);
       } else if (sectionParam === "land") {
         await landAcquisitionApi.updateLandInfo(caseId, landPayload);
@@ -219,6 +254,9 @@ export const CaseEdit: React.FC = () => {
         }
       } else {
         // ── Whole-case edit: update each section sequentially ───────────────
+        if (data.formData.caseTitle?.trim()) {
+          await landAcquisitionApi.updateCaseTitle(caseId, data.formData.caseTitle.trim());
+        }
         await landAcquisitionApi.updateProjectInfo(caseId, projectPayload);
         await landAcquisitionApi.updateLandInfo(caseId, landPayload);
         await landAcquisitionApi.updateOwnerInfo(caseId, ownersPayload);

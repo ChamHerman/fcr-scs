@@ -2,8 +2,19 @@ import { Request, Response } from "express";
 import * as caseService from "../services/case.service";
 import { validateCreateCasePayload } from "../validators/case.validator";
 import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 
 // ─── GET Handlers (Phase 1) ──────────────────────────────────────────────────
+
+export async function getAllProjects(req: Request, res: Response): Promise<void> {
+  try {
+    const projects = await caseService.getAllProjects();
+    res.json({ success: true, count: projects.length, projects });
+  } catch (e: unknown) {
+    res.status(500).json({ error: (e as Error).message });
+  }
+}
 
 export async function getAllCases(req: Request, res: Response): Promise<void> {
   try {
@@ -112,6 +123,33 @@ export async function createCase(req: Request, res: Response): Promise<void> {
   }
 }
 
+export async function updateCaseTitle(req: Request, res: Response): Promise<void> {
+  const caseId = req.params.caseId as string;
+  console.log(`[CONTROLLER REACHED] updateCaseTitle for caseId: ${caseId}`);
+  if (!caseId) {
+    res.status(400).json({ success: false, error: "caseId is required" });
+    return;
+  }
+
+  const caseTitle = req.body.caseTitle || req.body.caseName || req.body.title;
+  if (!caseTitle || typeof caseTitle !== "string" || !caseTitle.trim()) {
+    res.status(400).json({ success: false, error: "Case title is required and cannot be empty" });
+    return;
+  }
+
+  try {
+    const result = await caseService.updateCaseTitle(caseId, caseTitle);
+    res.json({ success: true, message: "Case title updated successfully", case: result, data: result });
+  } catch (e: unknown) {
+    const msg = (e as Error).message;
+    if (msg.toLowerCase().includes("not found")) {
+      res.status(404).json({ success: false, error: msg });
+    } else {
+      res.status(400).json({ success: false, error: msg });
+    }
+  }
+}
+
 export async function updateCase(req: Request, res: Response): Promise<void> {
   const caseId = req.params.caseId as string;
   console.log(`[CONTROLLER REACHED] updateCase for caseId: ${caseId}`);
@@ -120,11 +158,11 @@ export async function updateCase(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const { caseTitle, remarks, status, project, land, owners } = req.body;
+  const { caseTitle, caseName, title, remarks, status, project, land, owners } = req.body;
 
   try {
     const result = await caseService.updateCase(caseId, {
-      caseTitle,
+      caseTitle: caseTitle || caseName || title,
       remarks,
       status,
       project,
@@ -227,6 +265,17 @@ export async function deleteCase(req: Request, res: Response): Promise<void> {
 
 // ─── Document Handlers (Phase 2 - Multer) ─────────────────────────────────────
 
+function getCaseDocumentDir(caseId: string): string {
+  const candidate1 = path.resolve(__dirname, "../../../../data_layer/document_storage/case_document", caseId);
+  const candidate2 = path.resolve(process.cwd(), "data_layer/document_storage/case_document", caseId);
+  const candidate3 = path.resolve(process.cwd(), "../data_layer/document_storage/case_document", caseId);
+
+  if (fs.existsSync(path.dirname(candidate1))) return candidate1;
+  if (fs.existsSync(path.dirname(candidate2))) return candidate2;
+  if (fs.existsSync(path.dirname(candidate3))) return candidate3;
+  return candidate1;
+}
+
 export async function uploadDocument(req: Request, res: Response): Promise<void> {
   const caseId = req.params.caseId as string;
   const { documentType, createdById } = req.body;
@@ -246,13 +295,24 @@ export async function uploadDocument(req: Request, res: Response): Promise<void>
 
   const checksum = crypto.createHash("sha256").update(file.buffer).digest("hex");
 
+  // Destination folder: data_layer/document_storage/case_document/<caseId>
+  const storageDir = getCaseDocumentDir(caseId);
+  if (!fs.existsSync(storageDir)) {
+    fs.mkdirSync(storageDir, { recursive: true });
+  }
+
+  const targetFilePath = path.join(storageDir, file.originalname);
+  fs.writeFileSync(targetFilePath, file.buffer);
+
+  const dbFilePath = `document_storage/case_document/${caseId}/${file.originalname}`;
+
   try {
     const doc = await caseService.addCaseDocument({
       caseId,
       documentType: documentType || "Supporting Document",
       fileName: file.originalname,
       fileSize: file.size,
-      filePath: `/uploads/${caseId}/${file.originalname}`,
+      filePath: dbFilePath,
       mimeType: file.mimetype,
       checksum,
       createdById: userId,

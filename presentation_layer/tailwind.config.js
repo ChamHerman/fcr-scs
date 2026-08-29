@@ -22,6 +22,7 @@ export default {
         // Soft Notification Colors
         'md-error': 'var(--md-error)',
         'md-on-error': 'var(--md-on-error)',
+        'md-error-text': 'var(--md-error-text)',
         'md-warning': 'var(--md-warning)',
         'md-on-warning': 'var(--md-on-warning)',
         'md-success': 'var(--md-success)',

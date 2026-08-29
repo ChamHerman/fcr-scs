@@ -59,6 +59,10 @@ export const landAcquisitionApi = {
     return fetchJSON(LAND_ACQUISITION_BASE + url);
   },
 
+  getAllProjects: async () => {
+    return fetchJSON(LAND_ACQUISITION_BASE + "/api/land-acquisition/projects");
+  },
+
   getUnassignedCases: async () => {
     return fetchJSON(LAND_ACQUISITION_BASE + "/api/land-acquisition/cases/unassigned");
   },
@@ -83,6 +87,14 @@ export const landAcquisitionApi = {
     return fetchJSON(LAND_ACQUISITION_BASE + `/api/land-acquisition/cases/${encodeURIComponent(caseId)}`, {
       method: "PUT",
       body: JSON.stringify(updateData),
+    });
+  },
+
+  // ── Section-specific update: Case Title ──────────────────────────────────
+  updateCaseTitle: async (caseId: string, caseTitle: string) => {
+    return fetchJSON(LAND_ACQUISITION_BASE + `/api/land-acquisition/cases/${encodeURIComponent(caseId)}/title`, {
+      method: "PUT",
+      body: JSON.stringify({ caseTitle }),
     });
   },
 
