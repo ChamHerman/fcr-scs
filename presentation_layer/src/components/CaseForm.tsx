@@ -3,6 +3,7 @@ import React, { useState, useMemo } from "react";
 import { ChevronLeft, ChevronRight, Plus, Trash2, Upload, FileText, CheckCircle2 } from "lucide-react";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
+import { CurrencyInput } from "./ui/CurrencyInput";
 import { Select, type SelectOption } from "./ui/Select";
 import { Textarea } from "./ui/Textarea";
 import { IconButton } from "./ui/IconButton";
@@ -11,6 +12,7 @@ import { useNotification } from "./ui/NotificationSystem";
 import { useAuth } from "../context/AuthContext";
 import { landAcquisitionApi } from "../services/landAcquisitionApi";
 import { BASE_URL } from "../services/api";
+import { formatCurrencyWithDecimals, formatLiveCurrency } from "../utils/currency";
 import "../style.css";
 import "../pages/LandAcquisition/case_management.css";
 
@@ -419,36 +421,11 @@ export const CaseForm: React.FC<CaseFormProps> = ({
 
   const [currentStep, setCurrentStep] = useState(initialStep);
   const formatBudgetValue = (val: string): string => {
-    const clean = String(val).replace(/,/g, "").trim();
-    if (!clean || isNaN(Number(clean))) return val;
-    const num = parseFloat(clean);
-    if (isNaN(num)) return val;
-    return new Intl.NumberFormat("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(num);
+    return formatCurrencyWithDecimals(val) || val;
   };
 
   const formatLiveBudget = (input: string): string => {
-    const clean = input.replace(/[^\d.]/g, "");
-    if (!clean) return "";
-
-    const parts = clean.split(".");
-    let integerPart = parts[0] || "";
-    if (integerPart.length > 1 && integerPart.startsWith("0")) {
-      integerPart = integerPart.replace(/^0+/, "") || "0";
-    }
-    if (!integerPart && parts.length > 1) {
-      integerPart = "0";
-    }
-    const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-
-    if (parts.length > 1) {
-      const decimalPart = parts.slice(1).join("").slice(0, 2);
-      return `${formattedInteger}.${decimalPart}`;
-    }
-
-    return formattedInteger;
+    return formatLiveCurrency(input);
   };
 
   const handleBudgetChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1100,7 +1077,7 @@ export const CaseForm: React.FC<CaseFormProps> = ({
           projectType: selectedProj.projectType || "",
           fundingSource: formattedFundingSource,
           projectPurpose: selectedProj.purpose || "",
-          projectBudget: selectedProj.budget != null ? String(selectedProj.budget) : "",
+          projectBudget: selectedProj.budget != null ? formatCurrencyWithDecimals(selectedProj.budget) : "",
         };
       }
     } else {
@@ -1340,28 +1317,13 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                   </div>
                 </div>
                 <div>
-                  <Input
+                  <CurrencyInput
                     id="projectBudget"
                     name="projectBudget"
                     label="Project Budget (RM) *"
-                    type="text"
-                    inputMode="decimal"
                     value={formData.projectBudget}
                     error={errors.projectBudget}
-                    onChange={handleBudgetChange}
-                    onBlur={() => {
-                      if (formData.projectBudget) {
-                        handleFieldChange("projectBudget", formatBudgetValue(formData.projectBudget));
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        if (formData.projectBudget) {
-                          handleFieldChange("projectBudget", formatBudgetValue(formData.projectBudget));
-                        }
-                      }
-                    }}
+                    onChange={(e) => handleFieldChange("projectBudget", e.target.value)}
                     placeholder="0.00"
                   />
                 </div>

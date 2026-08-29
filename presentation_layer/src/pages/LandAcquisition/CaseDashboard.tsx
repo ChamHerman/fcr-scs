@@ -399,7 +399,7 @@ export const CaseManagementDashboard: React.FC = () => {
         <div className="topbar">
           <div className="topbar-left">
             <div className="flex items-center gap-3">
-              <h1>Case Management</h1>
+              <h1>Land Acquisition Case Dashboard</h1>
             </div>
             <div className="sub">
               {isAdmin

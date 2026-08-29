@@ -8,6 +8,7 @@ import { Button } from "../../components/ui/Button";
 import { Select, type SelectOption } from "../../components/ui/Select";
 import { SearchInput } from "../../components/ui/SearchInput";
 import { Input } from "../../components/ui/Input";
+import { CurrencyInput } from "../../components/ui/CurrencyInput";
 import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { Pagination } from "../../components/ui/Pagination";
@@ -341,12 +342,12 @@ export const ObjectionDashboard: React.FC = () => {
             value={editItem?.caseTitle || ""}
             disabled
           />
-          <Input
+          <CurrencyInput
             label="Requested Amount (RM) *"
-            type="number"
-            value={editAmount === "" ? "" : String(editAmount)}
-            onChange={(e) => setEditAmount(e.target.value === "" ? "" : Number(e.target.value))}
-            placeholder="Enter requested amount"
+            id="editAmount"
+            placeholder="0.00"
+            value={editAmount}
+            onValueChange={(_formatted, num) => setEditAmount(num > 0 ? num : "")}
           />
           <Textarea
             label="Objection Details / Reason *"
@@ -386,7 +387,7 @@ export const ObjectionDashboard: React.FC = () => {
 
       <div className="topbar" style={{ marginBottom: "20px" }}>
         <div className="topbar-left">
-          <h1 style={{ marginBottom: 0 }}>Objection Management</h1>
+          <h1 style={{ marginBottom: 0 }}>Objection Dashboard</h1>
           <div className="sub">
             Review land owner compensation objections (Form N)
           </div>
