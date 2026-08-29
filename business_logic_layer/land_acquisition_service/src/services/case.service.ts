@@ -1,7 +1,43 @@
 import { prisma } from "../prisma";
-import { CaseStatus, AreaUnit, Prisma } from "@prisma/client";
+import { CaseStatus, AreaUnit, FundingSource, LandCategory, TenureType, OwnershipType, Prisma } from "@prisma/client";
 import { CaseStateMachine } from "../utils/case-state.machine";
 
+function parseLandCategory(val?: string | null): LandCategory {
+  if (!val) return LandCategory.AGRICULTURE;
+  const upper = String(val).toUpperCase().trim();
+  if (upper === "BUILDING" || upper.includes("BUILD")) return LandCategory.BUILDING;
+  if (upper === "INDUSTRY" || upper.includes("INDUS")) return LandCategory.INDUSTRY;
+  if (upper === "AGRICULTURE" || upper.includes("AGRI")) return LandCategory.AGRICULTURE;
+  return LandCategory.AGRICULTURE;
+}
+
+function parseTenureType(val?: string | null): TenureType {
+  if (!val) return TenureType.FREEHOLD;
+  const upper = String(val).toUpperCase().trim();
+  if (upper.includes("LEASE")) return TenureType.LEASEHOLD;
+  if (upper.includes("MALAY") || upper.includes("RESERVE")) return TenureType.MALAY_RESERVE;
+  return TenureType.FREEHOLD;
+}
+
+export function parseOwnershipType(val?: string | null): OwnershipType {
+  if (!val) return OwnershipType.INDIVIDUAL_CITIZEN;
+  const upper = String(val).toUpperCase().trim();
+  if (upper === "JOINT_OWNERSHIP" || upper.includes("JOINT")) return OwnershipType.JOINT_OWNERSHIP;
+  if (upper === "CORPORATE_ENTITY" || upper.includes("CORP") || upper.includes("COMPANY") || upper.includes("ENTITY")) return OwnershipType.CORPORATE_ENTITY;
+  if (upper === "ESTATE_OF_DECEASED" || upper.includes("DECEASED") || upper.includes("ESTATE")) return OwnershipType.ESTATE_OF_DECEASED;
+  if (upper === "TRUSTEE" || upper.includes("TRUST")) return OwnershipType.TRUSTEE;
+  return OwnershipType.INDIVIDUAL_CITIZEN;
+}
+
+export function formatOwnershipType(val?: OwnershipType | string | null): string {
+  if (!val) return "Individual Citizen";
+  const upper = String(val).toUpperCase().trim();
+  if (upper === "JOINT_OWNERSHIP" || upper.includes("JOINT")) return "Joint Ownership";
+  if (upper === "CORPORATE_ENTITY" || upper.includes("CORP")) return "Corporate Entity";
+  if (upper === "ESTATE_OF_DECEASED" || upper.includes("DECEASED")) return "Estate of Deceased";
+  if (upper === "TRUSTEE" || upper.includes("TRUST")) return "Trustee";
+  return "Individual Citizen";
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -30,21 +66,23 @@ export interface CreateCaseInput {
   land: {
     landTitleNo: string;
     lotNo: string;
+    tempat?: string;
     mukim: string;
     district: string;
     state: string;
     area: number;
     areaUnit: string;
     category: string;
-    latitude: number;
-    longitude: number;
+    tenureType?: string;
   };
   owners: Array<{
     name: string;
     nric: string;
     address: string;
     contact: string;
+    email?: string;
     ownershipType: string;
+    share?: string;
   }>;
   caseTitle: string;
   remarks?: string;
@@ -78,7 +116,9 @@ export interface UpdateCaseInput {
     nric: string;
     address: string;
     contact: string;
+    email?: string;
     ownershipType: string;
+    share?: string;
   }>;
 }
 
@@ -208,7 +248,28 @@ function parseAreaUnit(unit: string): AreaUnit {
   return map[unit] || AreaUnit.HECTARE;
 }
 
+function parseFundingSource(val: any): FundingSource {
+  if (!val) return FundingSource.GOVERNMENT;
+  const upper = String(val).toUpperCase().trim();
+  if (upper.includes("GOV")) return FundingSource.GOVERNMENT;
+  if (upper.includes("PRIV")) return FundingSource.PRIVATE;
+  if (upper.includes("OTHER")) return FundingSource.OTHERS;
+  return (FundingSource as any)[upper] || FundingSource.GOVERNMENT;
+}
+
 // ─── READ Operations (Phase 1) ────────────────────────────────────────────────
+
+export async function getAllProjects() {
+  return prisma.project.findMany({
+    where: { deletedAt: null },
+    orderBy: { projectName: "asc" },
+    include: {
+      _count: {
+        select: { cases: true },
+      },
+    },
+  });
+}
 
 export async function getAllCases(filters: CaseFilters) {
   const page = filters.page || 1;
@@ -395,7 +456,7 @@ export async function createCase(input: CreateCaseInput) {
         projectType: project.projectType,
         purpose: project.purpose,
         budget: project.budget,
-        fundingSource: project.fundingSource,
+        fundingSource: parseFundingSource(project.fundingSource),
         createdById,
       },
     });
@@ -419,14 +480,14 @@ export async function createCase(input: CreateCaseInput) {
         caseId: dbCase.caseId,
         landTitleNo: land.landTitleNo,
         lotNo: land.lotNo,
+        tempat: land.tempat || "",
         mukim: land.mukim,
         district: land.district,
         state: land.state,
         area: land.area,
         areaUnit: parseAreaUnit(land.areaUnit),
-        category: land.category,
-        latitude: land.latitude,
-        longitude: land.longitude,
+        category: parseLandCategory(land.category),
+        tenureType: parseTenureType(land.tenureType),
         createdById,
       },
     });
@@ -444,7 +505,18 @@ export async function createCase(input: CreateCaseInput) {
             nric: ownerInput.nric,
             address: ownerInput.address,
             contact: ownerInput.contact,
+            email: ownerInput.email || null,
             createdById,
+          },
+        });
+      } else {
+        dbOwner = await tx.landOwner.update({
+          where: { ownerId: dbOwner.ownerId },
+          data: {
+            ...(ownerInput.name && { name: ownerInput.name }),
+            ...(ownerInput.address && { address: ownerInput.address }),
+            ...(ownerInput.contact && { contact: ownerInput.contact }),
+            ...(ownerInput.email !== undefined && { email: ownerInput.email || null }),
           },
         });
       }
@@ -453,7 +525,8 @@ export async function createCase(input: CreateCaseInput) {
         data: {
           landId: dbLand.landId,
           ownerId: dbOwner.ownerId,
-          ownershipType: ownerInput.ownershipType,
+          ownershipType: parseOwnershipType(ownerInput.ownershipType),
+          share: ownerInput.share || "1/1",
           ownershipStart: new Date(),
           isCurrent: true,
           createdById,
@@ -488,11 +561,7 @@ export async function updateProjectInformation(caseId: string, projectInput: any
   }
   if (!existing.projectId) throw new Error("Project record not associated with this case");
 
-  const projectName = projectInput.projectName;
-  const projectType = projectInput.projectType;
-  const purpose = projectInput.purpose || projectInput.projectPurpose;
-  const budget = projectInput.budget !== undefined ? projectInput.budget : projectInput.projectBudget;
-  const fundingSource = projectInput.fundingSource;
+  const { projectName, projectType, purpose, budget, fundingSource } = projectInput;
 
   return prisma.project.update({
     where: { projectId: existing.projectId },
@@ -501,7 +570,7 @@ export async function updateProjectInformation(caseId: string, projectInput: any
       ...(projectType && { projectType }),
       ...(purpose && { purpose }),
       ...(budget !== undefined && budget !== null && { budget: typeof budget === "string" ? parseFloat(budget) : budget }),
-      ...(fundingSource && { fundingSource }),
+      ...(fundingSource && { fundingSource: parseFundingSource(fundingSource) }),
     },
   });
 }
@@ -509,7 +578,7 @@ export async function updateProjectInformation(caseId: string, projectInput: any
 export async function updateLandInformation(caseId: string, landInput: any) {
   const existing = await prisma.acquisitionCase.findUnique({
     where: { caseId },
-    include: { landParcel: true },
+    select: { status: true, landParcel: { select: { landId: true } } },
   });
   if (!existing) throw new Error("Case not found");
   if (!CaseStateMachine.isEditable(existing.status)) {
@@ -517,28 +586,30 @@ export async function updateLandInformation(caseId: string, landInput: any) {
   }
   if (!existing.landParcel?.landId) throw new Error("Land parcel record not associated with this case");
 
-  const landTitleNo = landInput.landTitleNo || landInput.landTitleNumber;
-  const lotNo = landInput.lotNo || landInput.lotNumber;
-  const mukim = landInput.mukim;
-  const district = landInput.district;
-  const state = landInput.state;
-  const area = landInput.area !== undefined ? landInput.area : landInput.landArea;
-  const category = landInput.category || landInput.landCategory;
-  const latitude = landInput.latitude !== undefined ? landInput.latitude : landInput.gpsLatitude;
-  const longitude = landInput.longitude !== undefined ? landInput.longitude : landInput.gpsLongitude;
+  const {
+    landTitleNo,
+    lotNo,
+    tempat,
+    mukim,
+    district,
+    state,
+    area,
+    category,
+    tenureType,
+  } = landInput;
 
   return prisma.landParcel.update({
     where: { landId: existing.landParcel.landId },
     data: {
       ...(landTitleNo && { landTitleNo }),
       ...(lotNo && { lotNo }),
+      ...(tempat !== undefined && { tempat: tempat || null }),
       ...(mukim && { mukim }),
       ...(district && { district }),
       ...(state && { state }),
       ...(area !== undefined && area !== null && { area: typeof area === "string" ? parseFloat(area) : area }),
-      ...(category && { category }),
-      ...(latitude !== undefined && latitude !== null && { latitude: typeof latitude === "string" ? parseFloat(latitude) : latitude }),
-      ...(longitude !== undefined && longitude !== null && { longitude: typeof longitude === "string" ? parseFloat(longitude) : longitude }),
+      ...(category && { category: parseLandCategory(category) }),
+      ...(tenureType && { tenureType: parseTenureType(tenureType) }),
     },
   });
 }
@@ -557,12 +628,16 @@ export async function updateOwnerInformation(caseId: string, ownersInput: any[])
   const landId = existing.landParcel.landId;
 
   return prisma.$transaction(async (tx) => {
+    const updatedOwnerIds: string[] = [];
+
     for (const ownerInput of ownersInput) {
       const nric = ownerInput.nric || ownerInput.icNumber;
       const contact = ownerInput.contact || ownerInput.phone;
+      const email = ownerInput.email || null;
+      const share = ownerInput.share || "1/1";
       const name = ownerInput.name;
       const address = ownerInput.address;
-      const ownershipType = ownerInput.ownershipType || "Individual";
+      const ownershipType = parseOwnershipType(ownerInput.ownershipType);
 
       if (!nric) continue;
 
@@ -577,6 +652,7 @@ export async function updateOwnerInformation(caseId: string, ownersInput: any[])
             ...(name && { name }),
             ...(address && { address }),
             ...(contact && { contact }),
+            ...(email !== undefined && { email }),
           },
         });
       } else {
@@ -586,10 +662,13 @@ export async function updateOwnerInformation(caseId: string, ownersInput: any[])
             nric,
             address: address || "",
             contact: contact || "",
+            email,
             createdById: existing.createdById,
           },
         });
       }
+
+      updatedOwnerIds.push(dbOwner.ownerId);
 
       const existingOwnership = await tx.landOwnership.findFirst({
         where: { landId, ownerId: dbOwner.ownerId },
@@ -600,6 +679,7 @@ export async function updateOwnerInformation(caseId: string, ownersInput: any[])
           where: { ownershipId: existingOwnership.ownershipId },
           data: {
             ownershipType,
+            share,
             isCurrent: true,
           },
         });
@@ -609,6 +689,7 @@ export async function updateOwnerInformation(caseId: string, ownersInput: any[])
             landId,
             ownerId: dbOwner.ownerId,
             ownershipType,
+            share,
             ownershipStart: new Date(),
             isCurrent: true,
             createdById: existing.createdById,
@@ -623,6 +704,35 @@ export async function updateOwnerInformation(caseId: string, ownersInput: any[])
         ownerships: { include: { landOwner: true } },
       },
     });
+  });
+}
+
+export async function updateCaseTitle(caseId: string, caseTitle: string) {
+  const existing = await prisma.acquisitionCase.findUnique({
+    where: { caseId },
+  });
+  if (!existing) throw new Error("Case not found");
+
+  if (!CaseStateMachine.isEditable(existing.status)) {
+    throw new Error(`Cannot update case in '${existing.status}' status`);
+  }
+
+  const trimmedTitle = (caseTitle || "").trim();
+  if (!trimmedTitle) {
+    throw new Error("Case title cannot be empty");
+  }
+
+  return prisma.acquisitionCase.update({
+    where: { caseId },
+    data: { caseTitle: trimmedTitle },
+    include: {
+      project: true,
+      landParcel: {
+        include: {
+          ownerships: { include: { landOwner: true } },
+        },
+      },
+    },
   });
 }
 
@@ -649,8 +759,12 @@ export async function updateCase(caseId: string, input: UpdateCaseInput) {
     await updateOwnerInformation(caseId, input.owners);
   }
 
+  const titleValue = input.caseTitle || (input as any).caseName || (input as any).title;
+
   const updateData: Prisma.AcquisitionCaseUpdateInput = {};
-  if (input.caseTitle) updateData.caseTitle = input.caseTitle;
+  if (titleValue !== undefined && titleValue !== null && titleValue.trim()) {
+    updateData.caseTitle = titleValue.trim();
+  }
   if (input.remarks !== undefined) updateData.remarks = input.remarks;
   if (input.status) updateData.status = input.status;
 

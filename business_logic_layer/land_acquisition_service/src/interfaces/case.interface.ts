@@ -19,21 +19,23 @@ export interface CreateCaseInputDTO {
   land: {
     landTitleNo: string;
     lotNo: string;
+    tempat?: string;
     mukim: string;
     district: string;
     state: string;
     area: number;
     areaUnit: string;
     category: string;
-    latitude: number;
-    longitude: number;
+    tenureType: string;
   };
   owners: Array<{
     name: string;
     nric: string;
     address: string;
     contact: string;
+    email?: string;
     ownershipType: string;
+    share?: string;
   }>;
   caseTitle: string;
   remarks?: string;
