@@ -30,24 +30,11 @@ type Report = {
   statusClass: string;
 };
 
-const statusClassMap: Record<string, string> = {
-  PENDING: "status-pending-valuation",
-  APPROVED: "status-valuation-approved",
-  REJECTED: "status-valuation-rejected",
-};
-
-const statusLabelMap: Record<string, string> = {
-  PENDING: "Pending Review",
-  APPROVED: "Approved",
-  REJECTED: "Rejected",
-};
-
-const STATUS_OPTIONS: SelectOption[] = [
-  { value: "", label: "All Status" },
-  { value: "PENDING", label: "Pending Review" },
-  { value: "APPROVED", label: "Approved" },
-  { value: "REJECTED", label: "Rejected" },
-];
+import {
+  VALUATION_STATUS_CLASS_MAP as statusClassMap,
+  VALUATION_STATUS_LABEL_MAP as statusLabelMap,
+  VALUATION_STATUS_OPTIONS as STATUS_OPTIONS,
+} from "../../constants";
 
 export const ValuationDashboard: React.FC = () => {
   const navigate = useNavigate();

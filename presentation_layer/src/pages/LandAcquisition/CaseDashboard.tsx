@@ -19,64 +19,16 @@ import "./case_management.css";
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
-const statusClassMap: Record<string, string> = {
-  CASE_REGISTERED: "status-case-registered",
-  VALUER_ASSIGNED: "status-valuer-assigned",
-  VALUATION_IN_PROGRESS: "status-valuation-progress",
-  PENDING_VALUATION_APPROVAL: "status-pending-valuation",
-  VALUATION_APPROVED: "status-valuation-approved",
-  VALUATION_REJECTED: "status-valuation-rejected",
-  PENDING_COMPENSATION_APPROVAL: "status-pending-comp",
-  COMPENSATION_APPROVED: "status-comp-approved",
-  COMPENSATION_REJECTED: "status-comp-rejected",
-  OFFER_ISSUED: "status-offer-issued",
-  OFFER_REJECTED: "status-offer-rejected",
-  PAYMENT_IN_PROGRESS: "status-payment-progress",
-  PAYMENT_COMPLETED: "status-payment-completed",
-  CASE_CLOSED: "status-case-closed",
-};
-
-const statusLabelMap: Record<string, string> = {
-  CASE_REGISTERED: "Case Registered",
-  VALUER_ASSIGNED: "Valuer Assigned",
-  VALUATION_IN_PROGRESS: "Valuation In Progress",
-  PENDING_VALUATION_APPROVAL: "Pending Valuation Approval",
-  VALUATION_APPROVED: "Valuation Approved",
-  VALUATION_REJECTED: "Valuation Rejected",
-  PENDING_COMPENSATION_APPROVAL: "Pending Compensation Approval",
-  COMPENSATION_APPROVED: "Compensation Approved",
-  COMPENSATION_REJECTED: "Compensation Rejected",
-  OFFER_ISSUED: "Offer Issued",
-  OFFER_REJECTED: "Offer Rejected",
-  PAYMENT_IN_PROGRESS: "Payment In Progress",
-  PAYMENT_COMPLETED: "Payment Completed",
-  CASE_CLOSED: "Case Closed",
-};
-
-const STATUS_OPTIONS: SelectOption[] = [
-  { value: "", label: "All Status" },
-  { value: "CASE_REGISTERED", label: "Case Registered" },
-  { value: "VALUER_ASSIGNED", label: "Valuer Assigned" },
-  { value: "VALUATION_IN_PROGRESS", label: "Valuation In Progress" },
-  { value: "PENDING_VALUATION_APPROVAL", label: "Pending Valuation Approval" },
-  { value: "VALUATION_APPROVED", label: "Valuation Approved" },
-  { value: "VALUATION_REJECTED", label: "Valuation Rejected" },
-  { value: "PENDING_COMPENSATION_APPROVAL", label: "Pending Compensation Approval" },
-  { value: "COMPENSATION_APPROVED", label: "Compensation Approved" },
-  { value: "COMPENSATION_REJECTED", label: "Compensation Rejected" },
-  { value: "OFFER_ISSUED", label: "Offer Issued" },
-  { value: "OFFER_REJECTED", label: "Offer Rejected" },
-  { value: "PAYMENT_IN_PROGRESS", label: "Payment In Progress" },
-  { value: "PAYMENT_COMPLETED", label: "Payment Completed" },
-  { value: "CASE_CLOSED", label: "Case Closed" },
-];
+import {
+  CASE_STATUS_CLASS_MAP as statusClassMap,
+  CASE_STATUS_LABEL_MAP as statusLabelMap,
+  CASE_STATUS_OPTIONS as STATUS_OPTIONS,
+  PROJECT_TYPE_OPTIONS as BASE_PROJECT_TYPE_OPTIONS,
+} from "../../constants";
 
 const PROJECT_TYPE_OPTIONS: SelectOption[] = [
   { value: "", label: "All Project Types" },
-  { value: "Public Amenities", label: "Public Amenities" },
-  { value: "Transportation Development", label: "Transportation Development" },
-  { value: "Urban Redevelopment", label: "Urban Redevelopment" },
-  { value: "Tourism Development", label: "Tourism Development" },
+  ...BASE_PROJECT_TYPE_OPTIONS.filter((opt) => opt.value !== ""),
 ];
 
 export const CaseManagementDashboard: React.FC = () => {

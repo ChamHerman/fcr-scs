@@ -37,17 +37,10 @@ type ObjectionDetail = {
   respondedBy?: string;
 };
 
-const statusClassMap: Record<string, string> = {
-  PENDING: "status-objection-review",
-  APPROVED: "status-obj-approved",
-  REJECTED: "status-obj-rejected",
-};
-
-const statusLabelMap: Record<string, string> = {
-  PENDING: "Pending Review",
-  APPROVED: "Approved",
-  REJECTED: "Rejected",
-};
+import {
+  OBJECTION_STATUS_CLASS_MAP as statusClassMap,
+  OBJECTION_STATUS_LABEL_MAP as statusLabelMap,
+} from "../../constants";
 
 export const ObjectionReview: React.FC = () => {
   const { objectionId: paramId } = useParams<{ objectionId: string }>();
@@ -629,9 +622,12 @@ export const ObjectionReview: React.FC = () => {
                           rows={4}
                           placeholder="Provide detailed justification for your decision..."
                           value={responseText}
-                          onChange={(e) => setResponseText(e.target.value)}
+                          error={responseError}
+                          onChange={(e) => {
+                            setResponseText(e.target.value);
+                            if (responseError) setResponseError("");
+                          }}
                         />
-                        {responseError && <div className="text-xs text-md-error pl-2 mt-1">{responseError}</div>}
                       </div>
 
                       <div className="action-bar flex justify-end gap-3 pt-4 border-t border-md-outline/10">

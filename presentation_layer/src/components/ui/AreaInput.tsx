@@ -7,13 +7,13 @@ import React, {
 } from "react";
 import classNames from "classnames";
 import {
-  formatLiveCurrency,
-  formatCurrencyWithDecimals,
+  formatLiveInteger,
+  formatAreaWithoutDecimals,
   parseCurrencyToNumber,
   calculateCursorPosition,
 } from "../../utils/currency";
 
-export interface CurrencyInputProps
+export interface AreaInputProps
   extends Omit<
     React.InputHTMLAttributes<HTMLInputElement>,
     "value" | "onChange" | "prefix"
@@ -27,7 +27,7 @@ export interface CurrencyInputProps
   suffix?: React.ReactNode;
 }
 
-export const CurrencyInput: React.FC<CurrencyInputProps> = ({
+export const AreaInput: React.FC<AreaInputProps> = ({
   label,
   value,
   onChange,
@@ -37,12 +37,12 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
   suffix,
   className,
   id,
-  placeholder = "0.00",
+  placeholder = "10,000",
   onBlur,
   onKeyDown,
   ...props
 }) => {
-  const inputId = id || `currency-input-${label.replace(/\s+/g, "-").toLowerCase()}`;
+  const inputId = id || `area-input-${label.replace(/\s+/g, "-").toLowerCase()}`;
   const inputRef = useRef<HTMLInputElement>(null);
   const cursorPosRef = useRef<number | null>(null);
 
@@ -51,13 +51,12 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
     (v: string | number | null | undefined): string => {
       if (v === null || v === undefined || v === "") return "";
       const s = String(v).trim();
-      // If already formatted with commas or decimals, preserve or format to 2 decimals
-      if (s.includes(",") || s.includes(".")) {
-        return formatCurrencyWithDecimals(s);
+      if (s.includes(",")) {
+        return formatAreaWithoutDecimals(s);
       }
       const num = parseFloat(s);
       if (!isNaN(num)) {
-        return formatCurrencyWithDecimals(num);
+        return formatAreaWithoutDecimals(num);
       }
       return s;
     },
@@ -70,7 +69,6 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
 
   // Sync with external value changes (e.g. form reset, prefill, API load)
   useEffect(() => {
-    // Only update if parsed numeric representation differs from current display
     const currentNum = parseCurrencyToNumber(displayValue);
     const newNum = parseCurrencyToNumber(value);
 
@@ -101,8 +99,8 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
     const rawVal = e.target.value;
     const selStart = e.target.selectionStart ?? rawVal.length;
 
-    // Live format with thousand separators and max 2 decimal places
-    const formatted = formatLiveCurrency(rawVal);
+    // Live format integer with thousand separators and no decimals
+    const formatted = formatLiveInteger(rawVal);
 
     // Calculate preserved cursor position
     const targetCursor = calculateCursorPosition(rawVal, selStart, formatted);
@@ -117,7 +115,6 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
     }
 
     if (onChange) {
-      // Create synthetic event with formatted value
       const syntheticEvent = {
         ...e,
         target: {
@@ -133,7 +130,7 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
 
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     if (displayValue.trim() !== "") {
-      const normalized = formatCurrencyWithDecimals(displayValue);
+      const normalized = formatAreaWithoutDecimals(displayValue);
       setDisplayValue(normalized);
       const numericVal = parseCurrencyToNumber(normalized);
 
@@ -161,42 +158,43 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    // If Enter pressed, format to 2 decimal places
-    if (e.key === "Enter") {
-      if (displayValue.trim() !== "") {
-        const normalized = formatCurrencyWithDecimals(displayValue);
-        setDisplayValue(normalized);
-        const numericVal = parseCurrencyToNumber(normalized);
-        if (onValueChange) {
-          onValueChange(normalized, numericVal);
-        }
-      }
-    }
-
     // Smart backspace: if user backspaces right after a comma (e.g. "1,|000"), delete the digit before the comma
     if (
       e.key === "Backspace" &&
       inputRef.current &&
       inputRef.current.selectionStart === inputRef.current.selectionEnd
     ) {
-      const pos = inputRef.current.selectionStart ?? 0;
-      if (pos > 0 && displayValue[pos - 1] === ",") {
+      const cursor = inputRef.current.selectionStart ?? 0;
+      if (cursor > 0 && displayValue[cursor - 1] === ",") {
         e.preventDefault();
-        // Remove the comma and the digit before it
-        const nextRaw = displayValue.slice(0, pos - 2) + displayValue.slice(pos);
-        const formatted = formatLiveCurrency(nextRaw);
-        const targetCursor = calculateCursorPosition(nextRaw, pos - 2, formatted);
+        // Remove the comma AND the character before it
+        const newVal =
+          displayValue.slice(0, cursor - 2) + displayValue.slice(cursor);
+        const formatted = formatLiveInteger(newVal);
+
+        // Adjust cursor target
+        const targetCursor = Math.max(0, cursor - 2);
         cursorPosRef.current = targetCursor;
+
         setDisplayValue(formatted);
 
         const numericVal = parseCurrencyToNumber(formatted);
-        if (onValueChange) onValueChange(formatted, numericVal);
+        if (onValueChange) {
+          onValueChange(formatted, numericVal);
+        }
         if (onChange) {
           const syntheticEvent = {
-            target: { name: props.name || "", id: inputId, value: formatted },
-          } as React.ChangeEvent<HTMLInputElement>;
+            ...e,
+            target: {
+              ...inputRef.current,
+              name: props.name || "",
+              id: inputId,
+              value: formatted,
+            },
+          } as unknown as React.ChangeEvent<HTMLInputElement>;
           onChange(syntheticEvent);
         }
+        return;
       }
     }
 
@@ -216,17 +214,20 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
       >
         {label}
       </label>
-      <div className="relative flex items-center w-full">
+
+      <div className="relative flex items-center">
         {prefix && (
-          <div className="absolute left-4 top-[26px] -translate-y-1/2 text-sm text-md-on-surface-variant pointer-events-none z-10">
+          <div className="absolute left-4 top-[22px] flex items-center pointer-events-none text-sm font-normal text-md-on-surface-variant select-none">
             {prefix}
           </div>
         )}
+
         <input
+          {...props}
           ref={inputRef}
           id={inputId}
           type="text"
-          inputMode="decimal"
+          inputMode="numeric"
           value={displayValue}
           onChange={handleChange}
           onBlur={handleBlur}
@@ -241,14 +242,15 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
               : "border-md-outline/30 focus:border-md-primary",
             props.disabled ? "grayscale opacity-60 cursor-not-allowed" : ""
           )}
-          {...props}
         />
+
         {suffix && (
-          <div className="absolute right-3 top-[30px] -translate-y-1/2 text-xs font-semibold text-md-on-surface-variant select-none pointer-events-none bg-md-surface-container px-2.5 py-1 rounded-lg border border-md-outline/20">
+          <div className="absolute right-4 top-[22px] flex items-center pointer-events-none text-sm font-normal text-md-on-surface-variant select-none">
             {suffix}
           </div>
         )}
       </div>
+
       {error && (
         <span className="text-xs text-md-error mt-1 pl-[1.2rem]">
           {error}

@@ -27,24 +27,11 @@ type ReportItem = {
   offerLetterGenerated: boolean;
 };
 
-const statusClassMap: Record<string, string> = {
-  PENDING: "status-pending-comp",
-  APPROVED: "status-comp-approved",
-  REJECTED: "status-comp-rejected",
-};
-
-const statusLabelMap: Record<string, string> = {
-  PENDING: "Pending Approval",
-  APPROVED: "Approved",
-  REJECTED: "Rejected",
-};
-
-const STATUS_OPTIONS: SelectOption[] = [
-  { value: "", label: "All Status" },
-  { value: "PENDING", label: "Pending Approval" },
-  { value: "APPROVED", label: "Approved" },
-  { value: "REJECTED", label: "Rejected" },
-];
+import {
+  COMPENSATION_STATUS_CLASS_MAP as statusClassMap,
+  COMPENSATION_STATUS_LABEL_MAP as statusLabelMap,
+  COMPENSATION_STATUS_OPTIONS as STATUS_OPTIONS,
+} from "../../constants";
 
 export const CompensationDashboard: React.FC = () => {
   const navigate = useNavigate();

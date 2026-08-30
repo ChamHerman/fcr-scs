@@ -377,24 +377,32 @@ model CaseDocument {
 }
 
 model ValuationReport {
-  reportId                String               @id @default(uuid()) @db.Uuid @map("report_id")
-  caseId                  String               @db.VarChar(255) @map("case_id")
-  valuerId                String               @db.Uuid @map("valuer_id")
-  valuationDate           DateTime?            @map("valuation_date")
-  valuationMethod          String?              @db.VarChar(100) @map("valuation_method")
-  marketValue             Decimal?             @db.Decimal(20, 2) @map("market_value")
-  recommendedCompensation Decimal?             @db.Decimal(20, 2) @map("recommended_compensation")
-  remarks                 String?
-  reportStatus            ReportStatus?        @map("report_status")
-  acquisitionCase         AcquisitionCase      @relation(fields: [caseId], references: [caseId])
-  valuer                  User                 @relation("Valuer", fields: [valuerId], references: [userId])
-  compensationReports     CompensationReport[]
-  caseAssignments         CaseAssignment[]
-  createdAt               DateTime             @default(now()) @map("created_at")
-  updatedAt               DateTime             @updatedAt @map("updated_at")
-  deletedAt               DateTime?            @map("deleted_at")
-  createdById             String               @db.Uuid @map("created_by_id")
-  createdBy               User                 @relation("CreatedValuationReport", fields: [createdById], references: [userId])
+  reportId                   String               @id @default(uuid()) @db.Uuid @map("report_id")
+  caseId                     String               @db.VarChar(255) @map("case_id")
+  valuerId                   String               @db.Uuid @map("valuer_id")
+  valuationDate              DateTime?            @map("valuation_date")
+  valuationMethod            String?              @db.VarChar(100) @map("valuation_method")
+  locationType               String?              @db.VarChar(100) @map("location_type")
+  buildingAge                Int?                 @map("building_age")
+  landArea                   Decimal?             @db.Decimal(12, 2) @map("land_area")
+  acquisitionArea            Decimal?             @db.Decimal(12, 2) @map("acquisition_area")
+  builtUpArea                Decimal?             @db.Decimal(12, 2) @map("built_up_area")
+  marketRatePerSqMeter       Decimal?             @db.Decimal(20, 2) @map("market_rate_per_sqm")
+  compensationRatePerSqMeter Decimal?             @db.Decimal(20, 2) @map("compensation_rate_per_sqm")
+  aiValuationPrice           Decimal?             @db.Decimal(20, 2) @map("ai_valuation_price")
+  marketValue                Decimal?             @db.Decimal(20, 2) @map("market_value")
+  recommendedCompensation    Decimal?             @db.Decimal(20, 2) @map("recommended_compensation")
+  remarks                    String?
+  reportStatus               ReportStatus?        @map("report_status")
+  acquisitionCase            AcquisitionCase      @relation(fields: [caseId], references: [caseId])
+  valuer                     User                 @relation("Valuer", fields: [valuerId], references: [userId])
+  compensationReports        CompensationReport[]
+  caseAssignments            CaseAssignment[]
+  createdAt                  DateTime             @default(now()) @map("created_at")
+  updatedAt                  DateTime             @updatedAt @map("updated_at")
+  deletedAt                  DateTime?            @map("deleted_at")
+  createdById                String               @db.Uuid @map("created_by_id")
+  createdBy                  User                 @relation("CreatedValuationReport", fields: [createdById], references: [userId])
 
   @@index([caseId])
   @@index([valuerId])

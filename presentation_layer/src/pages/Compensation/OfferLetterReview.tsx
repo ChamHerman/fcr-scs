@@ -70,19 +70,10 @@ type OfferDetail = {
   currentUserStatus: "ACCEPTED" | "REJECTED" | "PENDING" | null;
 };
 
-const statusClassMap: Record<string, string> = {
-  PENDING: "status-offer-pending",
-  ACCEPTED: "status-offer-accepted",
-  REJECTED: "status-offer-rejected",
-  EXPIRED: "status-expired",
-};
-
-const statusLabelMap: Record<string, string> = {
-  PENDING: "Pending",
-  ACCEPTED: "Accepted",
-  REJECTED: "Rejected",
-  EXPIRED: "Expired",
-};
+import {
+  OFFER_STATUS_CLASS_MAP as statusClassMap,
+  OFFER_STATUS_LABEL_MAP as statusLabelMap,
+} from "../../constants";
 
 export const OfferLetterDetail: React.FC = () => {
   const { offerId: paramOfferId } = useParams<{ offerId: string }>();
@@ -652,12 +643,12 @@ export const OfferLetterDetail: React.FC = () => {
             rows={3}
             placeholder="State the reason for rejecting this offer..."
             value={reason}
+            error={reasonError}
             onChange={(e) => {
               setReason(e.target.value);
               if (reasonError) setReasonError("");
             }}
           />
-          {reasonError && <div className="text-xs text-md-error pl-2 mt-1">{reasonError}</div>}
         </div>
       </Modal>
 

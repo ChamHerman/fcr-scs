@@ -300,7 +300,7 @@ export const Select: React.FC<SelectProps> = ({
       </div>
 
       {error && (
-        <span className="text-xs text-md-error mt-1 pl-[1.2rem] font-medium">{error}</span>
+        <span className="text-xs text-md-error mt-1 pl-[1.2rem]">{error}</span>
       )}
 
       {name && <input type="hidden" name={name} value={value ?? ''} />}

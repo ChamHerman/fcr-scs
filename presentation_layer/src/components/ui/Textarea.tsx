@@ -37,7 +37,7 @@ export const Textarea: React.FC<TextareaProps> = ({
         {...props}
       />
       {error && (
-        <span className="text-xs text-md-error mt-1 pl-[1.2rem] font-medium">{error}</span>
+        <span className="text-xs text-md-error mt-1 pl-[1.2rem]">{error}</span>
       )}
     </div>
   );

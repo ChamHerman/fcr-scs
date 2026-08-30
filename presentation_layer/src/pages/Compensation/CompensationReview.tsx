@@ -48,17 +48,10 @@ type CompensationDetail = {
   } | null;
 };
 
-const statusClassMap: Record<string, string> = {
-  PENDING: "status-pending-comp",
-  APPROVED: "status-comp-approved",
-  REJECTED: "status-comp-rejected",
-};
-
-const statusLabelMap: Record<string, string> = {
-  PENDING: "Pending Approval",
-  APPROVED: "Approved",
-  REJECTED: "Rejected",
-};
+import {
+  COMPENSATION_STATUS_CLASS_MAP as statusClassMap,
+  COMPENSATION_STATUS_LABEL_MAP as statusLabelMap,
+} from "../../constants";
 
 export const CompensationApproval: React.FC = () => {
   const { reportId: paramReportId } = useParams<{ reportId: string }>();
@@ -283,12 +276,12 @@ export const CompensationApproval: React.FC = () => {
             rows={3}
             placeholder="State the reason for rejection..."
             value={rejectReason}
+            error={reasonError}
             onChange={(e) => {
               setRejectReason(e.target.value);
               if (reasonError) setReasonError("");
             }}
           />
-          {reasonError && <div className="text-xs text-md-error pl-2">{reasonError}</div>}
         </div>
       </Modal>
 

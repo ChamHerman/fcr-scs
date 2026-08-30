@@ -73,39 +73,10 @@ type CaseData = {
   documents: Document[];
 };
 
-const statusClassMap: Record<string, string> = {
-  CASE_REGISTERED: "status-case-registered",
-  VALUER_ASSIGNED: "status-valuer-assigned",
-  VALUATION_IN_PROGRESS: "status-valuation-progress",
-  PENDING_VALUATION_APPROVAL: "status-pending-valuation",
-  VALUATION_APPROVED: "status-valuation-approved",
-  VALUATION_REJECTED: "status-valuation-rejected",
-  PENDING_COMPENSATION_APPROVAL: "status-pending-comp",
-  COMPENSATION_APPROVED: "status-comp-approved",
-  COMPENSATION_REJECTED: "status-comp-rejected",
-  OFFER_ISSUED: "status-offer-issued",
-  OFFER_REJECTED: "status-offer-rejected",
-  PAYMENT_IN_PROGRESS: "status-payment-progress",
-  PAYMENT_COMPLETED: "status-payment-completed",
-  CASE_CLOSED: "status-case-closed",
-};
-
-const statusLabelMap: Record<string, string> = {
-  CASE_REGISTERED: "Case Registered",
-  VALUER_ASSIGNED: "Valuer Assigned",
-  VALUATION_IN_PROGRESS: "Valuation In Progress",
-  PENDING_VALUATION_APPROVAL: "Pending Valuation Approval",
-  VALUATION_APPROVED: "Valuation Approved",
-  VALUATION_REJECTED: "Valuation Rejected",
-  PENDING_COMPENSATION_APPROVAL: "Pending Compensation Approval",
-  COMPENSATION_APPROVED: "Compensation Approved",
-  COMPENSATION_REJECTED: "Compensation Rejected",
-  OFFER_ISSUED: "Offer Issued",
-  OFFER_REJECTED: "Offer Rejected",
-  PAYMENT_IN_PROGRESS: "Payment In Progress",
-  PAYMENT_COMPLETED: "Payment Completed",
-  CASE_CLOSED: "Case Closed",
-};
+import {
+  CASE_STATUS_CLASS_MAP as statusClassMap,
+  CASE_STATUS_LABEL_MAP as statusLabelMap,
+} from "../../constants";
 
 export const CaseView: React.FC = () => {
   const navigate = useNavigate();

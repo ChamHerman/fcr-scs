@@ -16,9 +16,17 @@ export interface CreateValuationInput {
   caseId: string;
   valuerId?: string;
   valuationMethod: string;
+  locationType?: string;
+  buildingAge?: number;
+  landArea?: number;
+  acquisitionArea?: number;
+  builtUpArea?: number;
+  marketRatePerSqMeter?: number;
+  compensationRatePerSqMeter?: number;
+  aiValuationPrice?: number;
   marketValue: number;
   recommendedCompensation: number;
-  remarks: string;
+  remarks?: string;
   createdById: string;
 }
 
@@ -128,7 +136,23 @@ export async function getReportById(reportId: string) {
 }
 
 export async function createOrUpdateReport(input: CreateValuationInput) {
-  const { caseId, valuerId, valuationMethod, marketValue, recommendedCompensation, remarks, createdById } = input;
+  const {
+    caseId,
+    valuerId,
+    valuationMethod,
+    locationType,
+    buildingAge,
+    landArea,
+    acquisitionArea,
+    builtUpArea,
+    marketRatePerSqMeter,
+    compensationRatePerSqMeter,
+    aiValuationPrice,
+    marketValue,
+    recommendedCompensation,
+    remarks,
+    createdById,
+  } = input;
 
   const caseData = await prisma.acquisitionCase.findUnique({
     where: { caseId },
@@ -158,9 +182,17 @@ export async function createOrUpdateReport(input: CreateValuationInput) {
         valuerId: targetValuerId,
         valuationDate: new Date(),
         valuationMethod,
+        locationType: locationType != null ? locationType : undefined,
+        buildingAge: buildingAge != null ? buildingAge : undefined,
+        landArea: landArea != null ? landArea : undefined,
+        acquisitionArea: acquisitionArea != null ? acquisitionArea : undefined,
+        builtUpArea: builtUpArea != null ? builtUpArea : undefined,
+        marketRatePerSqMeter: marketRatePerSqMeter != null ? marketRatePerSqMeter : undefined,
+        compensationRatePerSqMeter: compensationRatePerSqMeter != null ? compensationRatePerSqMeter : undefined,
+        aiValuationPrice: aiValuationPrice != null ? aiValuationPrice : undefined,
         marketValue,
         recommendedCompensation,
-        remarks,
+        remarks: remarks || "",
         reportStatus: ReportStatus.PENDING,
         createdById,
       },

@@ -74,297 +74,37 @@ export interface CaseFormProps {
   onCancel?: () => void;
 }
 
-const PROJECT_TYPE_OPTIONS: SelectOption[] = [
-  { value: "", label: "Select type" },
-  { value: "Public Amenities", label: "Public Amenities" },
-  { value: "Transportation Development", label: "Transportation Development" },
-  { value: "Urban Redevelopment", label: "Urban Redevelopment" },
-  { value: "Tourism Development", label: "Tourism Development" },
-  { value: "Others", label: "Others" },
-];
+import {
+  PROJECT_TYPE_OPTIONS,
+  FUNDING_SOURCE_OPTIONS,
+  STANDARD_PROJECT_PURPOSES,
+  PROJECT_PURPOSE_OPTIONS,
+  MANDATORY_DOCUMENT_TYPES,
+  DOCUMENT_TYPE_OPTIONS,
+  LAND_CATEGORY_OPTIONS,
+  TENURE_TYPE_OPTIONS,
+  OWNERSHIP_TYPE_OPTIONS,
+  MALAYSIA_STATES,
+  MALAYSIA_STATE_OPTIONS,
+  MALAYSIA_DISTRICTS_MAP,
+  DISTRICT_TO_STATE_MAP,
+} from "../constants";
 
-const FUNDING_SOURCE_OPTIONS: SelectOption[] = [
-  { value: "", label: "Select funding source" },
-  { value: "Government", label: "Government" },
-  { value: "Private", label: "Private" },
-  { value: "Others", label: "Others" },
-];
-
-const STANDARD_PROJECT_PURPOSES = [
-  "Public Infrastructure",
-  "Public Facilities",
-  "Recreational and Environmental Use",
-];
-
-const PROJECT_PURPOSE_OPTIONS: SelectOption[] = [
-  { value: "", label: "Select project purpose" },
-  { value: "Public Infrastructure", label: "Public Infrastructure" },
-  { value: "Public Facilities", label: "Public Facilities" },
-  { value: "Recreational and Environmental Use", label: "Recreational and Environmental Use" },
-  { value: "Others", label: "Others" },
-];
-
-export const MANDATORY_DOCUMENT_TYPES = [
-  {
-    type: "Acquisition Plan",
-    label: "Acquisition Plan *",
-    description: "Detailed layout showing the land boundary, acquisition perimeter, and project scope.",
-  },
-  {
-    type: "Official Title Search",
-    label: "Official Title Search *",
-    description: "Certified true copy of land title search issued by the Land Registry / Pejabat Tanah.",
-  },
-  {
-    type: "Proof of Financial Allocation",
-    label: "Proof of Financial Allocation *",
-    description: "Official warrant, treasury approval, or fund allocation confirmation letter.",
-  },
-  {
-    type: "Project Proposal",
-    label: "Project Proposal *",
-    description: "Cabinet approval, gazette notification, or executive project proposal brief.",
-  },
-] as const;
-
-export const DOCUMENT_TYPE_OPTIONS: SelectOption[] = [
-  { value: "", label: "Select type" },
-  { value: "Acquisition Plan", label: "Acquisition Plan" },
-  { value: "Official Title Search", label: "Official Title Search" },
-  { value: "Proof of Financial Allocation", label: "Proof of Financial Allocation" },
-  { value: "Project Proposal", label: "Project Proposal" },
-];
-
-export const LAND_CATEGORY_OPTIONS: SelectOption[] = [
-  { value: "", label: "Select category" },
-  { value: "Agriculture", label: "Agriculture" },
-  { value: "Building", label: "Building" },
-  { value: "Industry", label: "Industry" },
-];
-
-export const TENURE_TYPE_OPTIONS: SelectOption[] = [
-  { value: "", label: "Select tenure type" },
-  { value: "Freehold", label: "Freehold" },
-  { value: "Leasehold", label: "Leasehold" },
-  { value: "Malay Reserve", label: "Malay Reserve" },
-];
-
-export const OWNERSHIP_TYPE_OPTIONS: SelectOption[] = [
-  { value: "", label: "Select ownership type" },
-  { value: "Individual Citizen", label: "Individual Citizen" },
-  { value: "Joint Ownership", label: "Joint Ownership" },
-  { value: "Corporate Entity", label: "Corporate Entity" },
-  { value: "Estate of Deceased", label: "Estate of Deceased" },
-  { value: "Trustee", label: "Trustee" },
-];
-
-export const MALAYSIA_STATES = [
-  "Johor",
-  "Kedah",
-  "Kelantan",
-  "Melaka",
-  "Negeri Sembilan",
-  "Pahang",
-  "Perak",
-  "Perlis",
-  "Pulau Pinang",
-  "Sabah",
-  "Sarawak",
-  "Selangor",
-  "Terengganu",
-  "Wilayah Persekutuan Kuala Lumpur",
-  "Wilayah Persekutuan Labuan",
-  "Wilayah Persekutuan Putrajaya",
-] as const;
-
-export const MALAYSIA_STATE_OPTIONS: SelectOption[] = [
-  { value: "", label: "Select state" },
-  ...MALAYSIA_STATES.map((state) => ({ value: state, label: state })),
-];
-
-export const MALAYSIA_DISTRICTS_MAP: Record<string, string[]> = {
-  "Johor": [
-    "Batu Pahat",
-    "Johor Bahru",
-    "Kluang",
-    "Kota Tinggi",
-    "Kulai",
-    "Mersing",
-    "Muar",
-    "Pontian",
-    "Segamat",
-    "Tangkak",
-  ],
-  "Kedah": [
-    "Baling",
-    "Bandar Baharu",
-    "Kota Setar",
-    "Kuala Muda",
-    "Kubang Pasu",
-    "Kulim",
-    "Langkawi",
-    "Padang Terap",
-    "Pendang",
-    "Pokok Sena",
-    "Sik",
-    "Yan",
-  ],
-  "Kelantan": [
-    "Bachok",
-    "Gua Musang",
-    "Jeli",
-    "Kota Bharu",
-    "Kuala Krai",
-    "Machang",
-    "Pasir Mas",
-    "Pasir Puteh",
-    "Tanah Merah",
-    "Tumpat",
-  ],
-  "Melaka": [
-    "Alor Gajah",
-    "Jasin",
-    "Melaka Tengah",
-  ],
-  "Negeri Sembilan": [
-    "Jelebu",
-    "Jempol",
-    "Kuala Pilah",
-    "Port Dickson",
-    "Rembau",
-    "Seremban",
-    "Tampin",
-  ],
-  "Pahang": [
-    "Bentong",
-    "Bera",
-    "Cameron Highlands",
-    "Jerantut",
-    "Kuantan",
-    "Lipis",
-    "Maran",
-    "Pekan",
-    "Raub",
-    "Rompin",
-    "Temerloh",
-  ],
-  "Perak": [
-    "Bagan Datuk",
-    "Batang Padang",
-    "Hilir Perak",
-    "Hulu Perak",
-    "Kampar",
-    "Kerian",
-    "Kinta",
-    "Kuala Kangsar",
-    "Larut, Matang dan Selama",
-    "Manjung",
-    "Muallim",
-    "Perak Tengah",
-  ],
-  "Perlis": [
-    "Kangar",
-    "Arau",
-    "Padang Besar",
-  ],
-  "Pulau Pinang": [
-    "Barat Daya",
-    "Seberang Perai Selatan",
-    "Seberang Perai Tengah",
-    "Seberang Perai Utara",
-    "Timur Laut",
-  ],
-  "Sabah": [
-    "Beaufort",
-    "Beluran",
-    "Kalabakan",
-    "Keningau",
-    "Kinabatangan",
-    "Kota Belud",
-    "Kota Kinabalu",
-    "Kota Marudu",
-    "Kuala Penyu",
-    "Kudat",
-    "Kunak",
-    "Lahad Datu",
-    "Nabawan",
-    "Papar",
-    "Penampang",
-    "Putatan",
-    "Ranau",
-    "Sandakan",
-    "Semporna",
-    "Sipitang",
-    "Tambunan",
-    "Tawau",
-    "Telupid",
-    "Tenom",
-    "Tongod",
-    "Tuaran",
-  ],
-  "Sarawak": [
-    "Betong",
-    "Bintulu",
-    "Kapit",
-    "Kuching",
-    "Limbang",
-    "Miri",
-    "Mukah",
-    "Samarahan",
-    "Sarikei",
-    "Serian",
-    "Sibu",
-    "Sri Aman",
-  ],
-  "Selangor": [
-    "Gombak",
-    "Hulu Langat",
-    "Hulu Selangor",
-    "Klang",
-    "Kuala Langat",
-    "Kuala Selangor",
-    "Petaling",
-    "Sabak Bernam",
-    "Sepang",
-  ],
-  "Terengganu": [
-    "Besut",
-    "Dungun",
-    "Hulu Terengganu",
-    "Kemaman",
-    "Kuala Nerus",
-    "Kuala Terengganu",
-    "Marang",
-    "Setiu",
-  ],
-  "Wilayah Persekutuan Kuala Lumpur": [
-    "Bandar Tun Razak",
-    "Batu",
-    "Bukit Bintang",
-    "Cheras",
-    "Kepong",
-    "Lembah Pantai",
-    "Segambut",
-    "Seputeh",
-    "Setiawangsa",
-    "Titiwangsa",
-    "Wangsa Maju",
-  ],
-  "Wilayah Persekutuan Labuan": [
-    "Labuan",
-    "Victoria",
-  ],
-  "Wilayah Persekutuan Putrajaya": [
-    "Putrajaya",
-  ],
+export {
+  PROJECT_TYPE_OPTIONS,
+  FUNDING_SOURCE_OPTIONS,
+  STANDARD_PROJECT_PURPOSES,
+  PROJECT_PURPOSE_OPTIONS,
+  MANDATORY_DOCUMENT_TYPES,
+  DOCUMENT_TYPE_OPTIONS,
+  LAND_CATEGORY_OPTIONS,
+  TENURE_TYPE_OPTIONS,
+  OWNERSHIP_TYPE_OPTIONS,
+  MALAYSIA_STATES,
+  MALAYSIA_STATE_OPTIONS,
+  MALAYSIA_DISTRICTS_MAP,
+  DISTRICT_TO_STATE_MAP,
 };
-
-export const DISTRICT_TO_STATE_MAP: Record<string, string> = {};
-Object.entries(MALAYSIA_DISTRICTS_MAP).forEach(([state, districts]) => {
-  districts.forEach((d) => {
-    DISTRICT_TO_STATE_MAP[d] = state;
-  });
-});
 
 export function validateEmailFormat(email: string): string | null {
   const trimmed = email.trim();

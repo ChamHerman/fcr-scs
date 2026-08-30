@@ -41,7 +41,23 @@ export async function getReportById(req: Request, res: Response): Promise<void> 
 }
 
 export async function createReport(req: Request, res: Response): Promise<void> {
-  const { caseId, valuerId, valuationMethod, marketValue, recommendedCompensation, remarks, createdById } = req.body;
+  const {
+    caseId,
+    valuerId,
+    valuationMethod,
+    locationType,
+    buildingAge,
+    landArea,
+    acquisitionArea,
+    builtUpArea,
+    marketRatePerSqMeter,
+    compensationRatePerSqMeter,
+    aiValuationPrice,
+    marketValue,
+    recommendedCompensation,
+    remarks,
+    createdById,
+  } = req.body;
 
   if (!caseId) {
     res.status(400).json({ error: "caseId is required" });
@@ -59,6 +75,26 @@ export async function createReport(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: "recommendedCompensation must be a positive number" });
     return;
   }
+  if (landArea !== undefined && acquisitionArea !== undefined && parseFloat(acquisitionArea) >= parseFloat(landArea)) {
+    res.status(400).json({ error: "Acquisition area must be less than total land area (Land Area > Acquisition Area)" });
+    return;
+  }
+  if (landArea !== undefined && builtUpArea !== undefined && parseFloat(builtUpArea) >= parseFloat(landArea)) {
+    res.status(400).json({ error: "Built-up area must be less than total land area (Land Area > Built-Up Area)" });
+    return;
+  }
+  if (buildingAge !== undefined && parseInt(buildingAge, 10) < 0) {
+    res.status(400).json({ error: "Building age cannot be less than 0 year" });
+    return;
+  }
+  if (marketRatePerSqMeter !== undefined && parseFloat(marketRatePerSqMeter) <= 0) {
+    res.status(400).json({ error: "Market price cannot be negative or zero" });
+    return;
+  }
+  if (compensationRatePerSqMeter !== undefined && parseFloat(compensationRatePerSqMeter) <= 0) {
+    res.status(400).json({ error: "Recommended compensation price cannot be negative or zero" });
+    return;
+  }
 
   const userId = createdById || "00000000-0000-0000-0000-000000000001";
 
@@ -67,6 +103,14 @@ export async function createReport(req: Request, res: Response): Promise<void> {
       caseId,
       valuerId,
       valuationMethod,
+      locationType: locationType || undefined,
+      buildingAge: buildingAge !== undefined && buildingAge !== null && buildingAge !== "" ? parseInt(buildingAge, 10) : undefined,
+      landArea: landArea !== undefined && landArea !== null && landArea !== "" ? parseFloat(landArea) : undefined,
+      acquisitionArea: acquisitionArea !== undefined && acquisitionArea !== null && acquisitionArea !== "" ? parseFloat(acquisitionArea) : undefined,
+      builtUpArea: builtUpArea !== undefined && builtUpArea !== null && builtUpArea !== "" ? parseFloat(builtUpArea) : undefined,
+      marketRatePerSqMeter: marketRatePerSqMeter !== undefined && marketRatePerSqMeter !== null && marketRatePerSqMeter !== "" ? parseFloat(marketRatePerSqMeter) : undefined,
+      compensationRatePerSqMeter: compensationRatePerSqMeter !== undefined && compensationRatePerSqMeter !== null && compensationRatePerSqMeter !== "" ? parseFloat(compensationRatePerSqMeter) : undefined,
+      aiValuationPrice: aiValuationPrice !== undefined && aiValuationPrice !== null && aiValuationPrice !== "" ? parseFloat(aiValuationPrice) : undefined,
       marketValue: parseFloat(marketValue),
       recommendedCompensation: parseFloat(recommendedCompensation),
       remarks: remarks || "",

@@ -201,9 +201,17 @@ export const landAcquisitionApi = {
   createValuationReport: async (reportData: {
     caseId: string;
     valuationMethod: string;
+    locationType?: string;
+    buildingAge?: number;
+    landArea?: number;
+    acquisitionArea?: number;
+    builtUpArea?: number;
+    marketRatePerSqMeter?: number;
+    compensationRatePerSqMeter?: number;
+    aiValuationPrice?: number;
     marketValue: number;
     recommendedCompensation: number;
-    remarks: string;
+    remarks?: string;
     createdById?: string;
     valuerId?: string;
   }) => {
