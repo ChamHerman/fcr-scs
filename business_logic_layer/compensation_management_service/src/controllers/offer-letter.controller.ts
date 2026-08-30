@@ -1,5 +1,19 @@
 import { Request, Response } from "express";
+import fs from "fs";
+import path from "path";
+import { prisma } from "../prisma";
 import * as offerService from "../services/offer-letter.service";
+
+function getOfferLetterStorageDir(caseId: string): string {
+  const candidate1 = path.resolve(__dirname, "../../../../data_layer/document_storage/offer_letter", caseId);
+  const candidate2 = path.resolve(process.cwd(), "data_layer/document_storage/offer_letter", caseId);
+  const candidate3 = path.resolve(process.cwd(), "../data_layer/document_storage/offer_letter", caseId);
+
+  if (fs.existsSync(path.dirname(candidate1))) return candidate1;
+  if (fs.existsSync(path.dirname(candidate2))) return candidate2;
+  if (fs.existsSync(path.dirname(candidate3))) return candidate3;
+  return candidate1;
+}
 
 export async function getAllOfferLetters(req: Request, res: Response): Promise<void> {
   try {
@@ -78,7 +92,8 @@ export async function createOfferLetter(req: Request, res: Response): Promise<vo
 
 export async function acceptOffer(req: Request, res: Response): Promise<void> {
   const offerId = req.params.offerId as string;
-  const { signedDocument, forceAccept, ownerNric, ownerId, userId } = req.body;
+  const { forceAccept, ownerNric, ownerId, userId } = req.body;
+  let signedDocument = req.body.signedDocument as string | undefined;
 
   if (!offerId) {
     res.status(400).json({ error: "offerId is required" });
@@ -86,10 +101,32 @@ export async function acceptOffer(req: Request, res: Response): Promise<void> {
   }
 
   try {
+    // Look up offer letter to get caseId for folder placement
+    const existingOffer = await prisma.offerLetter.findUnique({
+      where: { offerId },
+      select: { caseId: true, offerReferenceNo: true },
+    });
+    const caseId = existingOffer?.caseId || "general";
+
+    // Handle uploaded file if present
+    if (req.file) {
+      const storageDir = getOfferLetterStorageDir(caseId);
+      if (!fs.existsSync(storageDir)) {
+        fs.mkdirSync(storageDir, { recursive: true });
+      }
+
+      const safeName = `Signed_${Date.now()}_${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      const targetFilePath = path.join(storageDir, safeName);
+      fs.writeFileSync(targetFilePath, req.file.buffer);
+
+      // Relative path stored in database
+      signedDocument = `document_storage/offer_letter/${caseId}/${safeName}`;
+    }
+
     const offer = await offerService.acceptOffer(
       offerId,
       signedDocument,
-      Boolean(forceAccept),
+      Boolean(forceAccept === true || forceAccept === "true"),
       { ownerNric, ownerId, userId }
     );
     res.json({ offerLetter: offer });

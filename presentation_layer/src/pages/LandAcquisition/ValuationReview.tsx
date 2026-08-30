@@ -23,6 +23,14 @@ type ReportDetail = {
   valuerId: string;
   valuationDate: string;
   valuationMethod: string;
+  locationType?: string;
+  buildingAge?: string;
+  landArea?: string;
+  acquisitionArea?: string;
+  builtUpArea?: string;
+  marketRatePerSqMeter?: string;
+  compensationRatePerSqMeter?: string;
+  aiValuationPrice?: string;
   marketValue: string;
   recommendedCompensation: string;
   remarks: string;
@@ -32,17 +40,10 @@ type ReportDetail = {
   statusClass: string;
 };
 
-const statusClassMap: Record<string, string> = {
-  PENDING: "status-pending-valuation",
-  APPROVED: "status-valuation-approved",
-  REJECTED: "status-valuation-rejected",
-};
-
-const statusLabelMap: Record<string, string> = {
-  PENDING: "Pending Review",
-  APPROVED: "Approved",
-  REJECTED: "Rejected",
-};
+import {
+  VALUATION_STATUS_CLASS_MAP as statusClassMap,
+  VALUATION_STATUS_LABEL_MAP as statusLabelMap,
+} from "../../constants";
 
 export const ValuationReview: React.FC = () => {
   const { user, userId, isSysAdmin, isAdmin, isOfficer, isValuer } = useRole();
@@ -90,6 +91,14 @@ export const ValuationReview: React.FC = () => {
             ? new Date(rep.valuationDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
             : "—",
           valuationMethod: rep.valuationMethod || "—",
+          locationType: rep.locationType || undefined,
+          buildingAge: rep.buildingAge !== undefined && rep.buildingAge !== null ? `${rep.buildingAge} Years` : undefined,
+          landArea: rep.landArea ? `${Number(rep.landArea).toLocaleString("en-US", { maximumFractionDigits: 0 })} m²` : undefined,
+          acquisitionArea: rep.acquisitionArea ? `${Number(rep.acquisitionArea).toLocaleString("en-US", { maximumFractionDigits: 0 })} m²` : undefined,
+          builtUpArea: rep.builtUpArea ? `${Number(rep.builtUpArea).toLocaleString("en-US", { maximumFractionDigits: 0 })} m²` : undefined,
+          marketRatePerSqMeter: rep.marketRatePerSqMeter ? `RM ${Number(rep.marketRatePerSqMeter).toLocaleString("en-US", { minimumFractionDigits: 2 })} /m²` : undefined,
+          compensationRatePerSqMeter: rep.compensationRatePerSqMeter ? `RM ${Number(rep.compensationRatePerSqMeter).toLocaleString("en-US", { minimumFractionDigits: 2 })} /m²` : undefined,
+          aiValuationPrice: rep.aiValuationPrice ? formatCurrencyRM(rep.aiValuationPrice) : undefined,
           marketValue: formatCurrencyRM(rep.marketValue),
           recommendedCompensation: formatCurrencyRM(rep.recommendedCompensation),
           remarks: rep.remarks || "No remarks provided.",
@@ -261,12 +270,12 @@ export const ValuationReview: React.FC = () => {
             rows={3}
             placeholder="Enter the reason for rejecting this report..."
             value={reason}
+            error={reasonError}
             onChange={(e) => {
               setReason(e.target.value);
               if (reasonError) setReasonError("");
             }}
           />
-          {reasonError && <div className="text-xs text-md-error pl-2">{reasonError}</div>}
 
           <div>
             <Input
@@ -275,13 +284,13 @@ export const ValuationReview: React.FC = () => {
               min="1"
               placeholder="e.g., 7"
               value={acceptanceDays}
+              error={daysError}
               onChange={(e) => {
                 setAcceptanceDays(e.target.value);
                 if (daysError) setDaysError("");
               }}
             />
-            {daysError && <div className="text-xs text-md-error pl-2 mt-1">{daysError}</div>}
-            <div className="text-xs text-md-on-surface-variant/60 mt-1 pl-2">
+            <div className="text-xs text-md-on-surface-variant/60 mt-1 pl-5">
               Number of days for the valuer to revise and resubmit.
             </div>
           </div>
@@ -350,23 +359,57 @@ export const ValuationReview: React.FC = () => {
                 <Lucide.ClipboardList size={16} className="inline mr-1" /> Report Details
               </div>
               <div className="detail-grid">
+                {report.landArea && (
+                  <div className="detail-item">
+                    <span className="label">Land Area</span>
+                    <span className="value">{report.landArea}</span>
+                  </div>
+                )}
+                {report.acquisitionArea && (
+                  <div className="detail-item">
+                    <span className="label">Acquisition Area</span>
+                    <span className="value">{report.acquisitionArea}</span>
+                  </div>
+                )}
+                {report.builtUpArea && (
+                  <div className="detail-item">
+                    <span className="label">Built-Up Area</span>
+                    <span className="value">{report.builtUpArea}</span>
+                  </div>
+                )}
                 <div className="detail-item">
                   <span className="label">Valuation Method</span>
                   <span className="value">{report.valuationMethod}</span>
                 </div>
+                {report.locationType && (
+                  <div className="detail-item">
+                    <span className="label">Location Type</span>
+                    <span className="value">{report.locationType}</span>
+                  </div>
+                )}
+                {report.buildingAge && (
+                  <div className="detail-item">
+                    <span className="label">Building Age</span>
+                    <span className="value">{report.buildingAge}</span>
+                  </div>
+                )}
                 <div className="detail-item">
                   <span className="label">Market Value</span>
-                  <span className="value">{report.marketValue}</span>
+                  <span className="value">{report.marketValue} {report.marketRatePerSqMeter && <span className="text-xs text-md-on-surface-variant font-normal">({report.marketRatePerSqMeter})</span>}</span>
                 </div>
+                {report.aiValuationPrice && (
+                  <div className="detail-item">
+                    <span className="label text-md-primary font-semibold">AI Valuation Price</span>
+                    <span className="value text-md-primary font-bold">{report.aiValuationPrice}</span>
+                  </div>
+                )}
                 <div className="detail-item">
                   <span className="label">Recommended Compensation</span>
-                  <span className="value">{report.recommendedCompensation}</span>
+                  <span className="value font-bold text-green-700 dark:text-green-400">{report.recommendedCompensation} {report.compensationRatePerSqMeter && <span className="text-xs text-md-on-surface-variant font-normal">({report.compensationRatePerSqMeter})</span>}</span>
                 </div>
                 <div className="detail-item">
                   <span className="label">Status</span>
-                  <span
-                    className="value font-semibold"
-                  >
+                  <span className="value font-semibold">
                     {report.status}
                   </span>
                 </div>

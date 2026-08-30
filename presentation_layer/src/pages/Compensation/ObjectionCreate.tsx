@@ -31,10 +31,7 @@ type FileAttachment = {
   file: File;
 };
 
-const OBJECTION_TYPE_OPTIONS: SelectOption[] = [
-  { value: "Form N", label: "Form N – Formal Objection" },
-  { value: "Additional Evidence", label: "Additional Supporting Evidence" },
-];
+import { OBJECTION_FORM_TYPE_OPTIONS as OBJECTION_TYPE_OPTIONS } from "../../constants";
 
 export const ObjectionCreate: React.FC = () => {
   const navigate = useNavigate();
@@ -313,11 +310,11 @@ export const ObjectionCreate: React.FC = () => {
                   label="Select Compensation Offer / Case *"
                   value={selectedOfferId}
                   options={offerOptions}
+                  error={errors.offer}
                   onChange={handleOfferSelect}
                   placeholder="— Choose an offer letter to object against —"
                 />
               )}
-              {errors.offer && <div className="text-xs text-md-error pl-3 mt-1.5">{errors.offer}</div>}
             </div>
 
             {/* Selected Offer Details Preview Card */}
@@ -349,6 +346,7 @@ export const ObjectionCreate: React.FC = () => {
                   id="requestedAmount"
                   placeholder="0.00"
                   value={requestedAmount}
+                  error={errors.amount}
                   onValueChange={(_formatted, num) => {
                     setRequestedAmount(num > 0 ? num : "");
                     if (errors.amount) {
@@ -360,7 +358,6 @@ export const ObjectionCreate: React.FC = () => {
                     }
                   }}
                 />
-                {errors.amount && <div className="text-xs text-md-error pl-3 mt-1.5">{errors.amount}</div>}
 
                 {offeredAmount > 0 && typeof requestedAmount === "number" && requestedAmount > 0 && (
                   <div className="mt-2 text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-md-primary/5 text-md-primary font-medium">
@@ -390,6 +387,7 @@ export const ObjectionCreate: React.FC = () => {
                 rows={6}
                 placeholder="Provide comprehensive details justifying your objection. Include specific references to comparable market valuations, property improvements, loss of earnings, or surveyor discrepancy..."
                 value={objectionText}
+                error={errors.text}
                 onChange={(e) => {
                   setObjectionText(e.target.value);
                   if (errors.text) {
@@ -407,7 +405,6 @@ export const ObjectionCreate: React.FC = () => {
                   {objectionText.length} characters
                 </span>
               </div>
-              {errors.text && <div className="text-xs text-md-error pl-3 mt-1">{errors.text}</div>}
             </div>
 
             {/* Supporting Evidence File Upload */}

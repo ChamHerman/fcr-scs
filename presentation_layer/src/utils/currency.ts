@@ -130,3 +130,33 @@ export const calculateCursorPosition = (
 
   return targetCursor;
 };
+
+/**
+ * Formats an area value with thousand separators and NO decimals (e.g. 10,000 m²).
+ */
+export const formatAreaWithoutDecimals = (
+  val: string | number | null | undefined
+): string => {
+  if (val === null || val === undefined || val === "") return "";
+  const clean = String(val).replace(/,/g, "").trim();
+  if (!clean || isNaN(Number(clean))) return "";
+  const num = Math.round(parseFloat(clean));
+  if (isNaN(num)) return "";
+
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(num);
+};
+
+/**
+ * Formats an integer live as the user types (adds thousand separators, removes decimals).
+ */
+export const formatLiveInteger = (input: string): string => {
+  if (!input) return "";
+  const clean = input.replace(/[^\d]/g, "");
+  if (!clean) return "";
+  const normalized = clean.replace(/^0+(?=\d)/, "");
+  return normalized.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+};
+

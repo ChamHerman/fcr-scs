@@ -29,27 +29,11 @@ type OfferItem = {
   totalOwners?: number;
 };
 
-const statusClassMap: Record<string, string> = {
-  PENDING: "status-offer-pending",
-  ACCEPTED: "status-offer-accepted",
-  REJECTED: "status-offer-rejected",
-  EXPIRED: "status-expired",
-};
-
-const statusLabelMap: Record<string, string> = {
-  PENDING: "Pending Response",
-  ACCEPTED: "Accepted",
-  REJECTED: "Rejected",
-  EXPIRED: "Expired",
-};
-
-const STATUS_OPTIONS: SelectOption[] = [
-  { value: "", label: "All Status" },
-  { value: "PENDING", label: "Pending Response" },
-  { value: "ACCEPTED", label: "Accepted" },
-  { value: "REJECTED", label: "Rejected" },
-  { value: "EXPIRED", label: "Expired" },
-];
+import {
+  OFFER_STATUS_CLASS_MAP as statusClassMap,
+  OFFER_STATUS_LABEL_MAP as statusLabelMap,
+  OFFER_STATUS_OPTIONS as STATUS_OPTIONS,
+} from "../../constants";
 
 const normalizeIc = (ic?: string) => (ic || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase().trim();
 

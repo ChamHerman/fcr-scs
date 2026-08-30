@@ -107,10 +107,33 @@ export const compensationApi = {
 
   acceptOffer: async (
     offerId: string,
-    signedDocument?: string,
+    signedDocument?: string | File | null,
     forceAccept?: boolean,
     options?: { ownerNric?: string; ownerId?: string; userId?: string }
   ) => {
+    if (signedDocument instanceof File) {
+      const formData = new FormData();
+      formData.append("signedDocument", signedDocument);
+      if (forceAccept) formData.append("forceAccept", "true");
+      if (options?.ownerNric) formData.append("ownerNric", options.ownerNric);
+      if (options?.ownerId) formData.append("ownerId", options.ownerId);
+      if (options?.userId) formData.append("userId", options.userId);
+
+      const url = COMPENSATION_BASE + `/api/compensation/offer-letters/${encodeURIComponent(offerId)}/accept`;
+      const res = await fetch(url, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const error: any = new Error(data.error || "Failed to accept offer");
+        error.code = data.code;
+        error.objection = data.activeObjection;
+        throw error;
+      }
+      return data;
+    }
+
     return fetchJSON(COMPENSATION_BASE + `/api/compensation/offer-letters/${encodeURIComponent(offerId)}/accept`, {
       method: "POST",
       body: JSON.stringify({ signedDocument, forceAccept, ...options }),

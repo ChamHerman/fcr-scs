@@ -1,19 +1,38 @@
 import * as Lucide from "lucide-react";
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Eye, Edit, X, File } from "lucide-react";
+import {
+  Eye,
+  Edit,
+  X,
+  File,
+  Sparkles,
+  FileText,
+  Folder,
+  Tag,
+  User,
+  Calendar,
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+  ArrowLeft,
+  Check,
+} from "lucide-react";
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
+import { valuateProperty } from "../../services/predictionApi";
 import { CaseSelectionModal } from "./CaseSelectionModal";
 import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
 import { Select, type SelectOption } from "../../components/ui/Select";
 import { Input } from "../../components/ui/Input";
+import { AreaInput } from "../../components/ui/AreaInput";
 import { CurrencyInput } from "../../components/ui/CurrencyInput";
 import { Textarea } from "../../components/ui/Textarea";
+import { FileUpload } from "../../components/ui/FileUpload";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../components/ui/NotificationSystem";
-import { formatCurrencyWithDecimals, formatCurrencyRM } from "../../utils/currency";
+import { formatCurrencyWithDecimals, formatCurrencyRM, parseCurrencyToNumber, formatAreaWithoutDecimals, formatLiveInteger } from "../../utils/currency";
 import "../../style.css";
 import "./valuation_report.css";
 
@@ -31,15 +50,30 @@ type CaseData = {
   owner: string;
   ownerIc: string;
   address: string;
+  state?: string;
+  category?: string;
+  tenureType?: string;
+  rawArea?: number;
 };
 
 type ReportFormData = {
+  // Area Details
+  landArea: string;
+  acquisitionArea: string;
+  builtUpArea: string;
+
+  // Valuation & Compensation
   valuationMethod: string;
-  marketValue: string;
-  recommendedCompensation: string;
+  locationType: string;
+  buildingAge: string;
+  marketRatePerSqMeter: string;
+  compensationRatePerSqMeter: string;
   remarks: string;
   buildingAssessment: File | null;
   siteInspection: File | null;
+
+  // AI Benchmark
+  aiValuationPrice: string;
 };
 
 type ReportRecord = {
@@ -49,6 +83,14 @@ type ReportRecord = {
   valuerName: string;
   valuationDate: string;
   valuationMethod: string;
+  locationType?: string;
+  buildingAge?: number;
+  landArea: string;
+  acquisitionArea: string;
+  builtUpArea: string;
+  marketRatePerSqMeter: string;
+  compensationRatePerSqMeter: string;
+  aiValuationPrice: string;
   marketValue: string;
   recommendedCompensation: string;
   remarks: string;
@@ -62,15 +104,7 @@ const mockValuer = {
   name: "Ahmad Faizal",
 };
 
-const VALUATION_METHOD_OPTIONS: SelectOption[] = [
-  { value: "", label: "Select method" },
-  { value: "Comparison Method", label: "Comparison Method" },
-  { value: "Income Capitalization", label: "Income Capitalization" },
-  { value: "Cost Approach", label: "Cost Approach" },
-  { value: "Residual Method", label: "Residual Method" },
-  { value: "Profit Method", label: "Profit Method" },
-  { value: "Other", label: "Other" },
-];
+import { VALUATION_METHOD_OPTIONS, LOCATION_TYPE_OPTIONS } from "../../constants";
 
 export const ValuationCreate: React.FC = () => {
   const { user } = useAuth();
@@ -87,14 +121,22 @@ export const ValuationCreate: React.FC = () => {
   const [loadingCase, setLoadingCase] = useState<boolean>(false);
   const [isCaseModalOpen, setIsCaseModalOpen] = useState<boolean>(!initialCaseId);
 
+  // Initial form data: fields that cannot be fetched from land parcel are left empty
   const [formData, setFormData] = useState<ReportFormData>({
+    landArea: "",
+    acquisitionArea: "",
+    builtUpArea: "",
     valuationMethod: "",
-    marketValue: "",
-    recommendedCompensation: "",
+    locationType: "",
+    buildingAge: "",
+    marketRatePerSqMeter: "",
+    compensationRatePerSqMeter: "",
     remarks: "",
     buildingAssessment: null,
     siteInspection: null,
+    aiValuationPrice: "",
   });
+
   const [isSaving, setIsSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -103,42 +145,86 @@ export const ValuationCreate: React.FC = () => {
     [key: string]: string;
   }>({});
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [isCalculatingAi, setIsCalculatingAi] = useState(false);
 
-  const buildingInputRef = useRef<HTMLInputElement>(null);
-  const siteInputRef = useRef<HTMLInputElement>(null);
+  // Computed Totals (Derived strictly from area and rates - stored in database on submit)
+  const calculatedMarketTotal = useMemo(() => {
+    const acq = parseCurrencyToNumber(formData.acquisitionArea);
+    const rate = parseCurrencyToNumber(formData.marketRatePerSqMeter);
+    return Math.round(acq * rate * 100) / 100;
+  }, [formData.acquisitionArea, formData.marketRatePerSqMeter]);
+
+  const calculatedCompTotal = useMemo(() => {
+    const acq = parseCurrencyToNumber(formData.acquisitionArea);
+    const rate = parseCurrencyToNumber(formData.compensationRatePerSqMeter);
+    return Math.round(acq * rate * 100) / 100;
+  }, [formData.acquisitionArea, formData.compensationRatePerSqMeter]);
 
   // Fetch case details from database when caseId is selected
-  const loadCaseDetails = useCallback(async (cId: string) => {
-    setLoadingCase(true);
-    try {
-      const res = await landAcquisitionApi.getCaseById(cId);
-      const c = res.case;
-      if (c) {
-        setCaseData({
-          id: c.caseId,
-          title: c.caseTitle,
-          project: c.project?.projectName || "—",
-          projectType: c.project?.projectType || "—",
-          registrationDate: c.registrationDate
-            ? new Date(c.registrationDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-            : "—",
-          assignedDate: c.updatedAt
-            ? new Date(c.updatedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-            : "—",
-          status: c.status,
-          statusClass: "status-valuation-progress",
-          landTitleNumber: c.landParcel?.landTitleNo || "—",
-          owner: c.landParcel?.ownerships?.[0]?.landOwner?.name || "—",
-          ownerIc: c.landParcel?.ownerships?.[0]?.landOwner?.icNumber || "—",
-          address: c.landParcel?.address || "—",
-        });
+  const loadCaseDetails = useCallback(
+    async (cId: string) => {
+      setLoadingCase(true);
+      try {
+        const res = await landAcquisitionApi.getCaseById(cId);
+        const c = res.case;
+        if (c) {
+          const parcelAreaNum = c.landParcel?.area ? Number(c.landParcel.area) : 0;
+          const parcelAreaStr = parcelAreaNum > 0 ? formatAreaWithoutDecimals(parcelAreaNum) : "";
+
+          setCaseData({
+            id: c.caseId,
+            title: c.caseTitle,
+            project: c.project?.projectName || "—",
+            projectType: c.project?.projectType || "—",
+            registrationDate: c.registrationDate
+              ? new Date(c.registrationDate).toLocaleDateString("en-GB", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                })
+              : "—",
+            assignedDate: c.updatedAt
+              ? new Date(c.updatedAt).toLocaleDateString("en-GB", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                })
+              : "—",
+            status: c.status,
+            statusClass: "status-valuation-progress",
+            landTitleNumber: c.landParcel?.landTitleNo || "—",
+            owner: c.landParcel?.ownerships?.[0]?.landOwner?.name || "—",
+            ownerIc: c.landParcel?.ownerships?.[0]?.landOwner?.icNumber || "—",
+            address: c.landParcel?.address || "—",
+            state: c.landParcel?.state || "Selangor",
+            category: c.landParcel?.category || "AGRICULTURE",
+            tenureType: c.landParcel?.tenureType || "FREEHOLD",
+            rawArea: parcelAreaNum,
+          });
+
+          // Only land area is set from land parcel table; all other fields remain empty
+          setFormData((prev) => ({
+            ...prev,
+            landArea: parcelAreaStr || "",
+            acquisitionArea: "",
+            builtUpArea: "",
+            valuationMethod: "",
+            locationType: "",
+            buildingAge: "",
+            marketRatePerSqMeter: "",
+            compensationRatePerSqMeter: "",
+            remarks: "",
+            aiValuationPrice: "",
+          }));
+        }
+      } catch (err: any) {
+        console.error("Failed to fetch case details:", err);
+      } finally {
+        setLoadingCase(false);
       }
-    } catch (err: any) {
-      console.error("Failed to fetch case details:", err);
-    } finally {
-      setLoadingCase(false);
-    }
-  }, []);
+    },
+    []
+  );
 
   useEffect(() => {
     if (selectedCaseId) {
@@ -154,14 +240,15 @@ export const ValuationCreate: React.FC = () => {
     setIsCaseModalOpen(false);
   };
 
-  // --- Handlers ---
+  // Input change handler
   const handleInputChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-    >,
+    >
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+
     if (validationErrors[name]) {
       setValidationErrors((prev) => {
         const newErrors = { ...prev };
@@ -171,54 +258,113 @@ export const ValuationCreate: React.FC = () => {
     }
   };
 
-  const handleFileChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
-    field: "buildingAssessment" | "siteInspection",
-  ) => {
-    const file = e.target.files?.[0] || null;
-    setFormData((prev) => ({ ...prev, [field]: file }));
-    if (validationErrors[field]) {
-      setValidationErrors((prev) => {
-        const newErrors = { ...prev };
-        delete newErrors[field];
-        return newErrors;
-      });
-    }
-  };
-
+  // Form validation: Required input fields
   const validateForm = (): boolean => {
     const errors: { [key: string]: string } = {};
+
     if (!caseData) {
       notify({
-        type: 'general',
-        title: 'No Case Selected',
-        message: 'Please select a case before generating the report.',
+        type: "general",
+        title: "No Case Selected",
+        message: "Please select an acquisition case before generating the report.",
       });
       return false;
     }
+
+    const landNum = parseCurrencyToNumber(formData.landArea);
+    const acqNum = parseCurrencyToNumber(formData.acquisitionArea);
+    const builtNum = parseCurrencyToNumber(formData.builtUpArea);
+    const marketRateNum = parseCurrencyToNumber(formData.marketRatePerSqMeter);
+    const compRateNum = parseCurrencyToNumber(formData.compensationRatePerSqMeter);
+
+    if (!formData.landArea.trim() || landNum <= 0) {
+      errors.landArea = "Land Area is required and must be greater than 0.";
+    }
+
+    if (!formData.acquisitionArea.trim() || acqNum <= 0) {
+      errors.acquisitionArea = "Acquisition Area is required and must be greater than 0.";
+    } else if (landNum > 0 && acqNum >= landNum) {
+      errors.acquisitionArea = "Land Area must be greater than Acquisition Area (Land Area > Acquisition Area).";
+    }
+
+    if (!formData.builtUpArea.trim() || isNaN(builtNum) || builtNum < 0) {
+      errors.builtUpArea = "Built-Up Area is required (0 for vacant land).";
+    } else if (landNum > 0 && builtNum >= landNum) {
+      errors.builtUpArea = "Land Area must be greater than Built-Up Area (Land Area > Built-Up Area).";
+    }
+
     if (!formData.valuationMethod.trim()) {
-      errors.valuationMethod = "Valuation method is required.";
+      errors.valuationMethod = "Valuation Method is required.";
     }
-    if (!formData.marketValue.trim()) {
-      errors.marketValue = "Market value is required.";
+
+    if (!formData.locationType.trim()) {
+      errors.locationType = "Location Type is required.";
     }
-    if (!formData.recommendedCompensation.trim()) {
-      errors.recommendedCompensation = "Recommended compensation is required.";
+
+    if (!formData.buildingAge.trim() || isNaN(Number(formData.buildingAge)) || Number(formData.buildingAge) < 0) {
+      errors.buildingAge = "Building Age cannot be less than 0 year.";
     }
-    if (!formData.remarks.trim()) {
-      errors.remarks = "Remarks are required.";
+
+    if (!formData.marketRatePerSqMeter.trim() || isNaN(marketRateNum) || marketRateNum <= 0) {
+      errors.marketRatePerSqMeter = "Market Price (RM /m²) is required and cannot be negative or zero.";
     }
+
+    if (!formData.compensationRatePerSqMeter.trim() || isNaN(compRateNum) || compRateNum <= 0) {
+      errors.compensationRatePerSqMeter = "Recommended Compensation (RM /m²) is required and cannot be negative or zero.";
+    }
+
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  const handleGeneratePreview = () => {
+  const handleGeneratePreview = async () => {
     if (!validateForm()) return;
+    if (!caseData) return;
+
+    setIsCalculatingAi(true);
+    let predictedAiPrice = "";
+
+    try {
+      // Pass raw values directly from Land Parcel table and Report Details
+      const landAreaVal = (caseData.rawArea && caseData.rawArea > 0) ? caseData.rawArea : parseCurrencyToNumber(formData.landArea);
+      const builtUpAreaVal = parseCurrencyToNumber(formData.builtUpArea);
+      const bldgAgeNum = Math.max(0, parseInt(formData.buildingAge, 10) || 0);
+
+      const res = await valuateProperty({
+        state: caseData.state || "Selangor",
+        land_category: caseData.category || "AGRICULTURE",
+        location_type: formData.locationType || "Urban",
+        tenure_type: caseData.tenureType || "FREEHOLD",
+        building_condition: "Good",
+        land_area_sqft: landAreaVal,
+        built_up_area_sqft: builtUpAreaVal,
+        building_age_years: bldgAgeNum,
+      });
+
+      if (res && typeof res.marketValueMyr === "number" && !isNaN(res.marketValueMyr)) {
+        predictedAiPrice = formatCurrencyWithDecimals(res.marketValueMyr);
+      }
+    } catch (err) {
+      console.error("AI valuation prediction failed:", err);
+      notify({
+        type: "error",
+        title: "AI Valuation Service",
+        message: "Unable to retrieve prediction from AI valuate service. Please check connection.",
+      });
+    } finally {
+      setIsCalculatingAi(false);
+    }
+
     setFormData((prev) => ({
       ...prev,
-      marketValue: formatCurrencyWithDecimals(prev.marketValue),
-      recommendedCompensation: formatCurrencyWithDecimals(prev.recommendedCompensation),
+      landArea: formatAreaWithoutDecimals(prev.landArea),
+      acquisitionArea: formatAreaWithoutDecimals(prev.acquisitionArea),
+      builtUpArea: formatAreaWithoutDecimals(prev.builtUpArea || 0),
+      marketRatePerSqMeter: formatCurrencyWithDecimals(prev.marketRatePerSqMeter),
+      compensationRatePerSqMeter: formatCurrencyWithDecimals(prev.compensationRatePerSqMeter),
+      aiValuationPrice: predictedAiPrice,
     }));
+
     setShowPreview(true);
   };
 
@@ -230,21 +376,37 @@ export const ValuationCreate: React.FC = () => {
   const handleConfirmSave = async () => {
     if (!caseData) {
       notify({
-        type: 'general',
-        title: 'No Case Selected',
-        message: 'No case selected.',
+        type: "general",
+        title: "No Case Selected",
+        message: "No case selected.",
       });
       return;
     }
 
     setIsSaving(true);
     try {
+      const landNum = parseCurrencyToNumber(formData.landArea);
+      const acqNum = parseCurrencyToNumber(formData.acquisitionArea);
+      const builtNum = parseCurrencyToNumber(formData.builtUpArea);
+      const mRateNum = parseCurrencyToNumber(formData.marketRatePerSqMeter);
+      const cRateNum = parseCurrencyToNumber(formData.compensationRatePerSqMeter);
+      const aiNum = parseCurrencyToNumber(formData.aiValuationPrice);
+      const bldgAgeNum = parseInt(formData.buildingAge, 10) || 0;
+
       const res = await landAcquisitionApi.createValuationReport({
         caseId: caseData.id,
         valuationMethod: formData.valuationMethod,
-        marketValue: parseFloat(formData.marketValue.replace(/[^0-9.]/g, "")) || 0,
-        recommendedCompensation: parseFloat(formData.recommendedCompensation.replace(/[^0-9.]/g, "")) || 0,
-        remarks: formData.remarks,
+        locationType: formData.locationType,
+        buildingAge: bldgAgeNum,
+        landArea: landNum,
+        acquisitionArea: acqNum,
+        builtUpArea: builtNum,
+        marketRatePerSqMeter: mRateNum,
+        compensationRatePerSqMeter: cRateNum,
+        aiValuationPrice: aiNum,
+        marketValue: calculatedMarketTotal,
+        recommendedCompensation: calculatedCompTotal,
+        remarks: formData.remarks || "",
         createdById: user?.userId,
         valuerId: user?.userId,
       });
@@ -252,14 +414,24 @@ export const ValuationCreate: React.FC = () => {
       // Upload attached files if present
       if (formData.buildingAssessment) {
         try {
-          await landAcquisitionApi.uploadDocument(caseData.id, formData.buildingAssessment, "Building Assessment", user?.userId);
+          await landAcquisitionApi.uploadDocument(
+            caseData.id,
+            formData.buildingAssessment,
+            "Building Assessment",
+            user?.userId
+          );
         } catch (fileErr) {
           console.warn("File upload notice (building assessment):", fileErr);
         }
       }
       if (formData.siteInspection) {
         try {
-          await landAcquisitionApi.uploadDocument(caseData.id, formData.siteInspection, "Site Inspection", user?.userId);
+          await landAcquisitionApi.uploadDocument(
+            caseData.id,
+            formData.siteInspection,
+            "Site Inspection",
+            user?.userId
+          );
         } catch (fileErr) {
           console.warn("File upload notice (site inspection):", fileErr);
         }
@@ -277,9 +449,17 @@ export const ValuationCreate: React.FC = () => {
           year: "numeric",
         }),
         valuationMethod: formData.valuationMethod,
-        marketValue: formatCurrencyWithDecimals(formData.marketValue),
-        recommendedCompensation: formatCurrencyWithDecimals(formData.recommendedCompensation),
-        remarks: formData.remarks,
+        locationType: formData.locationType,
+        buildingAge: bldgAgeNum,
+        landArea: formatAreaWithoutDecimals(formData.landArea),
+        acquisitionArea: formatAreaWithoutDecimals(formData.acquisitionArea),
+        builtUpArea: formatAreaWithoutDecimals(formData.builtUpArea),
+        marketRatePerSqMeter: formatCurrencyWithDecimals(formData.marketRatePerSqMeter),
+        compensationRatePerSqMeter: formatCurrencyWithDecimals(formData.compensationRatePerSqMeter),
+        aiValuationPrice: formData.aiValuationPrice ? formatCurrencyWithDecimals(formData.aiValuationPrice) : "—",
+        marketValue: formatCurrencyWithDecimals(calculatedMarketTotal),
+        recommendedCompensation: formatCurrencyWithDecimals(calculatedCompTotal),
+        remarks: formData.remarks || "",
         buildingAssessment: formData.buildingAssessment ? formData.buildingAssessment.name : "Not uploaded",
         siteInspection: formData.siteInspection ? formData.siteInspection.name : "Not uploaded",
         status: "Pending Valuation Approval",
@@ -288,11 +468,16 @@ export const ValuationCreate: React.FC = () => {
       setSavedReport(newReport);
       setShowPreview(false);
       setIsEditMode(false);
+      notify({
+        type: "success",
+        title: "Report Created",
+        message: `Valuation report created successfully for case ${caseData.id}.`,
+      });
     } catch (err: any) {
       console.error("Failed to save valuation report:", err);
       notify({
-        type: 'error',
-        title: 'Save Failed',
+        type: "error",
+        title: "Save Failed",
         message: err.message || "Could not reach backend",
       });
     } finally {
@@ -301,7 +486,7 @@ export const ValuationCreate: React.FC = () => {
   };
 
   const handleCancel = () => {
-    if (formData.valuationMethod || formData.marketValue || formData.remarks) {
+    if (formData.valuationMethod || formData.remarks || formData.acquisitionArea || formData.marketRatePerSqMeter) {
       setShowCancelConfirm(true);
     } else {
       navigate("/admin/case/valuation");
@@ -317,6 +502,7 @@ export const ValuationCreate: React.FC = () => {
     navigate("/admin/case/valuation");
   };
 
+  // Preview Modal showing ONLY Land Area, Final Market Value, Final AI Prediction Value, Final Recommended Value
   const renderPreviewModal = () => {
     if (!caseData) return null;
 
@@ -324,60 +510,61 @@ export const ValuationCreate: React.FC = () => {
       <Modal
         isOpen={showPreview}
         onClose={() => setShowPreview(false)}
-        title="Valuation Report Preview"
-        subtitle="Review the valuation report details before submitting"
-        maxWidth="max-w-2xl"
+        title="Valuation Summary"
+        subtitle="Review the calculated valuation totals before confirming"
+        maxWidth="max-w-xl"
         footer={
           <>
             <Button variant="text" onClick={handleEditFromPreview}>
               <Edit size={16} /> Edit
             </Button>
-            <Button
-              variant="filled"
-              onClick={handleConfirmSave}
-              isLoading={isSaving}
-            >
-              <Lucide.Check size={16} /> Confirm & Save
+            <Button variant="filled" onClick={handleConfirmSave} isLoading={isSaving}>
+              <Check size={16} /> Confirm & Save
             </Button>
           </>
         }
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-2">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">Report ID</span>
-            <span className="text-sm font-mono text-md-on-surface">REP-{Date.now().toString().slice(-6)}</span>
+        <div className="space-y-3.5 py-2">
+          {/* Land Area */}
+          <div className="flex justify-between items-center p-4 rounded-xl bg-md-surface-container-low border border-md-outline/15">
+            <span className="text-sm font-semibold text-md-on-surface-variant">Land Area</span>
+            <span className="text-base font-bold text-md-on-surface font-mono">
+              {formData.landArea ? `${formatAreaWithoutDecimals(formData.landArea)} m²` : "—"}
+            </span>
           </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">Case ID</span>
-            <span className="text-sm font-mono text-md-on-surface">{caseData.id}</span>
+
+          {/* Final Market Value */}
+          <div className="flex justify-between items-center p-4 rounded-xl bg-md-surface-container-low border border-md-outline/15">
+            <span className="text-sm font-semibold text-md-on-surface-variant">Final Market Value</span>
+            <span className="text-base font-bold text-md-on-surface font-mono">
+              {formatCurrencyRM(calculatedMarketTotal)}
+            </span>
           </div>
-          <div className="flex flex-col gap-1 md:col-span-2">
-            <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">Case Title</span>
-            <span className="text-sm font-semibold text-md-on-surface">{caseData.title}</span>
+
+          {/* Final AI Prediction Value */}
+          <div className="flex justify-between items-center p-4 rounded-xl bg-md-surface-container-low border border-md-primary/30">
+            <span className="text-sm font-semibold text-md-primary flex items-center gap-1.5">
+              <Sparkles size={14} /> Final AI Prediction Value
+            </span>
+            <span className="text-base font-bold text-md-primary font-mono">
+              {isCalculatingAi ? (
+                <span className="text-xs text-md-on-surface-variant flex items-center gap-1 font-sans font-normal">
+                  <Loader2 size={13} className="animate-spin inline" /> Estimating...
+                </span>
+              ) : formData.aiValuationPrice ? (
+                formatCurrencyRM(formData.aiValuationPrice)
+              ) : (
+                "—"
+              )}
+            </span>
           </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">Valuer</span>
-            <span className="text-sm text-md-on-surface">{mockValuer.name}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">Valuation Date</span>
-            <span className="text-sm text-md-on-surface">{new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">Valuation Method</span>
-            <span className="text-sm text-md-on-surface">{formData.valuationMethod}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">Market Value</span>
-            <span className="text-sm font-semibold text-md-primary">{formatCurrencyRM(formData.marketValue)}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">Recommended Compensation</span>
-            <span className="text-sm font-semibold text-md-primary">{formatCurrencyRM(formData.recommendedCompensation)}</span>
-          </div>
-          <div className="flex flex-col gap-1 md:col-span-2">
-            <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">Remarks</span>
-            <span className="text-sm text-md-on-surface">{formData.remarks}</span>
+
+          {/* Final Recommended Value */}
+          <div className="flex justify-between items-center p-4 rounded-xl bg-md-surface-container-low border border-green-500/30">
+            <span className="text-sm font-semibold text-green-700 dark:text-green-400">Final Recommended Value</span>
+            <span className="text-base font-bold text-green-700 dark:text-green-400 font-mono">
+              {formatCurrencyRM(calculatedCompTotal)}
+            </span>
           </div>
         </div>
       </Modal>
@@ -390,29 +577,31 @@ export const ValuationCreate: React.FC = () => {
         isOpen={showCancelConfirm}
         onClose={() => setShowCancelConfirm(false)}
         title="Cancel without saving?"
-        subtitle="You have unsaved changes. Any entered information will be lost."
+        subtitle="You have entered information. Any changes will be discarded."
         footer={
           <>
             <Button variant="text" onClick={() => setShowCancelConfirm(false)}>
               Continue Editing
             </Button>
             <Button variant="danger" onClick={confirmCancel}>
-              Yes, Cancel
+              Yes, Discard & Cancel
             </Button>
           </>
         }
       >
         <p className="text-sm text-md-on-surface-variant">
-          Are you sure you want to discard your draft valuation report and return to the dashboard?
+          Are you sure you want to discard your draft valuation report and return to the valuation dashboard?
         </p>
       </Modal>
     );
   };
 
   const renderSuccessState = () => (
-    <div className="report-form-card">
+    <div className="bg-md-surface-container rounded-xl p-7 border border-md-outline/15 shadow-sm space-y-6">
       <div className="success-banner">
-        <span className="check-icon"><Lucide.CheckCircle size={16} className="inline mr-1" /></span>
+        <span className="check-icon">
+          <CheckCircle size={20} className="inline mr-1" />
+        </span>
         <div>
           <strong>New Valuation Report Created Successfully!</strong>
           <span style={{ marginLeft: "12px", fontWeight: 400 }}>
@@ -420,34 +609,55 @@ export const ValuationCreate: React.FC = () => {
           </span>
         </div>
       </div>
-      <div style={{ textAlign: "center", padding: "20px 0" }}>
-        <div
-          style={{ fontSize: "14px", color: "var(--md-on-surface-variant)" }}
-        >
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="p-4 rounded-xl bg-md-surface-container-low border border-md-outline/10 text-center">
+          <span className="text-xs text-md-on-surface-variant uppercase font-semibold">Final Market Value</span>
+          <div className="text-xl font-bold text-md-on-surface mt-1">{formatCurrencyRM(savedReport?.marketValue)}</div>
+          <span className="text-xs text-md-on-surface-variant/70 font-mono mt-0.5 block">
+            {savedReport?.marketRatePerSqMeter} RM/m²
+          </span>
+        </div>
+        <div className="p-4 rounded-xl bg-md-surface-container-low border border-md-primary/30 text-center">
+          <span className="text-xs text-md-primary uppercase font-semibold flex items-center justify-center gap-1">
+            <Sparkles size={12} /> Final AI Prediction Value
+          </span>
+          <div className="text-xl font-bold text-md-primary mt-1">
+            {savedReport?.aiValuationPrice ? formatCurrencyRM(savedReport.aiValuationPrice) : "—"}
+          </div>
+          <span className="text-xs text-md-on-surface-variant/70 mt-0.5 block">Model Benchmark</span>
+        </div>
+        <div className="p-4 rounded-xl bg-md-surface-container-low border border-green-500/30 text-center">
+          <span className="text-xs text-green-700 dark:text-green-400 uppercase font-semibold">Final Recommended Value</span>
+          <div className="text-xl font-bold text-green-700 dark:text-green-400 mt-1">
+            {formatCurrencyRM(savedReport?.recommendedCompensation)}
+          </div>
+          <span className="text-xs text-md-on-surface-variant/70 font-mono mt-0.5 block">
+            {savedReport?.compensationRatePerSqMeter} RM/m²
+          </span>
+        </div>
+      </div>
+
+      <div style={{ textAlign: "center", padding: "10px 0" }}>
+        <div style={{ fontSize: "14px", color: "var(--md-on-surface-variant)" }}>
           <div className="mb-2">
-            <span className="text-sm">Assigned New Report ID:</span>{" "}
+            <span className="text-sm">Assigned Report ID:</span>{" "}
             <span className="font-mono text-base font-bold text-md-primary">{savedReport?.reportId}</span>
             <CopyButton value={savedReport?.reportId || ""} />
           </div>
-          <div>
-            <strong>Recommended Compensation:</strong>{" "}
-            {formatCurrencyRM(savedReport?.recommendedCompensation)}
-          </div>
-          <div className="text-xs text-md-on-surface-variant/70 mt-3 max-w-md mx-auto">
-            This report was saved as a brand-new row in the database. All previous report history for case <strong>{savedReport?.caseId}</strong> remains fully preserved and traceable.
+          <div className="text-xs text-md-on-surface-variant/70 mt-2 max-w-md mx-auto">
+            This report was saved with complete area measurements, rate parameters, and instant calculated totals.
           </div>
         </div>
+
         <div className="mt-6 flex justify-center gap-3">
           <Button
             variant="outlined"
             onClick={() => navigate("/admin/case/valuation/review", { state: { reportId: savedReport?.reportId } })}
           >
-            <Lucide.Eye size={16} /> View New Report
+            <Eye size={16} /> View New Report
           </Button>
-          <Button
-            variant="filled"
-            onClick={handleBackToDashboard}
-          >
+          <Button variant="filled" onClick={handleBackToDashboard}>
             Back to Dashboard
           </Button>
         </div>
@@ -467,272 +677,338 @@ export const ValuationCreate: React.FC = () => {
 
       <div className="main blur-shape-bg">
         <div className="report-generator-container">
-            {/* Top Bar */}
-            <div className="topbar" style={{ marginBottom: "20px" }}>
-              <div className="topbar-left">
-                <h1 style={{ marginBottom: 0 }}>Valuation Report Generator</h1>
-                <div className="sub">
-                  Create a valuation report for the selected case
-                </div>
-              </div>
-              <div className="topbar-right flex items-center gap-3">
-                <Button variant="outlined" size="sm" onClick={() => navigate("/admin/case/valuation")}>
-                  <Lucide.ArrowLeft size={16} /> Back
-                </Button>
-                <span className="date-badge">
-                  <Lucide.Calendar size={16} className="inline mr-1" />
-                  {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-                </span>
-                <div
-                  className="avatar"
-                  title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
-                >
-                  {user?.name ? (
-                    <span className="text-xs font-bold uppercase">
-                      {user.name
-                        .split(/\s+/)
-                        .map((n: string) => n[0])
-                        .slice(0, 2)
-                        .join("")}
-                    </span>
-                  ) : (
-                    <Lucide.User size={16} />
-                  )}
-                </div>
+          {/* Top Bar */}
+          <div className="topbar" style={{ marginBottom: "20px" }}>
+            <div className="topbar-left">
+              <h1 style={{ marginBottom: 0 }}>Create New Valuation Report</h1>
+              <div className="sub">
+                Fill in the area measurements, valuation methodology, and compensation rates for the acquisition case
               </div>
             </div>
-
-            {/* Case Summary (hidden after report is saved successfully) */}
-            {!savedReport &&
-              (loadingCase ? (
-                <div className="case-summary-card" style={{ padding: "20px", textAlign: "center" }}>
-                  <Lucide.Loader2 size={24} className="inline animate-spin mr-2" /> Loading selected case details...
-                </div>
-              ) : caseData ? (
-                <div className="case-summary-card">
-                  <div className="case-info">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="case-id font-mono text-sm">{caseData.id}</span>
-                      <CopyButton value={caseData.id} />
-                    </div>
-                    <span className="case-title">{caseData.title}</span>
-                    <div className="case-meta">
-                      <span><Lucide.Folder size={16} className="inline mr-1" /> {caseData.project}</span>
-                      <span><Lucide.Tag size={16} className="inline mr-1" /> {caseData.landTitleNumber}</span>
-                      <span><Lucide.User size={16} className="inline mr-1" /> {caseData.owner}</span>
-                      <span><Lucide.Calendar size={16} className="inline mr-1" /> {caseData.registrationDate}</span>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px" }}>
-                    <span className={`status-badge-lg ${caseData.statusClass}`}>
-                      <span className="dot"></span> {caseData.status}
-                    </span>
-                    <Button
-                      variant="outlined"
-                      size="sm"
-                      onClick={() => setIsCaseModalOpen(true)}
-                    >
-                      <Lucide.RefreshCw size={12} /> Change Case
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="case-summary-card" style={{ padding: "20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ color: "var(--md-on-surface-variant)" }}>
-                    <Lucide.AlertCircle size={20} className="inline mr-2 text-amber-500" />
-                    No case selected yet. Please select a case to generate a report.
-                  </div>
-                  <Button
-                    variant="filled"
-                    size="sm"
-                    onClick={() => setIsCaseModalOpen(true)}
-                  >
-                    Select Case
-                  </Button>
-                </div>
-              ))}
-
-            {/* Report Form or Success State */}
-            {savedReport ? (
-              renderSuccessState()
-            ) : (
-              <div className="report-form-card">
-                {caseData?.status === "VALUATION_REJECTED" && (
-                  <div className="p-4 mb-5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex items-start gap-3">
-                    <Lucide.AlertCircle size={20} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
-                    <div className="text-sm">
-                      <div className="font-semibold text-amber-800 dark:text-amber-300 mb-0.5">
-                        Revision Report Creation
-                      </div>
-                      <div className="text-xs text-amber-700/90 dark:text-amber-300/80">
-                        The previous valuation report for this case was rejected. Submitting this form will generate a <strong>new report row (with a new Report ID)</strong> in the database. The previous rejected report remains preserved for history and audit traceability.
-                      </div>
-                    </div>
-                  </div>
+            <div className="topbar-right flex items-center gap-3">
+              <Button variant="outlined" size="sm" onClick={() => navigate("/admin/case/valuation")}>
+                <ArrowLeft size={16} /> Back
+              </Button>
+              <span className="date-badge">
+                <Calendar size={16} className="inline mr-1" />
+                {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+              </span>
+              <div
+                className="avatar"
+                title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
+              >
+                {user?.name ? (
+                  <span className="text-xs font-bold uppercase">
+                    {user.name
+                      .split(/\s+/)
+                      .map((n: string) => n[0])
+                      .slice(0, 2)
+                      .join("")}
+                  </span>
+                ) : (
+                  <User size={16} />
                 )}
-                <div className="form-title">
-                  {isEditMode ? (
-                    <>
-                      <Edit size={18} className="inline mr-2" /> Edit Report
-                      <span
-                        style={{
-                          fontSize: "12px",
-                          fontWeight: 400,
-                          marginLeft: "8px",
-                          padding: "2px 10px",
-                          borderRadius: "var(--radius-full)",
-                          background: "#fff3e0",
-                          color: "#a8600b",
-                        }}
-                      >
-                        Editing
-                      </span>
-                    </>
-                  ) : (
-                    "Enter Report Details"
-                  )}
-                </div>
-                <div className="form-subtitle">
-                  {isEditMode
-                    ? "Update the report details below. Fields are pre-filled with existing values."
-                    : "Fill in the valuation information below. All fields marked with * are required."}
-                </div>
-
-                <div className="flex flex-col gap-5 mt-4">
-                  {/* Valuation Method */}
-                  <div>
-                    <Select
-                      label="Valuation Method *"
-                      value={formData.valuationMethod}
-                      options={VALUATION_METHOD_OPTIONS}
-                      onChange={(val) => {
-                        setFormData((prev) => ({ ...prev, valuationMethod: val }));
-                        if (validationErrors.valuationMethod) {
-                          setValidationErrors((prev) => {
-                            const newErrors = { ...prev };
-                            delete newErrors.valuationMethod;
-                            return newErrors;
-                          });
-                        }
-                      }}
-                      placeholder="Select method"
-                    />
-                    {validationErrors.valuationMethod && (
-                      <div className="text-xs text-md-error pl-2 mt-1">
-                        {validationErrors.valuationMethod}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Market Value */}
-                  <div>
-                    <CurrencyInput
-                      label="Market Value (RM) *"
-                      id="marketValue"
-                      name="marketValue"
-                      value={formData.marketValue}
-                      onChange={handleInputChange}
-                      placeholder="0.00"
-                    />
-                    {validationErrors.marketValue && (
-                      <div className="text-xs text-md-error pl-2 mt-1">
-                        {validationErrors.marketValue}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Recommended Compensation */}
-                  <div>
-                    <CurrencyInput
-                      label="Recommended Compensation (RM) *"
-                      id="recommendedCompensation"
-                      name="recommendedCompensation"
-                      value={formData.recommendedCompensation}
-                      onChange={handleInputChange}
-                      placeholder="0.00"
-                    />
-                    {validationErrors.recommendedCompensation && (
-                      <div className="text-xs text-md-error pl-2 mt-1">
-                        {validationErrors.recommendedCompensation}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Remarks */}
-                  <div>
-                    <Textarea
-                      label="Remarks *"
-                      id="remarks"
-                      name="remarks"
-                      value={formData.remarks}
-                      onChange={handleInputChange}
-                      placeholder="Additional notes, observations, or justifications..."
-                    />
-                    {validationErrors.remarks && (
-                      <div className="text-xs text-md-error pl-2 mt-1">
-                        {validationErrors.remarks}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Attach Section */}
-                  <div className="attach-section">
-                    <div className="attach-title">
-                      <File size={18} /> Attach Supporting Information
-                    </div>
-                    <div className="attach-grid">
-                      <label>Building Assessment</label>
-                      <input
-                        ref={buildingInputRef}
-                        type="file"
-                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                        onChange={(e) =>
-                          handleFileChange(e, "buildingAssessment")
-                        }
-                      />
-
-                      <label>Site Inspection Report</label>
-                      <input
-                        ref={siteInputRef}
-                        type="file"
-                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                        onChange={(e) => handleFileChange(e, "siteInspection")}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="form-actions flex items-center justify-end gap-3 pt-4 border-t border-md-outline/10">
-                    <Button variant="text" onClick={handleCancel}>
-                      <X size={16} /> Cancel
-                    </Button>
-                    <Button
-                      variant="filled"
-                      onClick={handleGeneratePreview}
-                      disabled={isSaving || !caseData}
-                    >
-                      <Eye size={18} /> Generate Report
-                    </Button>
-                  </div>
-                </div>
               </div>
-            )}
-
-            <div
-              style={{
-                marginTop: "32px",
-                fontSize: "13px",
-                color: "var(--md-on-surface-variant)",
-                opacity: 0.6,
-                textAlign: "center",
-                borderTop: "1px solid rgba(121,116,126,0.08)",
-                paddingTop: "18px",
-              }}
-            >
-              FCR-SCS · Valuation Report Generator · For Land Valuers only
             </div>
           </div>
+
+          {/* Case Summary */}
+          {!savedReport &&
+            (loadingCase ? (
+              <div className="case-summary-card" style={{ padding: "20px", textAlign: "center" }}>
+                <Loader2 size={24} className="inline animate-spin mr-2" /> Loading selected case details...
+              </div>
+            ) : caseData ? (
+              <div className="case-summary-card">
+                <div className="case-info">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="case-id font-mono text-sm">{caseData.id}</span>
+                    <CopyButton value={caseData.id} />
+                  </div>
+                  <span className="case-title">{caseData.title}</span>
+                  <div className="case-meta">
+                    <span>
+                      <Folder size={16} className="inline mr-1" /> {caseData.project}
+                    </span>
+                    <span>
+                      <Tag size={16} className="inline mr-1" /> {caseData.landTitleNumber}
+                    </span>
+                    <span>
+                      <User size={16} className="inline mr-1" /> {caseData.owner}
+                    </span>
+                    <span>
+                      <Calendar size={16} className="inline mr-1" /> {caseData.registrationDate}
+                    </span>
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px" }}>
+                  <span className={`status-badge-lg ${caseData.statusClass}`}>
+                    <span className="dot"></span> {caseData.status}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div
+                className="case-summary-card"
+                style={{ padding: "20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+              >
+                <div style={{ color: "var(--md-on-surface-variant)" }}>
+                  <AlertCircle size={20} className="inline mr-2 text-amber-500" />
+                  No case selected yet. Please select a case to generate a report.
+                </div>
+                <Button variant="filled" size="sm" onClick={() => setIsCaseModalOpen(true)}>
+                  Select Case
+                </Button>
+              </div>
+            ))}
+
+          {/* Report Form or Success State */}
+          {savedReport ? (
+            renderSuccessState()
+          ) : (
+            <div className="space-y-6">
+              {caseData?.status === "VALUATION_REJECTED" && (
+                <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex items-start gap-3">
+                  <AlertCircle size={20} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                  <div className="text-sm">
+                    <div className="font-semibold text-amber-800 dark:text-amber-300 mb-0.5">
+                      Revision Report Creation
+                    </div>
+                    <div className="text-xs text-amber-700/90 dark:text-amber-300/80">
+                      The previous valuation report for this case was rejected. Submitting this form will generate a{" "}
+                      <strong>new report record</strong> in the database while preserving historical traces.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ──────────────────────────────────────────────────────────── */}
+              {/* UNIFIED CONTAINER: Report Details (bold)                     */}
+              {/* ──────────────────────────────────────────────────────────── */}
+              <div className="bg-md-surface-container rounded-xl p-7 border border-md-outline/15 shadow-sm space-y-7">
+                {/* Main Header (Retain this icon only) */}
+                <div className="flex items-center gap-3 pb-4 border-b border-md-outline/15">
+                  <div className="p-2.5 rounded-xl bg-md-primary text-white shadow-sm">
+                    <FileText size={20} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-md-on-surface tracking-tight">Report Details</h2>
+                    <p className="text-xs text-md-on-surface-variant">
+                      Fill in the required property parameters and valuation rates below
+                    </p>
+                  </div>
+                </div>
+
+                {/* 1. Area Details (No icon, No Metric badge, Title Case) */}
+                <div className="space-y-4">
+                  <h3 className="text-base font-bold text-md-on-surface">Area Details</h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <AreaInput
+                      label="Land Area (m²) *"
+                      id="landArea"
+                      name="landArea"
+                      value={formData.landArea}
+                      disabled
+                      placeholder="e.g. 10,000"
+                      error={validationErrors.landArea}
+                    />
+                    <AreaInput
+                      label="Acquisition Area (m²) *"
+                      id="acquisitionArea"
+                      name="acquisitionArea"
+                      value={formData.acquisitionArea}
+                      onChange={handleInputChange}
+                      placeholder="e.g. 3,000"
+                      error={validationErrors.acquisitionArea}
+                    />
+                    <AreaInput
+                      label="Built-Up Area (m²) *"
+                      id="builtUpArea"
+                      name="builtUpArea"
+                      value={formData.builtUpArea}
+                      onChange={handleInputChange}
+                      placeholder="e.g. 250 (or 0)"
+                      error={validationErrors.builtUpArea}
+                    />
+                  </div>
+                </div>
+
+                {/* DIVIDER 1 */}
+                <hr className="border-t border-md-outline/30 my-6" />
+
+                {/* 2. Valuation & Compensation */}
+                <div className="space-y-4">
+                  <h3 className="text-base font-bold text-md-on-surface">Valuation & Compensation</h3>
+
+                  <div className="space-y-4">
+                    {/* Row 1: Valuation Method */}
+                    <div>
+                      <Select
+                        label="Valuation Method *"
+                        value={formData.valuationMethod}
+                        options={VALUATION_METHOD_OPTIONS}
+                        error={validationErrors.valuationMethod}
+                        onChange={(val) => {
+                          setFormData((prev) => ({ ...prev, valuationMethod: val }));
+                          if (validationErrors.valuationMethod) {
+                            setValidationErrors((prev) => {
+                              const n = { ...prev };
+                              delete n.valuationMethod;
+                              return n;
+                            });
+                          }
+                        }}
+                        placeholder="Select method"
+                      />
+                    </div>
+
+                    {/* Row 2: Location Type | Building Age */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Select
+                          label="Location Type *"
+                          value={formData.locationType}
+                          options={LOCATION_TYPE_OPTIONS}
+                          error={validationErrors.locationType}
+                          onChange={(val) => {
+                            setFormData((prev) => ({ ...prev, locationType: val }));
+                            if (validationErrors.locationType) {
+                              setValidationErrors((prev) => {
+                                const n = { ...prev };
+                                delete n.locationType;
+                                return n;
+                              });
+                            }
+                          }}
+                          placeholder="Select location type"
+                        />
+                      </div>
+
+                      <div>
+                        <Input
+                          label="Building Age (Years) *"
+                          id="buildingAge"
+                          name="buildingAge"
+                          type="number"
+                          min="0"
+                          value={formData.buildingAge}
+                          onChange={handleInputChange}
+                          placeholder="e.g. 5 (or 0)"
+                          error={validationErrors.buildingAge}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Row 3: Market Price | Recommended Compensation */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <CurrencyInput
+                          label="Market Price (RM /m²) *"
+                          id="marketRatePerSqMeter"
+                          name="marketRatePerSqMeter"
+                          value={formData.marketRatePerSqMeter}
+                          onChange={handleInputChange}
+                          placeholder="e.g. 266.67"
+                          error={validationErrors.marketRatePerSqMeter}
+                        />
+                      </div>
+
+                      <div>
+                        <CurrencyInput
+                          label="Recommended Compensation (RM /m²) *"
+                          id="compensationRatePerSqMeter"
+                          name="compensationRatePerSqMeter"
+                          value={formData.compensationRatePerSqMeter}
+                          onChange={handleInputChange}
+                          placeholder="e.g. 273.33"
+                          error={validationErrors.compensationRatePerSqMeter}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Row 4: Remarks (Optional) */}
+                    <div>
+                      <Textarea
+                        label="Remarks & Valuation Notes"
+                        id="remarks"
+                        name="remarks"
+                        value={formData.remarks}
+                        onChange={handleInputChange}
+                        placeholder="Optional notes, observations, or valuation justifications..."
+                        rows={3}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* DIVIDER 2 */}
+                <hr className="border-t border-md-outline/30 my-6" />
+
+                {/* 3. Supporting Documents */}
+                <div className="space-y-4">
+                  <h3 className="text-base font-bold text-md-on-surface">Supporting Documents</h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FileUpload
+                      label="Building Assessment (Optional)"
+                      id="buildingAssessment"
+                      fileName={formData.buildingAssessment?.name}
+                      onChange={(file) => setFormData((prev) => ({ ...prev, buildingAssessment: file }))}
+                      onClear={() => setFormData((prev) => ({ ...prev, buildingAssessment: null }))}
+                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                    />
+                    <FileUpload
+                      label="Site Inspection Report (Optional)"
+                      id="siteInspection"
+                      fileName={formData.siteInspection?.name}
+                      onChange={(file) => setFormData((prev) => ({ ...prev, siteInspection: file }))}
+                      onClear={() => setFormData((prev) => ({ ...prev, siteInspection: null }))}
+                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                    />
+                  </div>
+                </div>
+
+                {/* Form Actions */}
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-md-outline/30">
+                  <Button variant="text" onClick={handleCancel}>
+                    <X size={16} /> Cancel
+                  </Button>
+                  <Button
+                    variant="filled"
+                    onClick={handleGeneratePreview}
+                    disabled={isSaving || isCalculatingAi || !caseData}
+                  >
+                    {isCalculatingAi ? (
+                      <>
+                        <Loader2 size={18} className="animate-spin inline mr-1" /> Generating Report...
+                      </>
+                    ) : (
+                      <>
+                        <Eye size={18} /> Generate Report
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div
+            style={{
+              marginTop: "32px",
+              fontSize: "13px",
+              color: "var(--md-on-surface-variant)",
+              opacity: 0.6,
+              textAlign: "center",
+              borderTop: "1px solid rgba(121,116,126,0.08)",
+              paddingTop: "18px",
+            }}
+          >
+            FCR-SCS · Valuation Report Generator · For Land Valuers only
+          </div>
         </div>
+      </div>
     </>
   );
 };

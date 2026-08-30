@@ -30,24 +30,11 @@ type ObjectionItem = {
   reason: string;
 };
 
-const statusClassMap: Record<string, string> = {
-  PENDING: "status-objection-review",
-  APPROVED: "status-obj-approved",
-  REJECTED: "status-obj-rejected",
-};
-
-const statusLabelMap: Record<string, string> = {
-  PENDING: "Pending Review",
-  APPROVED: "Approved",
-  REJECTED: "Rejected",
-};
-
-const STATUS_OPTIONS: SelectOption[] = [
-  { value: "", label: "All Status" },
-  { value: "PENDING", label: "Pending Review" },
-  { value: "APPROVED", label: "Approved" },
-  { value: "REJECTED", label: "Rejected" },
-];
+import {
+  OBJECTION_STATUS_CLASS_MAP as statusClassMap,
+  OBJECTION_STATUS_LABEL_MAP as statusLabelMap,
+  OBJECTION_STATUS_OPTIONS as STATUS_OPTIONS,
+} from "../../constants";
 
 export const ObjectionDashboard: React.FC = () => {
   const navigate = useNavigate();
