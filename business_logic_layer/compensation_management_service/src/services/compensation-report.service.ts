@@ -228,8 +228,9 @@ export async function createReport(input: CreateCompensationReportInput) {
       const ownershipId = await getOrCreateLandOwnership(tx, caseId, createdById);
 
       const refNo = `OFFER-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`;
-      const offerDate = new Date();
-      const expiryDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+      const SIX_WEEKS_MS = 42 * 24 * 60 * 60 * 1000;
+      const offerDate = new Date(Date.now() + SIX_WEEKS_MS);
+      const expiryDate = new Date(offerDate.getTime() + SIX_WEEKS_MS);
 
       offerLetter = await tx.offerLetter.create({
         data: {
@@ -241,7 +242,7 @@ export async function createReport(input: CreateCompensationReportInput) {
           offerAmount: total,
           offerDate,
           expiryDate,
-          acceptancePeriodDays: 14,
+          acceptancePeriodDays: 42,
           status: OfferStatus.PENDING,
           remarks: "Auto-generated upon Compensation Report Creation",
           createdById,
@@ -291,8 +292,9 @@ export async function approveReport(compensationReportId: string, approvedById: 
     const ownershipId = await getOrCreateLandOwnership(tx, report.caseId, approvedById);
 
     const refNo = `OFFER-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`;
-    const offerDate = new Date();
-    const expiryDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+    const SIX_WEEKS_MS = 42 * 24 * 60 * 60 * 1000;
+    const offerDate = new Date(Date.now() + SIX_WEEKS_MS);
+    const expiryDate = new Date(offerDate.getTime() + SIX_WEEKS_MS);
 
     const offerLetter = await tx.offerLetter.create({
       data: {
@@ -304,7 +306,7 @@ export async function approveReport(compensationReportId: string, approvedById: 
         offerAmount: report.totalCompensation || 0,
         offerDate,
         expiryDate,
-        acceptancePeriodDays: 14,
+        acceptancePeriodDays: 42,
         status: OfferStatus.PENDING,
         remarks: "Auto-generated upon Compensation Report Approval",
         createdById: report.createdById,

@@ -571,7 +571,7 @@ export const CaseView: React.FC = () => {
         <div className="case-view-container">
           <div className="topbar" style={{ marginBottom: "16px" }}>
             <div className="topbar-left">
-              <h1 style={{ marginBottom: 0 }}>Case Details</h1>
+              <h1 style={{ marginBottom: 0 }}>Review Case Details</h1>
               <div className="sub">
                 Live case record from backend database
               </div>

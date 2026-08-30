@@ -631,7 +631,74 @@
   .offer-detail .action-bar .btn-reject {
     justify-content: center;
   }
-  .reject-modal {
-    padding: 20px;
+}
+
+/* PDF Document Viewer Styles */
+.pdf-sheet,
+.pdf-sheet *,
+.pdf-sheet h1,
+.pdf-sheet h2,
+.pdf-sheet h3,
+.pdf-sheet h4,
+.pdf-sheet h5,
+.pdf-sheet h6,
+.pdf-sheet p,
+.pdf-sheet span,
+.pdf-sheet table,
+.pdf-sheet th,
+.pdf-sheet td,
+.pdf-sheet div,
+.pdf-page,
+.pdf-page *,
+.pdf-print-page,
+.pdf-print-page * {
+  font-family: 'Times New Roman', Times, Georgia, serif !important;
+}
+
+/* Off-screen rendering container for jsPDF capture */
+.pdf-print-container {
+  position: fixed;
+  left: -99999px;
+  top: 0;
+  width: 794px;
+  opacity: 1;
+  pointer-events: none;
+  z-index: -100;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .pdf-toolbar,
+  .pdf-preview-wrapper,
+  .topbar,
+  .case-summary {
+    display: none !important;
+  }
+  .pdf-print-container,
+  .pdf-print-container * {
+    visibility: visible !important;
+  }
+  .pdf-print-container {
+    position: static !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .pdf-print-page {
+    page-break-after: always !important;
+    break-after: page !important;
+    padding: 24px !important;
+    margin: 0 auto !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  .pdf-print-page:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
 }
+

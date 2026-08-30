@@ -135,7 +135,13 @@ export async function getAllOfferLetters(filters: OfferLetterFilters) {
             },
           },
         },
-        compensationReport: true,
+        compensationReport: {
+          include: {
+            valuationReport: {
+              include: { valuer: true },
+            },
+          },
+        },
         landOwnership: { include: { landOwner: true, landParcel: true } },
         memberResponses: { include: { landOwner: true } },
       },
@@ -165,9 +171,16 @@ export async function getOfferLetterById(offerId: string) {
               },
             },
           },
+          valuationReports: true,
         },
       },
-      compensationReport: true,
+      compensationReport: {
+        include: {
+          valuationReport: {
+            include: { valuer: true },
+          },
+        },
+      },
       landOwnership: { include: { landOwner: true, landParcel: true } },
       objections: true,
       memberResponses: {
@@ -186,7 +199,7 @@ export async function getOfferLetterById(offerId: string) {
 }
 
 export async function createOfferLetter(input: CreateOfferLetterInput) {
-  const { compensationReportId, caseId, ownershipId, offerType, offerAmount, acceptancePeriodDays = 14, remarks, createdById } = input;
+  const { compensationReportId, caseId, ownershipId, offerType, offerAmount, acceptancePeriodDays = 42, remarks, createdById } = input;
 
   const compReport = await prisma.compensationReport.findUnique({
     where: { compensationReportId },
@@ -200,9 +213,10 @@ export async function createOfferLetter(input: CreateOfferLetterInput) {
   const finalCreatedById = compReport.createdById || createdById || "00000000-0000-0000-0000-000000000001";
 
   const refNo = `OFFER-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`;
-  const offerDate = new Date();
-  const expiryDate = new Date();
-  expiryDate.setDate(expiryDate.getDate() + acceptancePeriodDays);
+  const SIX_WEEKS_MS = 42 * 24 * 60 * 60 * 1000;
+  const offerDate = new Date(Date.now() + SIX_WEEKS_MS);
+  const finalAcceptanceDays = acceptancePeriodDays || 42;
+  const expiryDate = new Date(offerDate.getTime() + finalAcceptanceDays * 24 * 60 * 60 * 1000);
 
   const result = await prisma.$transaction(async (tx) => {
     const offer = await tx.offerLetter.create({
@@ -215,7 +229,7 @@ export async function createOfferLetter(input: CreateOfferLetterInput) {
         offerAmount,
         offerDate,
         expiryDate,
-        acceptancePeriodDays,
+        acceptancePeriodDays: finalAcceptanceDays,
         status: OfferStatus.PENDING,
         remarks: remarks || "",
         createdById: finalCreatedById,
