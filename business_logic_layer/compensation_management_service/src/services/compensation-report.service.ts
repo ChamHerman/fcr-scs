@@ -178,17 +178,23 @@ export async function createReport(input: CreateCompensationReportInput) {
     components.relocationAllowance +
     components.otherEligible;
 
-  // Threshold rule: >= 1,000,000 requires admin approval (PENDING), < 1,000,000 auto APPROVED
-  const isThresholdHigh = total >= 1_000_000;
-  const initialStatus = isThresholdHigh ? ReportStatus.PENDING : ReportStatus.APPROVED;
-  let newCaseStatus: CaseStatus = isThresholdHigh
+  // Compare Land Value with Approved Recommended Valuation
+  const valuationRec = Number(valReport.recommendedCompensation || 0);
+  const landValueNum = Number(components.landValue || 0);
+  const landDiff = valuationRec > 0 ? Math.abs(landValueNum - valuationRec) : 0;
+  const isLandDiffOver100k = valuationRec > 0 && landDiff > 100_000;
+
+  // Approval rule: If land value differs from recommended by > RM100,000 OR total >= 1,000,000,
+  // it requires Government Admin review and approval (PENDING) - DO NOT generate offer letter yet.
+  const requiresGovAdminApproval = total >= 1_000_000 || isLandDiffOver100k;
+  const initialStatus = requiresGovAdminApproval ? ReportStatus.PENDING : ReportStatus.APPROVED;
+  let newCaseStatus: CaseStatus = requiresGovAdminApproval
     ? CaseStatus.PENDING_COMPENSATION_APPROVAL
     : CaseStatus.COMPENSATION_APPROVED;
 
-  // Compare with AI / Valuation estimate (flag if > 20% diff)
-  const valuationRec = Number(valReport.recommendedCompensation || 0);
-  const diffPercent = valuationRec > 0 ? (Math.abs(total - valuationRec) / valuationRec) * 100 : 0;
-  const warningFlag = diffPercent > 20 ? `[AI WARNING]: Difference of ${diffPercent.toFixed(1)}% exceeds 20% threshold.` : "";
+  const warningFlag = isLandDiffOver100k
+    ? `[VARIANCE WARNING]: Land value of RM ${landValueNum.toLocaleString()} deviates by RM ${landDiff.toLocaleString()} from recommended value of RM ${valuationRec.toLocaleString()} (exceeds RM 100,000 threshold). Sent to Gov Admin for approval.`
+    : "";
 
   const finalRemarks = [remarks, warningFlag].filter(Boolean).join(" ");
 
@@ -197,6 +203,13 @@ export async function createReport(input: CreateCompensationReportInput) {
       data: {
         caseId,
         valuationReportId,
+        landValue: components.landValue,
+        buildingValue: components.buildingValue,
+        cropValue: components.cropValue,
+        businessDisruption: components.businessDisruption,
+        disturbanceCompensation: components.disturbanceCompensation,
+        relocationAllowance: components.relocationAllowance,
+        otherEligible: components.otherEligible,
         totalCompensation: total,
         status: initialStatus,
         remarks: finalRemarks,
@@ -242,7 +255,13 @@ export async function createReport(input: CreateCompensationReportInput) {
       data: { status: newCaseStatus },
     });
 
-    return { report, totalCompensation: total, warningFlag, requiresApproval: isThresholdHigh, offerLetter };
+    return {
+      report,
+      totalCompensation: total,
+      warningFlag,
+      requiresApproval: requiresGovAdminApproval,
+      offerLetter,
+    };
   });
 
   return result;

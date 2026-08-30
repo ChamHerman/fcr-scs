@@ -1,7 +1,22 @@
 import * as Lucide from "lucide-react";
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { CheckCircle, XCircle, ArrowLeft, Loader2 } from "lucide-react";
+import {
+  CheckCircle,
+  XCircle,
+  ArrowLeft,
+  Loader2,
+  PlusCircle,
+  AlertCircle,
+  Mail,
+  FileText,
+  Folder,
+  Tag,
+  User,
+  Calendar,
+  Scale,
+  ClipboardList,
+} from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
 import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
@@ -9,8 +24,14 @@ import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
+import { formatCurrencyRM } from "../../utils/currency";
+import {
+  COMPENSATION_STATUS_CLASS_MAP as statusClassMap,
+  COMPENSATION_STATUS_LABEL_MAP as statusLabelMap,
+} from "../../constants";
 import "../../style.css";
 import "./compensation.css";
+import "../LandAcquisition/valuation_report.css";
 
 type CompensationDetail = {
   id: string;
@@ -48,16 +69,11 @@ type CompensationDetail = {
   } | null;
 };
 
-import {
-  COMPENSATION_STATUS_CLASS_MAP as statusClassMap,
-  COMPENSATION_STATUS_LABEL_MAP as statusLabelMap,
-} from "../../constants";
-
-export const CompensationApproval: React.FC = () => {
+export const CompensationReview: React.FC = () => {
   const { reportId: paramReportId } = useParams<{ reportId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, userId, isGovAdmin, isAdmin } = useRole();
+  const { user, userId, isGovAdmin, isOfficer, isAdmin } = useRole();
   const { notify } = useNotification();
   const canApproveOrReject = isGovAdmin || isAdmin;
 
@@ -87,8 +103,9 @@ export const CompensationApproval: React.FC = () => {
         const vr = rep.valuationReport;
         const generatedOffer = rep.offerLetters?.[0];
 
+        const rawStatus = rep.reportStatus || rep.status || "PENDING";
         const formatted: CompensationDetail = {
-          id: rep.reportId,
+          id: rep.compensationReportId || rep.reportId,
           caseId: rep.caseId,
           caseTitle: c?.caseTitle || "—",
           owner: ownerInfo?.name || "—",
@@ -97,28 +114,30 @@ export const CompensationApproval: React.FC = () => {
           ownerPhone: ownerInfo?.contact || "—",
           landTitle: c?.landParcel?.landTitleNo || "—",
           project: c?.project?.projectName || "—",
-          status: statusLabelMap[rep.reportStatus] || rep.reportStatus,
-          statusClass: statusClassMap[rep.reportStatus] || "status-pending-comp",
-          generatedDate: new Date(rep.generatedDate).toLocaleDateString("en-GB", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-          }),
+          status: statusLabelMap[rawStatus] || rawStatus,
+          statusClass: statusClassMap[rawStatus] || "status-pending-comp",
+          generatedDate: rep.createdAt
+            ? new Date(rep.createdAt).toLocaleDateString("en-GB", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              })
+            : "—",
           totalAmount: Number(rep.totalCompensation || 0),
           components: {
-            landValue: Number(comps.landValue || 0),
-            buildingValue: Number(comps.buildingValue || 0),
-            cropValue: Number(comps.cropValue || 0),
-            businessDisruption: Number(comps.businessDisruption || 0),
-            disturbanceCompensation: Number(comps.disturbanceCompensation || 0),
-            relocationAllowance: Number(comps.relocationAllowance || 0),
-            otherEligible: Number(comps.otherEligible || 0),
+            landValue: Number(rep.landValue ?? comps.landValue ?? 0),
+            buildingValue: Number(rep.buildingValue ?? comps.buildingValue ?? 0),
+            cropValue: Number(rep.cropValue ?? comps.cropValue ?? 0),
+            businessDisruption: Number(rep.businessDisruption ?? comps.businessDisruption ?? 0),
+            disturbanceCompensation: Number(rep.disturbanceCompensation ?? comps.disturbanceCompensation ?? 0),
+            relocationAllowance: Number(rep.relocationAllowance ?? comps.relocationAllowance ?? 0),
+            otherEligible: Number(rep.otherEligible ?? comps.otherEligible ?? 0),
           },
           valuer: vr?.valuer?.name || "Valuer",
-          valuationMethod: vr?.valuationMethod || "Comparison Method",
+          valuationMethod: vr?.valuationMethod || "Sales Comparison Method",
           marketValue: Number(vr?.marketValue || 0),
           recommendedCompensation: Number(vr?.recommendedCompensation || 0),
-          remarks: rep.notes || vr?.remarks || "No remarks provided.",
+          remarks: rep.remarks || "No remarks provided.",
           offerLetter: generatedOffer
             ? {
                 id: generatedOffer.offerId,
@@ -126,7 +145,7 @@ export const CompensationApproval: React.FC = () => {
                 offerAmount: Number(generatedOffer.offerAmount || rep.totalCompensation),
                 status: generatedOffer.status,
               }
-            : undefined,
+            : null,
         };
 
         setReport(formatted);
@@ -144,9 +163,9 @@ export const CompensationApproval: React.FC = () => {
     if (!report) return;
     if (!canApproveOrReject) {
       notify({
-        type: 'error',
-        title: 'Access Denied',
-        message: 'Only Government Administrators can approve compensation reports.',
+        type: "error",
+        title: "Access Denied",
+        message: "Only Government Administrators can approve compensation reports.",
       });
       return;
     }
@@ -155,6 +174,12 @@ export const CompensationApproval: React.FC = () => {
       const res = await compensationApi.approveReport(report.id, userId);
       const generatedOffer = res.offerLetter || res.report?.offerLetters?.[0];
       setShowApproveModal(false);
+
+      notify({
+        type: "success",
+        title: "Report Approved",
+        message: "Compensation report approved and Offer Letter generated.",
+      });
 
       setReport((prev) =>
         prev
@@ -176,8 +201,8 @@ export const CompensationApproval: React.FC = () => {
     } catch (err: any) {
       console.error("Approve failed:", err);
       notify({
-        type: 'error',
-        title: 'Approval Failed',
+        type: "error",
+        title: "Approval Failed",
         message: err.message,
       });
     } finally {
@@ -193,9 +218,9 @@ export const CompensationApproval: React.FC = () => {
     if (!report) return;
     if (!canApproveOrReject) {
       notify({
-        type: 'error',
-        title: 'Access Denied',
-        message: 'Only Government Administrators can reject compensation reports.',
+        type: "error",
+        title: "Access Denied",
+        message: "Only Government Administrators can reject compensation reports.",
       });
       return;
     }
@@ -203,13 +228,18 @@ export const CompensationApproval: React.FC = () => {
     setSubmitting(true);
     try {
       await compensationApi.rejectReport(report.id, rejectReason, userId);
+      notify({
+        type: "success",
+        title: "Report Rejected",
+        message: `Reason: ${rejectReason}`,
+      });
       setShowRejectModal(false);
       navigate("/admin/compensation/report");
     } catch (err: any) {
       console.error("Reject failed:", err);
       notify({
-        type: 'error',
-        title: 'Rejection Failed',
+        type: "error",
+        title: "Rejection Failed",
         message: err.message,
       });
     } finally {
@@ -217,16 +247,12 @@ export const CompensationApproval: React.FC = () => {
     }
   };
 
-  const formatCurrency = (val: number) => {
-    return "RM " + val.toLocaleString("en-MY", { minimumFractionDigits: 2 });
-  };
-
   if (loading) {
     return (
-      <div className="main blur-shape-bg" style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "80vh" }}>
+      <div className="flex min-h-screen items-center justify-center bg-md-background text-md-on-surface">
         <div style={{ textAlign: "center", color: "var(--md-on-surface-variant)" }}>
           <Loader2 size={32} className="inline animate-spin mb-2" />
-          <div>Fetching compensation report details from backend...</div>
+          <div>Loading compensation report details from backend...</div>
         </div>
       </div>
     );
@@ -234,14 +260,12 @@ export const CompensationApproval: React.FC = () => {
 
   if (!report) {
     return (
-      <div className="main blur-shape-bg">
-        <div style={{ padding: "40px 0", textAlign: "center" }}>
-          <h2>Report Details Not Found</h2>
-          <p style={{ color: "var(--md-on-surface-variant)", marginBottom: "20px" }}>
-            No report selected or valid ID provided.
-          </p>
+      <div className="flex min-h-screen items-center justify-center bg-md-background text-md-on-surface">
+        <div style={{ textAlign: "center", color: "var(--md-on-surface-variant)" }}>
+          <h3 className="text-lg font-bold mb-2">Compensation Report Not Found</h3>
+          <p className="mb-4">No report selected or valid ID provided.</p>
           <Button variant="filled" onClick={() => navigate("/admin/compensation/report")}>
-            Back to Compensation Reports
+            Back to Compensation Dashboard
           </Button>
         </div>
       </div>
@@ -253,8 +277,8 @@ export const CompensationApproval: React.FC = () => {
       <Modal
         isOpen={showRejectModal}
         onClose={() => setShowRejectModal(false)}
-        title="Reject Compensation Report"
-        subtitle="State the clear reason for rejecting this compensation calculation"
+        title="Reject Report"
+        subtitle="State the clear reason for rejecting this compensation report"
         footer={
           <>
             <Button variant="text" onClick={() => setShowRejectModal(false)}>
@@ -265,16 +289,16 @@ export const CompensationApproval: React.FC = () => {
               onClick={handleRejectSubmit}
               isLoading={submitting}
             >
-              <XCircle size={16} /> Confirm Rejection
+              <XCircle size={16} /> Confirm Reject
             </Button>
           </>
         }
       >
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-4">
           <Textarea
-            label="Rejection Reason *"
+            label="Reason for Rejection *"
             rows={3}
-            placeholder="State the reason for rejection..."
+            placeholder="Enter the reason for rejecting this compensation report..."
             value={rejectReason}
             error={reasonError}
             onChange={(e) => {
@@ -306,148 +330,242 @@ export const CompensationApproval: React.FC = () => {
         }
       >
         <p className="text-sm text-md-on-surface-variant">
-          Approving this report will finalize the compensation total of <strong>{formatCurrency(report.totalAmount)}</strong> and automatically generate an official Offer Letter for the landowner.
+          Approving this report will finalize the compensation total of{" "}
+          <strong>{formatCurrencyRM(report.totalAmount)}</strong> and automatically generate an official Form H Offer Letter for the landowner.
         </p>
       </Modal>
 
       <div className="main blur-shape-bg">
-        <div className="topbar" style={{ marginBottom: "20px" }}>
-          <div className="topbar-left">
-            <h1 style={{ marginBottom: 0 }}>Review Compensation Report</h1>
-            <div className="sub">
-              Review calculation components and approve or reject report
+        <div className="review-container">
+          {/* Topbar */}
+          <div className="topbar" style={{ marginBottom: "16px" }}>
+            <div className="topbar-left">
+              <h1 style={{ marginBottom: 0 }}>Review Compensation Report</h1>
+              <div className="sub">Review the report details and take action</div>
             </div>
-          </div>
-          <div className="topbar-right flex items-center gap-3">
-            <Button variant="outlined" size="sm" onClick={() => navigate("/admin/compensation/report")}>
-              <ArrowLeft size={16} /> Back
-            </Button>
-            <span className="date-badge">
-              <Lucide.Calendar size={16} className="inline mr-1" />
-              {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-            </span>
-            <div
-              className="avatar"
-              title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
-            >
-              {user?.name ? (
-                <span className="text-xs font-bold uppercase">
-                  {user.name
-                    .split(/\s+/)
-                    .map((n: string) => n[0])
-                    .slice(0, 2)
-                    .join("")}
-                </span>
-              ) : (
-                <Lucide.User size={16} />
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="case-summary" style={{ background: "var(--md-surface-container)", padding: "20px", borderRadius: "16px", marginBottom: "24px" }}>
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="case-id font-mono text-xs">Report ID: {report.id}</span>
-              <CopyButton value={report.id} />
-            </div>
-            <h2 className="case-title" style={{ fontSize: "20px", margin: "4px 0" }}>{report.caseTitle}</h2>
-            <div style={{ fontSize: "13px", color: "var(--md-on-surface-variant)" }}>
-              Owner: <strong>{report.owner}</strong> ({report.ownerIc}) · Project: <strong>{report.project}</strong>
-            </div>
-          </div>
-          <span className={`status-badge-lg ${report.statusClass}`}>
-            <span className="dot"></span> {report.status}
-          </span>
-        </div>
-
-        <div className="report-card" style={{ background: "var(--md-surface-container)", padding: "24px", borderRadius: "16px", marginBottom: "24px" }}>
-          <h3 style={{ fontSize: "18px", marginBottom: "16px" }}>Compensation Breakdown</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px", marginBottom: "24px" }}>
-            <div><span className="label text-xs text-md-on-surface-variant">Land Value:</span> <div><strong>{formatCurrency(report.components.landValue)}</strong></div></div>
-            <div><span className="label text-xs text-md-on-surface-variant">Building Value:</span> <div><strong>{formatCurrency(report.components.buildingValue)}</strong></div></div>
-            <div><span className="label text-xs text-md-on-surface-variant">Disturbance:</span> <div><strong>{formatCurrency(report.components.disturbanceCompensation)}</strong></div></div>
-            <div><span className="label text-xs text-md-on-surface-variant">Relocation:</span> <div><strong>{formatCurrency(report.components.relocationAllowance)}</strong></div></div>
-          </div>
-
-          <div style={{ padding: "16px", background: "rgba(103,80,164,0.08)", borderRadius: "12px", marginBottom: "24px" }}>
-            <span className="label text-xs text-md-on-surface-variant">Total Compensation Package:</span>
-            <div style={{ fontSize: "24px", fontWeight: "bold", color: "var(--md-primary)" }}>
-              {formatCurrency(report.totalAmount)}
-            </div>
-          </div>
-
-          <div style={{ marginBottom: "24px" }}>
-            <span className="label text-xs text-md-on-surface-variant">Valuer Remarks:</span>
-            <p style={{ marginTop: "4px", fontSize: "14px", color: "var(--md-on-surface)" }}>{report.remarks}</p>
-          </div>
-
-          {report.offerLetter && (
-            <div
-              style={{
-                marginTop: "20px",
-                marginBottom: "20px",
-                padding: "18px 20px",
-                background: "rgba(34, 197, 94, 0.08)",
-                border: "1px solid rgba(34, 197, 94, 0.3)",
-                borderRadius: "14px",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: "16px",
-              }}
-            >
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#15803d", fontWeight: 600, fontSize: "15px", marginBottom: "4px" }}>
-                  <Lucide.Mail size={18} /> Compensation Offer Letter Auto-Generated
-                </div>
-                <div style={{ fontSize: "13px", color: "var(--md-on-surface-variant)" }}>
-                  Reference: <strong>{report.offerLetter.offerReferenceNo}</strong> · Amount: <strong>{formatCurrency(report.offerLetter.offerAmount)}</strong> · Status: <strong>{report.offerLetter.status}</strong>
-                </div>
+            <div className="topbar-right flex items-center gap-3">
+              <Button variant="outlined" size="sm" onClick={() => navigate("/admin/compensation/report")}>
+                <ArrowLeft size={16} /> Back
+              </Button>
+              <span className="date-badge">
+                <Calendar size={16} className="inline mr-1" />
+                {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+              </span>
+              <div
+                className="avatar"
+                title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
+              >
+                {user?.name ? (
+                  <span className="text-xs font-bold uppercase">
+                    {user.name
+                      .split(/\s+/)
+                      .map((n: string) => n[0])
+                      .slice(0, 2)
+                      .join("")}
+                  </span>
+                ) : (
+                  <User size={16} />
+                )}
               </div>
-              <Button
-                variant="filled"
-                size="sm"
-                onClick={() => navigate("/admin/compensation/offer/review", { state: { offerId: report.offerLetter?.id } })}
-              >
-                View Offer Letter
-              </Button>
             </div>
-          )}
+          </div>
 
-          {report.status === "Pending Approval" && canApproveOrReject ? (
-            <div className="flex gap-3 justify-end items-center mt-6 pt-4 border-t border-md-outline/10">
-              <Button
-                variant="danger"
-                onClick={() => setShowRejectModal(true)}
-              >
-                <XCircle size={18} /> Reject Report
-              </Button>
-
-              <Button
-                variant="filled"
-                onClick={() => setShowApproveModal(true)}
-              >
-                <CheckCircle size={18} /> Approve Report
-              </Button>
+          {/* Case Summary */}
+          <div className="case-summary">
+            <div className="left">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="case-id font-mono text-sm">Case ID: {report.caseId}</span>
+                <CopyButton value={report.caseId} />
+              </div>
+              <div className="case-title">{report.caseTitle}</div>
+              <div className="meta flex items-center flex-wrap gap-3 mt-2">
+                <span className="flex items-center gap-1">
+                  <FileText size={14} className="inline" /> Report ID: {report.id}
+                  <CopyButton value={report.id} size="sm" />
+                </span>
+                <span>
+                  <Folder size={14} className="inline mr-1" /> Project: {report.project}
+                </span>
+                <span>
+                  <Tag size={14} className="inline mr-1" /> Title No: {report.landTitle}
+                </span>
+                <span>
+                  <User size={14} className="inline mr-1" /> Owner: {report.owner}
+                </span>
+                <span>
+                  <Calendar size={14} className="inline mr-1" /> {report.generatedDate}
+                </span>
+              </div>
             </div>
-          ) : null}
-        </div>
+            <span className={`status-badge-lg ${report.statusClass}`}>
+              <span className="dot"></span> {report.status}
+            </span>
+          </div>
 
-        <div
-          style={{
-            marginTop: "24px",
-            fontSize: "13px",
-            color: "var(--md-on-surface-variant)",
-            opacity: 0.6,
-            textAlign: "center",
-            borderTop: "1px solid rgba(121,116,126,0.08)",
-            paddingTop: "18px",
-          }}
-        >
-          FCR-SCS · Compensation Approval · Connected to Live Backend Service
+          {/* Report Card */}
+          <div className="report-card">
+            <div className="section-title">
+              <ClipboardList size={16} className="inline mr-1" /> Report Details
+            </div>
+            <div className="detail-grid">
+              <div className="detail-item">
+                <span className="label">Valuation Method</span>
+                <span className="value">{report.valuationMethod}</span>
+              </div>
+              <div className="detail-item">
+                <span className="label">Approved Recommended Valuation</span>
+                <span className="value">{formatCurrencyRM(report.recommendedCompensation)}</span>
+              </div>
+              <div className="detail-item">
+                <span className="label">Land Value</span>
+                <span className="value">{formatCurrencyRM(report.components.landValue)}</span>
+              </div>
+              <div className="detail-item">
+                <span className="label">Building / Structure Value</span>
+                <span className="value">{formatCurrencyRM(report.components.buildingValue)}</span>
+              </div>
+              <div className="detail-item">
+                <span className="label">Crop / Plantation Value</span>
+                <span className="value">{formatCurrencyRM(report.components.cropValue)}</span>
+              </div>
+              <div className="detail-item">
+                <span className="label">Business Disruption</span>
+                <span className="value">{formatCurrencyRM(report.components.businessDisruption)}</span>
+              </div>
+              <div className="detail-item">
+                <span className="label">Disturbance Compensation</span>
+                <span className="value">{formatCurrencyRM(report.components.disturbanceCompensation)}</span>
+              </div>
+              <div className="detail-item">
+                <span className="label">Relocation Allowance</span>
+                <span className="value">{formatCurrencyRM(report.components.relocationAllowance)}</span>
+              </div>
+              <div className="detail-item">
+                <span className="label">Other Eligible Items</span>
+                <span className="value">{formatCurrencyRM(report.components.otherEligible)}</span>
+              </div>
+              <div className="detail-item">
+                <span className="label">Total Compensation</span>
+                <span className="value font-bold text-green-700 dark:text-green-400">
+                  {formatCurrencyRM(report.totalAmount)}
+                </span>
+              </div>
+              <div className="detail-item">
+                <span className="label">Status</span>
+                <span className="value font-semibold">{report.status}</span>
+              </div>
+              <div className="detail-item full-width">
+                <span className="label">Remarks</span>
+                <span className="value">{report.remarks}</span>
+              </div>
+            </div>
+
+            {/* Offer Letter Auto-Generated Banner (if exists) */}
+            {report.offerLetter && (
+              <div
+                style={{
+                  marginTop: "20px",
+                  marginBottom: "8px",
+                  padding: "16px 20px",
+                  background: "rgba(34, 197, 94, 0.08)",
+                  border: "1px solid rgba(34, 197, 94, 0.3)",
+                  borderRadius: "14px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: "16px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      color: "#15803d",
+                      fontWeight: 600,
+                      fontSize: "14px",
+                      marginBottom: "2px",
+                    }}
+                  >
+                    <Mail size={16} /> Compensation Offer Letter Auto-Generated
+                  </div>
+                  <div style={{ fontSize: "13px", color: "var(--md-on-surface-variant)" }}>
+                    Reference: <strong>{report.offerLetter.offerReferenceNo}</strong> · Amount:{" "}
+                    <strong>{formatCurrencyRM(report.offerLetter.offerAmount)}</strong> · Status:{" "}
+                    <strong>{report.offerLetter.status}</strong>
+                  </div>
+                </div>
+                <Button
+                  variant="filled"
+                  size="sm"
+                  onClick={() =>
+                    navigate("/admin/compensation/offer/review", { state: { offerId: report.offerLetter?.id } })
+                  }
+                >
+                  <Mail size={15} /> View Offer Letter
+                </Button>
+              </div>
+            )}
+
+            {/* Action Bar for Pending Approval */}
+            {report.status === "Pending Approval" &&
+              (canApproveOrReject ? (
+                <div className="action-bar flex items-center justify-end gap-3 mt-6 pt-4 border-t border-md-outline/10">
+                  <Button variant="danger" onClick={() => setShowRejectModal(true)}>
+                    <XCircle size={18} /> Reject
+                  </Button>
+                  <Button variant="filled" onClick={() => setShowApproveModal(true)}>
+                    <CheckCircle size={18} /> Accept & Approve
+                  </Button>
+                </div>
+              ) : null)}
+
+            {/* Action Bar for Rejected */}
+            {report.status === "Rejected" && (isOfficer || isAdmin) && (
+              <div className="action-bar flex items-center justify-between flex-wrap gap-4 mt-6 pt-4 border-t border-md-outline/10">
+                <div className="flex items-start gap-2 max-w-lg">
+                  <AlertCircle size={18} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="text-xs font-semibold text-amber-700 dark:text-amber-300">
+                      This compensation report was rejected.
+                    </div>
+                    <div className="text-xs text-md-on-surface-variant/80 mt-0.5">
+                      You can create a new revised compensation report. Submitting will assign a{" "}
+                      <strong>new Report ID</strong> and save as a new row in the database, preserving this rejected report in the history.
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  variant="filled"
+                  onClick={() => navigate("/admin/compensation/report/create", { state: { caseId: report.caseId } })}
+                >
+                  <PlusCircle size={18} /> Create Revised Report (New Record)
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div
+            style={{
+              marginTop: "24px",
+              fontSize: "13px",
+              color: "var(--md-on-surface-variant)",
+              opacity: 0.6,
+              textAlign: "center",
+              borderTop: "1px solid rgba(121,116,126,0.08)",
+              paddingTop: "18px",
+            }}
+          >
+            FCR-SCS · Compensation Report Review · Connected to Live Backend Service
+          </div>
         </div>
       </div>
     </>
   );
 };
+
+export const CompensationApproval = CompensationReview;
+export default CompensationReview;
