@@ -1,28 +1,4 @@
-function validateEmail(email: string): boolean {
-  return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email.trim());
-}
-
-function validatePhone(phone: string): string | null {
-  const trimmed = phone.trim();
-  if (!trimmed) return "Phone number is required";
-  const cleanDigits = trimmed.replace(/[\s\-+]/g, "");
-  if (!/^\d+$/.test(cleanDigits)) {
-    return "Phone number must contain only numbers and optional hyphens";
-  }
-  if (!cleanDigits.startsWith("01")) {
-    return "Phone number must start with 01 (e.g., 012-3456789 or 011-12345678)";
-  }
-  if (cleanDigits.startsWith("011")) {
-    if (cleanDigits.length !== 11) {
-      return "Phone numbers starting with 011 must be exactly 11 digits";
-    }
-  } else {
-    if (cleanDigits.length !== 10) {
-      return "Phone numbers starting with 01 must be exactly 10 digits";
-    }
-  }
-  return null;
-}
+import { validateEmail, validatePhone } from "../utils/validation.utils";
 
 export function validateCreateCasePayload(body: any): string | null {
   const { caseId, project, land, owners, caseTitle } = body;

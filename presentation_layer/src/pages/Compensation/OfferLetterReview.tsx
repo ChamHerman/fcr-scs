@@ -42,7 +42,7 @@ import { OfferLetterPreview, type OfferDetail, type OwnerApprovalStatus } from "
 import "../../index.css";
 import "./compensation.css";
 import "./offer_letter.css";
-import "../LandAcquisition/valuation_report.css";
+import "../../styles/shared-report.css";
 
 export type { OwnerApprovalStatus, OfferDetail };
 
@@ -50,9 +50,8 @@ export const OfferLetterReview: React.FC = () => {
   const { offerId: paramOfferId } = useParams<{ offerId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, isMember, isAdmin, isGovAdmin, isSysAdmin, isOfficer } = useRole();
+  const { user, isMember, canRespondToOffer } = useRole();
   const { notify } = useNotification();
-  const canRespondToOffer = (isMember || isSysAdmin) && !isGovAdmin && !isOfficer;
 
   const activeOfferId = location.state?.offerId || paramOfferId;
 

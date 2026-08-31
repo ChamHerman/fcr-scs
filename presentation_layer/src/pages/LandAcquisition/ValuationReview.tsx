@@ -12,6 +12,7 @@ import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
 import { formatCurrencyRM } from "../../utils/currency";
 import "../../index.css";
+import "../../styles/shared-report.css";
 import "./valuation_report.css";
 
 type ReportDetail = {

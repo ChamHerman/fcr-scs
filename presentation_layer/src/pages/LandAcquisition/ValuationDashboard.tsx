@@ -8,27 +8,16 @@ import { Button } from "../../components/ui/Button";
 import { Select, type SelectOption } from "../../components/ui/Select";
 import { SearchInput } from "../../components/ui/SearchInput";
 import { CopyButton } from "../../components/ui/CopyButton";
+import { PageHeader } from "../../components/ui/PageHeader";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
 import { formatCurrencyRM } from "../../utils/currency";
+import type { ValuationReportItem } from "./types/land-acquisition.types";
 import "../../index.css";
+import "../../styles/shared-report.css";
 import "./valuation_report.css";
 
 import { CaseSelectionModal } from "./CaseSelectionModal";
-
-type Report = {
-  id: string;
-  caseId: string;
-  caseTitle: string;
-  caseCreatedById?: string;
-  valuer: string;
-  valuerId?: string;
-  valuationDate: string;
-  method: string;
-  recommendedCompensation: string;
-  status: string;
-  statusClass: string;
-};
 
 import {
   VALUATION_STATUS_CLASS_MAP as statusClassMap,
@@ -42,8 +31,8 @@ export const ValuationDashboard: React.FC = () => {
   const { user, role, userId, isAdmin, isOfficer, isValuer, isSysAdmin } = useRole();
   const { notify } = useNotification();
 
-  const [allScopedReports, setAllScopedReports] = useState<Report[]>([]);
-  const [reports, setReports] = useState<Report[]>([]);
+  const [allScopedReports, setAllScopedReports] = useState<ValuationReportItem[]>([]);
+  const [reports, setReports] = useState<ValuationReportItem[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -52,7 +41,7 @@ export const ValuationDashboard: React.FC = () => {
   const [isCaseModalOpen, setIsCaseModalOpen] = useState(false);
   const itemsPerPage = 10;
 
-  const { sortKey, sortDirection, handleSort, renderSortIcon, sortItems } = useTableSort<keyof Report>();
+  const { sortKey, sortDirection, handleSort, renderSortIcon, sortItems } = useTableSort<keyof ValuationReportItem>();
 
   // 1. Fetch all valuation reports within user's role scope
   const loadReports = useCallback(async () => {
@@ -103,7 +92,7 @@ export const ValuationDashboard: React.FC = () => {
         return false;
       });
 
-      const formatted: Report[] = filteredList.map((r: any) => ({
+      const formatted: ValuationReportItem[] = filteredList.map((r: any) => ({
         id: r.reportId,
         caseId: r.caseId,
         caseTitle: r.acquisitionCase?.caseTitle || "—",
@@ -213,42 +202,18 @@ export const ValuationDashboard: React.FC = () => {
 
   return (
     <div className="valuation-report-dashboard">
-      <div className="topbar" style={{ marginBottom: "20px" }}>
-        <div className="topbar-left">
-          <h1 style={{ marginBottom: 0 }}>Valuation Report Dashboard</h1>
-          <div className="sub">
-            {isAdmin
-              ? "Review and manage all submitted valuation reports across the system"
-              : isOfficer
-              ? "Review valuation reports for land acquisition cases created by your department account"
-              : isValuer
-              ? "Manage and submit valuation reports for your assigned acquisition cases"
-              : "Review and manage submitted valuation reports"}
-          </div>
-        </div>
-        <div className="topbar-right" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <span className="date-badge">
-            <Lucide.Calendar size={16} className="inline mr-1" />
-            {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-          </span>
-          <div
-            className="avatar"
-            title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
-          >
-            {user?.name ? (
-              <span className="text-xs font-bold uppercase">
-                {user.name
-                  .split(/\s+/)
-                  .map((n: string) => n[0])
-                  .slice(0, 2)
-                  .join("")}
-              </span>
-            ) : (
-              <Lucide.User size={16} />
-            )}
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title="Valuation Report Dashboard"
+        subtitle={
+          isAdmin
+            ? "Review and manage all submitted valuation reports across the system"
+            : isOfficer
+            ? "Review valuation reports for land acquisition cases created by your department account"
+            : isValuer
+            ? "Manage and submit valuation reports for your assigned acquisition cases"
+            : "Review and manage submitted valuation reports"
+        }
+      />
 
       <div className="stats-grid">
         {stats.map((s, i) => (

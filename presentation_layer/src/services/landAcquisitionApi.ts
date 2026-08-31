@@ -85,7 +85,7 @@ export const landAcquisitionApi = {
   // ── Whole-case update (all sections at once) ──────────────────────────────
   updateCase: async (caseId: string, updateData: any) => {
     return fetchJSON(LAND_ACQUISITION_BASE + `/api/land-acquisition/cases/${encodeURIComponent(caseId)}`, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify(updateData),
     });
   },
@@ -93,7 +93,7 @@ export const landAcquisitionApi = {
   // ── Section-specific update: Case Title ──────────────────────────────────
   updateCaseTitle: async (caseId: string, caseTitle: string) => {
     return fetchJSON(LAND_ACQUISITION_BASE + `/api/land-acquisition/cases/${encodeURIComponent(caseId)}/title`, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify({ caseTitle }),
     });
   },
@@ -101,7 +101,7 @@ export const landAcquisitionApi = {
   // ── Section-specific update: Project ─────────────────────────────────────
   updateProjectInfo: async (caseId: string, projectData: any) => {
     return fetchJSON(LAND_ACQUISITION_BASE + `/api/land-acquisition/cases/${encodeURIComponent(caseId)}/project`, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify(projectData),
     });
   },
@@ -109,7 +109,7 @@ export const landAcquisitionApi = {
   // ── Section-specific update: Land ─────────────────────────────────────────
   updateLandInfo: async (caseId: string, landData: any) => {
     return fetchJSON(LAND_ACQUISITION_BASE + `/api/land-acquisition/cases/${encodeURIComponent(caseId)}/land`, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify(landData),
     });
   },
@@ -117,14 +117,14 @@ export const landAcquisitionApi = {
   // ── Section-specific update: Owners ───────────────────────────────────────
   updateOwnerInfo: async (caseId: string, ownersData: any) => {
     return fetchJSON(LAND_ACQUISITION_BASE + `/api/land-acquisition/cases/${encodeURIComponent(caseId)}/owners`, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify(ownersData),
     });
   },
 
   deleteCase: async (caseId: string) => {
-    return fetchJSON(LAND_ACQUISITION_BASE + `/api/land-acquisition/cases/${encodeURIComponent(caseId)}/delete`, {
-      method: "POST",
+    return fetchJSON(LAND_ACQUISITION_BASE + `/api/land-acquisition/cases/${encodeURIComponent(caseId)}`, {
+      method: "DELETE",
     });
   },
 
@@ -156,8 +156,8 @@ export const landAcquisitionApi = {
   },
 
   deleteDocument: async (documentId: string) => {
-    return fetchJSON(LAND_ACQUISITION_BASE + `/api/land-acquisition/documents/${encodeURIComponent(documentId)}/delete`, {
-      method: "POST",
+    return fetchJSON(LAND_ACQUISITION_BASE + `/api/land-acquisition/documents/${encodeURIComponent(documentId)}`, {
+      method: "DELETE",
     });
   },
 

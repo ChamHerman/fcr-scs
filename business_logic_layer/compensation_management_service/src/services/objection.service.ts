@@ -1,5 +1,6 @@
 import { prisma } from "../prisma";
 import { ObjectionStatus, Decision, OfferStatus, CaseStatus, Prisma } from "@prisma/client";
+import { buildNricConditions } from "../utils/nric.utils";
 
 export interface ObjectionFilters {
   status?: string;
@@ -28,6 +29,13 @@ export interface ReviewObjectionInput {
   reviewedById: string;
 }
 
+export interface ApproveObjectionInput {
+  objectionId: string;
+  revisedCompensation?: number;
+  reviewRemarks?: string;
+  reviewedById?: string;
+}
+
 export async function getAllObjections(filters: ObjectionFilters) {
   const page = filters.page || 1;
   const limit = filters.limit || 10;
@@ -38,13 +46,13 @@ export async function getAllObjections(filters: ObjectionFilters) {
   }
 
   // 1. Government Officer Supervision: only objections under cases created/supervised by this officer
-  if (filters.caseCreatedById || (filters.userRole === "GOVERNMENT_OFFICER" && filters.userId) || (filters.userId && !filters.ownerNric && filters.userRole !== "DISPLACED_COMMUNITY_MEMBER")) {
+  if (filters.caseCreatedById || (filters.userRole === "GOVERNMENT_OFFICER" && filters.userId) || (filters.userId && !filters.ownerNric)) {
     const targetUserId = filters.caseCreatedById || filters.userId;
     if (targetUserId) {
       andConditions.push({
         OR: [
+          { createdById: targetUserId },
           { acquisitionCase: { createdById: targetUserId } },
-          { offerLetter: { createdById: targetUserId } },
         ],
       });
     }
@@ -61,22 +69,7 @@ export async function getAllObjections(filters: ObjectionFilters) {
 
     // Objections associated with the same land (direct ownership or co-owners)
     if (filters.ownerNric) {
-      const rawNric = filters.ownerNric.trim();
-      const cleanNric = rawNric.replace(/[^a-zA-Z0-9]/g, "");
-      let formattedWithDashes = rawNric;
-      if (cleanNric.length === 12) {
-        formattedWithDashes = `${cleanNric.slice(0, 6)}-${cleanNric.slice(6, 8)}-${cleanNric.slice(8)}`;
-      }
-
-      const nricConditions: Prisma.LandOwnerWhereInput[] = [
-        { nric: { contains: rawNric, mode: "insensitive" } },
-      ];
-      if (cleanNric && cleanNric !== rawNric) {
-        nricConditions.push({ nric: { contains: cleanNric, mode: "insensitive" } });
-      }
-      if (formattedWithDashes && formattedWithDashes !== rawNric && formattedWithDashes !== cleanNric) {
-        nricConditions.push({ nric: { contains: formattedWithDashes, mode: "insensitive" } });
-      }
+      const nricConditions = buildNricConditions(filters.ownerNric);
 
       memberConditions.push({
         offerLetter: {
@@ -599,4 +592,16 @@ export async function deleteObjection(objectionId: string) {
 
   return result;
 }
+
+export async function approveObjection(input: ApproveObjectionInput) {
+  const decision: "ACCEPTED" | "REVISED" = input.revisedCompensation ? "REVISED" : "ACCEPTED";
+  return reviewObjection({
+    objectionId: input.objectionId,
+    decision,
+    revisedCompensation: input.revisedCompensation,
+    reviewRemarks: input.reviewRemarks || "Objection approved.",
+    reviewedById: input.reviewedById || "",
+  });
+}
+
 

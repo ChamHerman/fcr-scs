@@ -7,6 +7,7 @@ import { SearchInput } from "../../components/ui/SearchInput";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
 import "../../index.css";
+import "../../styles/shared-report.css";
 import "./valuation_report.css";
 
 interface CaseSelectionModalProps {

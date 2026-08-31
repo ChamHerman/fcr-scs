@@ -32,3 +32,21 @@ export function validateCreateOfferLetter(body: any): string | null {
   if (offerAmount === undefined || offerAmount <= 0) return "offerAmount must be a positive number";
   return null;
 }
+
+export function validateCreateObjection(body: unknown): string | null {
+  const { offerId, caseId, objectionReason, requestedAmount } = (body || {}) as Record<string, unknown>;
+  if (!offerId) return "offerId is required";
+  if (!caseId) return "caseId is required";
+  if (!objectionReason) return "objectionReason is required";
+  if (requestedAmount === undefined || Number(requestedAmount) <= 0)
+    return "requestedAmount must be a positive number";
+  return null;
+}
+
+export function validateReviewObjection(body: unknown): string | null {
+  const { decision, reviewRemarks } = (body || {}) as Record<string, unknown>;
+  if (!decision || !["ACCEPTED", "REJECTED", "REVISED"].includes(String(decision)))
+    return "decision must be ACCEPTED, REJECTED, or REVISED";
+  if (!reviewRemarks) return "reviewRemarks is required";
+  return null;
+}

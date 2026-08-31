@@ -1,0 +1,57 @@
+/* ================================================================
+   Shared Report Styles
+   Imported by: Compensation module AND LandAcquisition module
+   ================================================================ */
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-item .label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--md-on-surface-variant);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.detail-item .value {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--md-on-surface);
+}
+
+.case-summary-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 16px 20px;
+  border-radius: 12px;
+  background: var(--md-surface-container-low);
+  border: 1px solid rgba(121, 116, 126, 0.12);
+  margin-bottom: 16px;
+}
+
+.case-id {
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: var(--md-primary);
+  font-weight: 600;
+}
+
+.case-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--md-on-surface);
+}
+
+.case-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.8rem;
+  color: var(--md-on-surface-variant);
+  margin-top: 6px;
+}
