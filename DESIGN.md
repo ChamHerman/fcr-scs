@@ -56,10 +56,10 @@ Defined in `tailwind.config.js` and `index.css`.
 - **`md-surface-container-low`**: Light `#E7E0EC` / Dark `#1D1B20`
 - **`md-outline`**: Light `#79747E` / Dark `#938F99`
 - **`md-on-surface-variant`**: Light `#49454F` / Dark `#CAC4D0`
-- **`--md-error`** (`bg-md-error`): `#fce8e6` (defined in `style.css`) — background color for error containers, banners, and badges (`bg-md-error`).
-- **`--md-error-text`** (`.text-md-error`): `#b3261e` (defined in `style.css`) — high-contrast font color applied to `.text-md-error`, validation messages, error labels, and invalid input focus outlines.
-- **`--md-success`**: `#e6f4ea` / **`--md-success-text`**: `#1e7b4a` (defined in `style.css`)
-- **`--md-warning`**: `#fef7e0` / **`--md-warning-text`**: `#8d6e00` (defined in `style.css`)
+- **`--md-error`** (`bg-md-error`): `#fce8e6` (defined in `index.css`) — background color for error containers, banners, and badges (`bg-md-error`).
+- **`--md-error-text`** (`.text-md-error`): `#b3261e` (defined in `index.css`) — high-contrast font color applied to `.text-md-error`, validation messages, error labels, and invalid input focus outlines.
+- **`--md-success`**: `#e6f4ea` / **`--md-success-text`**: `#1e7b4a` (defined in `index.css`)
+- **`--md-warning`**: `#fef7e0` / **`--md-warning-text`**: `#8d6e00` (defined in `index.css`)
 - **`--md-shimmer`**: Light `rgba(255,255,255,0.22)` / Dark `rgba(255,255,255,0.10)`
 - **`--md-scrollbar-thumb`**: Light `rgba(121,116,126,0.4)` / Dark `rgba(147,143,153,0.45)` — used by `.md-scroll-thin`
 

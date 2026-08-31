@@ -9,7 +9,7 @@ import { SearchInput } from "../../components/ui/SearchInput";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { Pagination } from "../../components/ui/Pagination";
 import { useRole } from "../../hooks/useRole";
-import "../../style.css";
+import "../../index.css";
 import "./compensation.css";
 
 type OfferItem = {

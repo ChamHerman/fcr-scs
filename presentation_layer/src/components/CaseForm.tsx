@@ -13,7 +13,7 @@ import { useAuth } from "../context/AuthContext";
 import { landAcquisitionApi } from "../services/landAcquisitionApi";
 import { BASE_URL } from "../services/api";
 import { formatCurrencyWithDecimals, formatLiveCurrency } from "../utils/currency";
-import "../style.css";
+import "../index.css";
 import "../pages/LandAcquisition/case_management.css";
 
 export type Owner = {

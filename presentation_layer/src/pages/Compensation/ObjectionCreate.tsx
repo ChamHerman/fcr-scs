@@ -13,7 +13,7 @@ import { CopyButton } from "../../components/ui/CopyButton";
 import { IconButton } from "../../components/ui/IconButton";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
-import "../../style.css";
+import "../../index.css";
 import "./objection.css";
 
 type OfferOption = {

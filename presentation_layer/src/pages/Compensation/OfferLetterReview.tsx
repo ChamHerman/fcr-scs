@@ -39,7 +39,7 @@ import {
   OFFER_STATUS_LABEL_MAP as statusLabelMap,
 } from "../../constants";
 import { OfferLetterPreview, type OfferDetail, type OwnerApprovalStatus } from "./OfferLetterPreview";
-import "../../style.css";
+import "../../index.css";
 import "./compensation.css";
 import "./offer_letter.css";
 import "../LandAcquisition/valuation_report.css";

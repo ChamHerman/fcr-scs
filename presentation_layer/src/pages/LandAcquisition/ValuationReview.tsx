@@ -11,7 +11,7 @@ import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
 import { formatCurrencyRM } from "../../utils/currency";
-import "../../style.css";
+import "../../index.css";
 import "./valuation_report.css";
 
 type ReportDetail = {

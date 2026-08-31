@@ -35,7 +35,7 @@ import {
   parseCurrencyToNumber,
 } from "../../utils/currency";
 import { CASE_STATUS_CLASS_MAP } from "../../constants";
-import "../../style.css";
+import "../../index.css";
 import "./compensation.css";
 import "../LandAcquisition/valuation_report.css";
 

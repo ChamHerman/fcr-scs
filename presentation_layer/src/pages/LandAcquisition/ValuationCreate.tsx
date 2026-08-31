@@ -33,7 +33,7 @@ import { CopyButton } from "../../components/ui/CopyButton";
 import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../components/ui/NotificationSystem";
 import { formatCurrencyWithDecimals, formatCurrencyRM, parseCurrencyToNumber, formatAreaWithoutDecimals, formatLiveInteger } from "../../utils/currency";
-import "../../style.css";
+import "../../index.css";
 import "./valuation_report.css";
 
 // --- Types ---

@@ -29,7 +29,7 @@ import {
   COMPENSATION_STATUS_CLASS_MAP as statusClassMap,
   COMPENSATION_STATUS_LABEL_MAP as statusLabelMap,
 } from "../../constants";
-import "../../style.css";
+import "../../index.css";
 import "./compensation.css";
 import "../LandAcquisition/valuation_report.css";
 
@@ -382,9 +382,6 @@ export const CompensationReview: React.FC = () => {
                 <span className="flex items-center gap-1">
                   <FileText size={14} className="inline" /> Report ID: {report.id}
                   <CopyButton value={report.id} size="sm" />
-                </span>
-                <span>
-                  <Folder size={14} className="inline mr-1" /> Project: {report.project}
                 </span>
                 <span>
                   <Tag size={14} className="inline mr-1" /> Title No: {report.landTitle}
