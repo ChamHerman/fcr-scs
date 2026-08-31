@@ -1,6 +1,6 @@
 import { prisma } from "../prisma";
 import { CaseStatus, OfferStatus, ObjectionStatus, Prisma } from "@prisma/client";
-
+import { buildNricConditions } from "../utils/nric.utils";
 
 export interface OfferLetterFilters {
   status?: string;
@@ -47,22 +47,7 @@ export async function getAllOfferLetters(filters: OfferLetterFilters) {
   }
 
   if (filters.ownerNric) {
-    const rawNric = filters.ownerNric.trim();
-    const cleanNric = rawNric.replace(/[^a-zA-Z0-9]/g, "");
-    let formattedWithDashes = rawNric;
-    if (cleanNric.length === 12) {
-      formattedWithDashes = `${cleanNric.slice(0, 6)}-${cleanNric.slice(6, 8)}-${cleanNric.slice(8)}`;
-    }
-
-    const nricConditions: Prisma.LandOwnerWhereInput[] = [
-      { nric: { contains: rawNric, mode: "insensitive" } },
-    ];
-    if (cleanNric && cleanNric !== rawNric) {
-      nricConditions.push({ nric: { contains: cleanNric, mode: "insensitive" } });
-    }
-    if (formattedWithDashes && formattedWithDashes !== rawNric && formattedWithDashes !== cleanNric) {
-      nricConditions.push({ nric: { contains: formattedWithDashes, mode: "insensitive" } });
-    }
+    const nricConditions = buildNricConditions(filters.ownerNric);
 
     // Match if user is direct ownership on offer letter OR a co-owner of the land parcel
     andConditions.push({
@@ -194,6 +179,50 @@ export async function getOfferLetterById(offerId: string) {
 
   if (!offer) {
     throw new Error("Offer letter not found");
+  }
+
+  return offer;
+}
+
+export async function getOfferLetterByCaseId(caseId: string) {
+  const offer = await prisma.offerLetter.findFirst({
+    where: { caseId },
+    include: {
+      acquisitionCase: {
+        include: {
+          project: true,
+          landParcel: {
+            include: {
+              ownerships: {
+                include: {
+                  landOwner: true,
+                },
+              },
+            },
+          },
+          valuationReports: true,
+        },
+      },
+      compensationReport: {
+        include: {
+          valuationReport: {
+            include: { valuer: true },
+          },
+        },
+      },
+      landOwnership: { include: { landOwner: true, landParcel: true } },
+      objections: true,
+      memberResponses: {
+        include: {
+          landOwner: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!offer) {
+    throw new Error("Offer letter not found for the given caseId");
   }
 
   return offer;
@@ -628,4 +657,13 @@ export async function checkAndMarkExpiredOffers(): Promise<number> {
 
   return expiredOffers.length;
 }
+
+export async function getOfferCaseId(offerId: string): Promise<string> {
+  const offer = await prisma.offerLetter.findUnique({
+    where: { offerId },
+    select: { caseId: true },
+  });
+  return offer?.caseId || "general";
+}
+
 

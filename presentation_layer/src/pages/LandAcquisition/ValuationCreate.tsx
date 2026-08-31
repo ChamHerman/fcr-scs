@@ -30,10 +30,14 @@ import { CurrencyInput } from "../../components/ui/CurrencyInput";
 import { Textarea } from "../../components/ui/Textarea";
 import { FileUpload } from "../../components/ui/FileUpload";
 import { CopyButton } from "../../components/ui/CopyButton";
+import { PageHeader } from "../../components/ui/PageHeader";
 import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../components/ui/NotificationSystem";
 import { formatCurrencyWithDecimals, formatCurrencyRM, parseCurrencyToNumber, formatAreaWithoutDecimals, formatLiveInteger } from "../../utils/currency";
+import type { ValuationFormData } from "./types/land-acquisition.types";
+import { useValuationForm } from "./hooks/useValuationForm";
 import "../../index.css";
+import "../../styles/shared-report.css";
 import "./valuation_report.css";
 
 // --- Types ---
@@ -54,26 +58,6 @@ type CaseData = {
   category?: string;
   tenureType?: string;
   rawArea?: number;
-};
-
-type ReportFormData = {
-  // Area Details
-  landArea: string;
-  acquisitionArea: string;
-  builtUpArea: string;
-
-  // Valuation & Compensation
-  valuationMethod: string;
-  locationType: string;
-  buildingAge: string;
-  marketRatePerSqMeter: string;
-  compensationRatePerSqMeter: string;
-  remarks: string;
-  buildingAssessment: File | null;
-  siteInspection: File | null;
-
-  // AI Benchmark
-  aiValuationPrice: string;
 };
 
 type ReportRecord = {
@@ -121,31 +105,22 @@ export const ValuationCreate: React.FC = () => {
   const [loadingCase, setLoadingCase] = useState<boolean>(false);
   const [isCaseModalOpen, setIsCaseModalOpen] = useState<boolean>(!initialCaseId);
 
-  // Initial form data: fields that cannot be fetched from land parcel are left empty
-  const [formData, setFormData] = useState<ReportFormData>({
-    landArea: "",
-    acquisitionArea: "",
-    builtUpArea: "",
-    valuationMethod: "",
-    locationType: "",
-    buildingAge: "",
-    marketRatePerSqMeter: "",
-    compensationRatePerSqMeter: "",
-    remarks: "",
-    buildingAssessment: null,
-    siteInspection: null,
-    aiValuationPrice: "",
-  });
+  const {
+    formData,
+    setFormData,
+    validationErrors,
+    setValidationErrors,
+    isCalculatingAi,
+    handleInputChange,
+    validateForm,
+    calculateAiPrediction,
+  } = useValuationForm();
 
   const [isSaving, setIsSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [savedReport, setSavedReport] = useState<ReportRecord | null>(null);
-  const [validationErrors, setValidationErrors] = useState<{
-    [key: string]: string;
-  }>({});
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-  const [isCalculatingAi, setIsCalculatingAi] = useState(false);
 
   // Computed Totals (Derived strictly from area and rates - stored in database on submit)
   const calculatedMarketTotal = useMemo(() => {
@@ -240,128 +215,45 @@ export const ValuationCreate: React.FC = () => {
     setIsCaseModalOpen(false);
   };
 
-  // Input change handler
-  const handleInputChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-    >
-  ) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-
-    if (validationErrors[name]) {
-      setValidationErrors((prev) => {
-        const newErrors = { ...prev };
-        delete newErrors[name];
-        return newErrors;
-      });
-    }
-  };
-
-  // Form validation: Required input fields
-  const validateForm = (): boolean => {
-    const errors: { [key: string]: string } = {};
-
-    if (!caseData) {
-      notify({
-        type: "general",
-        title: "No Case Selected",
-        message: "Please select an acquisition case before generating the report.",
-      });
-      return false;
-    }
-
-    const landNum = parseCurrencyToNumber(formData.landArea);
-    const acqNum = parseCurrencyToNumber(formData.acquisitionArea);
-    const builtNum = parseCurrencyToNumber(formData.builtUpArea);
-    const marketRateNum = parseCurrencyToNumber(formData.marketRatePerSqMeter);
-    const compRateNum = parseCurrencyToNumber(formData.compensationRatePerSqMeter);
-
-    if (!formData.landArea.trim() || landNum <= 0) {
-      errors.landArea = "Land Area is required and must be greater than 0.";
-    }
-
-    if (!formData.acquisitionArea.trim() || acqNum <= 0) {
-      errors.acquisitionArea = "Acquisition Area is required and must be greater than 0.";
-    } else if (landNum > 0 && acqNum > landNum) {
-      errors.acquisitionArea = "Land Area must be greater than or equal to Acquisition Area (Land Area >= Acquisition Area).";
-    }
-
-    if (!formData.builtUpArea.trim() || isNaN(builtNum) || builtNum < 0) {
-      errors.builtUpArea = "Built-Up Area is required (0 for vacant land).";
-    } else if (landNum > 0 && builtNum >= landNum) {
-      errors.builtUpArea = "Land Area must be greater than Built-Up Area (Land Area > Built-Up Area).";
-    }
-
-    if (!formData.valuationMethod.trim()) {
-      errors.valuationMethod = "Valuation Method is required.";
-    }
-
-    if (!formData.locationType.trim()) {
-      errors.locationType = "Location Type is required.";
-    }
-
-    if (!formData.buildingAge.trim() || isNaN(Number(formData.buildingAge)) || Number(formData.buildingAge) < 0) {
-      errors.buildingAge = "Building Age cannot be less than 0 year.";
-    }
-
-    if (!formData.marketRatePerSqMeter.trim() || isNaN(marketRateNum) || marketRateNum <= 0) {
-      errors.marketRatePerSqMeter = "Market Price (RM /m²) is required and cannot be negative or zero.";
-    }
-
-    if (!formData.compensationRatePerSqMeter.trim() || isNaN(compRateNum) || compRateNum <= 0) {
-      errors.compensationRatePerSqMeter = "Recommended Compensation (RM /m²) is required and cannot be negative or zero.";
-    }
-
-    setValidationErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
   const handleGeneratePreview = async () => {
-    if (!validateForm()) return;
+    if (!validateForm(Boolean(caseData))) {
+      if (!caseData) {
+        notify({
+          type: "general",
+          title: "No Case Selected",
+          message: "Please select an acquisition case before generating the report.",
+        });
+      }
+      return;
+    }
     if (!caseData) return;
 
-    setIsCalculatingAi(true);
     let predictedAiPrice = "";
 
     try {
-      // Pass raw values directly from Land Parcel table and Report Details
-      const landAreaVal = (caseData.rawArea && caseData.rawArea > 0) ? caseData.rawArea : parseCurrencyToNumber(formData.landArea);
-      const builtUpAreaVal = parseCurrencyToNumber(formData.builtUpArea);
-      const bldgAgeNum = Math.max(0, parseInt(formData.buildingAge, 10) || 0);
-
-      const res = await valuateProperty({
+      predictedAiPrice = await calculateAiPrediction({
         state: caseData.state || "Selangor",
-        land_category: caseData.category || "AGRICULTURE",
-        location_type: formData.locationType || "Urban",
-        tenure_type: caseData.tenureType || "FREEHOLD",
-        building_condition: "Good",
-        land_area_sqft: landAreaVal,
-        built_up_area_sqft: builtUpAreaVal,
-        building_age_years: bldgAgeNum,
+        category: caseData.category || "AGRICULTURE",
+        tenureType: caseData.tenureType || "FREEHOLD",
+        rawArea: caseData.rawArea,
       });
-
-      if (res && typeof res.marketValueMyr === "number" && !isNaN(res.marketValueMyr)) {
-        predictedAiPrice = formatCurrencyWithDecimals(res.marketValueMyr);
-      }
     } catch (err) {
       console.error("AI valuation prediction failed:", err);
       notify({
         type: "error",
-        title: "AI Valuation Service",
-        message: "Unable to retrieve prediction from AI valuate service. Please check connection.",
+        title: "AI Benchmarking Warning",
+        message: "AI prediction failed, continuing with manual valuation.",
       });
-    } finally {
-      setIsCalculatingAi(false);
     }
 
     setFormData((prev) => ({
       ...prev,
       landArea: formatAreaWithoutDecimals(prev.landArea),
       acquisitionArea: formatAreaWithoutDecimals(prev.acquisitionArea),
-      builtUpArea: formatAreaWithoutDecimals(prev.builtUpArea || 0),
+      builtUpArea: formatAreaWithoutDecimals(prev.builtUpArea),
       marketRatePerSqMeter: formatCurrencyWithDecimals(prev.marketRatePerSqMeter),
       compensationRatePerSqMeter: formatCurrencyWithDecimals(prev.compensationRatePerSqMeter),
+      buildingAge: formatLiveInteger(prev.buildingAge),
       aiValuationPrice: predictedAiPrice,
     }));
 
@@ -678,39 +570,11 @@ export const ValuationCreate: React.FC = () => {
       <div className="main blur-shape-bg">
         <div className="report-generator-container">
           {/* Top Bar */}
-          <div className="topbar" style={{ marginBottom: "20px" }}>
-            <div className="topbar-left">
-              <h1 style={{ marginBottom: 0 }}>Create New Valuation Report</h1>
-              <div className="sub">
-                Fill in the area measurements, valuation methodology, and compensation rates for the acquisition case
-              </div>
-            </div>
-            <div className="topbar-right flex items-center gap-3">
-              <Button variant="outlined" size="sm" onClick={() => navigate("/admin/case/valuation")}>
-                <ArrowLeft size={16} /> Back
-              </Button>
-              <span className="date-badge">
-                <Calendar size={16} className="inline mr-1" />
-                {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-              </span>
-              <div
-                className="avatar"
-                title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
-              >
-                {user?.name ? (
-                  <span className="text-xs font-bold uppercase">
-                    {user.name
-                      .split(/\s+/)
-                      .map((n: string) => n[0])
-                      .slice(0, 2)
-                      .join("")}
-                  </span>
-                ) : (
-                  <User size={16} />
-                )}
-              </div>
-            </div>
-          </div>
+          <PageHeader
+            title="Create New Valuation Report"
+            subtitle="Fill in the area measurements, valuation methodology, and compensation rates for the acquisition case"
+            backPath="/admin/case/valuation"
+          />
 
           {/* Case Summary */}
           {!savedReport &&

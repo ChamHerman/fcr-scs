@@ -1,117 +1,52 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText, Eye, Loader2, Plus } from "lucide-react";
-import * as Lucide from "lucide-react";
-import { compensationApi } from "../../services/compensationApi";
+import { FileText, Loader2, Plus, CheckCircle, Clock, XCircle } from "lucide-react";
 import { CaseSelectionModal } from "../LandAcquisition/CaseSelectionModal";
 import { Pagination } from "../../components/ui/Pagination";
 import { Button } from "../../components/ui/Button";
-import { Select, type SelectOption } from "../../components/ui/Select";
+import { Select } from "../../components/ui/Select";
 import { SearchInput } from "../../components/ui/SearchInput";
 import { CopyButton } from "../../components/ui/CopyButton";
+import { PageHeader } from "../../components/ui/PageHeader";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
-import "../../index.css";
-import "./compensation.css";
-
-type ReportItem = {
-  id: string;
-  caseId: string;
-  caseTitle: string;
-  caseCreatedById?: string;
-  owner: string;
-  totalAmount: number;
-  status: string;
-  statusClass: string;
-  generatedDate: string;
-  offerLetterGenerated: boolean;
-};
-
+import { formatCurrencyRM } from "../../utils/currency";
+import type { CompensationReportItem } from "./types/compensation.types";
+import { useCompensationReports } from "./hooks/useCompensationReports";
 import {
-  COMPENSATION_STATUS_CLASS_MAP as statusClassMap,
   COMPENSATION_STATUS_LABEL_MAP as statusLabelMap,
   COMPENSATION_STATUS_OPTIONS as STATUS_OPTIONS,
   useTableSort,
 } from "../../constants";
+import "../../index.css";
+import "./compensation.css";
 
 export const CompensationDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { user, userId, role, isAdmin, isOfficer, isGovAdmin, isSysAdmin } = useRole();
+  const { userId, role, isAdmin, isOfficer, isGovAdmin, canCreateCompensationReport } = useRole();
   const { notify } = useNotification();
-  const [allScopedReports, setAllScopedReports] = useState<ReportItem[]>([]);
-  const [reports, setReports] = useState<ReportItem[]>([]);
+
+  const { allReports, loading } = useCompensationReports({
+    isAdmin,
+    isOfficer,
+    userId,
+    role,
+  });
+
+  const [reports, setReports] = useState<CompensationReportItem[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
-  const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [isCaseModalOpen, setIsCaseModalOpen] = useState(false);
   const itemsPerPage = 10;
 
-  const { sortKey, sortDirection, handleSort, renderSortIcon, sortItems } = useTableSort<keyof ReportItem>();
+  const { sortKey, sortDirection, handleSort, renderSortIcon, sortItems } =
+    useTableSort<keyof CompensationReportItem>();
 
-  // 1. Fetch all compensation reports within user's role scope
-  const loadReports = useCallback(async () => {
-    setLoading(true);
-    try {
-      const scopeParams: any = {
-        limit: 1000,
-      };
-
-      if (isOfficer && !isAdmin && userId) {
-        scopeParams.caseCreatedById = userId;
-        scopeParams.userRole = "GOVERNMENT_OFFICER";
-        scopeParams.userId = userId;
-      } else if (isAdmin) {
-        scopeParams.userRole = role || "ADMINISTRATOR";
-      }
-
-      const res = await compensationApi.getAllReports(scopeParams);
-      const fetchedList = res.reports || [];
-
-      // Defensive client-side RBAC filter
-      const filteredList = fetchedList.filter((r: any) => {
-        // 1. Administrators can view all records
-        if (isAdmin) return true;
-
-        // 2. Government Officers can only view reports for cases they created
-        if (isOfficer) {
-          return r.acquisitionCase?.createdById === userId;
-        }
-
-        return false;
-      });
-
-      const formatted: ReportItem[] = filteredList.map((r: any) => ({
-        id: r.compensationReportId,
-        caseId: r.caseId,
-        caseTitle: r.acquisitionCase?.caseTitle || "—",
-        caseCreatedById: r.acquisitionCase?.createdById,
-        owner: r.acquisitionCase?.landParcel?.ownerships?.[0]?.landOwner?.name || "—",
-        totalAmount: Number(r.totalCompensation || 0),
-        status: statusLabelMap[r.status] || r.status,
-        statusClass: statusClassMap[r.status] || "status-pending-comp",
-        generatedDate: r.createdAt
-          ? new Date(r.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-          : "—",
-        offerLetterGenerated: (r.acquisitionCase?.offerLetters || []).length > 0,
-      }));
-
-      setAllScopedReports(formatted);
-    } catch (err: any) {
-      console.error("Failed to load compensation reports:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [isAdmin, isOfficer, userId, role]);
-
-  useEffect(() => {
-    loadReports();
-  }, [loadReports]);
-
-  // 2. Filter data based on search and status
+  // Filter data based on search and status
   const filteredReports = React.useMemo(() => {
-    let list = allScopedReports;
+    let list = allReports;
 
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
@@ -130,16 +65,16 @@ export const CompensationDashboard: React.FC = () => {
     }
 
     return list;
-  }, [allScopedReports, searchTerm, statusFilter]);
+  }, [allReports, searchTerm, statusFilter]);
 
-  // 3. Sort the filtered reports using reusable sort helper
+  // Sort filtered reports
   const sortedReports = React.useMemo(() => {
     return sortItems(filteredReports, {
       generatedDate: (r) => (r.generatedDate && r.generatedDate !== "—" ? new Date(r.generatedDate).getTime() : 0),
     });
   }, [filteredReports, sortKey, sortDirection, sortItems]);
 
-  // 4. Paginate the sorted data for table display
+  // Paginate sorted data
   useEffect(() => {
     setTotalCount(sortedReports.length);
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -153,17 +88,17 @@ export const CompensationDashboard: React.FC = () => {
   const handleCreateReport = () => {
     if (isGovAdmin) {
       notify({
-        type: 'error',
-        title: 'Access Denied',
-        message: 'Government Administrators cannot create compensation reports. Reports must be generated by Government Officers.',
+        type: "error",
+        title: "Access Denied",
+        message: "Government Administrators cannot create compensation reports. Reports must be generated by Government Officers.",
       });
       return;
     }
-    if (!isOfficer && !isSysAdmin) {
+    if (!canCreateCompensationReport) {
       notify({
-        type: 'error',
-        title: 'Access Denied',
-        message: 'Only Government Officers can create compensation reports.',
+        type: "error",
+        title: "Access Denied",
+        message: "Only Government Officers can create compensation reports.",
       });
       return;
     }
@@ -175,27 +110,23 @@ export const CompensationDashboard: React.FC = () => {
     navigate("/admin/compensation/report/create", { state: { caseId } });
   };
 
-  const formatCurrency = (val: number) => {
-    return "RM " + val.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
-
-  // 4. Metrics dynamically derived directly from user-scoped filtered data
+  // Metrics dynamically derived directly from filtered data
   const stats = [
     { label: "Total Reports", value: filteredReports.length, icon: <FileText size={16} className="inline mr-1" /> },
     {
       label: "Approved",
       value: filteredReports.filter((r) => r.status === "Approved").length,
-      icon: <Lucide.CheckCircle size={16} className="inline mr-1" />,
+      icon: <CheckCircle size={16} className="inline mr-1" />,
     },
     {
       label: "Pending Approval",
       value: filteredReports.filter((r) => r.status === "Pending Approval").length,
-      icon: <Lucide.Clock size={16} className="inline mr-1" />,
+      icon: <Clock size={16} className="inline mr-1" />,
     },
     {
       label: "Rejected",
       value: filteredReports.filter((r) => r.status === "Rejected").length,
-      icon: <Lucide.XCircle size={16} className="inline mr-1" />,
+      icon: <XCircle size={16} className="inline mr-1" />,
     },
   ];
 
@@ -213,40 +144,16 @@ export const CompensationDashboard: React.FC = () => {
       />
 
       <div className="compensation-dashboard">
-        <div className="topbar" style={{ marginBottom: "20px" }}>
-          <div className="topbar-left">
-            <h1 style={{ marginBottom: 0 }}>Compensation Report Dashboard</h1>
-            <div className="sub">
-              {isAdmin
-                ? "Review and manage all compensation calculation reports across the system"
-                : isOfficer
-                ? "Review and generate compensation calculation reports for cases created by your account"
-                : "Review and manage compensation calculation reports"}
-            </div>
-          </div>
-          <div className="topbar-right" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <span className="date-badge">
-              <Lucide.Calendar size={16} className="inline mr-1" />
-              {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-            </span>
-            <div
-              className="avatar"
-              title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
-            >
-              {user?.name ? (
-                <span className="text-xs font-bold uppercase">
-                  {user.name
-                    .split(/\s+/)
-                    .map((n: string) => n[0])
-                    .slice(0, 2)
-                    .join("")}
-                </span>
-              ) : (
-                <Lucide.User size={16} />
-              )}
-            </div>
-          </div>
-        </div>
+        <PageHeader
+          title="Compensation Report Dashboard"
+          subtitle={
+            isAdmin
+              ? "Review and manage all compensation calculation reports across the system"
+              : isOfficer
+              ? "Review and generate compensation calculation reports for cases created by your account"
+              : "Review and manage compensation calculation reports"
+          }
+        />
 
         <div className="stats-grid">
           {stats.map((s, i) => (
@@ -294,7 +201,7 @@ export const CompensationDashboard: React.FC = () => {
             </span>
           </div>
 
-          {(isOfficer || isSysAdmin) && (
+          {canCreateCompensationReport && (
             <div className="right">
               <Button variant="filled" onClick={handleCreateReport}>
                 <Plus size={16} /> New Report
@@ -360,8 +267,8 @@ export const CompensationDashboard: React.FC = () => {
                       <td title={r.owner}>
                         <span className="meta-text line-clamp-2 leading-snug block">{r.owner}</span>
                       </td>
-                      <td title={formatCurrency(r.totalAmount)}>
-                        <span className="meta-text line-clamp-2 leading-snug block">{formatCurrency(r.totalAmount)}</span>
+                      <td title={formatCurrencyRM(r.totalAmount)}>
+                        <span className="meta-text line-clamp-2 leading-snug block">{formatCurrencyRM(r.totalAmount)}</span>
                       </td>
                       <td>
                         <span className={`status-badge ${r.statusClass}`}>
@@ -407,3 +314,4 @@ export const CompensationDashboard: React.FC = () => {
 };
 
 export const CompensationReportList = CompensationDashboard;
+export default CompensationDashboard;

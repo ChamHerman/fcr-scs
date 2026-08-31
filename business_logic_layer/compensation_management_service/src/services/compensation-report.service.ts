@@ -1,33 +1,11 @@
 import { prisma } from "../prisma";
 import { CaseStatus, ReportStatus, OfferStatus, Prisma } from "@prisma/client";
+import type {
+  CompensationFiltersDTO as CompensationFilters,
+  CompensationComponentsDTO as CompensationComponentsInput,
+  CreateCompensationReportInputDTO as CreateCompensationReportInput,
+} from "../interfaces/compensation.interface";
 
-export interface CompensationFilters {
-  status?: string;
-  search?: string;
-  page?: number;
-  limit?: number;
-  caseCreatedById?: string;
-  userRole?: string;
-  userId?: string;
-}
-
-export interface CompensationComponentsInput {
-  landValue: number;
-  buildingValue: number;
-  cropValue: number;
-  businessDisruption: number;
-  disturbanceCompensation: number;
-  relocationAllowance: number;
-  otherEligible: number;
-}
-
-export interface CreateCompensationReportInput {
-  caseId: string;
-  valuationReportId: string;
-  components: CompensationComponentsInput;
-  remarks?: string;
-  createdById: string;
-}
 
 async function getOrCreateLandOwnership(
   tx: Prisma.TransactionClient,
@@ -143,67 +121,31 @@ export async function getReportById(compensationReportId: string) {
     throw new Error("Compensation report not found");
   }
 
-  // Calculate project budget details
-  let projectBudget = 0;
-  let totalApprovedUnderProject = 0;
-  let remainingFundBefore = 0;
-  let remainingFundAfter = 0;
-  let isOverBudget = false;
-
   const projectId = report.acquisitionCase?.projectId;
-  if (projectId) {
-    const project = await prisma.project.findUnique({
-      where: { projectId },
-      include: {
-        cases: {
-          include: {
-            compensationReports: {
-              where: { status: ReportStatus.APPROVED },
-            },
-          },
-        },
-      },
-    });
-
-    if (project) {
-      projectBudget = Number(project.budget || 0);
-
-      let allApprovedSum = 0;
-      let otherApprovedSum = 0;
-
-      for (const c of project.cases) {
-        for (const cr of c.compensationReports) {
-          const amt = Number(cr.totalCompensation || 0);
-          allApprovedSum += amt;
-          if (cr.compensationReportId !== report.compensationReportId) {
-            otherApprovedSum += amt;
-          }
-        }
-      }
-
-      const isCurrentApproved = report.status === ReportStatus.APPROVED;
-      const currentReportAmount = Number(report.totalCompensation || 0);
-
-      remainingFundBefore = projectBudget - otherApprovedSum;
-      remainingFundAfter = remainingFundBefore - currentReportAmount;
-      totalApprovedUnderProject = isCurrentApproved ? allApprovedSum : otherApprovedSum;
-      isOverBudget = remainingFundAfter < 0;
-    }
-  }
+  const projectBudgetSummary = projectId
+    ? await calculateProjectBudgetSummary(
+        report.compensationReportId,
+        projectId,
+        Number(report.totalCompensation || 0),
+        report.status,
+        report.acquisitionCase?.project?.projectName,
+        report.acquisitionCase?.project?.projectType
+      )
+    : null;
 
   return {
     ...report,
-    projectBudgetSummary: {
-      projectId: projectId || "",
-      projectName: report.acquisitionCase?.project?.projectName || "",
-      projectType: report.acquisitionCase?.project?.projectType || "",
-      totalBudget: projectBudget,
-      totalApprovedUnderProject,
-      remainingFund: report.status === ReportStatus.APPROVED ? remainingFundAfter : remainingFundBefore,
-      remainingFundBefore,
-      remainingFundAfter,
+    projectBudgetSummary: projectBudgetSummary || {
+      projectId: "",
+      projectName: "",
+      projectType: "",
+      totalBudget: 0,
+      totalApprovedUnderProject: 0,
+      remainingFund: 0,
+      remainingFundBefore: 0,
+      remainingFundAfter: 0,
       currentReportAmount: Number(report.totalCompensation || 0),
-      isOverBudget,
+      isOverBudget: false,
     },
   };
 }
@@ -417,3 +359,59 @@ export async function rejectReport(compensationReportId: string, reason: string,
 
   return result;
 }
+
+async function calculateProjectBudgetSummary(
+  compensationReportId: string,
+  projectId: string,
+  currentTotalCompensation: number,
+  currentStatus: ReportStatus,
+  defaultProjectName?: string,
+  defaultProjectType?: string
+) {
+  const project = await prisma.project.findUnique({
+    where: { projectId },
+    include: {
+      cases: {
+        include: {
+          compensationReports: {
+            where: { status: ReportStatus.APPROVED },
+          },
+        },
+      },
+    },
+  });
+
+  if (!project) return null;
+
+  const projectBudget = Number(project.budget || 0);
+  let allApprovedSum = 0;
+  let otherApprovedSum = 0;
+
+  for (const c of project.cases) {
+    for (const cr of c.compensationReports) {
+      const amt = Number(cr.totalCompensation || 0);
+      allApprovedSum += amt;
+      if (cr.compensationReportId !== compensationReportId) {
+        otherApprovedSum += amt;
+      }
+    }
+  }
+
+  const isCurrentApproved = currentStatus === ReportStatus.APPROVED;
+  const remainingFundBefore = projectBudget - otherApprovedSum;
+  const remainingFundAfter = remainingFundBefore - currentTotalCompensation;
+
+  return {
+    projectId,
+    projectName: project.projectName || defaultProjectName || "",
+    projectType: project.projectType || defaultProjectType || "",
+    totalBudget: projectBudget,
+    totalApprovedUnderProject: isCurrentApproved ? allApprovedSum : otherApprovedSum,
+    remainingFund: isCurrentApproved ? remainingFundAfter : remainingFundBefore,
+    remainingFundBefore,
+    remainingFundAfter,
+    currentReportAmount: currentTotalCompensation,
+    isOverBudget: remainingFundAfter < 0,
+  };
+}
+

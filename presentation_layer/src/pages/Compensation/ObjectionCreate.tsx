@@ -12,6 +12,7 @@ import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { IconButton } from "../../components/ui/IconButton";
 import { FileUpload } from "../../components/ui/FileUpload";
+import { PageHeader } from "../../components/ui/PageHeader";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
 import "../../index.css";
@@ -361,39 +362,11 @@ export const ObjectionCreate: React.FC = () => {
     <div className="main blur-shape-bg">
       <div className="w-full">
         {/* Topbar */}
-        <div className="topbar flex justify-between items-center mb-6 flex-wrap gap-4">
-          <div className="topbar-left">
-            <h1 className="text-2xl font-bold mb-1">Create New Objection</h1>
-            <div className="text-xs md:text-sm text-md-on-surface-variant">
-              Land Acquisition Act 1960 — Section 37 Dispute Settlement
-            </div>
-          </div>
-          <div className="topbar-right flex items-center gap-3">
-            <Button variant="outlined" size="sm" onClick={() => navigate("/admin/compensation/objection")}>
-              <ArrowLeft size={16} /> Back
-            </Button>
-            <span className="date-badge">
-              <Lucide.Calendar size={16} className="inline mr-1" />
-              {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-            </span>
-            <div
-              className="avatar"
-              title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
-            >
-              {user?.name ? (
-                <span className="text-xs font-bold uppercase">
-                  {user.name
-                    .split(/\s+/)
-                    .map((n: string) => n[0])
-                    .slice(0, 2)
-                    .join("")}
-                </span>
-              ) : (
-                <Lucide.User size={16} />
-              )}
-            </div>
-          </div>
-        </div>
+        <PageHeader
+          title="Create New Objection"
+          subtitle="Land Acquisition Act 1960 — Section 37 Dispute Settlement"
+          backPath="/admin/compensation/objection"
+        />
 
         {/* Form Card */}
         <div className="bg-md-surface-container p-6 md:p-8 rounded-2xl shadow-sm mb-6">

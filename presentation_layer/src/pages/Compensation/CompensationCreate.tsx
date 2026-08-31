@@ -1,35 +1,26 @@
-import * as Lucide from "lucide-react";
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Eye,
-  Edit,
-  X,
   FileText,
   Folder,
   Tag,
   User,
   Calendar,
-  CheckCircle,
   AlertCircle,
-  AlertTriangle,
   Loader2,
-  ArrowLeft,
-  Check,
-  Mail,
   Wallet,
   Layers,
   Info,
 } from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
-import { landAcquisitionApi } from "../../services/landAcquisitionApi";
 import { CaseSelectionModal } from "../LandAcquisition/CaseSelectionModal";
 import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
 import { CurrencyInput } from "../../components/ui/CurrencyInput";
 import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
-import { useAuth } from "../../context/AuthContext";
+import { PageHeader } from "../../components/ui/PageHeader";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
 import {
@@ -37,66 +28,16 @@ import {
   formatCurrencyRM,
   parseCurrencyToNumber,
 } from "../../utils/currency";
-import { CASE_STATUS_CLASS_MAP } from "../../constants";
+import type { SavedCompensationReport } from "./types/compensation.types";
+import { useCompensationForm } from "./hooks/useCompensationForm";
+import { useCompensationCase } from "./hooks/useCompensationCase";
+import { CompensationPreviewModal } from "./components/CompensationPreviewModal";
+import { CompensationSuccessState } from "./components/CompensationSuccessState";
 import "../../index.css";
 import "./compensation.css";
-import "../LandAcquisition/valuation_report.css";
-
-// --- Types ---
-type ProjectBudgetSummary = {
-  projectId?: string;
-  projectName?: string;
-  projectType?: string;
-  totalBudget: number;
-  totalApprovedUnderProject: number;
-  remainingFund: number;
-};
-
-type CaseData = {
-  id: string;
-  title: string;
-  project: string;
-  owner: string;
-  ownerIc: string;
-  landTitleNumber: string;
-  registrationDate: string;
-  status: string;
-  statusClass: string;
-  projectBudgetSummary?: ProjectBudgetSummary;
-};
-
-type ValuationReport = {
-  reportId?: string;
-  valuationMethod: string;
-  marketValue: number;
-  recommendedCompensation: number;
-  landValue: number;
-  buildingValue: number;
-  cropValue: number;
-};
-
-type CompensationFormData = {
-  landValue: string;
-  buildingValue: string;
-  cropValue: string;
-  businessDisruption: string;
-  disturbanceCompensation: string;
-  relocationAllowance: string;
-  otherEligible: string;
-  remarks: string;
-};
-
-type SavedCompensationReport = {
-  reportId: string;
-  totalCompensation: number;
-  status: string;
-  offerId?: string;
-  offerReferenceNo?: string;
-  requiresApproval?: boolean;
-};
+import "../../styles/shared-report.css";
 
 export const CompensationCreate: React.FC = () => {
-  const { user } = useAuth();
   const { userId } = useRole();
   const navigate = useNavigate();
   const location = useLocation();
@@ -108,44 +49,29 @@ export const CompensationCreate: React.FC = () => {
   // --- State ---
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(initialCaseId || null);
   const [isCaseModalOpen, setIsCaseModalOpen] = useState<boolean>(!initialCaseId);
-  const [loadingCase, setLoadingCase] = useState<boolean>(false);
 
-  const [caseData, setCaseData] = useState<CaseData | null>(null);
-  const [valuationReport, setValuationReport] = useState<ValuationReport | null>(null);
-  const [valuationReportId, setValuationReportId] = useState<string | null>(null);
+  const {
+    formData,
+    setFormData,
+    validationErrors,
+    calculatedTotal,
+    handleInputChange,
+    validateForm,
+  } = useCompensationForm();
 
-  // Initial form data: Land value prefilled from recommended value; others left empty
-  const [formData, setFormData] = useState<CompensationFormData>({
-    landValue: "",
-    buildingValue: "",
-    cropValue: "",
-    businessDisruption: "",
-    disturbanceCompensation: "",
-    relocationAllowance: "",
-    otherEligible: "",
-    remarks: "",
-  });
+  const {
+    caseData,
+    valuationReport,
+    valuationReportId,
+    loadingCase,
+  } = useCompensationCase(selectedCaseId, setFormData);
 
-  const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
   const [showPreview, setShowPreview] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [savedReport, setSavedReport] = useState<SavedCompensationReport | null>(null);
 
-  // --- Computed Totals ---
-  const calculatedTotal = useMemo(() => {
-    const lv = parseCurrencyToNumber(formData.landValue);
-    const bv = parseCurrencyToNumber(formData.buildingValue);
-    const cv = parseCurrencyToNumber(formData.cropValue);
-    const bd = parseCurrencyToNumber(formData.businessDisruption);
-    const dc = parseCurrencyToNumber(formData.disturbanceCompensation);
-    const ra = parseCurrencyToNumber(formData.relocationAllowance);
-    const oe = parseCurrencyToNumber(formData.otherEligible);
-    return Math.round((lv + bv + cv + bd + dc + ra + oe) * 100) / 100;
-  }, [formData]);
-
-  // Project Budget & Remaining Funds (Dynamic calculation for reference)
+  // Project Budget & Remaining Funds
   const projectBudget = caseData?.projectBudgetSummary?.totalBudget || 0;
   const totalApprovedUnderProject = caseData?.projectBudgetSummary?.totalApprovedUnderProject || 0;
   const currentRemainingFund = caseData?.projectBudgetSummary?.remainingFund ?? projectBudget;
@@ -157,107 +83,11 @@ export const CompensationCreate: React.FC = () => {
   const landDiffFromRecommended = Math.abs(landValueNum - recommendedValuation);
   const isLandDiffOver100k = recommendedValuation > 0 && landDiffFromRecommended > 100_000;
 
-  // --- Fetch Case & Approved Valuation Details ---
-  const loadCaseDetails = useCallback(async (cId: string) => {
-    setLoadingCase(true);
-    try {
-      const res = await landAcquisitionApi.getCaseById(cId);
-      const c = res?.case || res;
-      if (c && (c.caseId || c.id)) {
-        const cIdValue = c.caseId || c.id;
-        const statusClass = CASE_STATUS_CLASS_MAP[c.status] || "status-valuation-approved";
-
-        const budgetSummary: ProjectBudgetSummary | undefined = c.projectBudgetSummary || (c.project ? {
-          projectId: c.project.projectId || "",
-          projectName: c.project.projectName || "—",
-          projectType: c.project.projectType || "—",
-          totalBudget: Number(c.project.budget || 0),
-          totalApprovedUnderProject: 0,
-          remainingFund: Number(c.project.budget || 0),
-        } : undefined);
-
-        setCaseData({
-          id: cIdValue,
-          title: c.caseTitle || "—",
-          project: c.project?.projectName || "—",
-          owner: c.landParcel?.ownerships?.[0]?.landOwner?.name || "—",
-          ownerIc: c.landParcel?.ownerships?.[0]?.landOwner?.icNumber || "—",
-          landTitleNumber: c.landParcel?.landTitleNo || "—",
-          registrationDate: c.registrationDate
-            ? new Date(c.registrationDate).toLocaleDateString("en-GB", {
-                day: "2-digit",
-                month: "short",
-                year: "numeric",
-              })
-            : "—",
-          status: c.status,
-          statusClass,
-          projectBudgetSummary: budgetSummary,
-        });
-
-        const valReports = c.valuationReports || [];
-        const approvedVal = valReports.find((r: any) => r.reportStatus === "APPROVED") || valReports[0];
-
-        if (approvedVal) {
-          const recComp = Number(approvedVal.recommendedCompensation || 0);
-          const mktVal = Number(approvedVal.marketValue || 0);
-
-          setValuationReportId(approvedVal.reportId);
-          setValuationReport({
-            reportId: approvedVal.reportId,
-            valuationMethod: approvedVal.valuationMethod || "Sales Comparison Method",
-            marketValue: mktVal,
-            recommendedCompensation: recComp,
-            landValue: recComp,
-            buildingValue: 0,
-            cropValue: 0,
-          });
-
-          // Land value directly taken from recommended value; other 6 fields remain empty
-          setFormData({
-            landValue: recComp > 0 ? formatCurrencyWithDecimals(recComp) : "",
-            buildingValue: "",
-            cropValue: "",
-            businessDisruption: "",
-            disturbanceCompensation: "",
-            relocationAllowance: "",
-            otherEligible: "",
-            remarks: "",
-          });
-        } else {
-          setValuationReportId(null);
-          setValuationReport(null);
-          setFormData({
-            landValue: "",
-            buildingValue: "",
-            cropValue: "",
-            businessDisruption: "",
-            disturbanceCompensation: "",
-            relocationAllowance: "",
-            otherEligible: "",
-            remarks: "",
-          });
-        }
-      }
-    } catch (err: any) {
-      console.error("Failed to load case details for compensation:", err);
-      notify({
-        type: "error",
-        title: "Load Failed",
-        message: "Failed to fetch case and valuation information.",
-      });
-    } finally {
-      setLoadingCase(false);
-    }
-  }, [notify]);
-
   useEffect(() => {
-    if (selectedCaseId) {
-      loadCaseDetails(selectedCaseId);
-    } else {
+    if (!selectedCaseId) {
       setIsCaseModalOpen(true);
     }
-  }, [selectedCaseId, loadCaseDetails]);
+  }, [selectedCaseId]);
 
   // --- Handlers ---
   const handleSelectCaseFromModal = (caseId: string) => {
@@ -267,76 +97,17 @@ export const CompensationCreate: React.FC = () => {
     setShowPreview(false);
   };
 
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-
-    if (validationErrors[name]) {
-      setValidationErrors((prev) => {
-        const next = { ...prev };
-        delete next[name];
-        return next;
-      });
-    }
-  };
-
-  const validateForm = (): boolean => {
-    const errors: { [key: string]: string } = {};
-
-    if (!caseData) {
-      notify({
-        type: "general",
-        title: "No Case Selected",
-        message: "Please select an acquisition case before generating the report.",
-      });
-      return false;
-    }
-
-    const landVal = parseCurrencyToNumber(formData.landValue);
-    const bldgValNum = parseCurrencyToNumber(formData.buildingValue);
-    const cropValNum = parseCurrencyToNumber(formData.cropValue);
-    const bdValNum = parseCurrencyToNumber(formData.businessDisruption);
-    const dcValNum = parseCurrencyToNumber(formData.disturbanceCompensation);
-    const raValNum = parseCurrencyToNumber(formData.relocationAllowance);
-    const oeValNum = parseCurrencyToNumber(formData.otherEligible);
-
-    // Land Value must be filled in and not negative
-    if (!formData.landValue.trim() || isNaN(landVal) || landVal <= 0) {
-      errors.landValue = "Land Value is required, must be filled in, and cannot be negative or zero.";
-    }
-
-    if (bldgValNum < 0) {
-      errors.buildingValue = "Building Value cannot be negative.";
-    }
-
-    if (cropValNum < 0) {
-      errors.cropValue = "Crop Value cannot be negative.";
-    }
-
-    if (bdValNum < 0) {
-      errors.businessDisruption = "Business Disruption cannot be negative.";
-    }
-
-    if (dcValNum < 0) {
-      errors.disturbanceCompensation = "Disturbance Compensation cannot be negative.";
-    }
-
-    if (raValNum < 0) {
-      errors.relocationAllowance = "Relocation Allowance cannot be negative.";
-    }
-
-    if (oeValNum < 0) {
-      errors.otherEligible = "Other Eligible cannot be negative.";
-    }
-
-    setValidationErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
   const handleGeneratePreview = () => {
-    if (!validateForm()) return;
+    if (!validateForm(Boolean(caseData))) {
+      if (!caseData) {
+        notify({
+          type: "general",
+          title: "No Case Selected",
+          message: "Please select an acquisition case before generating the report.",
+        });
+      }
+      return;
+    }
 
     setFormData((prev) => ({
       ...prev,
@@ -350,11 +121,6 @@ export const CompensationCreate: React.FC = () => {
     }));
 
     setShowPreview(true);
-  };
-
-  const handleEditFromPreview = () => {
-    setIsEditMode(true);
-    setShowPreview(false);
   };
 
   const handleConfirmSave = async () => {
@@ -425,273 +191,46 @@ export const CompensationCreate: React.FC = () => {
     navigate("/admin/compensation/report");
   };
 
-  const handleBackToDashboard = () => {
-    navigate("/admin/compensation/report");
-  };
-
-  // --- Modals ---
-  const renderPreviewModal = () => {
-    if (!caseData) return null;
-
-    return (
-      <Modal
+  return (
+    <>
+      <CompensationPreviewModal
         isOpen={showPreview}
         onClose={() => setShowPreview(false)}
-        title="Compensation Summary"
-        subtitle="Review the calculated compensation breakdown before confirming"
-        maxWidth="max-w-xl"
+        onEdit={() => setShowPreview(false)}
+        onConfirm={handleConfirmSave}
+        isSaving={isSaving}
+        formData={formData}
+        calculatedTotal={calculatedTotal}
+        projectBudgetSummary={caseData?.projectBudgetSummary}
+        recommendedValuation={recommendedValuation}
+        isLandDiffOver100k={isLandDiffOver100k}
+        landDiffFromRecommended={landDiffFromRecommended}
+        currentRemainingFund={currentRemainingFund}
+        remainingFundAfterReport={remainingFundAfterReport}
+        projectBudget={projectBudget}
+      />
+
+      <Modal
+        isOpen={showCancelConfirm}
+        onClose={() => setShowCancelConfirm(false)}
+        title="Cancel without saving?"
+        subtitle="You have entered information. Any changes will be discarded."
         footer={
           <>
-            <Button variant="text" onClick={handleEditFromPreview}>
-              <Edit size={16} /> Edit
+            <Button variant="text" onClick={() => setShowCancelConfirm(false)}>
+              Continue Editing
             </Button>
-            <Button variant="filled" onClick={handleConfirmSave} isLoading={isSaving}>
-              <Check size={16} /> Confirm & Save
+            <Button variant="danger" onClick={confirmCancel}>
+              Yes, Discard & Cancel
             </Button>
           </>
         }
       >
-        <div className="space-y-3.5 py-2">
-          {/* Breakdown Items */}
-          <div className="p-4 rounded-xl bg-md-surface-container-low border border-md-outline/15 space-y-2 text-sm">
-            <div className="flex justify-between items-center text-md-on-surface-variant">
-              <span>Land Value</span>
-              <span className="font-mono font-semibold text-md-on-surface">
-                {formData.landValue ? formatCurrencyRM(formData.landValue) : "RM 0.00"}
-              </span>
-            </div>
-            <div className="flex justify-between items-center text-md-on-surface-variant">
-              <span>Building / Structure Value</span>
-              <span className="font-mono font-semibold text-md-on-surface">
-                {formData.buildingValue ? formatCurrencyRM(formData.buildingValue) : "RM 0.00"}
-              </span>
-            </div>
-            <div className="flex justify-between items-center text-md-on-surface-variant">
-              <span>Crop / Plantation Value</span>
-              <span className="font-mono font-semibold text-md-on-surface">
-                {formData.cropValue ? formatCurrencyRM(formData.cropValue) : "RM 0.00"}
-              </span>
-            </div>
-            {(parseCurrencyToNumber(formData.businessDisruption) > 0 ||
-              parseCurrencyToNumber(formData.disturbanceCompensation) > 0 ||
-              parseCurrencyToNumber(formData.relocationAllowance) > 0 ||
-              parseCurrencyToNumber(formData.otherEligible) > 0) && (
-              <div className="flex justify-between items-center text-md-on-surface-variant pt-1 border-t border-md-outline/10">
-                <span>Other Allowances & Disturbance</span>
-                <span className="font-mono font-semibold text-md-on-surface">
-                  {formatCurrencyRM(
-                    parseCurrencyToNumber(formData.businessDisruption) +
-                      parseCurrencyToNumber(formData.disturbanceCompensation) +
-                      parseCurrencyToNumber(formData.relocationAllowance) +
-                      parseCurrencyToNumber(formData.otherEligible)
-                  )}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Total Calculated Compensation */}
-          <div className="flex justify-between items-center p-4 rounded-xl bg-md-surface-container-low border border-green-500/30">
-            <span className="text-sm font-semibold text-green-700 dark:text-green-400">Total Compensation Value</span>
-            <span className="text-base font-bold text-green-700 dark:text-green-400 font-mono">
-              {formatCurrencyRM(calculatedTotal)}
-            </span>
-          </div>
-
-          {/* Project Budget Reference */}
-          {caseData.projectBudgetSummary && (
-            <div className="p-3.5 rounded-xl bg-md-surface-container-low border border-md-outline/15 text-xs space-y-1.5">
-              <div className="flex justify-between items-center text-md-on-surface-variant">
-                <span>Total Project Budget:</span>
-                <span className="font-mono font-semibold text-md-on-surface">
-                  {formatCurrencyRM(projectBudget)}
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-md-on-surface-variant">
-                <span>Current Remaining Fund:</span>
-                <span className="font-mono font-semibold text-blue-700 dark:text-blue-400">
-                  {formatCurrencyRM(currentRemainingFund)}
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-md-on-surface-variant pt-1 border-t border-md-outline/10">
-                <span>Remaining Fund After This Report:</span>
-                <span
-                  className={`font-mono font-bold ${
-                    remainingFundAfterReport < 0 ? "text-amber-700 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-400"
-                  }`}
-                >
-                  {formatCurrencyRM(remainingFundAfterReport)}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Approved Valuation Recommended Reference */}
-          <div className="flex justify-between items-center p-4 rounded-xl bg-md-surface-container-low border border-md-primary/30">
-            <span className="text-sm font-semibold text-md-primary">Approved Recommended Valuation</span>
-            <span className="text-base font-bold text-md-primary font-mono">
-              {recommendedValuation > 0 ? formatCurrencyRM(recommendedValuation) : "—"}
-            </span>
-          </div>
-
-          {/* RM 100,000 Difference Warning Indicator */}
-          {recommendedValuation > 0 && (
-            <div
-              className={`p-3 rounded-xl border flex items-start gap-2.5 text-xs ${
-                isLandDiffOver100k
-                  ? "bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200"
-                  : "bg-green-500/10 border-green-500/30 text-green-900 dark:text-green-200"
-              }`}
-            >
-              {isLandDiffOver100k ? (
-                <AlertTriangle size={16} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
-              ) : (
-                <CheckCircle size={16} className="shrink-0 mt-0.5 text-green-600 dark:text-green-400" />
-              )}
-              <div>
-                <strong>
-                  {isLandDiffOver100k
-                    ? `RM ${landDiffFromRecommended.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Difference Detected (> RM 100,000 Threshold)`
-                    : "Land Value within RM 100,000 threshold"}
-                </strong>
-                <p className="mt-0.5 opacity-80">
-                  {isLandDiffOver100k
-                    ? "The proposed Land Value deviates by more than RM 100,000 from the Approved Recommended Valuation. Proceeding will route this report to Government Admin for review and approval. The offer letter will not be generated yet."
-                    : "The proposed Land Value is aligned within RM 100,000 of the Approved Recommended Valuation."}
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
+        <p className="text-sm text-md-on-surface-variant">
+          Are you sure you want to discard your draft compensation report and return to the compensation dashboard?
+        </p>
       </Modal>
-    );
-  };
 
-  const renderCancelModal = () => (
-    <Modal
-      isOpen={showCancelConfirm}
-      onClose={() => setShowCancelConfirm(false)}
-      title="Cancel without saving?"
-      subtitle="You have entered information. Any changes will be discarded."
-      footer={
-        <>
-          <Button variant="text" onClick={() => setShowCancelConfirm(false)}>
-            Continue Editing
-          </Button>
-          <Button variant="danger" onClick={confirmCancel}>
-            Yes, Discard & Cancel
-          </Button>
-        </>
-      }
-    >
-      <p className="text-sm text-md-on-surface-variant">
-        Are you sure you want to discard your draft compensation report and return to the compensation dashboard?
-      </p>
-    </Modal>
-  );
-
-  const renderSuccessState = () => (
-    <div className="bg-md-surface-container rounded-xl p-7 border border-md-outline/15 shadow-sm space-y-6">
-      <div className="success-banner">
-        <span className="check-icon">
-          <CheckCircle size={20} className="inline mr-1" />
-        </span>
-        <div>
-          <strong>
-            {savedReport?.requiresApproval
-              ? "New Compensation Report Created and Sent for Approval!"
-              : "New Compensation Report Created Successfully!"}
-          </strong>
-          <span style={{ marginLeft: "12px", fontWeight: 400 }}>
-            Case status updated to <strong>{savedReport?.status}</strong>
-          </span>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="p-4 rounded-xl bg-md-surface-container-low border border-green-500/30 text-center">
-          <span className="text-xs text-green-700 dark:text-green-400 uppercase font-semibold">Total Compensation</span>
-          <div className="text-xl font-bold text-green-700 dark:text-green-400 mt-1">
-            {formatCurrencyRM(savedReport?.totalCompensation)}
-          </div>
-          <span className="text-xs text-md-on-surface-variant/70 font-mono mt-0.5 block">Approved Breakdown</span>
-        </div>
-        <div className="p-4 rounded-xl bg-md-surface-container-low border border-md-primary/30 text-center">
-          <span className="text-xs text-md-primary uppercase font-semibold">Recommended Valuation</span>
-          <div className="text-xl font-bold text-md-primary mt-1">
-            {recommendedValuation > 0 ? formatCurrencyRM(recommendedValuation) : "—"}
-          </div>
-          <span className="text-xs text-md-on-surface-variant/70 mt-0.5 block">Benchmark</span>
-        </div>
-        <div className="p-4 rounded-xl bg-md-surface-container-low border border-md-outline/10 text-center">
-          <span className="text-xs text-md-on-surface-variant uppercase font-semibold">Land Value Difference</span>
-          <div className="text-xl font-bold text-md-on-surface mt-1">
-            RM {landDiffFromRecommended.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </div>
-          <span className="text-xs text-md-on-surface-variant/70 mt-0.5 block">
-            {isLandDiffOver100k ? "Exceeds RM 100k (Requires Admin Review)" : "Within Threshold"}
-          </span>
-        </div>
-      </div>
-
-      <div style={{ textAlign: "center", padding: "10px 0" }}>
-        <div style={{ fontSize: "14px", color: "var(--md-on-surface-variant)" }}>
-          <div className="mb-2 flex items-center justify-center gap-2">
-            <span className="text-sm">Assigned Report ID:</span>{" "}
-            <span className="font-mono text-base font-bold text-md-primary">{savedReport?.reportId}</span>
-            <CopyButton value={savedReport?.reportId || ""} />
-          </div>
-
-          {savedReport?.offerReferenceNo ? (
-            <div className="mt-3 p-3 max-w-md mx-auto rounded-xl bg-green-500/10 border border-green-500/20 text-xs text-green-800 dark:text-green-300 flex items-center justify-center gap-2">
-              <Mail size={16} />
-              <span>
-                Offer Letter Auto-Generated: <strong>{savedReport.offerReferenceNo}</strong>
-              </span>
-              <CopyButton value={savedReport.offerReferenceNo} />
-            </div>
-          ) : savedReport?.requiresApproval ? (
-            <div className="mt-3 p-3 max-w-lg mx-auto rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 text-center">
-              Because the Land Value differs by more than RM 100,000 from the Recommended Valuation (or total exceeds RM 1,000,000), this report has been routed to <strong>Government Admin</strong> for review and approval. The Offer Letter will be issued once approved.
-            </div>
-          ) : null}
-
-          <div className="text-xs text-md-on-surface-variant/70 mt-3 max-w-md mx-auto">
-            This compensation report has been recorded with all 7 itemized components in the database with audit trails.
-          </div>
-        </div>
-
-        <div className="mt-6 flex justify-center gap-3 flex-wrap">
-          {savedReport?.offerId && (
-            <Button
-              variant="filled"
-              onClick={() =>
-                navigate("/admin/compensation/offer/review", { state: { offerId: savedReport.offerId } })
-              }
-            >
-              <Mail size={16} /> View Offer Letter
-            </Button>
-          )}
-          <Button
-            variant="outlined"
-            onClick={() =>
-              navigate("/admin/compensation/report/review", { state: { reportId: savedReport?.reportId } })
-            }
-          >
-            <Eye size={16} /> View New Report
-          </Button>
-          <Button variant="outlined" onClick={handleBackToDashboard}>
-            Back to Dashboard
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-
-  return (
-    <>
-      {renderPreviewModal()}
-      {renderCancelModal()}
       <CaseSelectionModal
         isOpen={isCaseModalOpen}
         onClose={() => setIsCaseModalOpen(false)}
@@ -704,40 +243,11 @@ export const CompensationCreate: React.FC = () => {
 
       <div className="main blur-shape-bg">
         <div className="report-generator-container">
-          {/* Top Bar */}
-          <div className="topbar" style={{ marginBottom: "20px" }}>
-            <div className="topbar-left">
-              <h1 style={{ marginBottom: 0 }}>Create Compensation Report</h1>
-              <div className="sub">
-                Itemize compensation components, review against approved valuation benchmarks, and create the compensation report
-              </div>
-            </div>
-            <div className="topbar-right flex items-center gap-3">
-              <Button variant="outlined" size="sm" onClick={() => navigate("/admin/compensation/report")}>
-                <ArrowLeft size={16} /> Back
-              </Button>
-              <span className="date-badge">
-                <Calendar size={16} className="inline mr-1" />
-                {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-              </span>
-              <div
-                className="avatar"
-                title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
-              >
-                {user?.name ? (
-                  <span className="text-xs font-bold uppercase">
-                    {user.name
-                      .split(/\s+/)
-                      .map((n: string) => n[0])
-                      .slice(0, 2)
-                      .join("")}
-                  </span>
-                ) : (
-                  <User size={16} />
-                )}
-              </div>
-            </div>
-          </div>
+          <PageHeader
+            title="Create Compensation Report"
+            subtitle="Itemize compensation components, review against approved valuation benchmarks, and create the compensation report"
+            backPath="/admin/compensation/report"
+          />
 
           {/* Case Summary */}
           {!savedReport &&
@@ -791,7 +301,13 @@ export const CompensationCreate: React.FC = () => {
 
           {/* Report Form or Success State */}
           {savedReport ? (
-            renderSuccessState()
+            <CompensationSuccessState
+              savedReport={savedReport}
+              recommendedValuation={recommendedValuation}
+              landDiffFromRecommended={landDiffFromRecommended}
+              isLandDiffOver100k={isLandDiffOver100k}
+              onBackToDashboard={() => navigate("/admin/compensation/report")}
+            />
           ) : (
             <div className="space-y-6">
               {caseData?.status === "COMPENSATION_REJECTED" && (
@@ -809,9 +325,7 @@ export const CompensationCreate: React.FC = () => {
                 </div>
               )}
 
-              {/* ──────────────────────────────────────────────────────────── */}
-              {/* 1. UNIFIED CONTAINER: Report Details (bold)                  */}
-              {/* ──────────────────────────────────────────────────────────── */}
+              {/* Report Details */}
               <div className="bg-md-surface-container rounded-xl p-7 border border-md-outline/15 shadow-sm space-y-7">
                 {/* Main Header */}
                 <div className="flex items-center gap-3 pb-4 border-b border-md-outline/15">
@@ -826,7 +340,7 @@ export const CompensationCreate: React.FC = () => {
                   </div>
                 </div>
 
-                {/* 1. Approved Valuation Benchmark */}
+                {/* 1. Valuation Benchmark */}
                 <div className="space-y-3">
                   <h3 className="text-base font-bold text-md-on-surface">Valuation Benchmark</h3>
 
@@ -852,7 +366,6 @@ export const CompensationCreate: React.FC = () => {
                   </div>
                 </div>
 
-                {/* DIVIDER 1 */}
                 <hr className="border-t border-md-outline/30 my-6" />
 
                 {/* 2. Compensation Components */}
@@ -928,7 +441,7 @@ export const CompensationCreate: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Total Calculated Compensation Live Card */}
+                {/* Live Total Card */}
                 <div className="p-4 rounded-xl bg-md-surface-container-low border border-green-500/30 flex items-center justify-between">
                   <span className="text-sm font-semibold text-green-700 dark:text-green-400">Total Compensation Value</span>
                   <span className="text-xl font-bold text-green-700 dark:text-green-400 font-mono">
@@ -936,7 +449,6 @@ export const CompensationCreate: React.FC = () => {
                   </span>
                 </div>
 
-                {/* DIVIDER 2 */}
                 <hr className="border-t border-md-outline/30 my-6" />
 
                 {/* 3. Remarks */}
@@ -953,9 +465,7 @@ export const CompensationCreate: React.FC = () => {
                 </div>
               </div>
 
-              {/* ──────────────────────────────────────────────────────────── */}
-              {/* 2. PROJECT BUDGET & REMAINING FUND OVERVIEW (Below Report Details) */}
-              {/* ──────────────────────────────────────────────────────────── */}
+              {/* Project Budget Card */}
               {caseData?.projectBudgetSummary && (
                 <div className="project-budget-card">
                   <div className="budget-header flex items-center justify-between flex-wrap gap-3">
@@ -1032,7 +542,7 @@ export const CompensationCreate: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Visual Budget Allocation Progress Bar */}
+                  {/* Visual Budget Progress Bar */}
                   {projectBudget > 0 && (
                     <div className="budget-progress-section">
                       <div className="flex justify-between items-center text-xs mb-1.5 font-medium">
@@ -1102,9 +612,6 @@ export const CompensationCreate: React.FC = () => {
                     </div>
                   )}
 
-                  {/* ──────────────────────────────────────────────────────────── */}
-                  {/* FORM ACTION BUTTONS (Moved into Budget Card After Progress Bar) */}
-                  {/* ──────────────────────────────────────────────────────────── */}
                   <div className="flex items-center justify-end gap-3 pt-5 mt-4 border-t border-md-outline/15">
                     <Button variant="outlined" onClick={handleCancel}>
                       Cancel
@@ -1116,7 +623,6 @@ export const CompensationCreate: React.FC = () => {
                 </div>
               )}
 
-              {/* Fallback Action Buttons if no budget summary */}
               {!caseData?.projectBudgetSummary && (
                 <div className="flex items-center justify-end gap-3 pt-4">
                   <Button variant="outlined" onClick={handleCancel}>

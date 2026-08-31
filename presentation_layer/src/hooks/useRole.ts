@@ -48,6 +48,13 @@ export const useRole = () => {
     return isOfficer && caseItem.createdById === user.userId;
   };
 
+  // 6. Compensation & Valuation RBAC rules
+  const canApproveCompensation = isGovAdmin || isSysAdmin;
+  const canCreateCompensationReport = (isOfficer || isSysAdmin) && !isGovAdmin;
+  const canRespondToOffer = (isMember || isSysAdmin) && !isGovAdmin && !isOfficer;
+  const canReviewObjection = isGovAdmin || isSysAdmin;
+  const canApproveValuation = isAdmin || isGovAdmin;
+
   return {
     role,
     user,
@@ -69,5 +76,11 @@ export const useRole = () => {
     canEditCaseDetails,
     canAssignValuer,
     canDeleteCase,
+    canApproveCompensation,
+    canCreateCompensationReport,
+    canRespondToOffer,
+    canReviewObjection,
+    canApproveValuation,
   };
 };
+

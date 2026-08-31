@@ -1,34 +1,10 @@
 import { prisma } from "../prisma";
 import { CaseStatus, ReportStatus, Prisma } from "@prisma/client";
+import type {
+  ValuationFiltersDTO as ValuationFilters,
+  CreateValuationInputDTO as CreateValuationInput,
+} from "../interfaces/valuation.interface";
 
-export interface ValuationFilters {
-  status?: string;
-  search?: string;
-  page?: number;
-  limit?: number;
-  caseCreatedById?: string;
-  valuerId?: string;
-  userRole?: string;
-  userId?: string;
-}
-
-export interface CreateValuationInput {
-  caseId: string;
-  valuerId?: string;
-  valuationMethod: string;
-  locationType?: string;
-  buildingAge?: number;
-  landArea?: number;
-  acquisitionArea?: number;
-  builtUpArea?: number;
-  marketRatePerSqMeter?: number;
-  compensationRatePerSqMeter?: number;
-  aiValuationPrice?: number;
-  marketValue: number;
-  recommendedCompensation: number;
-  remarks?: string;
-  createdById: string;
-}
 
 export async function getAllReports(filters: ValuationFilters) {
   const page = filters.page || 1;

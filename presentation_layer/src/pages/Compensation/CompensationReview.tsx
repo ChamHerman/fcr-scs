@@ -32,22 +32,10 @@ import {
   COMPENSATION_STATUS_CLASS_MAP as statusClassMap,
   COMPENSATION_STATUS_LABEL_MAP as statusLabelMap,
 } from "../../constants";
+import type { ProjectBudgetSummary } from "./types/compensation.types";
 import "../../index.css";
 import "./compensation.css";
-import "../LandAcquisition/valuation_report.css";
-
-export type ProjectBudgetSummary = {
-  projectId: string;
-  projectName: string;
-  projectType: string;
-  totalBudget: number;
-  totalApprovedUnderProject: number;
-  remainingFund: number;
-  remainingFundBefore: number;
-  remainingFundAfter: number;
-  currentReportAmount: number;
-  isOverBudget: boolean;
-};
+import "../../styles/shared-report.css";
 
 type CompensationDetail = {
   id: string;
@@ -91,9 +79,9 @@ export const CompensationReview: React.FC = () => {
   const { reportId: paramReportId } = useParams<{ reportId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, userId, isGovAdmin, isOfficer, isAdmin } = useRole();
+  const { user, userId, isGovAdmin, isOfficer, isAdmin, canApproveCompensation } = useRole();
   const { notify } = useNotification();
-  const canApproveOrReject = isGovAdmin || isAdmin;
+  const canApproveOrReject = canApproveCompensation;
 
   const activeReportId = location.state?.reportId || paramReportId;
 

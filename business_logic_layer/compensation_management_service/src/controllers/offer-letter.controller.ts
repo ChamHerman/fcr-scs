@@ -1,19 +1,8 @@
 import { Request, Response } from "express";
 import fs from "fs";
 import path from "path";
-import { prisma } from "../prisma";
 import * as offerService from "../services/offer-letter.service";
-
-function getOfferLetterStorageDir(caseId: string): string {
-  const candidate1 = path.resolve(__dirname, "../../../../data_layer/document_storage/offer_letter", caseId);
-  const candidate2 = path.resolve(process.cwd(), "data_layer/document_storage/offer_letter", caseId);
-  const candidate3 = path.resolve(process.cwd(), "../data_layer/document_storage/offer_letter", caseId);
-
-  if (fs.existsSync(path.dirname(candidate1))) return candidate1;
-  if (fs.existsSync(path.dirname(candidate2))) return candidate2;
-  if (fs.existsSync(path.dirname(candidate3))) return candidate3;
-  return candidate1;
-}
+import { getOfferLetterStorageDir } from "../utils/storage.utils";
 
 export async function getAllOfferLetters(req: Request, res: Response): Promise<void> {
   try {
@@ -43,7 +32,27 @@ export async function getOfferLetterById(req: Request, res: Response): Promise<v
 
   try {
     const offer = await offerService.getOfferLetterById(offerId);
-    res.json({ offerLetter: offer });
+    res.json({ offerLetter: offer, offer });
+  } catch (e: unknown) {
+    const msg = (e as Error).message;
+    if (msg.toLowerCase().includes("not found")) {
+      res.status(404).json({ error: msg });
+    } else {
+      res.status(500).json({ error: msg });
+    }
+  }
+}
+
+export async function getOfferLetterByCaseId(req: Request, res: Response): Promise<void> {
+  const caseId = req.params.caseId as string;
+  if (!caseId) {
+    res.status(400).json({ error: "caseId is required" });
+    return;
+  }
+
+  try {
+    const offer = await offerService.getOfferLetterByCaseId(caseId);
+    res.json({ offerLetter: offer, offer });
   } catch (e: unknown) {
     const msg = (e as Error).message;
     if (msg.toLowerCase().includes("not found")) {
@@ -61,10 +70,6 @@ export async function createOfferLetter(req: Request, res: Response): Promise<vo
     res.status(400).json({ error: "compensationReportId, caseId, and ownershipId are required" });
     return;
   }
-  if (offerAmount === undefined || offerAmount <= 0) {
-    res.status(400).json({ error: "offerAmount must be a positive number" });
-    return;
-  }
 
   const userId = createdById || "00000000-0000-0000-0000-000000000001";
 
@@ -73,20 +78,15 @@ export async function createOfferLetter(req: Request, res: Response): Promise<vo
       compensationReportId,
       caseId,
       ownershipId,
-      offerType,
-      offerAmount: parseFloat(offerAmount),
-      acceptancePeriodDays: acceptancePeriodDays ? parseInt(acceptancePeriodDays, 10) : 14,
+      offerType: offerType || "FULL_SETTLEMENT",
+      offerAmount: parseFloat(offerAmount) || 0,
+      acceptancePeriodDays: acceptancePeriodDays ? parseInt(acceptancePeriodDays, 10) : undefined,
       remarks,
       createdById: userId,
     });
-    res.status(201).json({ offerLetter: offer });
+    res.status(201).json({ offerLetter: offer, offer });
   } catch (e: unknown) {
-    const msg = (e as Error).message;
-    if (msg.toLowerCase().includes("not found")) {
-      res.status(404).json({ error: msg });
-    } else {
-      res.status(400).json({ error: msg });
-    }
+    res.status(400).json({ error: (e as Error).message });
   }
 }
 
@@ -101,12 +101,8 @@ export async function acceptOffer(req: Request, res: Response): Promise<void> {
   }
 
   try {
-    // Look up offer letter to get caseId for folder placement
-    const existingOffer = await prisma.offerLetter.findUnique({
-      where: { offerId },
-      select: { caseId: true, offerReferenceNo: true },
-    });
-    const caseId = existingOffer?.caseId || "general";
+    // Look up offer letter to get caseId for folder placement via service
+    const caseId = await offerService.getOfferCaseId(offerId);
 
     // Handle uploaded file if present
     if (req.file) {

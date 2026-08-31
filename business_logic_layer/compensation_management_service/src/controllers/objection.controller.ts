@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import * as objectionService from "../services/objection.service";
+import { validateCreateObjection } from "../validators/compensation.validator";
 
 export async function getAllObjections(req: Request, res: Response): Promise<void> {
   try {
@@ -41,17 +42,13 @@ export async function getObjectionById(req: Request, res: Response): Promise<voi
 }
 
 export async function createObjection(req: Request, res: Response): Promise<void> {
+  const validationError = validateCreateObjection(req.body);
+  if (validationError) {
+    res.status(400).json({ error: validationError });
+    return;
+  }
+
   const { offerId, caseId, objectionReason, requestedAmount, createdById } = req.body;
-
-  if (!offerId || !caseId || !objectionReason) {
-    res.status(400).json({ error: "offerId, caseId, and objectionReason are required" });
-    return;
-  }
-  if (requestedAmount === undefined || requestedAmount <= 0) {
-    res.status(400).json({ error: "requestedAmount must be a positive number" });
-    return;
-  }
-
   const userId = createdById || "00000000-0000-0000-0000-000000000001";
 
   try {
@@ -83,9 +80,8 @@ export async function approveObjection(req: Request, res: Response): Promise<voi
   }
 
   try {
-    const objection = await objectionService.reviewObjection({
+    const objection = await objectionService.approveObjection({
       objectionId,
-      decision: revisedCompensation ? "REVISED" : "ACCEPTED",
       revisedCompensation: revisedCompensation ? parseFloat(revisedCompensation) : undefined,
       reviewRemarks: reviewRemarks || "Objection approved.",
       reviewedById: reviewedById || undefined,

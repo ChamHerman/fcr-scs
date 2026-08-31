@@ -1,43 +1,7 @@
 import { prisma } from "../prisma";
 import { CaseStatus, AreaUnit, FundingSource, LandCategory, TenureType, OwnershipType, Prisma } from "@prisma/client";
 import { CaseStateMachine } from "../utils/case-state.machine";
-
-function parseLandCategory(val?: string | null): LandCategory {
-  if (!val) return LandCategory.AGRICULTURE;
-  const upper = String(val).toUpperCase().trim();
-  if (upper === "BUILDING" || upper.includes("BUILD")) return LandCategory.BUILDING;
-  if (upper === "INDUSTRY" || upper.includes("INDUS")) return LandCategory.INDUSTRY;
-  if (upper === "AGRICULTURE" || upper.includes("AGRI")) return LandCategory.AGRICULTURE;
-  return LandCategory.AGRICULTURE;
-}
-
-function parseTenureType(val?: string | null): TenureType {
-  if (!val) return TenureType.FREEHOLD;
-  const upper = String(val).toUpperCase().trim();
-  if (upper.includes("LEASE")) return TenureType.LEASEHOLD;
-  if (upper.includes("MALAY") || upper.includes("RESERVE")) return TenureType.MALAY_RESERVE;
-  return TenureType.FREEHOLD;
-}
-
-export function parseOwnershipType(val?: string | null): OwnershipType {
-  if (!val) return OwnershipType.INDIVIDUAL_CITIZEN;
-  const upper = String(val).toUpperCase().trim();
-  if (upper === "JOINT_OWNERSHIP" || upper.includes("JOINT")) return OwnershipType.JOINT_OWNERSHIP;
-  if (upper === "CORPORATE_ENTITY" || upper.includes("CORP") || upper.includes("COMPANY") || upper.includes("ENTITY")) return OwnershipType.CORPORATE_ENTITY;
-  if (upper === "ESTATE_OF_DECEASED" || upper.includes("DECEASED") || upper.includes("ESTATE")) return OwnershipType.ESTATE_OF_DECEASED;
-  if (upper === "TRUSTEE" || upper.includes("TRUST")) return OwnershipType.TRUSTEE;
-  return OwnershipType.INDIVIDUAL_CITIZEN;
-}
-
-export function formatOwnershipType(val?: OwnershipType | string | null): string {
-  if (!val) return "Individual Citizen";
-  const upper = String(val).toUpperCase().trim();
-  if (upper === "JOINT_OWNERSHIP" || upper.includes("JOINT")) return "Joint Ownership";
-  if (upper === "CORPORATE_ENTITY" || upper.includes("CORP")) return "Corporate Entity";
-  if (upper === "ESTATE_OF_DECEASED" || upper.includes("DECEASED")) return "Estate of Deceased";
-  if (upper === "TRUSTEE" || upper.includes("TRUST")) return "Trustee";
-  return "Individual Citizen";
-}
+import { parseLandCategory, parseTenureType, parseOwnershipType, formatOwnershipType } from "../utils/enum.utils";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

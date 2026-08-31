@@ -1,13 +1,7 @@
 import { prisma } from "../prisma";
 import { CaseStatus, ReportStatus, UserRole } from "@prisma/client";
+import type { AssignValuerInputDTO as AssignValuerInput } from "../interfaces/assignment.interface";
 
-export interface AssignValuerInput {
-  caseId: string;
-  valuerId: string;
-  acceptancePeriodDays?: number;
-  remarks?: string;
-  assignedById: string;
-}
 
 export async function assignValuer(input: AssignValuerInput) {
   const { caseId, valuerId, acceptancePeriodDays = 7, remarks, assignedById } = input;

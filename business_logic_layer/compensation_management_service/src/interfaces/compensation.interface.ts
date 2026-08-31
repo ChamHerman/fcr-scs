@@ -5,6 +5,9 @@ export interface CompensationFiltersDTO {
   search?: string;
   page?: number;
   limit?: number;
+  caseCreatedById?: string;
+  userRole?: string;
+  userId?: string;
 }
 
 export interface CompensationComponentsDTO {
