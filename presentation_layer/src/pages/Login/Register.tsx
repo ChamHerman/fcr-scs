@@ -3,6 +3,7 @@ import { MD3Button, MD3Input, MD3Card, MD3BlurBackground } from '../MD3Component
 import { UserPlus, Info, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../../services/auth.service';
+import { IdentificationInput } from '../../components/ui/IdentificationInput';
 
 export const Register: React.FC = () => {
   const navigate = useNavigate();
@@ -96,7 +97,14 @@ export const Register: React.FC = () => {
           <MD3Input type="email" label="Email Address" name="email" required value={formData.email} onChange={handleChange} disabled={isLoading} />
           <div className="grid grid-cols-2 gap-4">
             <MD3Input type="tel" label="Contact Number" name="contactNumber" required value={formData.contactNumber} onChange={handleChange} disabled={isLoading} />
-            <MD3Input type="text" label="Identification Number" name="identificationNumber" required value={formData.identificationNumber} onChange={handleChange} disabled={isLoading} />
+            <IdentificationInput 
+              label="Identification Number *" 
+              name="identificationNumber" 
+              value={formData.identificationNumber} 
+              onChange={handleChange} 
+              disabled={isLoading} 
+              placeholder="900101-14-5532"
+            />
           </div>
           
           <div className="relative">

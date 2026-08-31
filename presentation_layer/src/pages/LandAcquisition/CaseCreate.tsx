@@ -61,7 +61,7 @@ export const CaseCreate: React.FC = () => {
           mukim: data.formData.mukim,
           district: data.formData.district,
           state: data.formData.state,
-          area: parseFloat(data.formData.landArea) || 1000.0,
+          area: parseFloat(data.formData.landArea.replace(/,/g, "")) || 1000.0,
           areaUnit: "SQUARE_METER",
           category: data.formData.landCategory || "Agriculture",
           tenureType: data.formData.tenureType || "Freehold",

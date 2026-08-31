@@ -354,22 +354,22 @@ export const CompensationDashboard: React.FC = () => {
                           <CopyButton value={r.id} />
                         </div>
                       </td>
-                      <td className="case-title" title={r.caseTitle}>
-                        <span className="line-clamp-2 leading-snug font-medium block">
-                          {r.caseTitle}
-                        </span>
+                      <td title={r.caseTitle}>
+                        <span className="meta-text line-clamp-2 leading-snug block">{r.caseTitle}</span>
                       </td>
                       <td title={r.owner}>
-                        <span className="line-clamp-2 leading-snug block">{r.owner}</span>
+                        <span className="meta-text line-clamp-2 leading-snug block">{r.owner}</span>
                       </td>
-                      <td><strong>{formatCurrency(r.totalAmount)}</strong></td>
+                      <td title={formatCurrency(r.totalAmount)}>
+                        <span className="meta-text line-clamp-2 leading-snug block">{formatCurrency(r.totalAmount)}</span>
+                      </td>
                       <td>
                         <span className={`status-badge ${r.statusClass}`}>
                           <span className="dot"></span> {r.status}
                         </span>
                       </td>
                       <td>
-                        <span className="text-xs whitespace-nowrap">{r.generatedDate}</span>
+                        <span className="meta-text text-xs whitespace-nowrap">{r.generatedDate}</span>
                       </td>
                     </tr>
                   ))

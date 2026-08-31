@@ -496,25 +496,22 @@ export const CaseManagementDashboard: React.FC = () => {
             <table className="w-full table-fixed">
               <thead>
                 <tr>
-                  <th style={{ width: "12%" }} onClick={() => handleSort("caseId")} className="cursor-pointer select-none">
+                  <th style={{ width: "14%" }} onClick={() => handleSort("caseId")} className="cursor-pointer select-none">
                     Case ID {renderSortIcon("caseId")}
                   </th>
-                  <th style={{ width: "24%" }} onClick={() => handleSort("caseTitle")} className="cursor-pointer select-none">
+                  <th style={{ width: "26%" }} onClick={() => handleSort("caseTitle")} className="cursor-pointer select-none">
                     Case Title {renderSortIcon("caseTitle")}
                   </th>
-                  <th style={{ width: "13%" }} onClick={() => handleSort("status")} className="cursor-pointer select-none">
+                  <th style={{ width: "20%" }} onClick={() => handleSort("status")} className="cursor-pointer select-none">
                     Status {renderSortIcon("status")}
                   </th>
-                  <th style={{ width: "13%" }} onClick={() => handleSort("registrationDate")} className="cursor-pointer select-none">
-                    Registration Date {renderSortIcon("registrationDate")}
-                  </th>
-                  <th style={{ width: "14%" }} onClick={() => handleSort("projectName")} className="cursor-pointer select-none">
+                  <th style={{ width: "18%" }} onClick={() => handleSort("projectName")} className="cursor-pointer select-none">
                     Project Name {renderSortIcon("projectName")}
                   </th>
-                  <th style={{ width: "11%" }} onClick={() => handleSort("landTitleNo")} className="cursor-pointer select-none">
+                  <th style={{ width: "10%" }} onClick={() => handleSort("landTitleNo")} className="cursor-pointer select-none">
                     Land Title No. {renderSortIcon("landTitleNo")}
                   </th>
-                  <th style={{ width: "13%" }} onClick={() => handleSort("assignedValuer")} className="cursor-pointer select-none">
+                  <th style={{ width: "12%" }} onClick={() => handleSort("assignedValuer")} className="cursor-pointer select-none">
                     Assigned Valuer {renderSortIcon("assignedValuer")}
                   </th>
                 </tr>
@@ -522,13 +519,13 @@ export const CaseManagementDashboard: React.FC = () => {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)" }}>
+                    <td colSpan={6} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)" }}>
                       <Lucide.Loader2 size={24} className="inline animate-spin mr-2" /> Loading cases from database...
                     </td>
                   </tr>
                 ) : sortedCases.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: "center", padding: "36px", color: "var(--md-on-surface-variant)", opacity: 0.7 }}>
+                    <td colSpan={6} style={{ textAlign: "center", padding: "36px", color: "var(--md-on-surface-variant)", opacity: 0.7 }}>
                       {isOfficer ? (
                         <p className="mb-2 font-medium">No cases found created by you.</p>
                       ) : isValuer ? (
@@ -563,18 +560,13 @@ export const CaseManagementDashboard: React.FC = () => {
                             <CopyButton value={c.caseId} />
                           </div>
                         </td>
-                        <td className="case-title" title={c.caseTitle}>
-                          <span className="line-clamp-2 leading-snug font-medium block">
-                            {c.caseTitle}
-                          </span>
+                        <td title={c.caseTitle}>
+                          <span className="meta-text line-clamp-2 leading-snug block">{c.caseTitle}</span>
                         </td>
                         <td>
                           <span className={`status-badge ${statusClass}`}>
                             <span className="dot"></span> {statusLabel}
                           </span>
-                        </td>
-                        <td>
-                          <span className="meta-text text-xs whitespace-nowrap">{formatDate(c.registrationDate)}</span>
                         </td>
                         <td title={c.project?.projectName || "—"}>
                           <span className="meta-text line-clamp-2 leading-snug block">{c.project?.projectName || "—"}</span>
@@ -585,7 +577,7 @@ export const CaseManagementDashboard: React.FC = () => {
                         <td title={assignedValuer || ""}>
                           {assignedValuer ? (
                             <span className="meta-text line-clamp-2 leading-snug block">
-                              <strong>{assignedValuer}</strong>
+                              {assignedValuer}
                             </span>
                           ) : canAssignValuer ? (
                             <div onClick={(e) => e.stopPropagation()}>

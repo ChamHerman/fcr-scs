@@ -519,17 +519,17 @@ export const ObjectionDashboard: React.FC = () => {
                         <CopyButton value={o.id} />
                       </div>
                     </td>
-                    <td className="case-title" title={o.caseTitle}>
-                      <span className="line-clamp-2 leading-snug font-medium block">
-                        {o.caseTitle}
-                      </span>
+                    <td title={o.caseTitle}>
+                      <span className="meta-text line-clamp-2 leading-snug block">{o.caseTitle}</span>
                     </td>
                     <td title={o.ownerName}>
-                      <span className="line-clamp-2 leading-snug block">{o.ownerName}</span>
+                      <span className="meta-text line-clamp-2 leading-snug block">{o.ownerName}</span>
                     </td>
-                    <td><strong>{formatCurrency(o.requestedAmount)}</strong></td>
+                    <td title={formatCurrency(o.requestedAmount)}>
+                      <span className="meta-text line-clamp-2 leading-snug block">{formatCurrency(o.requestedAmount)}</span>
+                    </td>
                     <td>
-                      <span className="text-xs whitespace-nowrap">{o.submissionDate}</span>
+                      <span className="meta-text text-xs whitespace-nowrap">{o.submissionDate}</span>
                     </td>
                     <td>
                       <span className={`status-badge ${o.statusClass}`}>

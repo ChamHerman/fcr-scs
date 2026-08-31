@@ -363,14 +363,14 @@ export const ValuationDashboard: React.FC = () => {
                         <CopyButton value={r.caseId} />
                       </div>
                     </td>
-                    <td className="case-title font-medium text-md-on-surface" title={r.caseTitle}>
-                      <span className="line-clamp-2 leading-snug block">{r.caseTitle}</span>
+                    <td title={r.caseTitle}>
+                      <span className="meta-text line-clamp-2 leading-snug block">{r.caseTitle}</span>
                     </td>
                     <td title={r.valuer}>
-                      <span className="line-clamp-2 leading-snug block">{r.valuer}</span>
+                      <span className="meta-text line-clamp-2 leading-snug block">{r.valuer}</span>
                     </td>
                     <td>
-                      <span className="text-xs whitespace-nowrap">{r.valuationDate}</span>
+                      <span className="meta-text text-xs whitespace-nowrap">{r.valuationDate}</span>
                     </td>
                     <td>
                       <span className={`status-badge ${r.statusClass}`}>

@@ -360,17 +360,17 @@ export const OfferDashboard: React.FC = () => {
                         <CopyButton value={o.id} />
                       </div>
                     </td>
-                    <td className="case-title" title={o.caseTitle}>
-                      <span className="line-clamp-2 leading-snug font-medium block">
-                        {o.caseTitle}
-                      </span>
+                    <td title={o.caseTitle}>
+                      <span className="meta-text line-clamp-2 leading-snug block">{o.caseTitle}</span>
                     </td>
                     <td title={o.ownerName}>
-                      <span className="line-clamp-2 leading-snug block">{o.ownerName}</span>
+                      <span className="meta-text line-clamp-2 leading-snug block">{o.ownerName}</span>
                     </td>
-                    <td><strong>{formatCurrency(o.offerAmount)}</strong></td>
+                    <td title={formatCurrency(o.offerAmount)}>
+                      <span className="meta-text line-clamp-2 leading-snug block">{formatCurrency(o.offerAmount)}</span>
+                    </td>
                     <td>
-                      <span className="text-xs whitespace-nowrap">{o.expiryDate}</span>
+                      <span className="meta-text text-xs whitespace-nowrap">{o.expiryDate}</span>
                     </td>
                     <td>
                       <div className="flex flex-col items-start gap-1">
