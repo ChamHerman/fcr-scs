@@ -105,16 +105,34 @@ export const OfferLetterReview: React.FC = () => {
 
       // Extract all owners from landParcel.ownerships
       const parcelOwnerships = lp?.ownerships || [];
-      const parcelOwners = parcelOwnerships.map((ow: any) => ({
-        ...ow.landOwner,
-        sharePercentage: ow.sharePercentage,
-      })).filter(Boolean);
+      const parcelOwners = parcelOwnerships
+        .map((ow: any) => {
+          if (!ow?.landOwner) return null;
+          const rawShare = ow.share != null ? String(ow.share) : ow.sharePercentage != null ? String(ow.sharePercentage) : "";
+          const formattedShare = rawShare
+            ? (rawShare.endsWith("%") ? rawShare : `${rawShare}%`)
+            : "100%";
+          return {
+            ...ow.landOwner,
+            sharePercentage: formattedShare,
+          };
+        })
+        .filter(Boolean);
 
       const allOwners =
         parcelOwners.length > 0
           ? parcelOwners
           : o.landOwnership?.landOwner
-          ? [{ ...o.landOwnership.landOwner, sharePercentage: o.landOwnership.sharePercentage }]
+          ? [
+              {
+                ...o.landOwnership.landOwner,
+                sharePercentage: o.landOwnership.share != null
+                  ? (String(o.landOwnership.share).endsWith("%") ? String(o.landOwnership.share) : `${o.landOwnership.share}%`)
+                  : o.landOwnership.sharePercentage
+                  ? (String(o.landOwnership.sharePercentage).endsWith("%") ? String(o.landOwnership.sharePercentage) : `${o.landOwnership.sharePercentage}%`)
+                  : "100%",
+              },
+            ]
           : [];
 
       const userIcClean = (user?.identificationNumber || "").replace(/[^a-zA-Z0-9]/g, "");

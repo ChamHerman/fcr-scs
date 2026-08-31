@@ -25,6 +25,7 @@ export type OwnerApprovalStatus = {
   contact: string;
   address: string;
   sharePercentage?: number | string;
+  share?: number | string;
   status: "ACCEPTED" | "REJECTED" | "PENDING";
   remarks?: string;
   respondedAt?: string;
@@ -377,6 +378,7 @@ export const OfferLetterPreview: React.FC<OfferLetterPreviewProps> = ({ offer })
               name: offer.ownerName || "—",
               nric: offer.ownerIc || "—",
               sharePercentage: "100%",
+              share: "100%",
             },
           ];
 
@@ -397,7 +399,7 @@ export const OfferLetterPreview: React.FC<OfferLetterPreviewProps> = ({ offer })
               </tr>
             </thead>
             <tbody>
-              {ownerList.map((ow, idx) => (
+              {ownerList.map((ow: any, idx: number) => (
                 <tr key={ow.ownerId || idx} className="hover:bg-slate-50 text-slate-700 text-[15px]">
                   <td className="p-2.5 border border-slate-300 text-center text-slate-800 font-medium text-[15px]">
                     {idx + 1}
@@ -409,9 +411,12 @@ export const OfferLetterPreview: React.FC<OfferLetterPreviewProps> = ({ offer })
                     {ow.nric}
                   </td>
                   <td className="p-2.5 border border-slate-300 text-center text-slate-700 font-medium text-[15px]">
-                    {typeof ow.sharePercentage === "number"
-                      ? `${ow.sharePercentage}%`
-                      : ow.sharePercentage || "100%"}
+                    {(() => {
+                      const val = ow.sharePercentage || ow.share;
+                      if (!val) return "100%";
+                      const str = String(val).trim();
+                      return str.endsWith("%") ? str : `${str}%`;
+                    })()}
                   </td>
                 </tr>
               ))}
