@@ -31,6 +31,7 @@ import {
   COMPENSATION_STATUS_CLASS_MAP as statusClassMap,
   COMPENSATION_STATUS_LABEL_MAP as statusLabelMap,
   COMPENSATION_STATUS_OPTIONS as STATUS_OPTIONS,
+  useTableSort,
 } from "../../constants";
 
 export const CompensationDashboard: React.FC = () => {
@@ -46,6 +47,8 @@ export const CompensationDashboard: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [isCaseModalOpen, setIsCaseModalOpen] = useState(false);
   const itemsPerPage = 10;
+
+  const { sortKey, sortDirection, handleSort, renderSortIcon, sortItems } = useTableSort<keyof ReportItem>();
 
   // 1. Fetch all compensation reports within user's role scope
   const loadReports = useCallback(async () => {
@@ -129,12 +132,19 @@ export const CompensationDashboard: React.FC = () => {
     return list;
   }, [allScopedReports, searchTerm, statusFilter]);
 
-  // 3. Paginate the filtered data for table display
+  // 3. Sort the filtered reports using reusable sort helper
+  const sortedReports = React.useMemo(() => {
+    return sortItems(filteredReports, {
+      generatedDate: (r) => (r.generatedDate && r.generatedDate !== "—" ? new Date(r.generatedDate).getTime() : 0),
+    });
+  }, [filteredReports, sortKey, sortDirection, sortItems]);
+
+  // 4. Paginate the sorted data for table display
   useEffect(() => {
-    setTotalCount(filteredReports.length);
+    setTotalCount(sortedReports.length);
     const startIndex = (currentPage - 1) * itemsPerPage;
-    setReports(filteredReports.slice(startIndex, startIndex + itemsPerPage));
-  }, [filteredReports, currentPage, itemsPerPage]);
+    setReports(sortedReports.slice(startIndex, startIndex + itemsPerPage));
+  }, [sortedReports, currentPage, itemsPerPage]);
 
   const handleView = (reportId: string) => {
     navigate("/admin/compensation/report/review", { state: { reportId } });
@@ -295,15 +305,27 @@ export const CompensationDashboard: React.FC = () => {
 
         <div className="table-wrap">
           <div className="table-scroll md-scroll-thin">
-            <table>
+            <table className="w-full table-fixed">
               <thead>
                 <tr>
-                  <th>Report ID</th>
-                  <th>Case Title</th>
-                  <th>Land Owner</th>
-                  <th>Total Amount</th>
-                  <th>Status</th>
-                  <th>Date</th>
+                  <th style={{ width: "18%" }} onClick={() => handleSort("id")} className="cursor-pointer select-none">
+                    Report ID {renderSortIcon("id")}
+                  </th>
+                  <th style={{ width: "28%" }} onClick={() => handleSort("caseTitle")} className="cursor-pointer select-none">
+                    Case Title {renderSortIcon("caseTitle")}
+                  </th>
+                  <th style={{ width: "18%" }} onClick={() => handleSort("owner")} className="cursor-pointer select-none">
+                    Land Owner {renderSortIcon("owner")}
+                  </th>
+                  <th style={{ width: "14%" }} onClick={() => handleSort("totalAmount")} className="cursor-pointer select-none">
+                    Total Amount {renderSortIcon("totalAmount")}
+                  </th>
+                  <th style={{ width: "12%" }} onClick={() => handleSort("status")} className="cursor-pointer select-none">
+                    Status {renderSortIcon("status")}
+                  </th>
+                  <th style={{ width: "10%" }} onClick={() => handleSort("generatedDate")} className="cursor-pointer select-none">
+                    Date {renderSortIcon("generatedDate")}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -327,22 +349,28 @@ export const CompensationDashboard: React.FC = () => {
                       className="cursor-pointer hover:bg-md-primary/5 transition-colors"
                     >
                       <td>
-                        <div className="flex items-center gap-1.5">
-                          <span className="case-id font-mono text-xs">{r.id}</span>
-                          <span onClick={(e) => e.stopPropagation()}>
-                            <CopyButton value={r.id} />
-                          </span>
+                        <div className="flex items-center gap-1.5 min-w-0" onClick={(e) => e.stopPropagation()}>
+                          <span className="case-id font-mono text-xs truncate block">{r.id}</span>
+                          <CopyButton value={r.id} />
                         </div>
                       </td>
-                      <td className="case-title">{r.caseTitle}</td>
-                      <td>{r.owner}</td>
+                      <td className="case-title" title={r.caseTitle}>
+                        <span className="line-clamp-2 leading-snug font-medium block">
+                          {r.caseTitle}
+                        </span>
+                      </td>
+                      <td title={r.owner}>
+                        <span className="line-clamp-2 leading-snug block">{r.owner}</span>
+                      </td>
                       <td><strong>{formatCurrency(r.totalAmount)}</strong></td>
                       <td>
                         <span className={`status-badge ${r.statusClass}`}>
                           <span className="dot"></span> {r.status}
                         </span>
                       </td>
-                      <td>{r.generatedDate}</td>
+                      <td>
+                        <span className="text-xs whitespace-nowrap">{r.generatedDate}</span>
+                      </td>
                     </tr>
                   ))
                 )}
