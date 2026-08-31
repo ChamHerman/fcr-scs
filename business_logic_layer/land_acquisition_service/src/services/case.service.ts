@@ -308,7 +308,17 @@ export async function getCaseById(caseId: string) {
   const caseData = await prisma.acquisitionCase.findUnique({
     where: { caseId },
     include: {
-      project: true,
+      project: {
+        include: {
+          cases: {
+            include: {
+              compensationReports: {
+                where: { status: "APPROVED" },
+              },
+            },
+          },
+        },
+      },
       landParcel: {
         include: {
           ownerships: {
@@ -333,7 +343,32 @@ export async function getCaseById(caseId: string) {
     throw new Error("Case not found");
   }
 
-  return caseData;
+  // Calculate project budget details for reference
+  let projectBudget = 0;
+  let totalApprovedUnderProject = 0;
+  let remainingFund = 0;
+
+  if (caseData.project) {
+    projectBudget = Number(caseData.project.budget || 0);
+    for (const c of caseData.project.cases || []) {
+      for (const cr of c.compensationReports || []) {
+        totalApprovedUnderProject += Number(cr.totalCompensation || 0);
+      }
+    }
+    remainingFund = projectBudget - totalApprovedUnderProject;
+  }
+
+  return {
+    ...caseData,
+    projectBudgetSummary: {
+      projectId: caseData.project?.projectId || "",
+      projectName: caseData.project?.projectName || "",
+      projectType: caseData.project?.projectType || "",
+      totalBudget: projectBudget,
+      totalApprovedUnderProject,
+      remainingFund,
+    },
+  };
 }
 
 export async function getCaseStats(filters?: CaseFilters) {

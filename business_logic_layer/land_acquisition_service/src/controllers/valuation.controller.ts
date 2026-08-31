@@ -75,8 +75,8 @@ export async function createReport(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: "recommendedCompensation must be a positive number" });
     return;
   }
-  if (landArea !== undefined && acquisitionArea !== undefined && parseFloat(acquisitionArea) >= parseFloat(landArea)) {
-    res.status(400).json({ error: "Acquisition area must be less than total land area (Land Area > Acquisition Area)" });
+  if (landArea !== undefined && acquisitionArea !== undefined && parseFloat(acquisitionArea) > parseFloat(landArea)) {
+    res.status(400).json({ error: "Acquisition area must be less than or equal to total land area (Land Area >= Acquisition Area)" });
     return;
   }
   if (landArea !== undefined && builtUpArea !== undefined && parseFloat(builtUpArea) >= parseFloat(landArea)) {

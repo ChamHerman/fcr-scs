@@ -283,8 +283,8 @@ export const ValuationCreate: React.FC = () => {
 
     if (!formData.acquisitionArea.trim() || acqNum <= 0) {
       errors.acquisitionArea = "Acquisition Area is required and must be greater than 0.";
-    } else if (landNum > 0 && acqNum >= landNum) {
-      errors.acquisitionArea = "Land Area must be greater than Acquisition Area (Land Area > Acquisition Area).";
+    } else if (landNum > 0 && acqNum > landNum) {
+      errors.acquisitionArea = "Land Area must be greater than or equal to Acquisition Area (Land Area >= Acquisition Area).";
     }
 
     if (!formData.builtUpArea.trim() || isNaN(builtNum) || builtNum < 0) {

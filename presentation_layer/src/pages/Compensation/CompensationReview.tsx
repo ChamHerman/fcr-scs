@@ -16,6 +16,9 @@ import {
   Calendar,
   Scale,
   ClipboardList,
+  Wallet,
+  Layers,
+  Info,
 } from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
 import { Modal } from "../../components/ui/Modal";
@@ -33,6 +36,19 @@ import "../../index.css";
 import "./compensation.css";
 import "../LandAcquisition/valuation_report.css";
 
+export type ProjectBudgetSummary = {
+  projectId: string;
+  projectName: string;
+  projectType: string;
+  totalBudget: number;
+  totalApprovedUnderProject: number;
+  remainingFund: number;
+  remainingFundBefore: number;
+  remainingFundAfter: number;
+  currentReportAmount: number;
+  isOverBudget: boolean;
+};
+
 type CompensationDetail = {
   id: string;
   caseId: string;
@@ -43,6 +59,8 @@ type CompensationDetail = {
   ownerPhone: string;
   landTitle: string;
   project: string;
+  projectId?: string;
+  projectBudgetSummary?: ProjectBudgetSummary;
   status: string;
   statusClass: string;
   generatedDate: string;
@@ -104,6 +122,28 @@ export const CompensationReview: React.FC = () => {
         const generatedOffer = rep.offerLetters?.[0];
 
         const rawStatus = rep.reportStatus || rep.status || "PENDING";
+        const totalAmountNum = Number(rep.totalCompensation || 0);
+
+        // Compute or use project budget summary from backend
+        let budgetSummary: ProjectBudgetSummary | undefined = rep.projectBudgetSummary;
+        if (!budgetSummary && c?.project) {
+          const totalBudget = Number(c.project.budget || 0);
+          const remainingFund = totalBudget;
+          const remainingFundAfter = totalBudget - totalAmountNum;
+          budgetSummary = {
+            projectId: c.project.projectId || "",
+            projectName: c.project.projectName || "—",
+            projectType: c.project.projectType || "—",
+            totalBudget,
+            totalApprovedUnderProject: 0,
+            remainingFund,
+            remainingFundBefore: totalBudget,
+            remainingFundAfter,
+            currentReportAmount: totalAmountNum,
+            isOverBudget: remainingFundAfter < 0,
+          };
+        }
+
         const formatted: CompensationDetail = {
           id: rep.compensationReportId || rep.reportId,
           caseId: rep.caseId,
@@ -114,6 +154,8 @@ export const CompensationReview: React.FC = () => {
           ownerPhone: ownerInfo?.contact || "—",
           landTitle: c?.landParcel?.landTitleNo || "—",
           project: c?.project?.projectName || "—",
+          projectId: c?.project?.projectId,
+          projectBudgetSummary: budgetSummary,
           status: statusLabelMap[rawStatus] || rawStatus,
           statusClass: statusClassMap[rawStatus] || "status-pending-comp",
           generatedDate: rep.createdAt
@@ -123,7 +165,7 @@ export const CompensationReview: React.FC = () => {
                 year: "numeric",
               })
             : "—",
-          totalAmount: Number(rep.totalCompensation || 0),
+          totalAmount: totalAmountNum,
           components: {
             landValue: Number(rep.landValue ?? comps.landValue ?? 0),
             buildingValue: Number(rep.buildingValue ?? comps.buildingValue ?? 0),
@@ -336,9 +378,9 @@ export const CompensationReview: React.FC = () => {
       </Modal>
 
       <div className="main blur-shape-bg">
-        <div className="review-container">
+        <div className="review-container space-y-6">
           {/* Topbar */}
-          <div className="topbar" style={{ marginBottom: "16px" }}>
+          <div className="topbar" style={{ marginBottom: "0px" }}>
             <div className="topbar-left">
               <h1 style={{ marginBottom: 0 }}>Review Compensation Report</h1>
               <div className="sub">Review the report details and take action</div>
@@ -506,19 +548,6 @@ export const CompensationReview: React.FC = () => {
               </div>
             )}
 
-            {/* Action Bar for Pending Approval */}
-            {report.status === "Pending Approval" &&
-              (canApproveOrReject ? (
-                <div className="action-bar flex items-center justify-end gap-3 mt-6 pt-4 border-t border-md-outline/10">
-                  <Button variant="danger" onClick={() => setShowRejectModal(true)}>
-                    <XCircle size={18} /> Reject
-                  </Button>
-                  <Button variant="filled" onClick={() => setShowApproveModal(true)}>
-                    <CheckCircle size={18} /> Accept & Approve
-                  </Button>
-                </div>
-              ) : null)}
-
             {/* Action Bar for Rejected */}
             {report.status === "Rejected" && (isOfficer || isAdmin) && (
               <div className="action-bar flex items-center justify-between flex-wrap gap-4 mt-6 pt-4 border-t border-md-outline/10">
@@ -543,6 +572,197 @@ export const CompensationReview: React.FC = () => {
               </div>
             )}
           </div>
+
+          {/* ──────────────────────────────────────────────────────────── */}
+          {/* PROJECT BUDGET & REMAINING FUND SECTION (Only shown when pending action) */}
+          {/* ──────────────────────────────────────────────────────────── */}
+          {report.status === "Pending Approval" && (
+            report.projectBudgetSummary ? (
+              <div className="project-budget-card">
+                <div className="budget-header flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="budget-icon-badge">
+                      <Wallet size={20} />
+                    </div>
+                    <div>
+                      <div className="budget-title flex items-center gap-2 flex-wrap">
+                        <span>Project Budget & Remaining Fund</span>
+                        <span className="project-pill flex items-center gap-1">
+                          <Folder size={13} className="inline" /> {report.project}
+                        </span>
+                      </div>
+                      <div className="budget-subtitle">
+                        Project fund overview and remaining allocation reference
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="budget-status-pill">
+                    <span className="status-pill info">
+                      <Info size={14} className="inline mr-1" /> Budget Reference
+                    </span>
+                  </div>
+                </div>
+
+                {/* 4 Key Metrics Grid */}
+                <div className="budget-metrics-grid">
+                  <div className="metric-box">
+                    <span className="metric-label">Total Project Budget</span>
+                    <span className="metric-value font-mono">
+                      {formatCurrencyRM(report.projectBudgetSummary.totalBudget)}
+                    </span>
+                    <span className="metric-sub">Allocated Project Budget</span>
+                  </div>
+
+                  <div className="metric-box">
+                    <span className="metric-label">Total Approved Under Project</span>
+                    <span className="metric-value font-mono text-amber-700 dark:text-amber-400">
+                      {formatCurrencyRM(report.projectBudgetSummary.totalApprovedUnderProject)}
+                    </span>
+                    <span className="metric-sub">Across All Project Cases</span>
+                  </div>
+
+                  <div className="metric-box highlight-current">
+                    <span className="metric-label">Remaining Fund</span>
+                    <span className="metric-value font-mono text-blue-700 dark:text-blue-400">
+                      {formatCurrencyRM(report.projectBudgetSummary.remainingFund)}
+                    </span>
+                    <span className="metric-sub">Prior to This Approval</span>
+                  </div>
+
+                  <div
+                    className={`metric-box highlight-after ${
+                      report.projectBudgetSummary.remainingFundAfter < 0 ? "warning" : "success"
+                    }`}
+                  >
+                    <span className="metric-label">Remaining Fund After Approval</span>
+                    <span
+                      className={`metric-value font-mono font-bold ${
+                        report.projectBudgetSummary.remainingFundAfter < 0
+                          ? "text-amber-700 dark:text-amber-400"
+                          : "text-emerald-700 dark:text-emerald-400"
+                      }`}
+                    >
+                      {formatCurrencyRM(report.projectBudgetSummary.remainingFundAfter)}
+                    </span>
+                    <span className="metric-sub font-semibold">
+                      {report.projectBudgetSummary.remainingFundAfter < 0
+                        ? `Difference: ${formatCurrencyRM(report.projectBudgetSummary.remainingFundAfter)}`
+                        : "Estimated Post-Approval Balance"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Visual Budget Allocation Progress Bar */}
+                {report.projectBudgetSummary.totalBudget > 0 && (
+                  <div className="budget-progress-section">
+                    <div className="flex justify-between items-center text-xs mb-1.5 font-medium">
+                      <span className="text-md-on-surface-variant flex items-center gap-1.5">
+                        <Layers size={14} /> Project Budget Allocation
+                      </span>
+                      <span className="font-mono font-semibold text-md-on-surface">
+                        {(
+                          ((report.projectBudgetSummary.totalApprovedUnderProject + report.totalAmount) /
+                            report.projectBudgetSummary.totalBudget) *
+                          100
+                        ).toFixed(1)}
+                        % Total
+                      </span>
+                    </div>
+
+                    <div className="budget-progress-track">
+                      <div
+                        className="budget-bar-approved"
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            (report.projectBudgetSummary.totalApprovedUnderProject /
+                              report.projectBudgetSummary.totalBudget) *
+                              100
+                          )}%`,
+                        }}
+                        title={`Previously Approved: ${formatCurrencyRM(
+                          report.projectBudgetSummary.totalApprovedUnderProject
+                        )}`}
+                      />
+                      <div
+                        className="budget-bar-current"
+                        style={{
+                          width: `${Math.min(
+                            100 -
+                              Math.min(
+                                100,
+                                (report.projectBudgetSummary.totalApprovedUnderProject /
+                                  report.projectBudgetSummary.totalBudget) *
+                                  100
+                              ),
+                            (report.totalAmount / report.projectBudgetSummary.totalBudget) * 100
+                          )}%`,
+                        }}
+                        title={`This Report: ${formatCurrencyRM(report.totalAmount)}`}
+                      />
+                    </div>
+
+                    <div className="budget-legend flex items-center justify-between text-xs mt-2.5 flex-wrap gap-2 text-md-on-surface-variant">
+                      <div className="flex items-center gap-4 flex-wrap">
+                        <span className="flex items-center gap-1.5">
+                          <span className="legend-dot approved" /> Approved Cases:{" "}
+                          <strong>{formatCurrencyRM(report.projectBudgetSummary.totalApprovedUnderProject)}</strong>
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="legend-dot current" /> This Report:{" "}
+                          <strong>{formatCurrencyRM(report.totalAmount)}</strong>
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="legend-dot remaining" /> Remaining After Approval:{" "}
+                          <strong
+                            className={
+                              report.projectBudgetSummary.remainingFundAfter < 0
+                                ? "text-amber-700 dark:text-amber-400"
+                                : "text-emerald-700 dark:text-emerald-400"
+                            }
+                          >
+                            {formatCurrencyRM(report.projectBudgetSummary.remainingFundAfter)}
+                          </strong>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ──────────────────────────────────────────────────────────── */}
+                {/* ACTION BUTTONS (Moved under Project Budget & Remaining Fund section) */}
+                {/* ──────────────────────────────────────────────────────────── */}
+                {canApproveOrReject && (
+                  <div className="action-bar flex items-center justify-between flex-wrap gap-4 mt-6 pt-5 border-t border-md-outline/15">
+                    <div className="text-xs text-md-on-surface-variant flex items-center gap-1.5">
+                      <Info size={15} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                      <span>Budget figures are provided for project fund allocation reference.</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Button variant="danger" onClick={() => setShowRejectModal(true)}>
+                        <XCircle size={18} /> Reject
+                      </Button>
+                      <Button variant="filled" onClick={() => setShowApproveModal(true)}>
+                        <CheckCircle size={18} /> Accept & Approve
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              canApproveOrReject && (
+                <div className="flex items-center justify-end gap-3 pt-4">
+                  <Button variant="danger" onClick={() => setShowRejectModal(true)}>
+                    <XCircle size={18} /> Reject
+                  </Button>
+                  <Button variant="filled" onClick={() => setShowApproveModal(true)}>
+                    <CheckCircle size={18} /> Accept & Approve
+                  </Button>
+                </div>
+              )
+            )
+          )}
 
           {/* Footer */}
           <div
