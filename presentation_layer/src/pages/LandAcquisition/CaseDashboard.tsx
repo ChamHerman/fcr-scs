@@ -14,7 +14,7 @@ import { Modal } from "../../components/ui/Modal";
 import { Input } from "../../components/ui/Input";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
-import "../../style.css";
+import "../../index.css";
 import "./case_management.css";
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
@@ -24,6 +24,7 @@ import {
   CASE_STATUS_LABEL_MAP as statusLabelMap,
   CASE_STATUS_OPTIONS as STATUS_OPTIONS,
   PROJECT_TYPE_OPTIONS as BASE_PROJECT_TYPE_OPTIONS,
+  useTableSort,
 } from "../../constants";
 
 const PROJECT_TYPE_OPTIONS: SelectOption[] = [
@@ -50,6 +51,8 @@ export const CaseManagementDashboard: React.FC = () => {
     canAssignValuer,
     canDeleteCase,
   } = useRole();
+
+  const { sortKey, sortDirection, handleSort, renderSortIcon, sortItems } = useTableSort<string>();
 
   // State
   const [cases, setCases] = useState<any[]>([]);
@@ -237,6 +240,16 @@ export const CaseManagementDashboard: React.FC = () => {
   useEffect(() => {
     loadDashboardData();
   }, [loadDashboardData]);
+
+  const sortedCases = React.useMemo(() => {
+    return sortItems(cases, {
+      status: (c) => statusLabelMap[c.status] || c.status || "",
+      registrationDate: (c) => new Date(c.registrationDate || c.createdAt || 0).getTime(),
+      projectName: (c) => c.project?.projectName || "",
+      landTitleNo: (c) => c.landParcel?.landTitleNo || "",
+      assignedValuer: (c) => c.caseAssignments?.[0]?.assignedTo?.name || "",
+    });
+  }, [cases, sortKey, sortDirection, sortItems]);
 
   const handleClearFilters = () => {
     setSearchTerm("");
@@ -480,28 +493,39 @@ export const CaseManagementDashboard: React.FC = () => {
         {/* Table */}
         <div className="table-wrap">
           <div className="table-scroll md-scroll-thin">
-            <table>
+            <table className="w-full table-fixed">
               <thead>
                 <tr>
-                  <th>Case ID</th>
-                  <th>Case Title</th>
-                  <th>Status</th>
-                  <th>Registration Date</th>
-                  <th>Project Name</th>
-                  <th>Land Title No.</th>
-                  <th>Assigned Valuer</th>
+                  <th style={{ width: "14%" }} onClick={() => handleSort("caseId")} className="cursor-pointer select-none">
+                    Case ID {renderSortIcon("caseId")}
+                  </th>
+                  <th style={{ width: "26%" }} onClick={() => handleSort("caseTitle")} className="cursor-pointer select-none">
+                    Case Title {renderSortIcon("caseTitle")}
+                  </th>
+                  <th style={{ width: "20%" }} onClick={() => handleSort("status")} className="cursor-pointer select-none">
+                    Status {renderSortIcon("status")}
+                  </th>
+                  <th style={{ width: "18%" }} onClick={() => handleSort("projectName")} className="cursor-pointer select-none">
+                    Project Name {renderSortIcon("projectName")}
+                  </th>
+                  <th style={{ width: "10%" }} onClick={() => handleSort("landTitleNo")} className="cursor-pointer select-none">
+                    Land Title No. {renderSortIcon("landTitleNo")}
+                  </th>
+                  <th style={{ width: "12%" }} onClick={() => handleSort("assignedValuer")} className="cursor-pointer select-none">
+                    Assigned Valuer {renderSortIcon("assignedValuer")}
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)" }}>
+                    <td colSpan={6} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)" }}>
                       <Lucide.Loader2 size={24} className="inline animate-spin mr-2" /> Loading cases from database...
                     </td>
                   </tr>
-                ) : cases.length === 0 ? (
+                ) : sortedCases.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: "center", padding: "36px", color: "var(--md-on-surface-variant)", opacity: 0.7 }}>
+                    <td colSpan={6} style={{ textAlign: "center", padding: "36px", color: "var(--md-on-surface-variant)", opacity: 0.7 }}>
                       {isOfficer ? (
                         <p className="mb-2 font-medium">No cases found created by you.</p>
                       ) : isValuer ? (
@@ -512,7 +536,7 @@ export const CaseManagementDashboard: React.FC = () => {
                     </td>
                   </tr>
                 ) : (
-                  cases.map((c) => {
+                  sortedCases.map((c) => {
                     const statusClass = statusClassMap[c.status] || "status-case-registered";
                     const statusLabel = statusLabelMap[c.status] || c.status;
                     const assignedValuer =
@@ -525,9 +549,9 @@ export const CaseManagementDashboard: React.FC = () => {
                         onClick={() => navigate("/admin/case/details", { state: { caseId: c.caseId } })}
                       >
                         <td>
-                          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-1 min-w-0" onClick={(e) => e.stopPropagation()}>
                             <span
-                              className="case-id hover:underline cursor-pointer font-mono font-semibold"
+                              className="case-id hover:underline cursor-pointer font-mono font-semibold truncate block"
                               onClick={() => navigate("/admin/case/details", { state: { caseId: c.caseId } })}
                               title={c.caseId}
                             >
@@ -536,25 +560,24 @@ export const CaseManagementDashboard: React.FC = () => {
                             <CopyButton value={c.caseId} />
                           </div>
                         </td>
-                        <td className="case-title">{c.caseTitle}</td>
+                        <td title={c.caseTitle}>
+                          <span className="meta-text line-clamp-2 leading-snug block">{c.caseTitle}</span>
+                        </td>
                         <td>
                           <span className={`status-badge ${statusClass}`}>
                             <span className="dot"></span> {statusLabel}
                           </span>
                         </td>
-                        <td>
-                          <span className="meta-text">{formatDate(c.registrationDate)}</span>
+                        <td title={c.project?.projectName || "—"}>
+                          <span className="meta-text line-clamp-2 leading-snug block">{c.project?.projectName || "—"}</span>
                         </td>
-                        <td>
-                          <span className="meta-text">{c.project?.projectName || "—"}</span>
+                        <td title={c.landParcel?.landTitleNo || "—"}>
+                          <span className="meta-text font-mono text-xs truncate block">{c.landParcel?.landTitleNo || "—"}</span>
                         </td>
-                        <td>
-                          <span className="meta-text">{c.landParcel?.landTitleNo || "—"}</span>
-                        </td>
-                        <td>
+                        <td title={assignedValuer || ""}>
                           {assignedValuer ? (
-                            <span className="meta-text">
-                              <strong>{assignedValuer}</strong>
+                            <span className="meta-text line-clamp-2 leading-snug block">
+                              {assignedValuer}
                             </span>
                           ) : canAssignValuer ? (
                             <div onClick={(e) => e.stopPropagation()}>
@@ -564,7 +587,7 @@ export const CaseManagementDashboard: React.FC = () => {
                                 onClick={() => handleOpenAssignModal(c)}
                                 className="!py-1 !px-2.5 !text-xs !h-auto flex items-center gap-1.5 font-medium whitespace-nowrap"
                               >
-                                <Lucide.UserPlus size={13} /> Assign Valuer
+                                <Lucide.UserPlus size={13} /> Assign
                               </Button>
                             </div>
                           ) : (

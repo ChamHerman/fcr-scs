@@ -130,7 +130,8 @@
 .objection-dashboard table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: 13.5px;
+  table-layout: fixed;
 }
 .objection-dashboard table thead {
   background: rgba(103, 80, 164, 0.04);
@@ -138,18 +139,19 @@
 }
 .objection-dashboard table th {
   text-align: left;
-  padding: 14px 18px;
+  padding: 12px 10px;
   font-weight: 600;
-  font-size: 12px;
+  font-size: 11.5px;
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.3px;
   color: var(--md-on-surface-variant);
   white-space: nowrap;
 }
 .objection-dashboard table td {
-  padding: 14px 18px;
+  padding: 12px 10px;
   border-bottom: 1px solid rgba(121, 116, 126, 0.06);
   vertical-align: middle;
+  word-break: break-word;
 }
 .objection-dashboard table tbody tr {
   transition: background 0.15s;
@@ -159,6 +161,17 @@
 }
 .objection-dashboard table tbody tr:last-child td {
   border-bottom: none;
+}
+.objection-dashboard .case-title {
+  font-weight: 500;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-clamp: 2;
+  line-height: 1.35;
+  word-break: break-word;
 }
 .objection-dashboard .status-badge {
   display: inline-flex;

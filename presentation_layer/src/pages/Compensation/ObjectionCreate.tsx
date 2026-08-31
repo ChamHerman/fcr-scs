@@ -1,7 +1,7 @@
 import * as Lucide from "lucide-react";
 import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Send, X, File, Upload, ArrowLeft, Loader2 } from "lucide-react";
+import { Send, X, File, ArrowLeft, Loader2 } from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
 import { Button } from "../../components/ui/Button";
 import { Modal } from "../../components/ui/Modal";
@@ -11,9 +11,10 @@ import { CurrencyInput } from "../../components/ui/CurrencyInput";
 import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { IconButton } from "../../components/ui/IconButton";
+import { FileUpload } from "../../components/ui/FileUpload";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
-import "../../style.css";
+import "../../index.css";
 import "./objection.css";
 
 type OfferOption = {
@@ -22,6 +23,7 @@ type OfferOption = {
   caseTitle: string;
   ownerName: string;
   offerAmount: number;
+  isAcceptedWithinGrace?: boolean;
 };
 
 type FileAttachment = {
@@ -63,19 +65,108 @@ export const ObjectionCreate: React.FC = () => {
           ownerNric: activeMemberIc || undefined,
           limit: 1000,
         });
-        const list: OfferOption[] = (res.offerLetters || []).map((o: any) => ({
-          offerId: o.offerId,
-          caseId: o.caseId,
-          caseTitle: o.acquisitionCase?.caseTitle || "Unknown Case",
-          ownerName: o.landOwnership?.landOwner?.name || "Unknown Owner",
-          offerAmount: Number(o.offerAmount || 0),
-        }));
+
+        const now = Date.now();
+        const rawOffers = res.offerLetters || [];
+
+        // Filter out offers where acceptance grace period (24 hours) has expired
+        const validOffers = rawOffers.filter((o: any) => {
+          // 1. Check member responses if user is a member
+          const memberResponses = o.memberResponses || [];
+          let userMemberResp = null;
+          if (activeMemberIc) {
+            const cleanUserIc = activeMemberIc.replace(/[^a-zA-Z0-9]/g, "");
+            userMemberResp = memberResponses.find((mr: any) => {
+              const oIc = (mr.landOwner?.nric || "").trim();
+              const oClean = oIc.replace(/[^a-zA-Z0-9]/g, "");
+              return oIc === activeMemberIc || (cleanUserIc && oClean === cleanUserIc);
+            });
+          }
+
+          let isAccepted = false;
+          let acceptanceTime: Date | null = null;
+
+          if (userMemberResp && userMemberResp.status === "ACCEPTED") {
+            isAccepted = true;
+            acceptanceTime = userMemberResp.respondedAt
+              ? new Date(userMemberResp.respondedAt)
+              : o.acceptedAt
+              ? new Date(o.acceptedAt)
+              : null;
+          } else if (o.status === "ACCEPTED" || o.acceptedAt) {
+            isAccepted = true;
+            acceptanceTime = o.acceptedAt
+              ? new Date(o.acceptedAt)
+              : userMemberResp?.respondedAt
+              ? new Date(userMemberResp.respondedAt)
+              : null;
+          }
+
+          if (isAccepted && acceptanceTime) {
+            const diffHours = (now - acceptanceTime.getTime()) / (1000 * 60 * 60);
+            // If already accepted and past the 24-hour grace period, DO NOT allow selection
+            if (diffHours > 24) {
+              return false;
+            }
+          }
+
+          // Check if there is an active pending objection already created
+          const hasPendingObjection = (o.objections || []).some(
+            (obj: any) => obj.status === "PENDING"
+          );
+          if (hasPendingObjection) {
+            return false;
+          }
+
+          return true;
+        });
+
+        const list: OfferOption[] = validOffers.map((o: any) => {
+          let isAcceptedWithinGrace = false;
+          const memberResponses = o.memberResponses || [];
+          let userMemberResp = null;
+          if (activeMemberIc) {
+            const cleanUserIc = activeMemberIc.replace(/[^a-zA-Z0-9]/g, "");
+            userMemberResp = memberResponses.find((mr: any) => {
+              const oIc = (mr.landOwner?.nric || "").trim();
+              const oClean = oIc.replace(/[^a-zA-Z0-9]/g, "");
+              return oIc === activeMemberIc || (cleanUserIc && oClean === cleanUserIc);
+            });
+          }
+
+          if (userMemberResp && userMemberResp.status === "ACCEPTED") {
+            isAcceptedWithinGrace = true;
+          } else if (o.status === "ACCEPTED" || o.acceptedAt) {
+            isAcceptedWithinGrace = true;
+          }
+
+          return {
+            offerId: o.offerId,
+            caseId: o.caseId,
+            caseTitle: o.acquisitionCase?.caseTitle || "Unknown Case",
+            ownerName: o.landOwnership?.landOwner?.name || "Unknown Owner",
+            offerAmount: Number(o.offerAmount || 0),
+            isAcceptedWithinGrace,
+          };
+        });
+
         setOffers(list);
 
-        if (paramOfferId && list.some((item) => item.offerId === paramOfferId)) {
+        if (paramOfferId) {
           const match = list.find((item) => item.offerId === paramOfferId);
           if (match) {
+            setSelectedOfferId(match.offerId);
             setRequestedAmount(Math.round(match.offerAmount * 1.15));
+          } else {
+            // Check if paramOfferId was excluded due to expired grace period
+            const rawMatch = rawOffers.find((item: any) => item.offerId === paramOfferId);
+            if (rawMatch) {
+              notify({
+                type: "general",
+                title: "Grace Period Expired",
+                message: "The 24-hour grace period for this accepted offer letter has expired. Objections cannot be submitted.",
+              });
+            }
           }
         }
       } catch (err) {
@@ -86,7 +177,7 @@ export const ObjectionCreate: React.FC = () => {
     }
 
     loadOffers();
-  }, [paramOfferId]);
+  }, [paramOfferId, isMember, user?.identificationNumber]);
 
   const handleOfferSelect = (offerId: string) => {
     setSelectedOfferId(offerId);
@@ -103,16 +194,14 @@ export const ObjectionCreate: React.FC = () => {
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fileList = e.target.files;
-    if (!fileList) return;
+  const handleFileListUpload = (fileList: FileList) => {
     for (let i = 0; i < fileList.length; i++) {
       const file = fileList[i];
       if (file.size > 10 * 1024 * 1024) {
         notify({
-          type: 'error',
-          title: 'File Too Large',
-          message: 'File size exceeds 10MB limit.',
+          type: "error",
+          title: "File Too Large",
+          message: `${file.name} exceeds 10MB limit.`,
         });
         continue;
       }
@@ -120,14 +209,34 @@ export const ObjectionCreate: React.FC = () => {
       setFiles((prev) => [
         ...prev,
         {
-          id: Date.now().toString() + i,
+          id: Date.now().toString() + i + Math.random().toString(36).substring(2, 5),
           name: file.name,
           size: `${sizeInMB} MB`,
           file: file,
         },
       ]);
     }
-    e.target.value = "";
+  };
+
+  const handleSingleFileUpload = (file: File) => {
+    if (file.size > 10 * 1024 * 1024) {
+      notify({
+        type: "error",
+        title: "File Too Large",
+        message: `${file.name} exceeds 10MB limit.`,
+      });
+      return;
+    }
+    const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
+    setFiles((prev) => [
+      ...prev,
+      {
+        id: Date.now().toString() + Math.random().toString(36).substring(2, 5),
+        name: file.name,
+        size: `${sizeInMB} MB`,
+        file: file,
+      },
+    ]);
   };
 
   const removeFile = (id: string) => {
@@ -193,7 +302,9 @@ export const ObjectionCreate: React.FC = () => {
     { value: "", label: "— Choose an offer letter —" },
     ...offers.map((o) => ({
       value: o.offerId,
-      label: `${o.caseTitle} — ${o.ownerName} (Offered: RM ${o.offerAmount.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`,
+      label: `${o.caseTitle} — ${o.ownerName} (Offered: RM ${o.offerAmount.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${
+        o.isAcceptedWithinGrace ? " · Accepted (within 24h grace window)" : ""
+      })`,
     })),
   ];
 
@@ -408,35 +519,56 @@ export const ObjectionCreate: React.FC = () => {
             </div>
 
             {/* Supporting Evidence File Upload */}
-            <div className="p-5 rounded-2xl bg-md-surface-container-low border border-md-outline/10">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2 text-sm font-bold">
-                  <File size={18} className="text-md-primary" /> Supporting Documents & Evidence
-                </div>
-                <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-md-primary/30 text-xs font-semibold text-md-primary cursor-pointer hover:bg-md-primary/5 transition-colors">
-                  <Upload size={14} /> Attach Files
-                  <input
-                    type="file"
-                    multiple
-                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                    onChange={handleFileUpload}
-                    style={{ display: "none" }}
-                  />
-                </label>
+            <div className="p-5 rounded-2xl bg-md-surface-container-low border border-md-outline/10 space-y-3">
+              <div className="flex items-center gap-2 text-sm font-bold">
+                <File size={18} className="text-md-primary" /> Supporting Documents & Evidence
               </div>
+
+              <FileUpload
+                id="objectionEvidence"
+                label="Attach Supporting Documents (Optional)"
+                placeholder="Choose file to attach (PDF, JPG, PNG, DOC, DOCX)"
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                multiple
+                fileName={files.length === 1 ? files[0].name : undefined}
+                onClear={files.length === 1 ? () => setFiles([]) : undefined}
+                onChange={(file, e) => {
+                  const fileList = e?.target.files;
+                  if (fileList && fileList.length > 0) {
+                    handleFileListUpload(fileList);
+                  } else if (file) {
+                    handleSingleFileUpload(file);
+                  }
+                }}
+              />
 
               {files.length === 0 ? (
                 <p className="text-xs text-md-on-surface-variant opacity-70">
                   No attachments uploaded. (Optional: Attach private valuer report, photographs, or official title deeds).
                 </p>
               ) : (
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2 pt-1">
+                  <div className="text-xs font-semibold text-md-on-surface-variant flex items-center justify-between">
+                    <span>Attached Files ({files.length})</span>
+                    {files.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setFiles([])}
+                        className="text-red-600 hover:underline text-[11px]"
+                      >
+                        Remove All
+                      </button>
+                    )}
+                  </div>
                   {files.map((f) => (
-                    <div key={f.id} className="flex items-center justify-between p-2.5 rounded-xl bg-md-surface-container text-xs">
-                      <div className="flex items-center gap-2">
-                        <Lucide.FileText size={16} className="text-md-primary" />
-                        <span className="font-medium">{f.name}</span>
-                        <span className="opacity-60">({f.size})</span>
+                    <div
+                      key={f.id}
+                      className="flex items-center justify-between p-2.5 rounded-xl bg-md-surface-container text-xs border border-md-outline/10"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 pr-2">
+                        <Lucide.FileText size={16} className="text-md-primary flex-shrink-0" />
+                        <span className="font-medium truncate">{f.name}</span>
+                        <span className="opacity-60 flex-shrink-0">({f.size})</span>
                       </div>
                       <IconButton
                         title="Remove file"
@@ -450,7 +582,8 @@ export const ObjectionCreate: React.FC = () => {
                   ))}
                 </div>
               )}
-              <div className="text-[11px] text-md-on-surface-variant opacity-60 mt-2">
+
+              <div className="text-[11px] text-md-on-surface-variant opacity-60">
                 Supported formats: PDF, JPEG, PNG, DOC, DOCX. Max 10MB per file.
               </div>
             </div>

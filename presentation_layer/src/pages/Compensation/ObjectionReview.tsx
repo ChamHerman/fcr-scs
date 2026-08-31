@@ -11,7 +11,7 @@ import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
-import "../../style.css";
+import "../../index.css";
 import "./objection.css";
 
 type ObjectionDetail = {

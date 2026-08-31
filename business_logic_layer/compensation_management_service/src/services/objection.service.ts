@@ -228,14 +228,42 @@ export async function getObjectionById(objectionId: string) {
 export async function createObjection(input: CreateObjectionInput) {
   const { offerId, caseId, objectionReason, requestedAmount, createdById } = input;
 
-  const offer = await prisma.offerLetter.findUnique({ where: { offerId } });
+  const offer = await prisma.offerLetter.findUnique({
+    where: { offerId },
+    include: {
+      acquisitionCase: {
+        include: {
+          landParcel: {
+            include: {
+              ownerships: {
+                include: {
+                  landOwner: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      landOwnership: {
+        include: {
+          landOwner: true,
+        },
+      },
+      memberResponses: {
+        include: {
+          landOwner: true,
+        },
+      },
+    },
+  });
   if (!offer) throw new Error("Offer letter not found");
 
   // Validate or resolve user for createdById to prevent foreign key violation
   let validUserId = createdById;
+  let user = null;
   if (validUserId) {
-    const userExists = await prisma.user.findUnique({ where: { userId: validUserId } });
-    if (!userExists) {
+    user = await prisma.user.findUnique({ where: { userId: validUserId } });
+    if (!user) {
       validUserId = undefined as any;
     }
   }
@@ -244,6 +272,42 @@ export async function createObjection(input: CreateObjectionInput) {
     const defaultUser = await prisma.user.findFirst();
     if (!defaultUser) throw new Error("No valid user found to author the objection record");
     validUserId = defaultUser.userId;
+    user = defaultUser;
+  }
+
+  // --- Business Logic: Grace Period Validation on Accepted Offer Letters ---
+  const userNric = user?.identificationNumber?.trim();
+  const cleanUserNric = userNric ? userNric.replace(/[^a-zA-Z0-9]/g, "") : "";
+
+  // Check if this specific member has a response record
+  const matchingMemberResp = (offer.memberResponses || []).find((mr) => {
+    if (!userNric) return false;
+    const oNric = (mr.landOwner?.nric || "").trim();
+    const oClean = oNric.replace(/[^a-zA-Z0-9]/g, "");
+    return oNric === userNric || (cleanUserNric && oClean === cleanUserNric);
+  });
+
+  // Determine if the offer has already been accepted (by member or overall)
+  let isAccepted = false;
+  let acceptanceTime: Date | null = null;
+
+  if (matchingMemberResp && matchingMemberResp.status === OfferStatus.ACCEPTED) {
+    isAccepted = true;
+    acceptanceTime = matchingMemberResp.respondedAt || offer.acceptedAt || offer.updatedAt;
+  } else if (offer.status === OfferStatus.ACCEPTED || offer.acceptedAt != null) {
+    isAccepted = true;
+    acceptanceTime = offer.acceptedAt || matchingMemberResp?.respondedAt || offer.updatedAt;
+  }
+
+  if (isAccepted && acceptanceTime) {
+    const now = new Date();
+    const diffHours = (now.getTime() - new Date(acceptanceTime).getTime()) / (1000 * 60 * 60);
+
+    if (diffHours > 24) {
+      throw new Error(
+        "The 24-hour grace period for this accepted offer letter has expired. Objections cannot be submitted after the grace period."
+      );
+    }
   }
 
   const objection = await prisma.$transaction(async (tx) => {
@@ -261,6 +325,30 @@ export async function createObjection(input: CreateObjectionInput) {
         offerLetter: true,
       },
     });
+
+    // If the member had previously accepted within grace period, update response to REJECTED (disputed)
+    if (matchingMemberResp) {
+      await tx.offerMemberResponse.upsert({
+        where: {
+          offerId_ownerId: {
+            offerId,
+            ownerId: matchingMemberResp.ownerId,
+          },
+        },
+        create: {
+          offerId,
+          ownerId: matchingMemberResp.ownerId,
+          status: OfferStatus.REJECTED,
+          remarks: `Disputed via Form N Objection (${createdObj.objectionId}) within 24-hour grace window`,
+          respondedAt: new Date(),
+        },
+        update: {
+          status: OfferStatus.REJECTED,
+          remarks: `Disputed via Form N Objection (${createdObj.objectionId}) within 24-hour grace window`,
+          respondedAt: new Date(),
+        },
+      });
+    }
 
     // Business Logic: Submitting a Form N objection disputes the award.
     // Update the offer letter status to REJECTED and the case status to OFFER_REJECTED.

@@ -20,7 +20,7 @@ import { Modal } from "../../components/ui/Modal";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
-import "../../style.css";
+import "../../index.css";
 import "./case_management.css";
 
 // --- Types ---

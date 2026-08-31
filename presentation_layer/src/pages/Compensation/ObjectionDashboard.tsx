@@ -14,7 +14,7 @@ import { CopyButton } from "../../components/ui/CopyButton";
 import { Pagination } from "../../components/ui/Pagination";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
-import "../../style.css";
+import "../../index.css";
 import "./compensation.css";
 
 type ObjectionItem = {
@@ -34,6 +34,7 @@ import {
   OBJECTION_STATUS_CLASS_MAP as statusClassMap,
   OBJECTION_STATUS_LABEL_MAP as statusLabelMap,
   OBJECTION_STATUS_OPTIONS as STATUS_OPTIONS,
+  useTableSort,
 } from "../../constants";
 
 export const ObjectionDashboard: React.FC = () => {
@@ -49,6 +50,8 @@ export const ObjectionDashboard: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  const { sortKey, sortDirection, handleSort, renderSortIcon, sortItems } = useTableSort<keyof ObjectionItem>();
 
   // Edit Modal state
   const [editItem, setEditItem] = useState<ObjectionItem | null>(null);
@@ -193,12 +196,19 @@ export const ObjectionDashboard: React.FC = () => {
     return list;
   }, [allScopedObjections, searchTerm, statusFilter]);
 
-  // 3. Paginate the filtered data for table display
+  // 3. Sort the filtered objections using reusable sort helper
+  const sortedObjections = React.useMemo(() => {
+    return sortItems(filteredObjections, {
+      submissionDate: (o) => (o.submissionDate && o.submissionDate !== "—" ? new Date(o.submissionDate).getTime() : 0),
+    });
+  }, [filteredObjections, sortKey, sortDirection, sortItems]);
+
+  // 4. Paginate the sorted data for table display
   useEffect(() => {
-    setTotalCount(filteredObjections.length);
+    setTotalCount(sortedObjections.length);
     const startIndex = (currentPage - 1) * itemsPerPage;
-    setObjections(filteredObjections.slice(startIndex, startIndex + itemsPerPage));
-  }, [filteredObjections, currentPage, itemsPerPage]);
+    setObjections(sortedObjections.slice(startIndex, startIndex + itemsPerPage));
+  }, [sortedObjections, currentPage, itemsPerPage]);
 
   const handleView = (objectionId: string) => {
     navigate(`/admin/compensation/objection/review/${objectionId}`, { state: { objectionId } });
@@ -460,15 +470,27 @@ export const ObjectionDashboard: React.FC = () => {
 
       <div className="table-wrap">
         <div className="table-scroll md-scroll-thin">
-          <table>
+          <table className="w-full table-fixed">
             <thead>
               <tr>
-                <th>Objection ID</th>
-                <th>Case Title</th>
-                <th>Land Owner</th>
-                <th>Requested Amount</th>
-                <th>Date</th>
-                <th>Status</th>
+                <th style={{ width: "18%" }} onClick={() => handleSort("id")} className="cursor-pointer select-none">
+                  Objection ID {renderSortIcon("id")}
+                </th>
+                <th style={{ width: "26%" }} onClick={() => handleSort("caseTitle")} className="cursor-pointer select-none">
+                  Case Title {renderSortIcon("caseTitle")}
+                </th>
+                <th style={{ width: "18%" }} onClick={() => handleSort("ownerName")} className="cursor-pointer select-none">
+                  Land Owner {renderSortIcon("ownerName")}
+                </th>
+                <th style={{ width: "14%" }} onClick={() => handleSort("requestedAmount")} className="cursor-pointer select-none">
+                  Requested Amount {renderSortIcon("requestedAmount")}
+                </th>
+                <th style={{ width: "11%" }} onClick={() => handleSort("submissionDate")} className="cursor-pointer select-none">
+                  Date {renderSortIcon("submissionDate")}
+                </th>
+                <th style={{ width: "13%" }} onClick={() => handleSort("status")} className="cursor-pointer select-none">
+                  Status {renderSortIcon("status")}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -492,17 +514,23 @@ export const ObjectionDashboard: React.FC = () => {
                     className="cursor-pointer hover:bg-md-primary/5 transition-colors"
                   >
                     <td>
-                      <div className="flex items-center gap-1.5">
-                        <span className="case-id font-mono text-xs">{o.id}</span>
-                        <span onClick={(e) => e.stopPropagation()}>
-                          <CopyButton value={o.id} />
-                        </span>
+                      <div className="flex items-center gap-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+                        <span className="case-id font-mono text-xs truncate block">{o.id}</span>
+                        <CopyButton value={o.id} />
                       </div>
                     </td>
-                    <td className="case-title">{o.caseTitle}</td>
-                    <td>{o.ownerName}</td>
-                    <td><strong>{formatCurrency(o.requestedAmount)}</strong></td>
-                    <td>{o.submissionDate}</td>
+                    <td title={o.caseTitle}>
+                      <span className="meta-text line-clamp-2 leading-snug block">{o.caseTitle}</span>
+                    </td>
+                    <td title={o.ownerName}>
+                      <span className="meta-text line-clamp-2 leading-snug block">{o.ownerName}</span>
+                    </td>
+                    <td title={formatCurrency(o.requestedAmount)}>
+                      <span className="meta-text line-clamp-2 leading-snug block">{formatCurrency(o.requestedAmount)}</span>
+                    </td>
+                    <td>
+                      <span className="meta-text text-xs whitespace-nowrap">{o.submissionDate}</span>
+                    </td>
                     <td>
                       <span className={`status-badge ${o.statusClass}`}>
                         <span className="dot"></span> {o.status}

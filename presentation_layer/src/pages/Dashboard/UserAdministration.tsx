@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MD3Card, MD3Button, MD3Input } from '../MD3Components';
 import { Select, type SelectOption } from '../../components/ui/Select';
+import { IdentificationInput } from '../../components/ui/IdentificationInput';
 import { Search, Filter, Shield, Eye, EyeOff, MoreVertical, X, CheckCircle } from 'lucide-react';
 
 export const UserAdministration: React.FC = () => {
@@ -211,11 +212,11 @@ export const UserAdministration: React.FC = () => {
                   value={formData.contactNumber}
                   onChange={(e) => setFormData({...formData, contactNumber: e.target.value})}
                 />
-                <MD3Input 
-                  label="Identification Number (IC)" 
-                  required 
+                <IdentificationInput 
+                  label="Identification Number (IC) *" 
                   value={formData.identificationNumber}
                   onChange={(e) => setFormData({...formData, identificationNumber: e.target.value})}
+                  placeholder="900101-14-5532"
                 />
                 
                 <div className="flex flex-col gap-1.5 mt-2 z-10 relative">

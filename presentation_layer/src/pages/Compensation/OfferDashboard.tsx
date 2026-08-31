@@ -9,7 +9,7 @@ import { SearchInput } from "../../components/ui/SearchInput";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { Pagination } from "../../components/ui/Pagination";
 import { useRole } from "../../hooks/useRole";
-import "../../style.css";
+import "../../index.css";
 import "./compensation.css";
 
 type OfferItem = {
@@ -33,6 +33,7 @@ import {
   OFFER_STATUS_CLASS_MAP as statusClassMap,
   OFFER_STATUS_LABEL_MAP as statusLabelMap,
   OFFER_STATUS_OPTIONS as STATUS_OPTIONS,
+  useTableSort,
 } from "../../constants";
 
 const normalizeIc = (ic?: string) => (ic || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase().trim();
@@ -49,6 +50,8 @@ export const OfferDashboard: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  const { sortKey, sortDirection, handleSort, renderSortIcon, sortItems } = useTableSort<keyof OfferItem>();
 
   // Retrieve user IC if missing in context
   useEffect(() => {
@@ -166,7 +169,8 @@ export const OfferDashboard: React.FC = () => {
       const term = searchTerm.toLowerCase();
       list = list.filter(
         (o) =>
-          o.offerReferenceNo.toLowerCase().includes(term) ||
+          o.id.toLowerCase().includes(term) ||
+          (o.offerReferenceNo && o.offerReferenceNo.toLowerCase().includes(term)) ||
           o.caseTitle.toLowerCase().includes(term) ||
           o.ownerName.toLowerCase().includes(term) ||
           o.ownerNric.toLowerCase().includes(term)
@@ -181,12 +185,19 @@ export const OfferDashboard: React.FC = () => {
     return list;
   }, [allScopedOffers, searchTerm, statusFilter]);
 
-  // 3. Paginate the filtered data for table display
+  // 3. Sort the filtered offers using reusable sort helper
+  const sortedOffers = React.useMemo(() => {
+    return sortItems(filteredOffers, {
+      expiryDate: (o) => (o.expiryDate && o.expiryDate !== "—" ? new Date(o.expiryDate).getTime() : 0),
+    });
+  }, [filteredOffers, sortKey, sortDirection, sortItems]);
+
+  // 4. Paginate the sorted data for table display
   useEffect(() => {
-    setTotalCount(filteredOffers.length);
+    setTotalCount(sortedOffers.length);
     const startIndex = (currentPage - 1) * itemsPerPage;
-    setOfferLetters(filteredOffers.slice(startIndex, startIndex + itemsPerPage));
-  }, [filteredOffers, currentPage, itemsPerPage]);
+    setOfferLetters(sortedOffers.slice(startIndex, startIndex + itemsPerPage));
+  }, [sortedOffers, currentPage, itemsPerPage]);
 
   const handleView = (offerId: string) => {
     navigate("/admin/compensation/offer/review", { state: { offerId } });
@@ -298,15 +309,27 @@ export const OfferDashboard: React.FC = () => {
 
       <div className="table-wrap">
         <div className="table-scroll md-scroll-thin">
-          <table>
+          <table className="w-full table-fixed">
             <thead>
               <tr>
-                <th>Offer Ref No.</th>
-                <th>Case Title</th>
-                <th>Land Owner</th>
-                <th>Offer Amount</th>
-                <th>Expiry Date</th>
-                <th>Status</th>
+                <th style={{ width: "18%" }} onClick={() => handleSort("id")} className="cursor-pointer select-none">
+                  Offer ID {renderSortIcon("id")}
+                </th>
+                <th style={{ width: "26%" }} onClick={() => handleSort("caseTitle")} className="cursor-pointer select-none">
+                  Case Title {renderSortIcon("caseTitle")}
+                </th>
+                <th style={{ width: "18%" }} onClick={() => handleSort("ownerName")} className="cursor-pointer select-none">
+                  Land Owner {renderSortIcon("ownerName")}
+                </th>
+                <th style={{ width: "14%" }} onClick={() => handleSort("offerAmount")} className="cursor-pointer select-none">
+                  Offer Amount {renderSortIcon("offerAmount")}
+                </th>
+                <th style={{ width: "11%" }} onClick={() => handleSort("expiryDate")} className="cursor-pointer select-none">
+                  Expiry Date {renderSortIcon("expiryDate")}
+                </th>
+                <th style={{ width: "13%" }} onClick={() => handleSort("status")} className="cursor-pointer select-none">
+                  Status {renderSortIcon("status")}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -332,17 +355,23 @@ export const OfferDashboard: React.FC = () => {
                     className="cursor-pointer hover:bg-md-primary/5 transition-colors"
                   >
                     <td>
-                      <div className="flex items-center gap-1.5">
-                        <span className="case-id font-mono text-xs">{o.offerReferenceNo}</span>
-                        <span onClick={(e) => e.stopPropagation()}>
-                          <CopyButton value={o.offerReferenceNo} />
-                        </span>
+                      <div className="flex items-center gap-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+                        <span className="case-id font-mono text-xs truncate block">{o.id}</span>
+                        <CopyButton value={o.id} />
                       </div>
                     </td>
-                    <td className="case-title">{o.caseTitle}</td>
-                    <td>{o.ownerName}</td>
-                    <td><strong>{formatCurrency(o.offerAmount)}</strong></td>
-                    <td>{o.expiryDate}</td>
+                    <td title={o.caseTitle}>
+                      <span className="meta-text line-clamp-2 leading-snug block">{o.caseTitle}</span>
+                    </td>
+                    <td title={o.ownerName}>
+                      <span className="meta-text line-clamp-2 leading-snug block">{o.ownerName}</span>
+                    </td>
+                    <td title={formatCurrency(o.offerAmount)}>
+                      <span className="meta-text line-clamp-2 leading-snug block">{formatCurrency(o.offerAmount)}</span>
+                    </td>
+                    <td>
+                      <span className="meta-text text-xs whitespace-nowrap">{o.expiryDate}</span>
+                    </td>
                     <td>
                       <div className="flex flex-col items-start gap-1">
                         <span className={`status-badge ${o.statusClass}`}>

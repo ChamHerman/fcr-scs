@@ -17,6 +17,9 @@ import {
   ArrowLeft,
   Check,
   Mail,
+  Wallet,
+  Layers,
+  Info,
 } from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
@@ -35,11 +38,20 @@ import {
   parseCurrencyToNumber,
 } from "../../utils/currency";
 import { CASE_STATUS_CLASS_MAP } from "../../constants";
-import "../../style.css";
+import "../../index.css";
 import "./compensation.css";
 import "../LandAcquisition/valuation_report.css";
 
 // --- Types ---
+type ProjectBudgetSummary = {
+  projectId?: string;
+  projectName?: string;
+  projectType?: string;
+  totalBudget: number;
+  totalApprovedUnderProject: number;
+  remainingFund: number;
+};
+
 type CaseData = {
   id: string;
   title: string;
@@ -50,6 +62,7 @@ type CaseData = {
   registrationDate: string;
   status: string;
   statusClass: string;
+  projectBudgetSummary?: ProjectBudgetSummary;
 };
 
 type ValuationReport = {
@@ -132,6 +145,12 @@ export const CompensationCreate: React.FC = () => {
     return Math.round((lv + bv + cv + bd + dc + ra + oe) * 100) / 100;
   }, [formData]);
 
+  // Project Budget & Remaining Funds (Dynamic calculation for reference)
+  const projectBudget = caseData?.projectBudgetSummary?.totalBudget || 0;
+  const totalApprovedUnderProject = caseData?.projectBudgetSummary?.totalApprovedUnderProject || 0;
+  const currentRemainingFund = caseData?.projectBudgetSummary?.remainingFund ?? projectBudget;
+  const remainingFundAfterReport = currentRemainingFund - calculatedTotal;
+
   // Land value difference vs approved recommended valuation
   const recommendedValuation = valuationReport?.recommendedCompensation || 0;
   const landValueNum = parseCurrencyToNumber(formData.landValue);
@@ -147,6 +166,15 @@ export const CompensationCreate: React.FC = () => {
       if (c && (c.caseId || c.id)) {
         const cIdValue = c.caseId || c.id;
         const statusClass = CASE_STATUS_CLASS_MAP[c.status] || "status-valuation-approved";
+
+        const budgetSummary: ProjectBudgetSummary | undefined = c.projectBudgetSummary || (c.project ? {
+          projectId: c.project.projectId || "",
+          projectName: c.project.projectName || "—",
+          projectType: c.project.projectType || "—",
+          totalBudget: Number(c.project.budget || 0),
+          totalApprovedUnderProject: 0,
+          remainingFund: Number(c.project.budget || 0),
+        } : undefined);
 
         setCaseData({
           id: cIdValue,
@@ -164,6 +192,7 @@ export const CompensationCreate: React.FC = () => {
             : "—",
           status: c.status,
           statusClass,
+          projectBudgetSummary: budgetSummary,
         });
 
         const valReports = c.valuationReports || [];
@@ -469,6 +498,34 @@ export const CompensationCreate: React.FC = () => {
             </span>
           </div>
 
+          {/* Project Budget Reference */}
+          {caseData.projectBudgetSummary && (
+            <div className="p-3.5 rounded-xl bg-md-surface-container-low border border-md-outline/15 text-xs space-y-1.5">
+              <div className="flex justify-between items-center text-md-on-surface-variant">
+                <span>Total Project Budget:</span>
+                <span className="font-mono font-semibold text-md-on-surface">
+                  {formatCurrencyRM(projectBudget)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-md-on-surface-variant">
+                <span>Current Remaining Fund:</span>
+                <span className="font-mono font-semibold text-blue-700 dark:text-blue-400">
+                  {formatCurrencyRM(currentRemainingFund)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-md-on-surface-variant pt-1 border-t border-md-outline/10">
+                <span>Remaining Fund After This Report:</span>
+                <span
+                  className={`font-mono font-bold ${
+                    remainingFundAfterReport < 0 ? "text-amber-700 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-400"
+                  }`}
+                >
+                  {formatCurrencyRM(remainingFundAfterReport)}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Approved Valuation Recommended Reference */}
           <div className="flex justify-between items-center p-4 rounded-xl bg-md-surface-container-low border border-md-primary/30">
             <span className="text-sm font-semibold text-md-primary">Approved Recommended Valuation</span>
@@ -753,7 +810,7 @@ export const CompensationCreate: React.FC = () => {
               )}
 
               {/* ──────────────────────────────────────────────────────────── */}
-              {/* UNIFIED CONTAINER: Report Details (bold)                     */}
+              {/* 1. UNIFIED CONTAINER: Report Details (bold)                  */}
               {/* ──────────────────────────────────────────────────────────── */}
               <div className="bg-md-surface-container rounded-xl p-7 border border-md-outline/15 shadow-sm space-y-7">
                 {/* Main Header */}
@@ -859,7 +916,7 @@ export const CompensationCreate: React.FC = () => {
                     />
                     <div className="md:col-span-2">
                       <CurrencyInput
-                        label="Other Eligible Items (Special Damages) (RM)"
+                        label="Other Eligible Items (RM)"
                         id="otherEligible"
                         name="otherEligible"
                         value={formData.otherEligible}
@@ -871,43 +928,212 @@ export const CompensationCreate: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Total Calculated Compensation Live Card */}
+                <div className="p-4 rounded-xl bg-md-surface-container-low border border-green-500/30 flex items-center justify-between">
+                  <span className="text-sm font-semibold text-green-700 dark:text-green-400">Total Compensation Value</span>
+                  <span className="text-xl font-bold text-green-700 dark:text-green-400 font-mono">
+                    {formatCurrencyRM(calculatedTotal)}
+                  </span>
+                </div>
+
                 {/* DIVIDER 2 */}
                 <hr className="border-t border-md-outline/30 my-6" />
 
-                {/* 3. Additional Remarks */}
-                <div className="space-y-4">
-                  <h3 className="text-base font-bold text-md-on-surface">Additional Remarks</h3>
+                {/* 3. Remarks */}
+                <div className="space-y-2">
                   <Textarea
-                    label="Officer Notes / Remarks (Optional)"
+                    label="Remarks / Justification"
                     id="remarks"
                     name="remarks"
+                    rows={3}
+                    placeholder="Enter any additional remarks, justification or notes for this compensation assessment..."
                     value={formData.remarks}
                     onChange={handleInputChange}
-                    placeholder="Add any statutory justification, special assessment notes, or details regarding the compensation breakdown..."
-                    rows={3}
                   />
                 </div>
+              </div>
 
-                {/* Form Actions */}
-                <div className="flex items-center justify-end gap-3 pt-4 border-t border-md-outline/30">
-                  <Button variant="text" onClick={handleCancel}>
-                    <X size={16} /> Cancel
+              {/* ──────────────────────────────────────────────────────────── */}
+              {/* 2. PROJECT BUDGET & REMAINING FUND OVERVIEW (Below Report Details) */}
+              {/* ──────────────────────────────────────────────────────────── */}
+              {caseData?.projectBudgetSummary && (
+                <div className="project-budget-card">
+                  <div className="budget-header flex items-center justify-between flex-wrap gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="budget-icon-badge">
+                        <Wallet size={20} />
+                      </div>
+                      <div>
+                        <div className="budget-title flex items-center gap-2 flex-wrap">
+                          <span>Project Budget & Remaining Fund</span>
+                          <span className="project-pill flex items-center gap-1">
+                            <Folder size={13} className="inline" /> {caseData.project}
+                          </span>
+                        </div>
+                        <div className="budget-subtitle">
+                          Project fund overview and remaining allocation reference
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="budget-status-pill">
+                      <span className="status-pill info">
+                        <Info size={14} className="inline mr-1" /> Budget Reference
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 4 Key Metrics Grid */}
+                  <div className="budget-metrics-grid">
+                    <div className="metric-box">
+                      <span className="metric-label">Total Project Budget</span>
+                      <span className="metric-value font-mono">
+                        {formatCurrencyRM(projectBudget)}
+                      </span>
+                      <span className="metric-sub">Allocated Project Budget</span>
+                    </div>
+
+                    <div className="metric-box">
+                      <span className="metric-label">Total Approved Under Project</span>
+                      <span className="metric-value font-mono text-amber-700 dark:text-amber-400">
+                        {formatCurrencyRM(totalApprovedUnderProject)}
+                      </span>
+                      <span className="metric-sub">Across All Project Cases</span>
+                    </div>
+
+                    <div className="metric-box highlight-current">
+                      <span className="metric-label">Remaining Fund</span>
+                      <span className="metric-value font-mono text-blue-700 dark:text-blue-400">
+                        {formatCurrencyRM(currentRemainingFund)}
+                      </span>
+                      <span className="metric-sub">Prior to This Report</span>
+                    </div>
+
+                    <div
+                      className={`metric-box highlight-after ${
+                        remainingFundAfterReport < 0 ? "warning" : "success"
+                      }`}
+                    >
+                      <span className="metric-label">Remaining Fund After Report</span>
+                      <span
+                        className={`metric-value font-mono font-bold ${
+                          remainingFundAfterReport < 0
+                            ? "text-amber-700 dark:text-amber-400"
+                            : "text-emerald-700 dark:text-emerald-400"
+                        }`}
+                      >
+                        {formatCurrencyRM(remainingFundAfterReport)}
+                      </span>
+                      <span className="metric-sub font-semibold">
+                        {remainingFundAfterReport < 0
+                          ? `Difference: ${formatCurrencyRM(remainingFundAfterReport)}`
+                          : "Estimated Post-Approval Balance"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Visual Budget Allocation Progress Bar */}
+                  {projectBudget > 0 && (
+                    <div className="budget-progress-section">
+                      <div className="flex justify-between items-center text-xs mb-1.5 font-medium">
+                        <span className="text-md-on-surface-variant flex items-center gap-1.5">
+                          <Layers size={14} /> Project Budget Allocation
+                        </span>
+                        <span className="font-mono font-semibold text-md-on-surface">
+                          {(
+                            ((totalApprovedUnderProject + calculatedTotal) / projectBudget) *
+                            100
+                          ).toFixed(1)}
+                          % Total
+                        </span>
+                      </div>
+
+                      <div className="budget-progress-track">
+                        <div
+                          className="budget-bar-approved"
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              (totalApprovedUnderProject / projectBudget) * 100
+                            )}%`,
+                          }}
+                          title={`Previously Approved: ${formatCurrencyRM(totalApprovedUnderProject)}`}
+                        />
+                        {calculatedTotal > 0 && (
+                          <div
+                            className="budget-bar-current"
+                            style={{
+                              width: `${Math.min(
+                                100 - Math.min(100, (totalApprovedUnderProject / projectBudget) * 100),
+                                (calculatedTotal / projectBudget) * 100
+                              )}%`,
+                            }}
+                            title={`This Report: ${formatCurrencyRM(calculatedTotal)}`}
+                          />
+                        )}
+                      </div>
+
+                      <div className="budget-legend flex items-center justify-between text-xs mt-2.5 flex-wrap gap-2 text-md-on-surface-variant">
+                        <div className="flex items-center gap-4 flex-wrap">
+                          <span className="flex items-center gap-1.5">
+                            <span className="legend-dot approved" /> Approved Cases:{" "}
+                            <strong>{formatCurrencyRM(totalApprovedUnderProject)}</strong>
+                          </span>
+                          {calculatedTotal > 0 && (
+                            <span className="flex items-center gap-1.5">
+                              <span className="legend-dot current" /> This Report:{" "}
+                              <strong>{formatCurrencyRM(calculatedTotal)}</strong>
+                            </span>
+                          )}
+                          <span className="flex items-center gap-1.5">
+                            <span className="legend-dot remaining" /> Remaining After Report:{" "}
+                            <strong
+                              className={
+                                remainingFundAfterReport < 0
+                                  ? "text-amber-700 dark:text-amber-400"
+                                  : "text-emerald-700 dark:text-emerald-400"
+                              }
+                            >
+                              {formatCurrencyRM(remainingFundAfterReport)}
+                            </strong>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ──────────────────────────────────────────────────────────── */}
+                  {/* FORM ACTION BUTTONS (Moved into Budget Card After Progress Bar) */}
+                  {/* ──────────────────────────────────────────────────────────── */}
+                  <div className="flex items-center justify-end gap-3 pt-5 mt-4 border-t border-md-outline/15">
+                    <Button variant="outlined" onClick={handleCancel}>
+                      Cancel
+                    </Button>
+                    <Button variant="filled" onClick={handleGeneratePreview}>
+                      <Eye size={16} /> Review & Confirm
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Fallback Action Buttons if no budget summary */}
+              {!caseData?.projectBudgetSummary && (
+                <div className="flex items-center justify-end gap-3 pt-4">
+                  <Button variant="outlined" onClick={handleCancel}>
+                    Cancel
                   </Button>
-                  <Button
-                    variant="filled"
-                    onClick={handleGeneratePreview}
-                    disabled={isSaving || !caseData}
-                  >
-                    <Eye size={18} /> Generate Report
+                  <Button variant="filled" onClick={handleGeneratePreview}>
+                    <Eye size={16} /> Review & Confirm
                   </Button>
                 </div>
-              </div>
+              )}
             </div>
           )}
 
+          {/* Footer */}
           <div
             style={{
-              marginTop: "32px",
+              marginTop: "24px",
               fontSize: "13px",
               color: "var(--md-on-surface-variant)",
               opacity: 0.6,
@@ -916,7 +1142,7 @@ export const CompensationCreate: React.FC = () => {
               paddingTop: "18px",
             }}
           >
-            FCR-SCS · Compensation Report Module · For Compensation Officers only
+            FCR-SCS · Compensation Report Generator · Connected to Live Backend Service
           </div>
         </div>
       </div>
@@ -924,5 +1150,4 @@ export const CompensationCreate: React.FC = () => {
   );
 };
 
-export const CompensationReportGenerator = CompensationCreate;
 export default CompensationCreate;

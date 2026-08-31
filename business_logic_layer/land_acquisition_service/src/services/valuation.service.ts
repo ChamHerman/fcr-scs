@@ -115,7 +115,17 @@ export async function getReportById(reportId: string) {
     include: {
       acquisitionCase: {
         include: {
-          project: true,
+          project: {
+            include: {
+              cases: {
+                include: {
+                  compensationReports: {
+                    where: { status: "APPROVED" },
+                  },
+                },
+              },
+            },
+          },
           landParcel: {
             include: {
               ownerships: { include: { landOwner: true } },
@@ -132,7 +142,40 @@ export async function getReportById(reportId: string) {
     throw new Error("Valuation report not found");
   }
 
-  return report;
+  // Calculate project budget details for reference
+  let projectBudget = 0;
+  let totalApprovedUnderProject = 0;
+  let remainingFund = 0;
+  const project = report.acquisitionCase?.project;
+
+  if (project) {
+    projectBudget = Number(project.budget || 0);
+    for (const c of project.cases || []) {
+      for (const cr of c.compensationReports || []) {
+        totalApprovedUnderProject += Number(cr.totalCompensation || 0);
+      }
+    }
+    remainingFund = projectBudget - totalApprovedUnderProject;
+  }
+
+  const recComp = Number(report.recommendedCompensation || 0);
+  const remainingFundAfter = remainingFund - recComp;
+
+  return {
+    ...report,
+    projectBudgetSummary: {
+      projectId: project?.projectId || "",
+      projectName: project?.projectName || "",
+      projectType: project?.projectType || "",
+      totalBudget: projectBudget,
+      totalApprovedUnderProject,
+      remainingFund,
+      remainingFundBefore: remainingFund,
+      remainingFundAfter,
+      currentReportAmount: recComp,
+      isOverBudget: remainingFundAfter < 0,
+    },
+  };
 }
 
 export async function createOrUpdateReport(input: CreateValuationInput) {

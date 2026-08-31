@@ -11,7 +11,7 @@ import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
 import { formatCurrencyRM } from "../../utils/currency";
-import "../../style.css";
+import "../../index.css";
 import "./valuation_report.css";
 
 type ReportDetail = {
@@ -199,7 +199,7 @@ export const ValuationReview: React.FC = () => {
         title: 'Report Rejected',
         message: `Reason: ${reason}`,
       });
-      setShowRejectModal(false);
+      closeRejectModal();
       navigate("/admin/case/valuation");
     } catch (err: any) {
       console.error("Failed to reject report:", err);
@@ -215,9 +215,7 @@ export const ValuationReview: React.FC = () => {
 
   if (loading) {
     return (
-      <div
-        className="flex min-h-screen items-center justify-center bg-md-background text-md-on-surface"
-      >
+      <div className="flex min-h-screen items-center justify-center bg-md-background text-md-on-surface">
         <div style={{ textAlign: "center", color: "var(--md-on-surface-variant)" }}>
           <Loader2 size={32} className="inline animate-spin mb-2" />
           <div>Loading valuation report details from backend...</div>
@@ -228,9 +226,7 @@ export const ValuationReview: React.FC = () => {
 
   if (!report) {
     return (
-      <div
-        className="flex min-h-screen items-center justify-center bg-md-background text-md-on-surface"
-      >
+      <div className="flex min-h-screen items-center justify-center bg-md-background text-md-on-surface">
         <div style={{ textAlign: "center", color: "var(--md-on-surface-variant)" }}>
           <h3 className="text-lg font-bold mb-2">Valuation Report Not Found</h3>
           <p className="mb-4">No report selected or valid ID provided.</p>
@@ -248,7 +244,7 @@ export const ValuationReview: React.FC = () => {
         isOpen={showRejectModal}
         onClose={closeRejectModal}
         title="Reject Report"
-        subtitle="Provide reason for rejection and specify revision timeline"
+        subtitle="State the clear reason for rejecting this valuation report"
         footer={
           <>
             <Button variant="text" onClick={closeRejectModal}>
@@ -268,7 +264,7 @@ export const ValuationReview: React.FC = () => {
           <Textarea
             label="Reason for Rejection *"
             rows={3}
-            placeholder="Enter the reason for rejecting this report..."
+            placeholder="Enter the reason for rejecting this valuation report..."
             value={reason}
             error={reasonError}
             onChange={(e) => {
@@ -276,23 +272,22 @@ export const ValuationReview: React.FC = () => {
               if (reasonError) setReasonError("");
             }}
           />
-
           <div>
             <Input
-              label="Acceptance Period (days) *"
+              label="Days Given to Land Valuer to Accept & Re-evaluate *"
               type="number"
-              min="1"
-              placeholder="e.g., 7"
+              min={1}
               value={acceptanceDays}
               error={daysError}
               onChange={(e) => {
                 setAcceptanceDays(e.target.value);
                 if (daysError) setDaysError("");
               }}
+              placeholder="e.g. 7"
             />
-            <div className="text-xs text-md-on-surface-variant/60 mt-1 pl-5">
-              Number of days for the valuer to revise and resubmit.
-            </div>
+            <span className="text-xs text-md-on-surface-variant/70 mt-1 block">
+              Number of days the Valuer has to submit a revised report.
+            </span>
           </div>
         </div>
       </Modal>
@@ -333,6 +328,7 @@ export const ValuationReview: React.FC = () => {
               </div>
             </div>
 
+            {/* Case Summary */}
             <div className="case-summary">
               <div className="left">
                 <div className="flex items-center gap-2 mb-1">
@@ -354,6 +350,7 @@ export const ValuationReview: React.FC = () => {
               </span>
             </div>
 
+            {/* Report Details Card */}
             <div className="report-card">
               <div className="section-title">
                 <Lucide.ClipboardList size={16} className="inline mr-1" /> Report Details
@@ -472,3 +469,4 @@ export const ValuationReview: React.FC = () => {
 };
 
 export const ValuationReportReview = ValuationReview;
+export default ValuationReview;

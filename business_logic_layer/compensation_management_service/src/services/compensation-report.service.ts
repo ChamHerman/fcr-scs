@@ -143,7 +143,69 @@ export async function getReportById(compensationReportId: string) {
     throw new Error("Compensation report not found");
   }
 
-  return report;
+  // Calculate project budget details
+  let projectBudget = 0;
+  let totalApprovedUnderProject = 0;
+  let remainingFundBefore = 0;
+  let remainingFundAfter = 0;
+  let isOverBudget = false;
+
+  const projectId = report.acquisitionCase?.projectId;
+  if (projectId) {
+    const project = await prisma.project.findUnique({
+      where: { projectId },
+      include: {
+        cases: {
+          include: {
+            compensationReports: {
+              where: { status: ReportStatus.APPROVED },
+            },
+          },
+        },
+      },
+    });
+
+    if (project) {
+      projectBudget = Number(project.budget || 0);
+
+      let allApprovedSum = 0;
+      let otherApprovedSum = 0;
+
+      for (const c of project.cases) {
+        for (const cr of c.compensationReports) {
+          const amt = Number(cr.totalCompensation || 0);
+          allApprovedSum += amt;
+          if (cr.compensationReportId !== report.compensationReportId) {
+            otherApprovedSum += amt;
+          }
+        }
+      }
+
+      const isCurrentApproved = report.status === ReportStatus.APPROVED;
+      const currentReportAmount = Number(report.totalCompensation || 0);
+
+      remainingFundBefore = projectBudget - otherApprovedSum;
+      remainingFundAfter = remainingFundBefore - currentReportAmount;
+      totalApprovedUnderProject = isCurrentApproved ? allApprovedSum : otherApprovedSum;
+      isOverBudget = remainingFundAfter < 0;
+    }
+  }
+
+  return {
+    ...report,
+    projectBudgetSummary: {
+      projectId: projectId || "",
+      projectName: report.acquisitionCase?.project?.projectName || "",
+      projectType: report.acquisitionCase?.project?.projectType || "",
+      totalBudget: projectBudget,
+      totalApprovedUnderProject,
+      remainingFund: report.status === ReportStatus.APPROVED ? remainingFundAfter : remainingFundBefore,
+      remainingFundBefore,
+      remainingFundAfter,
+      currentReportAmount: Number(report.totalCompensation || 0),
+      isOverBudget,
+    },
+  };
 }
 
 export async function createReport(input: CreateCompensationReportInput) {

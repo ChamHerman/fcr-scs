@@ -144,6 +144,7 @@ export async function getAllOfferLetters(filters: OfferLetterFilters) {
         },
         landOwnership: { include: { landOwner: true, landParcel: true } },
         memberResponses: { include: { landOwner: true } },
+        objections: true,
       },
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * limit,

@@ -4,6 +4,8 @@ import { ChevronLeft, ChevronRight, Plus, Trash2, Upload, FileText, CheckCircle2
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { CurrencyInput } from "./ui/CurrencyInput";
+import { AreaInput } from "./ui/AreaInput";
+import { IdentificationInput } from "./ui/IdentificationInput";
 import { Select, type SelectOption } from "./ui/Select";
 import { Textarea } from "./ui/Textarea";
 import { IconButton } from "./ui/IconButton";
@@ -13,7 +15,7 @@ import { useAuth } from "../context/AuthContext";
 import { landAcquisitionApi } from "../services/landAcquisitionApi";
 import { BASE_URL } from "../services/api";
 import { formatCurrencyWithDecimals, formatLiveCurrency } from "../utils/currency";
-import "../style.css";
+import "../index.css";
 import "../pages/LandAcquisition/case_management.css";
 
 export type Owner = {
@@ -416,13 +418,60 @@ export const CaseForm: React.FC<CaseFormProps> = ({
   const handleOwnershipTypeChange = (val: string) => {
     handleFieldChange("ownershipType", val);
     if (val === "Individual Citizen" || val === "Corporate Entity") {
-      if (owners.length > 1) {
-        setOwners((prev) => prev.slice(0, 1));
-      }
+      setOwners((prev) => [
+        { ...(prev[0] || {}), share: "100" }
+      ]);
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.ownersShareTotal;
+        Object.keys(next).forEach((k) => {
+          if (k.endsWith("_share")) delete next[k];
+        });
+        return next;
+      });
     } else if (val === "Trustee") {
       if (owners.length > 4) {
         setOwners((prev) => prev.slice(0, 4));
       }
+    } else if (val === "Joint Ownership") {
+      setOwners((prev) => {
+        const owner1 = prev[0] || {
+          id: Date.now().toString(),
+          name: "",
+          icNumber: "",
+          address: "",
+          phone: "",
+          email: "",
+          share: "100",
+        };
+
+        const rawShare1 = parseFloat(owner1.share);
+        let share1 = "50";
+        let share2 = "50";
+
+        if (!isNaN(rawShare1) && rawShare1 > 0 && rawShare1 < 100) {
+          share1 = String(rawShare1);
+          share2 = String(Number((100 - rawShare1).toFixed(2)));
+        }
+
+        const updatedOwner1 = { ...owner1, share: share1 };
+
+        if (prev.length >= 2) {
+          const updatedOwner2 = { ...prev[1], share: share2 };
+          return [updatedOwner1, updatedOwner2, ...prev.slice(2)];
+        } else {
+          const secondOwner: Owner = {
+            id: (Date.now() + 1).toString(),
+            name: "",
+            icNumber: "",
+            address: "",
+            phone: "",
+            email: "",
+            share: share2,
+          };
+          return [updatedOwner1, secondOwner];
+        }
+      });
     }
   };
 
@@ -452,7 +501,8 @@ export const CaseForm: React.FC<CaseFormProps> = ({
   };
 
   const removeOwner = (id: string) => {
-    if (owners.length <= 1) return;
+    const minOwners = formData.ownershipType === "Joint Ownership" ? 2 : 1;
+    if (owners.length <= minOwners) return;
     const updated = owners.filter((o) => o.id !== id);
     setOwners(updated);
 
@@ -480,6 +530,14 @@ export const CaseForm: React.FC<CaseFormProps> = ({
     clearError("ownersShareTotal");
 
     if (field === "share") {
+      const valNum = parseFloat(value);
+      if (!isNaN(valNum) && valNum <= 0) {
+        setErrors((prev) => ({
+          ...prev,
+          [`owner_${id}_share`]: "Ownership share cannot be 0%. Each owner must have a share greater than 0%.",
+        }));
+      }
+
       const total = calculateTotalShare(updated);
       if (total > 100) {
         const formattedTotal = Number(total.toFixed(2)).toString();
@@ -654,7 +712,16 @@ export const CaseForm: React.FC<CaseFormProps> = ({
         let totalShare = 0;
         for (const owner of owners) {
           if (!owner.name.trim()) stepErrors[`owner_${owner.id}_name`] = "Full name is required.";
-          if (!owner.icNumber.trim()) stepErrors[`owner_${owner.id}_icNumber`] = "Identification number is required.";
+          
+          if (!owner.icNumber.trim()) {
+            stepErrors[`owner_${owner.id}_icNumber`] = "Identification number is required.";
+          } else {
+            const rawDigits = owner.icNumber.replace(/\D/g, "");
+            if (rawDigits.length !== 12) {
+              stepErrors[`owner_${owner.id}_icNumber`] = "Identification number must be exactly 12 digits (e.g. 900101-14-5532).";
+            }
+          }
+
           if (!owner.address.trim()) stepErrors[`owner_${owner.id}_address`] = "Address is required.";
 
           if (!owner.phone.trim()) {
@@ -680,7 +747,7 @@ export const CaseForm: React.FC<CaseFormProps> = ({
           } else {
             const shareNum = parseFloat(owner.share);
             if (isNaN(shareNum) || shareNum <= 0) {
-              stepErrors[`owner_${owner.id}_share`] = "Share must be greater than 0%.";
+              stepErrors[`owner_${owner.id}_share`] = "Ownership share cannot be 0%. Each owner must have a share greater than 0%.";
             } else if (shareNum > 100) {
               stepErrors[`owner_${owner.id}_share`] = "Share cannot exceed 100%.";
             }
@@ -1120,15 +1187,14 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                   />
                 </div>
                 <div>
-                  <Input
+                  <AreaInput
                     id="landArea"
                     name="landArea"
                     label="Land Area (m²) *"
-                    type="number"
                     value={formData.landArea}
                     error={errors.landArea}
                     onChange={(e) => handleFieldChange("landArea", e.target.value)}
-                    placeholder="0.0"
+                    placeholder="e.g. 10,000"
                   />
                 </div>
               </div>
@@ -1241,6 +1307,12 @@ export const CaseForm: React.FC<CaseFormProps> = ({
 
             {/* Total Share Summary Banner */}
             {(() => {
+              if (
+                formData.ownershipType === "Individual Citizen" ||
+                formData.ownershipType === "Corporate Entity"
+              ) {
+                return null;
+              }
               const currentTotal = calculateTotalShare(owners);
               const isOver = currentTotal > 100;
               const isUnder = currentTotal < 100;
@@ -1289,7 +1361,9 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                     <div className="text-sm font-bold text-md-primary">
                       Owner #{index + 1}
                     </div>
-                    {owners.length > 1 && (
+                    {(formData.ownershipType === "Joint Ownership"
+                      ? owners.length > 2 && index >= 2
+                      : owners.length > 1) && (
                       <IconButton
                         title="Remove Owner"
                         size="sm"
@@ -1317,7 +1391,7 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                       />
                     </div>
                     <div>
-                      <Input
+                      <IdentificationInput
                         id={`owner_${owner.id}_icNumber`}
                         name={`owner_${owner.id}_icNumber`}
                         label="Identification Number *"
@@ -1389,7 +1463,16 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                         min="0"
                         max="100"
                         step="any"
-                        value={owner.share}
+                        disabled={
+                          formData.ownershipType === "Individual Citizen" ||
+                          formData.ownershipType === "Corporate Entity"
+                        }
+                        value={
+                          formData.ownershipType === "Individual Citizen" ||
+                          formData.ownershipType === "Corporate Entity"
+                            ? "100"
+                            : owner.share
+                        }
                         error={errors[`owner_${owner.id}_share`]}
                         onChange={(e) =>
                           handleOwnerChange(owner.id, "share", e.target.value)
