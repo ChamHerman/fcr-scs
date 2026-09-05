@@ -2,25 +2,39 @@ const fs = require('fs');
 const path = require('path');
 
 // Read root .env and database .env
-const rootEnvPath = path.resolve('d:/Siew Feng/CD_Assignment/.env');
-let dbUrl = 'postgresql://postgres:siewfeng@localhost:5432/fcr_scs_db?schema=public';
+const envPaths = [
+  path.resolve(__dirname, '../.env'),
+  path.resolve(__dirname, '../data_layer/database/.env'),
+  path.resolve(process.cwd(), '.env')
+];
 
-if (fs.existsSync(rootEnvPath)) {
-  const content = fs.readFileSync(rootEnvPath, 'utf8');
-  const match = content.match(/DATABASE_URL=["']?([^"'\r\n]+)["']?/);
-  if (match) {
-    dbUrl = match[1];
+let dbUrl = process.env.DATABASE_URL || 'postgresql://postgres:siewfeng@localhost:5432/fcr_scs_db?schema=public';
+
+for (const envPath of envPaths) {
+  if (fs.existsSync(envPath)) {
+    const content = fs.readFileSync(envPath, 'utf8');
+    const match = content.match(/DATABASE_URL=["']?([^"'\r\n]+)["']?/);
+    if (match) {
+      dbUrl = match[1];
+      break;
+    }
   }
 }
 
-const pgPath = require.resolve('pg', {
-  paths: [
-    'd:/Siew Feng/CD_Assignment/business_logic_layer/compensation_management_service',
-    'd:/Siew Feng/CD_Assignment/data_layer/database',
-    'd:/Siew Feng/CD_Assignment'
-  ]
-});
-const { Pool } = require(pgPath);
+let Pool;
+try {
+  ({ Pool } = require('pg'));
+} catch (e) {
+  const pgPath = require.resolve('pg', {
+    paths: [
+      path.resolve(__dirname, '..'),
+      path.resolve(__dirname, '../data_layer/database'),
+      path.resolve(__dirname, '../business_logic_layer'),
+      process.cwd()
+    ]
+  });
+  ({ Pool } = require(pgPath));
+}
 
 async function clearDatabase(connectionString) {
   console.log(`Connecting to: ${connectionString.replace(/:[^:@]+@/, ':***@')}`);
@@ -59,12 +73,14 @@ async function main() {
   // Clear the main database in root .env
   await clearDatabase(dbUrl);
 
-  // Also check if fcr_scs database exists and clear if reachable
-  const altUrl = 'postgresql://postgres:siewfeng@localhost:5432/fcr_scs?schema=public';
-  try {
-    await clearDatabase(altUrl);
-  } catch (e) {
-    // Ignore if alternate DB doesn't exist
+  // Also check if legacy database (fcr_scs_db) exists and clear if reachable
+  const altUrl = 'postgresql://postgres:siewfeng@localhost:5432/fcr_scs_db?schema=public';
+  if (altUrl !== dbUrl) {
+    try {
+      await clearDatabase(altUrl);
+    } catch (e) {
+      // Ignore if legacy DB doesn't exist or unreachable
+    }
   }
 }
 
