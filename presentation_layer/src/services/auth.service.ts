@@ -37,5 +37,10 @@ export const authService = {
   activateAccount: async (token: string): Promise<{ message: string }> => {
     const response = await api.post<{ message: string }>('/users/activate', { token });
     return response.data;
+  },
+
+  getUserById: async (userId: string): Promise<{ success: boolean; data?: any }> => {
+    const response = await api.get<{ success: boolean; data?: any }>(`/users/${userId}`);
+    return response.data;
   }
 };

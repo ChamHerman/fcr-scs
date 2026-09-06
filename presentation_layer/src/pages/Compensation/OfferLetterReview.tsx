@@ -51,6 +51,7 @@ import {
   type OwnerApprovalStatus,
   type OfferLetterPreviewHandle,
 } from "./OfferLetterPreview";
+import { useOfferResponse } from "./hooks/useOfferResponse";
 import "../../index.css";
 import "./compensation.css";
 import "./offer_letter.css";
@@ -79,36 +80,6 @@ export const OfferLetterReview: React.FC = () => {
   const handleZoomIn = () => setZoomScale((prev) => Math.min(prev + 10, 150));
   const handleZoomOut = () => setZoomScale((prev) => Math.max(prev - 10, 70));
   const handleResetZoom = () => setZoomScale(100);
-
-  const [showRejectModal, setShowRejectModal] = useState(false);
-  const [showAcceptConfirmModal, setShowAcceptConfirmModal] = useState(false);
-  const [showCancelApprovalModal, setShowCancelApprovalModal] = useState(false);
-  const [cancellingApproval, setCancellingApproval] = useState(false);
-  const [reason, setReason] = useState("");
-  const [reasonError, setReasonError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [signedFile, setSignedFile] = useState<File | null>(null);
-  const [signedFileError, setSignedFileError] = useState<string>("");
-
-  const handleOpenSignedPdf = useCallback(() => {
-    if (!signedFile) return;
-    const blobUrl = URL.createObjectURL(signedFile);
-    const win = window.open(blobUrl, "_blank");
-    if (!win || win.closed || typeof win.closed === "undefined") {
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => document.body.removeChild(a), 300);
-    }
-  }, [signedFile]);
-
-  // Active Objection Check state
-  const [activeObjection, setActiveObjection] = useState<any | null>(null);
-  const [showObjectionPrompt, setShowObjectionPrompt] = useState(false);
-  const [withdrawingObjection, setWithdrawingObjection] = useState(false);
 
   const fetchOffer = useCallback(async () => {
     if (!activeOfferId) {
@@ -377,210 +348,39 @@ export const OfferLetterReview: React.FC = () => {
     fetchOffer();
   }, [fetchOffer]);
 
-  const handleAcceptClick = () => {
-    if (!offer) return;
-    if (!canRespondToOffer) {
-      notify({
-        type: "error",
-        title: "Access Denied",
-        message: "Only land owners (Displaced Community Members) can accept this offer.",
-      });
-      return;
-    }
-    if (!signedFile) {
-      setSignedFileError("Please upload the signed Form H PDF before accepting the offer.");
-      notify({
-        type: "error",
-        title: "Signed Document Required",
-        message: "Please upload the signed Form H PDF before submitting your acceptance.",
-      });
-      return;
-    }
-    const isPdf = signedFile.name.toLowerCase().endsWith(".pdf") || signedFile.type === "application/pdf";
-    if (!isPdf) {
-      setSignedFileError("Only PDF files (.pdf) are allowed.");
-      notify({
-        type: "error",
-        title: "Invalid File Type",
-        message: "Only PDF documents (.pdf) can be uploaded.",
-      });
-      return;
-    }
-    setSignedFileError("");
-    setShowAcceptConfirmModal(true);
-  };
-
-  const handleConfirmAccept = async (force?: boolean) => {
-    setShowAcceptConfirmModal(false);
-    await handleAccept(force);
-  };
-
-  const handleAccept = async (force?: boolean) => {
-    if (!offer) return;
-    if (!canRespondToOffer) {
-      notify({
-        type: "error",
-        title: "Access Denied",
-        message: "Only land owners (Displaced Community Members) can accept this offer.",
-      });
-      return;
-    }
-
-    if (!force) {
-      try {
-        const objRes = await compensationApi.getAllObjections({ search: offer.id });
-        const list = objRes.objections || [];
-        const pending = list.find((o: any) => o.status === "PENDING" || o.status === "Pending Review" || o.rawStatus === "PENDING");
-
-        if (pending) {
-          setActiveObjection(pending);
-          setShowObjectionPrompt(true);
-          return;
-        }
-      } catch (e) {
-        console.warn("Could not pre-check objections:", e);
-      }
-    }
-
-    setSubmitting(true);
-    try {
-      await compensationApi.acceptOffer(offer.id, signedFile, force, {
-        ownerNric: user?.identificationNumber,
-        userId: user?.userId,
-      });
-      setShowObjectionPrompt(false);
-      await fetchOffer();
-      notify({
-        type: "success",
-        title: "Offer Accepted",
-        message: "Your formal acceptance has been recorded successfully.",
-      });
-    } catch (err: any) {
-      console.error("Accept failed:", err);
-      if (err.code === "ACTIVE_OBJECTION_EXISTS" || err.activeObjection) {
-        setActiveObjection(
-          err.activeObjection || {
-            objectionId: "OBJ-PENDING",
-            objectionReason: "Active objection exists",
-          }
-        );
-        setShowObjectionPrompt(true);
-      } else {
-        notify({
-          type: "error",
-          title: "Accept Failed",
-          message: err.message || err,
-        });
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleCancelAcceptanceSubmit = async () => {
-    if (!offer) return;
-    if (!canRespondToOffer) {
-      notify({
-        type: "error",
-        title: "Access Denied",
-        message: "Only land owners (Displaced Community Members) can cancel offer approvals.",
-      });
-      return;
-    }
-
-    setCancellingApproval(true);
-    try {
-      await compensationApi.cancelOfferAcceptance(offer.id, {
-        ownerNric: user?.identificationNumber,
-        userId: user?.userId,
-      });
-      setShowCancelApprovalModal(false);
-      await fetchOffer();
-      notify({
-        type: "success",
-        title: "Approval Cancelled",
-        message: "Your approval has been cancelled. You can now re-evaluate or submit an objection if needed.",
-      });
-    } catch (err: any) {
-      console.error("Cancel approval failed:", err);
-      notify({
-        type: "error",
-        title: "Cancellation Failed",
-        message: err.message || err,
-      });
-    } finally {
-      setCancellingApproval(false);
-    }
-  };
-
-  const handleWithdrawObjectionAndAccept = async () => {
-    if (!activeObjection || !offer) return;
-    if (!canRespondToOffer) {
-      notify({
-        type: "error",
-        title: "Access Denied",
-        message: "Only land owners (Displaced Community Members) can perform this action.",
-      });
-      return;
-    }
-    setWithdrawingObjection(true);
-    try {
-      if (activeObjection.objectionId) {
-        await compensationApi.deleteObjection(activeObjection.objectionId);
-      }
-      setShowObjectionPrompt(false);
-      await handleAccept(true);
-    } catch (err: any) {
-      console.error("Failed to withdraw objection:", err);
-      notify({
-        type: "error",
-        title: "Withdrawal Failed",
-        message: `Could not withdraw objection: ${err.message || err}`,
-      });
-    } finally {
-      setWithdrawingObjection(false);
-    }
-  };
-
-  const handleRejectSubmit = async () => {
-    if (!reason.trim()) {
-      setReasonError("Reason is required.");
-      return;
-    }
-    if (!offer) return;
-    if (!canRespondToOffer) {
-      notify({
-        type: "error",
-        title: "Access Denied",
-        message: "Only land owners (Displaced Community Members) can reject this offer.",
-      });
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await compensationApi.rejectOffer(offer.id, reason, {
-        ownerNric: user?.identificationNumber,
-        userId: user?.userId,
-      });
-      setShowRejectModal(false);
-      await fetchOffer();
-      notify({
-        type: "success",
-        title: "Offer Rejected",
-        message: "Offer rejection recorded. Case marked as OFFER_REJECTED.",
-      });
-    } catch (err: any) {
-      console.error("Reject failed:", err);
-      notify({
-        type: "error",
-        title: "Rejection Failed",
-        message: err.message || err,
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const {
+    showRejectModal,
+    setShowRejectModal,
+    showAcceptConfirmModal,
+    setShowAcceptConfirmModal,
+    showCancelApprovalModal,
+    setShowCancelApprovalModal,
+    cancellingApproval,
+    submitting,
+    reason,
+    setReason,
+    reasonError,
+    setReasonError,
+    signedFile,
+    setSignedFile,
+    signedFileError,
+    setSignedFileError,
+    activeObjection,
+    showObjectionPrompt,
+    setShowObjectionPrompt,
+    withdrawingObjection,
+    handleOpenSignedPdf,
+    handleAcceptClick,
+    handleConfirmAccept,
+    handleReject,
+    handleCancelApproval: handleCancelAcceptanceSubmit,
+    handleWithdrawObjectionAndAccept,
+  } = useOfferResponse({
+    offer,
+    canRespondToOffer,
+    user,
+    onRefresh: fetchOffer,
+  });
 
   if (loading) {
     return (
@@ -638,7 +438,7 @@ export const OfferLetterReview: React.FC = () => {
         // Reject
         showRejectModal={showRejectModal}
         onCloseRejectModal={() => setShowRejectModal(false)}
-        onConfirmReject={handleRejectSubmit}
+        onConfirmReject={handleReject}
         reason={reason}
         onReasonChange={(val) => { setReason(val); if (reasonError) setReasonError(""); }}
         reasonError={reasonError}

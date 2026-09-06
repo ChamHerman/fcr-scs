@@ -3,13 +3,10 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, Loader2, Plus, Edit2, Trash2 } from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
-import { Modal } from "../../components/ui/Modal";
+import { authService } from "../../services/auth.service";
 import { Button } from "../../components/ui/Button";
 import { Select, type SelectOption } from "../../components/ui/Select";
 import { SearchInput } from "../../components/ui/SearchInput";
-import { Input } from "../../components/ui/Input";
-import { CurrencyInput } from "../../components/ui/CurrencyInput";
-import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { Pagination } from "../../components/ui/Pagination";
 import { useRole } from "../../hooks/useRole";
@@ -53,23 +50,13 @@ export const ObjectionDashboard: React.FC = () => {
 
   const { sortKey, sortDirection, handleSort, renderSortIcon, sortItems } = useTableSort<keyof ObjectionItem>();
 
-  // Edit Modal state
-  const [editItem, setEditItem] = useState<ObjectionItem | null>(null);
-  const [editReason, setEditReason] = useState("");
-  const [editAmount, setEditAmount] = useState<number | "">("");
-  const [isUpdating, setIsUpdating] = useState(false);
-
-  // Delete Modal state
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-
   // Retrieve user IC if missing in context
   useEffect(() => {
     if (user?.identificationNumber) {
       setUserIc(user.identificationNumber);
     } else if (isMember && user?.userId) {
-      fetch(`http://localhost:3030/api/users/${user.userId}`)
-        .then((res) => res.json())
+      authService
+        .getUserById(user.userId)
         .then((json) => {
           if (json.success && json.data?.identificationNumber) {
             setUserIc(json.data.identificationNumber);
@@ -226,66 +213,6 @@ export const ObjectionDashboard: React.FC = () => {
     navigate("/admin/compensation/objection/create");
   };
 
-  const handleOpenEdit = (obj: ObjectionItem) => {
-    setEditItem(obj);
-    setEditReason(obj.reason);
-    setEditAmount(obj.requestedAmount);
-  };
-
-  const handleSaveEdit = async () => {
-    if (!editItem) return;
-    if (typeof editAmount === "number" && editAmount <= 0) {
-      notify({
-        type: 'general',
-        title: 'Invalid Amount',
-        message: 'Requested amount must be greater than 0.',
-      });
-      return;
-    }
-    setIsUpdating(true);
-    try {
-      await compensationApi.updateObjection(editItem.id, {
-        objectionReason: editReason,
-        requestedAmount: Number(editAmount),
-      });
-      setEditItem(null);
-      await loadScopedObjections();
-    } catch (err: any) {
-      console.error("Failed to update objection:", err);
-      notify({
-        type: 'error',
-        title: 'Update Failed',
-        message: err.message,
-      });
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!deleteId) return;
-    setIsDeleting(true);
-    try {
-      await compensationApi.deleteObjection(deleteId);
-      setDeleteId(null);
-      notify({
-        type: 'success',
-        title: 'Objection Deleted',
-        message: 'The objection has been deleted and the compensation offer letter status has been reset to Pending.',
-      });
-      await loadScopedObjections();
-    } catch (err: any) {
-      console.error("Failed to delete objection:", err);
-      notify({
-        type: 'error',
-        title: 'Delete Failed',
-        message: err.message,
-      });
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
   const formatCurrency = (val: number) => {
     return "RM " + val.toLocaleString("en-MY", { minimumFractionDigits: 2 });
   };
@@ -312,76 +239,6 @@ export const ObjectionDashboard: React.FC = () => {
 
   return (
     <div className="compensation-dashboard">
-      {/* Edit Modal */}
-      <Modal
-        isOpen={Boolean(editItem)}
-        onClose={() => setEditItem(null)}
-        title="Edit Objection"
-        subtitle={`Update details for ${editItem?.caseTitle || ""}`}
-        footer={
-          <>
-            <Button variant="text" onClick={() => setEditItem(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="filled"
-              onClick={handleSaveEdit}
-              isLoading={isUpdating}
-            >
-              Save Changes
-            </Button>
-          </>
-        }
-      >
-        <div className="flex flex-col gap-4">
-          <Input
-            label="Case Title"
-            value={editItem?.caseTitle || ""}
-            disabled
-          />
-          <CurrencyInput
-            label="Requested Amount (RM) *"
-            id="editAmount"
-            placeholder="0.00"
-            value={editAmount}
-            onValueChange={(_formatted, num) => setEditAmount(num > 0 ? num : "")}
-          />
-          <Textarea
-            label="Objection Details / Reason *"
-            rows={4}
-            value={editReason}
-            onChange={(e) => setEditReason(e.target.value)}
-            placeholder="Details of objection..."
-          />
-        </div>
-      </Modal>
-
-      {/* Delete Modal */}
-      <Modal
-        isOpen={Boolean(deleteId)}
-        onClose={() => setDeleteId(null)}
-        title="Confirm Delete Objection"
-        subtitle="This action cannot be undone."
-        footer={
-          <>
-            <Button variant="text" onClick={() => setDeleteId(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              onClick={handleDeleteConfirm}
-              isLoading={isDeleting}
-            >
-              Delete Permanently
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm text-md-on-surface-variant">
-          Are you sure you want to permanently delete this objection record from the database?
-        </p>
-      </Modal>
-
       <div className="topbar" style={{ marginBottom: "20px" }}>
         <div className="topbar-left">
           <h1 style={{ marginBottom: 0 }}>Objection Dashboard</h1>

@@ -41,6 +41,8 @@ import { FileUpload } from '../../components/ui/FileUpload';
 import { CurrencyInput } from '../../components/ui/CurrencyInput';
 import { CopyButton } from '../../components/ui/CopyButton';
 import { OfferResponseModals } from '../../components/OfferResponseModals';
+import { CreateObjectionModal } from '../../components/objection';
+import { useOfferResponse } from '../Compensation/hooks/useOfferResponse';
 import { 
   OfferLetterPreview, 
   type OfferDetail, 
@@ -69,46 +71,12 @@ export const MemberOfferLetter: React.FC = () => {
   const [offer, setOffer] = useState<OfferDetail | null>(null);
   const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [openingPdf, setOpeningPdf] = useState(false);
   const previewRef = useRef<OfferLetterPreviewHandle>(null);
-
-  // Landowner Response Actions State
-  const [showRejectModal, setShowRejectModal] = useState(false);
-  const [showAcceptConfirmModal, setShowAcceptConfirmModal] = useState(false);
-  const [showCancelApprovalModal, setShowCancelApprovalModal] = useState(false);
-  const [cancellingApproval, setCancellingApproval] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [reason, setReason] = useState('');
-  const [reasonError, setReasonError] = useState('');
-  const [signedFile, setSignedFile] = useState<File | null>(null);
-  const [signedFileError, setSignedFileError] = useState('');
-
-  // Active Objection State
-  const [activeObjection, setActiveObjection] = useState<any | null>(null);
-  const [showObjectionPrompt, setShowObjectionPrompt] = useState(false);
-  const [withdrawingObjection, setWithdrawingObjection] = useState(false);
 
   // Create Objection Modal State
   const [showCreateObjectionModal, setShowCreateObjectionModal] = useState(false);
-  const [createObjectionAmount, setCreateObjectionAmount] = useState<number | ''>('');
-  const [createObjectionReason, setCreateObjectionReason] = useState('');
-  const [createObjectionFiles, setCreateObjectionFiles] = useState<any[]>([]);
-  const [isCreatingObjection, setIsCreatingObjection] = useState(false);
-
-  // File preview helper
-  const handleOpenSignedPdf = useCallback(() => {
-    if (!signedFile) return;
-    const blobUrl = URL.createObjectURL(signedFile);
-    const win = window.open(blobUrl, '_blank');
-    if (!win || win.closed || typeof win.closed === 'undefined') {
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => document.body.removeChild(a), 300);
-    }
-  }, [signedFile]);
 
   // 1. Fetch Cases for Member (to enable case switching if member has multiple cases)
   useEffect(() => {
@@ -443,209 +411,41 @@ export const MemberOfferLetter: React.FC = () => {
   };
 
   // ---------------------------------------------------------------------------
-  // Action Handlers (aligned with admin OfferLetterReview business logic)
+  // Action Handlers via useOfferResponse
   // ---------------------------------------------------------------------------
-  const handleAcceptClick = () => {
-    if (!offer) return;
-    if (!canRespondToOffer) {
-      notify({
-        type: 'error',
-        title: 'Access Denied',
-        message: 'Only land owners (Displaced Community Members) can accept this offer.',
-      });
-      return;
-    }
-    if (!signedFile) {
-      setSignedFileError('Please upload the signed Form H PDF before accepting the offer.');
-      notify({
-        type: 'error',
-        title: 'Signed Document Required',
-        message: 'Please upload the signed Form H PDF before submitting your acceptance.',
-      });
-      return;
-    }
-    const isPdf = signedFile.name.toLowerCase().endsWith('.pdf') || signedFile.type === 'application/pdf';
-    if (!isPdf) {
-      setSignedFileError('Only PDF files (.pdf) are allowed.');
-      notify({
-        type: 'error',
-        title: 'Invalid File Type',
-        message: 'Only PDF documents (.pdf) can be uploaded.',
-      });
-      return;
-    }
-    setSignedFileError('');
-    setShowAcceptConfirmModal(true);
-  };
-
-  const handleConfirmAccept = async (force?: boolean) => {
-    setShowAcceptConfirmModal(false);
-    await handleAccept(force);
-  };
-
-  const handleAccept = async (force?: boolean) => {
-    if (!offer) return;
-    if (!canRespondToOffer) {
-      notify({
-        type: 'error',
-        title: 'Access Denied',
-        message: 'Only land owners (Displaced Community Members) can accept this offer.',
-      });
-      return;
-    }
-
-    if (!force) {
-      try {
-        const objRes = await compensationApi.getAllObjections({ search: offer.id });
-        const list = objRes.objections || [];
-        const pending = list.find((o: any) => o.status === 'PENDING' || o.status === 'Pending Review' || o.rawStatus === 'PENDING');
-        if (pending) {
-          setActiveObjection(pending);
-          setShowObjectionPrompt(true);
-          return;
-        }
-      } catch (e) {
-        console.warn('Could not pre-check objections:', e);
-      }
-    }
-
-    setSubmitting(true);
-    try {
-      await compensationApi.acceptOffer(offer.id, signedFile, force, {
-        ownerNric: identificationNumber || user?.identificationNumber,
-        userId: user?.userId,
-      });
-      setShowObjectionPrompt(false);
-      await loadOfferData();
-      notify({
-        type: 'success',
-        title: 'Offer Accepted',
-        message: 'Your formal acceptance has been recorded successfully.',
-      });
-    } catch (err: any) {
-      console.error('Accept failed:', err);
-      if (err.code === 'ACTIVE_OBJECTION_EXISTS' || err.activeObjection) {
-        setActiveObjection(
-          err.activeObjection || {
-            objectionId: 'OBJ-PENDING',
-            objectionReason: 'Active objection exists',
-          }
-        );
-        setShowObjectionPrompt(true);
-      } else {
-        notify({
-          type: 'error',
-          title: 'Accept Failed',
-          message: err.message || err,
-        });
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleWithdrawObjectionAndAccept = async () => {
-    if (!activeObjection || !offer) return;
-    if (!canRespondToOffer) {
-      notify({
-        type: 'error',
-        title: 'Access Denied',
-        message: 'Only land owners (Displaced Community Members) can perform this action.',
-      });
-      return;
-    }
-    setWithdrawingObjection(true);
-    try {
-      if (activeObjection.objectionId) {
-        await compensationApi.deleteObjection(activeObjection.objectionId);
-      }
-      setShowObjectionPrompt(false);
-      await handleAccept(true);
-    } catch (err: any) {
-      console.error('Failed to withdraw objection:', err);
-      notify({
-        type: 'error',
-        title: 'Withdrawal Failed',
-        message: `Could not withdraw objection: ${err.message || err}`,
-      });
-    } finally {
-      setWithdrawingObjection(false);
-    }
-  };
-
-  const handleRejectSubmit = async () => {
-    if (!reason.trim()) {
-      setReasonError('Reason is required.');
-      return;
-    }
-    if (!offer) return;
-    if (!canRespondToOffer) {
-      notify({
-        type: 'error',
-        title: 'Access Denied',
-        message: 'Only land owners (Displaced Community Members) can reject this offer.',
-      });
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await compensationApi.rejectOffer(offer.id, reason.trim(), {
-        ownerNric: identificationNumber || user?.identificationNumber,
-        userId: user?.userId,
-      });
-      setShowRejectModal(false);
-      await loadOfferData();
-      notify({
-        type: 'success',
-        title: 'Offer Rejected',
-        message: 'Offer rejection recorded. Case marked as OFFER_REJECTED.',
-      });
-    } catch (err: any) {
-      console.error('Reject failed:', err);
-      notify({
-        type: 'error',
-        title: 'Rejection Failed',
-        message: err.message || err,
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleCancelApproval = async () => {
-    if (!offer) return;
-    if (!canRespondToOffer) {
-      notify({
-        type: 'error',
-        title: 'Access Denied',
-        message: 'Only land owners (Displaced Community Members) can cancel offer approvals.',
-      });
-      return;
-    }
-    setCancellingApproval(true);
-    try {
-      await compensationApi.cancelOfferAcceptance(offer.id, {
-        ownerNric: identificationNumber || user?.identificationNumber,
-        userId: user?.userId,
-      });
-      setShowCancelApprovalModal(false);
-      await loadOfferData();
-      notify({
-        type: 'success',
-        title: 'Approval Cancelled',
-        message: 'Your approval has been cancelled. You can now re-evaluate or submit an objection if needed.',
-      });
-    } catch (err: any) {
-      console.error('Cancel approval failed:', err);
-      notify({
-        type: 'error',
-        title: 'Cancellation Failed',
-        message: err.message || err,
-      });
-    } finally {
-      setCancellingApproval(false);
-    }
-  };
+  const {
+    showRejectModal,
+    setShowRejectModal,
+    showAcceptConfirmModal,
+    setShowAcceptConfirmModal,
+    showCancelApprovalModal,
+    setShowCancelApprovalModal,
+    cancellingApproval,
+    submitting,
+    reason,
+    setReason,
+    reasonError,
+    setReasonError,
+    signedFile,
+    setSignedFile,
+    signedFileError,
+    setSignedFileError,
+    activeObjection,
+    showObjectionPrompt,
+    setShowObjectionPrompt,
+    withdrawingObjection,
+    handleOpenSignedPdf,
+    handleAcceptClick,
+    handleConfirmAccept,
+    handleReject,
+    handleCancelApproval,
+    handleWithdrawObjectionAndAccept,
+  } = useOfferResponse({
+    offer,
+    canRespondToOffer,
+    user: { userId: user?.userId, identificationNumber: identificationNumber || user?.identificationNumber },
+    onRefresh: loadOfferData,
+  });
 
   const handleOpenCreateObjection = () => {
     if (!offer) return;
@@ -657,113 +457,7 @@ export const MemberOfferLetter: React.FC = () => {
       });
       return;
     }
-    const base = offer.totalCompensation;
-    setCreateObjectionAmount(base ? Math.round(Number(base) * 1.15) : '');
-    setCreateObjectionReason('');
-    setCreateObjectionFiles([]);
     setShowCreateObjectionModal(true);
-  };
-
-  const handleCreateFileUpload = (file: File | null, e?: React.ChangeEvent<HTMLInputElement>) => {
-    const fileList = e?.target.files;
-    if (fileList && fileList.length > 0) {
-      for (let i = 0; i < fileList.length; i++) {
-        const f = fileList[i];
-        if (f.size > 10 * 1024 * 1024) {
-          notify({
-            type: 'general',
-            title: 'File Too Large',
-            message: `${f.name} exceeds 10MB limit.`,
-          });
-          continue;
-        }
-        const sizeInMB = (f.size / (1024 * 1024)).toFixed(1);
-        setCreateObjectionFiles((prev) => [
-          ...prev,
-          {
-            id: `new-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 5)}`,
-            name: f.name,
-            fileName: f.name,
-            fileSize: `${sizeInMB} MB`,
-            file: f,
-          },
-        ]);
-      }
-    } else if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        notify({
-          type: 'general',
-          title: 'File Too Large',
-          message: `${file.name} exceeds 10MB limit.`,
-        });
-        return;
-      }
-      const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
-      setCreateObjectionFiles((prev) => [
-        ...prev,
-        {
-          id: `new-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
-          name: file.name,
-          fileName: file.name,
-          fileSize: `${sizeInMB} MB`,
-          file: file,
-        },
-      ]);
-    }
-  };
-
-  const handleRemoveCreateFile = (fileId: string) => {
-    setCreateObjectionFiles((prev) => prev.filter((f) => f.id !== fileId));
-  };
-
-  const handleSaveCreateObjection = async () => {
-    if (!offer) return;
-    if (typeof createObjectionAmount !== 'number' || createObjectionAmount <= 0) {
-      notify({
-        type: 'general',
-        title: 'Invalid Amount',
-        message: 'Requested compensation amount must be greater than RM 0.',
-      });
-      return;
-    }
-
-    if (!createObjectionReason.trim()) {
-      notify({
-        type: 'general',
-        title: 'Reason Required',
-        message: 'Please provide statutory grounds / reasons for your objection.',
-      });
-      return;
-    }
-
-    setIsCreatingObjection(true);
-    try {
-      await compensationApi.createObjection({
-        offerId: offer.id,
-        caseId: offer.caseId,
-        objectionReason: createObjectionReason.trim(),
-        requestedAmount: Number(createObjectionAmount),
-        createdById: user?.userId,
-      });
-
-      notify({
-        type: 'success',
-        title: 'Objection Filed',
-        message: 'Your compensation objection has been successfully submitted for officer review.',
-      });
-
-      setShowCreateObjectionModal(false);
-      await loadOfferData();
-    } catch (err: any) {
-      console.error('Failed to submit objection:', err);
-      notify({
-        type: 'error',
-        title: 'Submission Failed',
-        message: err.message || 'Failed to submit objection.',
-      });
-    } finally {
-      setIsCreatingObjection(false);
-    }
   };
 
   // Status flags
@@ -798,6 +492,80 @@ export const MemberOfferLetter: React.FC = () => {
     const diff = Math.ceil((expDate - Date.now()) / (1000 * 60 * 60 * 24));
     return Math.max(0, diff);
   }, [offer]);
+
+  // Open PDF in new browser tab / window
+  const handleOpenPdfInNewTab = async () => {
+    // Open new tab immediately on user click to preserve user-gesture permission
+    const newTab = window.open('', '_blank');
+    if (newTab) {
+      newTab.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Loading Form H PDF...</title>
+            <style>
+              body {
+                margin: 0;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+                font-family: system-ui, -apple-system, sans-serif;
+                background-color: #0f172a;
+                color: #f8fafc;
+              }
+              .spinner {
+                width: 44px;
+                height: 44px;
+                border: 4px solid #334155;
+                border-top-color: #8b5cf6;
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+              }
+              @keyframes spin { to { transform: rotate(360deg); } }
+              p { margin-top: 16px; font-size: 14px; font-weight: 600; color: #cbd5e1; }
+            </style>
+          </head>
+          <body>
+            <div class="spinner"></div>
+            <p>Loading Official Form H Notice of Award...</p>
+          </body>
+        </html>
+      `);
+      newTab.document.close();
+    }
+
+    setOpeningPdf(true);
+    try {
+      let url = pdfBlobUrl || previewRef.current?.getPdfUrl();
+      if (!url && previewRef.current) {
+        url = await previewRef.current.generatePdfBlob();
+      }
+
+      if (url && newTab) {
+        newTab.location.href = url;
+      } else if (newTab) {
+        newTab.close();
+        notify({
+          type: 'error',
+          title: 'PDF Generation Failed',
+          message: 'Unable to prepare PDF document. Please try downloading directly.',
+        });
+      }
+    } catch (err) {
+      if (newTab) newTab.close();
+      console.error('Failed to open PDF in new tab:', err);
+      notify({
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to open PDF in new window.',
+      });
+    } finally {
+      setOpeningPdf(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50/50 pb-16">
@@ -918,7 +686,7 @@ export const MemberOfferLetter: React.FC = () => {
             </div>
 
             {/* ------------------------------------------------------------- */}
-            {/* OFFICIAL FORM H OFFER LETTER PREVIEW (IMAGE 2 DESIGN)         */}
+            {/* OFFICIAL FORM H OFFER LETTER PREVIEW / MOBILE ACTION CARD     */}
             {/* ------------------------------------------------------------- */}
             <div className="bg-gradient-to-br from-[#f8f5fc] via-[#f3edf7] to-[#e8def8] rounded-3xl p-5 sm:p-6 border border-purple-200/80 shadow-sm relative overflow-hidden">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-200/70 pb-4">
@@ -936,8 +704,18 @@ export const MemberOfferLetter: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Right side controls: Collapse button and Download button */}
-                <div className="flex items-center gap-2 self-end sm:self-center">
+                {/* Desktop controls (hidden on mobile) */}
+                <div className="hidden sm:flex items-center gap-2 self-end sm:self-center">
+                  <button
+                    type="button"
+                    onClick={handleOpenPdfInNewTab}
+                    className="px-3 py-1.5 rounded-xl border border-purple-200 bg-white/80 hover:bg-white text-slate-700 font-semibold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                    title="Open PDF in new browser window"
+                  >
+                    <ExternalLink size={14} className="text-violet-600" />
+                    <span>Open in New Tab</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => setIsPreviewCollapsed(!isPreviewCollapsed)}
@@ -970,13 +748,54 @@ export const MemberOfferLetter: React.FC = () => {
                 </div>
               </div>
 
-              {/* Only the PDF Viewer Black Box (When not collapsed) */}
-              <div className={`mt-4 ${isPreviewCollapsed ? "hidden" : "block"}`}>
+              {/* MOBILE VIEW (sm:hidden): Hide Preview & Redirect User to New Browser to View PDF */}
+              <div className="sm:hidden mt-4 space-y-3">
+                <div className="bg-white/90 backdrop-blur-xs rounded-2xl p-4 border border-purple-200/70 space-y-2.5">
+                  <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                    The official Form H statutory compensation schedule is formatted as an official A4 document. Tap below to view the complete PDF in a new browser tab with native zoom and full clarity.
+                  </p>
+                  <div className="flex items-center justify-between text-[11px] pt-2 border-t border-purple-100 text-slate-600">
+                    <span>Reference: <strong className="font-mono text-violet-700">{offer.offerReferenceNo}</strong></span>
+                    <span className="font-semibold text-slate-500">Official Statutory Award</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleOpenPdfInNewTab}
+                    disabled={openingPdf}
+                    className="w-full py-3 px-4 bg-violet-700 hover:bg-violet-800 active:bg-violet-900 text-white font-bold text-xs rounded-2xl flex items-center justify-center gap-2 shadow-sm transition cursor-pointer disabled:opacity-60"
+                  >
+                    <ExternalLink size={15} />
+                    <span>{openingPdf ? 'Opening PDF in New Tab...' : 'View PDF in New Browser'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => previewRef.current?.downloadPdf()}
+                    disabled={downloadingPdf}
+                    className="w-full py-2.5 px-4 bg-white hover:bg-slate-50 text-slate-700 border border-purple-200/80 font-semibold text-xs rounded-2xl flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer disabled:opacity-60"
+                  >
+                    <Download size={14} className="text-slate-500" />
+                    <span>{downloadingPdf ? 'Downloading PDF...' : 'Download PDF Document'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* DESKTOP VIEW: Full PDF Viewer Box */}
+              {/* On mobile, hidden from view but kept offscreen with fixed -left-[99999px] to enable canvas capture for PDF generation */}
+              <div
+                className={`mt-4 ${
+                  isPreviewCollapsed ? 'hidden' : 'block'
+                } max-sm:fixed max-sm:-left-[99999px] max-sm:top-0 max-sm:opacity-0 max-sm:pointer-events-none sm:block`}
+              >
                 <OfferLetterPreview
                   ref={previewRef}
                   offer={offer}
                   viewMode="pdf"
                   onDownloadingChange={setDownloadingPdf}
+                  onPdfReady={(url) => setPdfBlobUrl(url)}
                 />
               </div>
             </div>
@@ -1201,98 +1020,21 @@ export const MemberOfferLetter: React.FC = () => {
         // Reject
         showRejectModal={showRejectModal}
         onCloseRejectModal={() => setShowRejectModal(false)}
-        onConfirmReject={handleRejectSubmit}
+        onConfirmReject={handleReject}
         reason={reason}
         onReasonChange={(val) => { setReason(val); if (reasonError) setReasonError(''); }}
         reasonError={reasonError}
       />
 
-      {/* ------------------------------------------------------------- */}
-      {/* CREATE OBJECTION MODAL                                         */}
-      {/* ------------------------------------------------------------- */}
-      <Modal
+      {/* CREATE OBJECTION MODAL */}
+      <CreateObjectionModal
         isOpen={showCreateObjectionModal}
         onClose={() => setShowCreateObjectionModal(false)}
-        title="Submit Compensation Objection"
-        subtitle="Submit objection against compensation award for officer review and assessment"
-        maxWidth="!max-w-2xl"
-        footer={
-          <div className="flex items-center justify-end gap-2 w-full">
-            <Button variant="text" size="md" onClick={() => setShowCreateObjectionModal(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="filled"
-              size="md"
-              onClick={handleSaveCreateObjection}
-              isLoading={isCreatingObjection}
-              className="!rounded-xl bg-violet-700 hover:bg-violet-800 text-white font-bold text-xs"
-            >
-              Submit Objection
-            </Button>
-          </div>
-        }
-      >
-        <div className="flex flex-col gap-4 py-2">
-          <CurrencyInput
-            label="Requested Compensation Amount (RM) *"
-            id="createObjectionAmount"
-            placeholder="0.00"
-            value={createObjectionAmount}
-            onValueChange={(_formatted, num) => setCreateObjectionAmount(num > 0 ? num : '')}
-          />
-
-          <Textarea
-            label="Grounds & Details of Objection (Reason) *"
-            rows={5}
-            value={createObjectionReason}
-            onChange={(e) => setCreateObjectionReason(e.target.value)}
-            placeholder="Explain the grounds and details for your compensation objection..."
-          />
-
-          {/* Attached Documents Upload & List */}
-          <div className="space-y-2.5">
-            <label className="text-xs font-semibold text-slate-700 block">
-              Attached Supporting Document(s)
-            </label>
-            <FileUpload
-              id="createObjectionUpload"
-              label="Attach Supporting Documents"
-              placeholder="Choose file to attach (PDF, JPG, PNG, DOC, DOCX)"
-              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-              multiple
-              onChange={handleCreateFileUpload}
-            />
-
-            {createObjectionFiles.length > 0 ? (
-              <div className="space-y-1.5 pt-1">
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  Attached Files ({createObjectionFiles.length})
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {createObjectionFiles.map((f) => (
-                    <div
-                      key={f.id}
-                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700"
-                    >
-                      <FileText className="w-3.5 h-3.5 text-violet-600 shrink-0" />
-                      <span className="font-medium truncate max-w-[180px]">{f.name || f.fileName}</span>
-                      {f.fileSize && <span className="text-[10px] text-slate-400">({f.fileSize})</span>}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveCreateFile(f.id)}
-                        className="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-md transition cursor-pointer"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </Modal>
+        offerId={offer?.id}
+        caseId={offer?.caseId}
+        userId={user?.userId}
+        onSuccess={loadOfferData}
+      />
 
     </div>
   );
