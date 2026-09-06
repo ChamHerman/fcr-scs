@@ -3,6 +3,8 @@ import {
   FileText,
   FileCheck,
   RefreshCw,
+  Download,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { useNotification } from "../../components/ui/NotificationSystem";
@@ -135,9 +137,20 @@ export const OfferLetterPreview = React.forwardRef<OfferLetterPreviewHandle, Off
     const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
     const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
 
-    // Track File object URL creation & cleanup
+    const isOfferAccepted = useMemo(() => {
+      if (!offer) return false;
+      return (
+        offer.rawStatus === "ACCEPTED" ||
+        offer.status === "Accepted" ||
+        offer.status === "ACCEPTED" ||
+        offer.currentUserStatus === "ACCEPTED" ||
+        offer.rawOffer?.status === "ACCEPTED"
+      );
+    }, [offer]);
+
+    // Track File object URL creation & cleanup ONLY when offer is accepted
     useEffect(() => {
-      if (uploadedPdf instanceof File) {
+      if (isOfferAccepted && uploadedPdf instanceof File) {
         const url = URL.createObjectURL(uploadedPdf);
         setUploadedFileUrl(url);
         return () => {
@@ -146,30 +159,33 @@ export const OfferLetterPreview = React.forwardRef<OfferLetterPreviewHandle, Off
       } else {
         setUploadedFileUrl(null);
       }
-    }, [uploadedPdf]);
+    }, [uploadedPdf, isOfferAccepted]);
 
-    // Resolve active PDF URL prioritizing uploaded file / document
+    // Resolve active PDF URL prioritizing uploaded file / document ONLY when offer is accepted
     const activePdfUrl = useMemo(() => {
-      if (uploadedFileUrl) return uploadedFileUrl;
-      if (typeof uploadedPdf === "string" && uploadedPdf.trim()) {
-        const str = uploadedPdf.trim();
-        return str.startsWith("blob:") || str.startsWith("http:") || str.startsWith("https:") || str.startsWith("data:")
-          ? str
-          : `${BASE_URL}/${str.replace(/^\/+/, "")}`;
-      }
-      if (offer?.rawOffer?.signedDocument) {
-        const raw = String(offer.rawOffer.signedDocument).trim();
-        return raw.startsWith("blob:") || raw.startsWith("http:") || raw.startsWith("https:") || raw.startsWith("data:")
-          ? raw
-          : `${BASE_URL}/${raw.replace(/^\/+/, "")}`;
+      if (isOfferAccepted) {
+        if (uploadedFileUrl) return uploadedFileUrl;
+        if (typeof uploadedPdf === "string" && uploadedPdf.trim()) {
+          const str = uploadedPdf.trim();
+          return str.startsWith("blob:") || str.startsWith("http:") || str.startsWith("https:") || str.startsWith("data:")
+            ? str
+            : `${BASE_URL}/${str.replace(/^\/+/, "")}`;
+        }
+        if (offer?.rawOffer?.signedDocument) {
+          const raw = String(offer.rawOffer.signedDocument).trim();
+          return raw.startsWith("blob:") || raw.startsWith("http:") || raw.startsWith("https:") || raw.startsWith("data:")
+            ? raw
+            : `${BASE_URL}/${raw.replace(/^\/+/, "")}`;
+        }
       }
       return pdfUrl;
-    }, [uploadedFileUrl, uploadedPdf, offer?.rawOffer?.signedDocument, pdfUrl]);
+    }, [isOfferAccepted, uploadedFileUrl, uploadedPdf, offer?.rawOffer?.signedDocument, pdfUrl]);
 
     const hasUploadedPdf = Boolean(
-      uploadedFileUrl ||
-      (typeof uploadedPdf === "string" && uploadedPdf.trim()) ||
-      offer?.rawOffer?.signedDocument
+      isOfferAccepted &&
+      (uploadedFileUrl ||
+        (typeof uploadedPdf === "string" && uploadedPdf.trim()) ||
+        offer?.rawOffer?.signedDocument)
     );
 
     // Dynamic layout state calculated from actual DOM section heights
@@ -242,6 +258,9 @@ export const OfferLetterPreview = React.forwardRef<OfferLetterPreviewHandle, Off
       return pages;
     };
 
+    // Ref to prevent repeat generation loops
+    const generatedForOfferRef = useRef<string | null>(null);
+
     // Compile PDF Blob using dynamic page refs (or return uploaded PDF)
     const generatePdfBlob = async (): Promise<string | null> => {
       if (hasUploadedPdf && activePdfUrl) {
@@ -294,6 +313,7 @@ export const OfferLetterPreview = React.forwardRef<OfferLetterPreviewHandle, Off
           if (prevUrl) URL.revokeObjectURL(prevUrl);
           return url;
         });
+        generatedForOfferRef.current = offer.id || offer.offerReferenceNo;
         onPdfReady?.(url);
         return url;
       } catch (err) {
@@ -304,23 +324,30 @@ export const OfferLetterPreview = React.forwardRef<OfferLetterPreviewHandle, Off
       }
     };
 
+    const offerKey = offer?.id || offer?.offerReferenceNo;
+
     useEffect(() => {
       if (hasUploadedPdf && activePdfUrl) {
         onPdfReady?.(activePdfUrl);
         return;
       }
-      let isMounted = true;
-      const timer = setTimeout(() => {
-        if (isMounted && !hasUploadedPdf) {
-          generatePdfBlob();
-        }
-      }, 400);
+      if (!offerKey || hasUploadedPdf) return;
 
-      return () => {
-        isMounted = false;
-        clearTimeout(timer);
-      };
-    }, [offer, hasUploadedPdf, activePdfUrl]);
+      // Only generate if not already generated for this specific offer
+      if (generatedForOfferRef.current !== offerKey || !pdfUrl) {
+        let isMounted = true;
+        const timer = setTimeout(() => {
+          if (isMounted && !hasUploadedPdf) {
+            generatePdfBlob();
+          }
+        }, 400);
+
+        return () => {
+          isMounted = false;
+          clearTimeout(timer);
+        };
+      }
+    }, [offerKey, hasUploadedPdf]);
 
     const handleDownload = async () => {
       if (!offer) return;
@@ -860,7 +887,7 @@ export const OfferLetterPreview = React.forwardRef<OfferLetterPreviewHandle, Off
           {activePdfUrl ? (
             <div className="w-full rounded-2xl overflow-hidden shadow-2xl border border-slate-700 bg-slate-800">
               <iframe
-                src={`${activePdfUrl}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`}
+                src={`${activePdfUrl}#toolbar=1&navpanes=0&view=FitH`}
                 className="w-full h-[650px] sm:h-[850px] border-none"
                 title="Form H PDF Official Viewer"
               />
@@ -894,7 +921,7 @@ export const OfferLetterPreview = React.forwardRef<OfferLetterPreviewHandle, Off
             </div>
             <div className="w-full rounded-2xl overflow-hidden shadow-2xl border border-slate-700 bg-slate-800">
               <iframe
-                src={`${activePdfUrl}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`}
+                src={`${activePdfUrl}#toolbar=1&navpanes=0&view=FitH`}
                 className="w-full h-[650px] sm:h-[850px] border-none"
                 title="Form H PDF Official Viewer"
               />

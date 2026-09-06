@@ -696,7 +696,7 @@ export const MemberOfferLetter: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
-                      {signedFile || offer.rawOffer?.signedDocument ? (
+                      {isOfferAccepted && offer.rawOffer?.signedDocument ? (
                         <>
                           <span>Form H: Uploaded Signed Acceptance Document</span>
                           <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[11px] font-bold border border-emerald-300/60">
@@ -708,7 +708,7 @@ export const MemberOfferLetter: React.FC = () => {
                       )}
                     </h3>
                     <p className="text-[11px] sm:text-xs text-slate-600 mt-0.5 font-medium">
-                      {signedFile || offer.rawOffer?.signedDocument
+                      {isOfferAccepted && offer.rawOffer?.signedDocument
                         ? 'Official Landowner Signed Form H Document • Read-Only View'
                         : 'Land Acquisition Act 1960 • Statutory Award Schedule'}
                     </p>
@@ -763,7 +763,7 @@ export const MemberOfferLetter: React.FC = () => {
               <div className="sm:hidden mt-4 space-y-3">
                 <div className="bg-white/90 backdrop-blur-xs rounded-2xl p-4 border border-purple-200/70 space-y-2.5">
                   <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                    {signedFile || offer.rawOffer?.signedDocument
+                    {isOfferAccepted && offer.rawOffer?.signedDocument
                       ? 'Your uploaded signed Form H acceptance document is ready for review. Tap below to view the uploaded PDF in a new browser tab with full clarity.'
                       : 'The official Form H statutory compensation schedule is formatted as an official A4 document. Tap below to view the complete PDF in a new browser tab with native zoom and full clarity.'}
                   </p>
@@ -808,7 +808,7 @@ export const MemberOfferLetter: React.FC = () => {
                 <OfferLetterPreview
                   ref={previewRef}
                   offer={offer}
-                  uploadedPdf={signedFile || offer.rawOffer?.signedDocument}
+                  uploadedPdf={isOfferAccepted ? offer.rawOffer?.signedDocument : null}
                   viewMode="pdf"
                   onDownloadingChange={setDownloadingPdf}
                   onPdfReady={(url) => setPdfBlobUrl(url)}

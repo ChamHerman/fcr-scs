@@ -515,14 +515,14 @@ export const OfferLetterReview: React.FC = () => {
                 <div className="flex items-center gap-2 text-md-primary font-bold text-sm sm:text-base">
                   <FileText size={18} />
                   <span>
-                    {offer.rawOffer?.signedDocument || signedFile
+                    {(offer.rawStatus === "ACCEPTED" || offer.status === "Accepted" || offer.status === "ACCEPTED" || offer.currentUserStatus === "ACCEPTED") && offer.rawOffer?.signedDocument
                       ? "Form H: Uploaded Signed Acceptance Document"
                       : "Form H: Notice of Award and Offer of Compensation"}
                   </span>
                 </div>
 
                 {/* View Mode Switcher (Draft Template Only) */}
-                {!(offer.rawOffer?.signedDocument || signedFile) && (
+                {!((offer.rawStatus === "ACCEPTED" || offer.status === "Accepted" || offer.status === "ACCEPTED" || offer.currentUserStatus === "ACCEPTED") && offer.rawOffer?.signedDocument) && (
                   <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
                     <button
                       type="button"
@@ -552,7 +552,7 @@ export const OfferLetterReview: React.FC = () => {
 
               {/* Action Controls */}
               <div className="flex items-center gap-2 flex-wrap">
-                {viewMode === "html" && !(offer.rawOffer?.signedDocument || signedFile) && (
+                {viewMode === "html" && !((offer.rawStatus === "ACCEPTED" || offer.status === "Accepted" || offer.status === "ACCEPTED" || offer.currentUserStatus === "ACCEPTED") && offer.rawOffer?.signedDocument) && (
                   <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
                     <button
                       type="button"
@@ -629,7 +629,11 @@ export const OfferLetterReview: React.FC = () => {
                 <OfferLetterPreview
                   ref={previewRef}
                   offer={offer}
-                  uploadedPdf={signedFile || offer.rawOffer?.signedDocument}
+                  uploadedPdf={
+                    (offer.rawStatus === "ACCEPTED" || offer.status === "Accepted" || offer.status === "ACCEPTED" || offer.currentUserStatus === "ACCEPTED")
+                      ? offer.rawOffer?.signedDocument
+                      : null
+                  }
                   viewMode={viewMode}
                   zoomScale={zoomScale}
                   onDownloadingChange={setDownloadingPdf}
