@@ -44,6 +44,7 @@ import FailedTransactions from './pages/Payment/FailedTransactions';
 
 // Import Member Pages
 import { MemberDashboard } from './pages/Member/MemberDashboard';
+import { MemberOfferLetter } from './pages/Member/MemberOfferLetter';
 import SubmitBankDetails from './pages/Member/SubmitBankDetails';
 import MemberPaymentStatus from './pages/Member/MemberPaymentStatus';
 import VerifyAuditTrail from './pages/Member/VerifyAuditTrail';
@@ -173,6 +174,8 @@ function App() {
           <Route element={<ProtectedRoute allowedRoles={['member', 'admin']} />}>
             <Route path="/member" element={<MemberLayout />}>
               <Route index element={<MemberDashboard />} />
+              <Route path="offer-letter" element={<MemberOfferLetter />} />
+              <Route path="offer-letter/:offerId" element={<MemberOfferLetter />} />
               <Route path="bank-details" element={<SubmitBankDetails />} />
               <Route path="payment-status" element={<MemberPaymentStatus />} />
               <Route path="verify-audit" element={<VerifyAuditTrail />} />

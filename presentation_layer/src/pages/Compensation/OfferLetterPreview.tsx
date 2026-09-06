@@ -1,16 +1,7 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useImperativeHandle } from "react";
 import {
   FileText,
-  Download,
-  ZoomIn,
-  ZoomOut,
-  RotateCcw,
-  Eye,
-  EyeOff,
-  ChevronDown,
-  ChevronUp,
   RefreshCw,
-  Layers,
 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { useNotification } from "../../components/ui/NotificationSystem";
@@ -97,8 +88,20 @@ export type OfferDetail = {
   rawStatus?: string;
 };
 
-interface OfferLetterPreviewProps {
+export interface OfferLetterPreviewHandle {
+  downloadPdf: () => Promise<void>;
+  refreshPdf: () => Promise<string | null>;
+  generatePdfBlob: () => Promise<string | null>;
+  getPdfUrl: () => string | null;
+}
+
+export interface OfferLetterPreviewProps {
   offer: OfferDetail;
+  viewMode?: "pdf" | "html";
+  zoomScale?: number;
+  className?: string;
+  onDownloadingChange?: (isDownloading: boolean) => void;
+  onPdfReady?: (url: string | null) => void;
 }
 
 type SectionId = "sec1" | "sec2" | "sec3" | "sec4" | "sec5" | "sec6";
@@ -108,14 +111,22 @@ interface PageLayout {
   sections: SectionId[];
 }
 
-export const OfferLetterPreview: React.FC<OfferLetterPreviewProps> = ({ offer }) => {
-  const { notify } = useNotification();
-  const [zoomScale, setZoomScale] = useState<number>(100);
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
-
-  // PDF View mode: 'pdf' (native embedded PDF viewer iframe) or 'html' (dynamic A4 sheet view)
-  const [viewMode, setViewMode] = useState<"pdf" | "html">("pdf");
+export const OfferLetterPreview = React.forwardRef<OfferLetterPreviewHandle, OfferLetterPreviewProps>(
+  (
+    {
+      offer,
+      viewMode: propViewMode,
+      zoomScale: propZoomScale,
+      className = "",
+      onDownloadingChange,
+      onPdfReady,
+    },
+    ref
+  ) => {
+    const { notify } = useNotification();
+    const zoomScale = propZoomScale ?? 100;
+    const viewMode = propViewMode ?? "pdf";
+    const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
 
@@ -129,10 +140,6 @@ export const OfferLetterPreview: React.FC<OfferLetterPreviewProps> = ({ offer })
   // DOM references for measurement and capture
   const measureContainerRef = useRef<HTMLDivElement>(null);
   const dynamicPageRefs = useRef<(HTMLDivElement | null)[]>([]);
-
-  const handleZoomIn = () => setZoomScale((prev) => Math.min(prev + 10, 150));
-  const handleZoomOut = () => setZoomScale((prev) => Math.max(prev - 10, 70));
-  const handleResetZoom = () => setZoomScale(100);
 
   // Dynamic Page Break Algorithm:
   // Measures exact heights of all sections and groups them into pages without splitting any section across pages
@@ -241,6 +248,7 @@ export const OfferLetterPreview: React.FC<OfferLetterPreviewProps> = ({ offer })
         if (prevUrl) URL.revokeObjectURL(prevUrl);
         return url;
       });
+      onPdfReady?.(url);
       return url;
     } catch (err) {
       console.error("Failed to generate dynamic section PDF blob:", err);
@@ -267,6 +275,7 @@ export const OfferLetterPreview: React.FC<OfferLetterPreviewProps> = ({ offer })
   const handleDownload = async () => {
     if (!offer) return;
     setDownloadingPdf(true);
+    onDownloadingChange?.(true);
     try {
       let currentUrl = pdfUrl;
       if (!currentUrl) {
@@ -301,8 +310,20 @@ export const OfferLetterPreview: React.FC<OfferLetterPreviewProps> = ({ offer })
       });
     } finally {
       setDownloadingPdf(false);
+      onDownloadingChange?.(false);
     }
   };
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      downloadPdf: handleDownload,
+      refreshPdf: generatePdfBlob,
+      generatePdfBlob,
+      getPdfUrl: () => pdfUrl,
+    }),
+    [handleDownload, generatePdfBlob, pdfUrl]
+  );
 
   // Reusable Component: Official Header
   const renderOfficialHeader = () => (
@@ -749,218 +770,85 @@ export const OfferLetterPreview: React.FC<OfferLetterPreviewProps> = ({ offer })
   );
 
   return (
-    <div className="pdf-viewer-container mt-6 bg-md-surface-container rounded-2xl border border-md-outline/15 shadow-sm overflow-hidden">
-      {/* PDF Toolbar Header */}
-      <div className="pdf-toolbar flex justify-between items-center p-3.5 flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-md-on-surface font-semibold text-sm">
-            <FileText size={18} className="text-md-primary" />
-            <span>Form H: Notice of Award and Offer of Compensation</span>
-          </div>
-
-          {/* Mode Switcher Tabs */}
-          <div className="hidden sm:flex items-center bg-md-surface-container-low border border-md-outline/15 rounded-lg p-1 text-xs">
-            <button
-              onClick={() => setViewMode("pdf")}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded transition font-medium ${
-                viewMode === "pdf"
-                  ? "bg-md-primary text-white shadow-xs"
-                  : "text-md-on-surface-variant hover:bg-md-outline/10"
-              }`}
-              title="Native PDF Viewer (Exact compiled document)"
-            >
-              <FileText size={13} />
-              <span>PDF Viewer</span>
-            </button>
-            <button
-              onClick={() => setViewMode("html")}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded transition font-medium ${
-                viewMode === "html"
-                  ? "bg-md-primary text-white shadow-xs"
-                  : "text-md-on-surface-variant hover:bg-md-outline/10"
-              }`}
-              title="Dynamic Synchronized HTML Sheet View"
-            >
-              <Layers size={13} />
-              <span>Sheet View</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Refresh PDF Blob Button */}
-          {viewMode === "pdf" && (
-            <button
-              onClick={() => generatePdfBlob()}
-              disabled={isGeneratingPdf}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-md-outline/20 text-xs font-medium text-md-on-surface hover:bg-md-outline/10 transition disabled:opacity-50"
-              title="Re-generate PDF Document"
-            >
-              <RefreshCw size={13} className={isGeneratingPdf ? "animate-spin text-md-primary" : ""} />
-              <span className="hidden md:inline">Refresh PDF</span>
-            </button>
-          )}
-
-          {/* Collapse / Expand Toggle for Desktop */}
-          <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-md-outline/20 text-xs font-medium text-md-on-surface hover:bg-md-outline/10 transition"
-            title={isCollapsed ? "Expand PDF Preview" : "Collapse PDF Preview"}
-          >
-            {isCollapsed ? (
-              <>
-                <Eye size={14} className="text-md-primary" />
-                <span>Show Preview</span>
-                <ChevronDown size={14} />
-              </>
-            ) : (
-              <>
-                <EyeOff size={14} className="text-md-on-surface-variant" />
-                <span>Collapse Preview</span>
-                <ChevronUp size={14} />
-              </>
-            )}
-          </button>
-
-          {/* Zoom Controls for HTML Sheet View */}
-          {!isCollapsed && viewMode === "html" && (
-            <div className="hidden md:flex items-center bg-md-surface-container-low border border-md-outline/15 rounded-lg p-1 text-xs">
-              <button
-                onClick={handleZoomOut}
-                className="px-2 py-1 hover:bg-md-outline/10 rounded transition text-md-on-surface"
-                title="Zoom Out"
-              >
-                <ZoomOut size={14} />
-              </button>
-              <span className="px-2 font-mono text-xs">{zoomScale}%</span>
-              <button
-                onClick={handleZoomIn}
-                className="px-2 py-1 hover:bg-md-outline/10 rounded transition text-md-on-surface"
-                title="Zoom In"
-              >
-                <ZoomIn size={14} />
-              </button>
-              <button
-                onClick={handleResetZoom}
-                className="px-1.5 py-1 hover:bg-md-outline/10 rounded transition text-md-on-surface-variant ml-1"
-                title="Reset Zoom"
-              >
-                <RotateCcw size={12} />
-              </button>
+    <div className={`pdf-viewer-embed w-full ${className}`}>
+      {/* MODE 1: NATIVE EMBEDDED PDF VIEWER (BLACK COLOUR BOX) */}
+      {viewMode === "pdf" && (
+        <div className="w-full space-y-3">
+          {isGeneratingPdf && !pdfUrl && (
+            <div className="flex flex-col items-center justify-center h-[500px] sm:h-[650px] bg-slate-900/5 rounded-2xl border border-slate-300/40 space-y-4">
+              <RefreshCw size={36} className="animate-spin text-md-primary" />
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Compiling Official Form H PDF Document...
+              </p>
             </div>
           )}
 
-          <Button variant="filled" size="sm" onClick={handleDownload} isLoading={downloadingPdf}>
-            <Download size={15} /> {downloadingPdf ? "Generating PDF..." : "Download PDF"}
-          </Button>
+          {pdfUrl ? (
+            <div className="w-full rounded-2xl overflow-hidden shadow-2xl border border-slate-700 bg-slate-800">
+              <iframe
+                src={`${pdfUrl}#toolbar=1&navpanes=0&view=FitH`}
+                className="w-full h-[650px] sm:h-[850px] border-none"
+                title="Form H PDF Official Viewer"
+              />
+            </div>
+          ) : (
+            !isGeneratingPdf && (
+              <div className="flex flex-col items-center justify-center h-[400px] bg-slate-900/5 rounded-2xl border border-dashed border-slate-300 space-y-3">
+                <FileText size={40} className="text-slate-400" />
+                <p className="text-sm text-slate-600">PDF Preview could not be loaded automatically.</p>
+                <Button variant="tonal" size="sm" onClick={() => generatePdfBlob()}>
+                  <RefreshCw size={14} /> Generate PDF Viewer
+                </Button>
+              </div>
+            )
+          )}
         </div>
-      </div>
+      )}
 
-      {/* MOBILE HELPER CARD */}
-      <div className="md:hidden p-4 border-t border-md-outline/15 text-center space-y-3 bg-md-surface-container-low">
-        <div className="flex items-center justify-center gap-2 text-md-on-surface font-semibold text-sm">
-          <FileText size={18} className="text-md-primary" />
-          <span>Form H PDF Ready</span>
-        </div>
-        <p className="text-xs text-md-on-surface-variant leading-relaxed">
-          Full interactive document preview is optimized for desktop. Download the official Form H PDF below to view or print the full document.
-        </p>
-        <Button
-          variant="filled"
-          size="sm"
-          className="w-full justify-center"
-          onClick={handleDownload}
-          isLoading={downloadingPdf}
+      {/* MODE 2: SYNCHRONIZED DYNAMIC A4 HTML SHEET VIEW */}
+      {viewMode === "html" && (
+        <div
+          style={{
+            fontFamily: "'Times New Roman', Times, serif",
+            transform: `scale(${zoomScale / 100})`,
+            transformOrigin: "top center",
+            transition: "transform 0.2s ease-out",
+          }}
+          className="space-y-8 py-4 flex flex-col items-center w-full"
         >
-          <Download size={15} /> {downloadingPdf ? "Generating PDF..." : "Download Form H PDF"}
-        </Button>
-      </div>
+          {pageLayouts.map((page) => (
+            <div key={page.pageNumber} className="relative">
+              <div className="absolute -top-6 left-0 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Page {page.pageNumber} of {pageLayouts.length}
+              </div>
+              <div
+                style={{ width: "794px", minHeight: "1123px", padding: "36px 40px" }}
+                className="bg-white text-slate-900 border border-slate-300 shadow-2xl rounded-sm leading-relaxed relative space-y-3"
+              >
+                {page.pageNumber === 1 ? (
+                  <>
+                    {renderOfficialHeader()}
+                    {renderMetadataBox()}
+                  </>
+                ) : (
+                  renderSecondaryHeader(page.pageNumber)
+                )}
 
-      {/* ──────────────────────────────────────────────────────────── */}
-      {/* ON-SCREEN PREVIEW DROPDOWN PANEL (ATTACHED DIRECTLY TO TOOLBAR) */}
-      {/* ──────────────────────────────────────────────────────────── */}
-      {!isCollapsed && (
-        <div className="pdf-preview-panel border-t border-md-outline/15 hidden md:flex flex-col items-center p-4 sm:p-6 bg-slate-900/10 dark:bg-slate-950/40 w-full min-h-[500px]">
-          {/* MODE 1: NATIVE EMBEDDED PDF VIEWER (EXACT GENERATED PDF FILE) */}
-          {viewMode === "pdf" && (
-            <div className="w-full space-y-3">
-              {isGeneratingPdf && !pdfUrl && (
-                <div className="flex flex-col items-center justify-center h-[600px] bg-slate-900/5 rounded-2xl border border-slate-300/40 space-y-4">
-                  <RefreshCw size={36} className="animate-spin text-md-primary" />
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Compiling Official Form H PDF Document...
-                  </p>
-                </div>
-              )}
+                {page.sections.map((secId) => (
+                  <React.Fragment key={secId}>
+                    {secId === "sec1" && renderSection1()}
+                    {secId === "sec2" && renderSection2(false)}
+                    {secId === "sec3" && renderSection3()}
+                    {secId === "sec4" && renderSection4()}
+                    {secId === "sec5" && renderSection5(false)}
+                    {secId === "sec6" && renderSection6()}
+                  </React.Fragment>
+                ))}
 
-              {pdfUrl ? (
-                <div className="w-full rounded-xl overflow-hidden shadow-2xl border border-slate-300 bg-slate-800">
-                  <iframe
-                    src={`${pdfUrl}#toolbar=1&navpanes=0&view=FitH`}
-                    className="w-full h-[850px] border-none"
-                    title="Form H PDF Official Viewer"
-                  />
-                </div>
-              ) : (
-                !isGeneratingPdf && (
-                  <div className="flex flex-col items-center justify-center h-[400px] bg-slate-900/5 rounded-2xl border border-dashed border-slate-300 space-y-3">
-                    <FileText size={40} className="text-slate-400" />
-                    <p className="text-sm text-slate-600">PDF Preview could not be loaded automatically.</p>
-                    <Button variant="tonal" size="sm" onClick={() => generatePdfBlob()}>
-                      <RefreshCw size={14} /> Generate PDF Viewer
-                    </Button>
-                  </div>
-                )
-              )}
+                {renderPageFooter(page.pageNumber, pageLayouts.length)}
+              </div>
             </div>
-          )}
-
-          {/* MODE 2: SYNCHRONIZED DYNAMIC A4 HTML SHEET VIEW */}
-          {viewMode === "html" && (
-            <div
-              style={{
-                fontFamily: "'Times New Roman', Times, serif",
-                transform: `scale(${zoomScale / 100})`,
-                transformOrigin: "top center",
-                transition: "transform 0.2s ease-out",
-              }}
-              className="space-y-8 py-4 flex flex-col items-center w-full"
-            >
-              {pageLayouts.map((page) => (
-                <div key={page.pageNumber} className="relative">
-                  <div className="absolute -top-6 left-0 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Page {page.pageNumber} of {pageLayouts.length}
-                  </div>
-                  <div
-                    style={{ width: "794px", minHeight: "1123px", padding: "36px 40px" }}
-                    className="bg-white text-slate-900 border border-slate-300 shadow-2xl rounded-sm leading-relaxed relative space-y-3"
-                  >
-                    {page.pageNumber === 1 ? (
-                      <>
-                        {renderOfficialHeader()}
-                        {renderMetadataBox()}
-                      </>
-                    ) : (
-                      renderSecondaryHeader(page.pageNumber)
-                    )}
-
-                    {page.sections.map((secId) => (
-                      <React.Fragment key={secId}>
-                        {secId === "sec1" && renderSection1()}
-                        {secId === "sec2" && renderSection2(false)}
-                        {secId === "sec3" && renderSection3()}
-                        {secId === "sec4" && renderSection4()}
-                        {secId === "sec5" && renderSection5(false)}
-                        {secId === "sec6" && renderSection6()}
-                      </React.Fragment>
-                    ))}
-
-                    {renderPageFooter(page.pageNumber, pageLayouts.length)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          ))}
         </div>
       )}
 
@@ -1040,4 +928,6 @@ export const OfferLetterPreview: React.FC<OfferLetterPreviewProps> = ({ offer })
       </div>
     </div>
   );
-};
+});
+
+OfferLetterPreview.displayName = "OfferLetterPreview";

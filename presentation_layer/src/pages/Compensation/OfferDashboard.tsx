@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, Loader2 } from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
+import { authService } from "../../services/auth.service";
 import { Button } from "../../components/ui/Button";
 import { Select, type SelectOption } from "../../components/ui/Select";
 import { SearchInput } from "../../components/ui/SearchInput";
@@ -58,8 +59,8 @@ export const OfferDashboard: React.FC = () => {
     if (user?.identificationNumber) {
       setUserIc(user.identificationNumber);
     } else if (isMember && user?.userId) {
-      fetch(`http://localhost:3030/api/users/${user.userId}`)
-        .then((res) => res.json())
+      authService
+        .getUserById(user.userId)
         .then((json) => {
           if (json.success && json.data?.identificationNumber) {
             setUserIc(json.data.identificationNumber);

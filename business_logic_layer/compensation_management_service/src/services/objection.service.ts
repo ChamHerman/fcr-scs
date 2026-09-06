@@ -332,25 +332,25 @@ export async function createObjection(input: CreateObjectionInput) {
           offerId,
           ownerId: matchingMemberResp.ownerId,
           status: OfferStatus.REJECTED,
-          remarks: `Disputed via Form N Objection (${createdObj.objectionId}) within 24-hour grace window`,
+          remarks: `Disputed via Compensation Objection (${createdObj.objectionId}) within 24-hour grace window`,
           respondedAt: new Date(),
         },
         update: {
           status: OfferStatus.REJECTED,
-          remarks: `Disputed via Form N Objection (${createdObj.objectionId}) within 24-hour grace window`,
+          remarks: `Disputed via Compensation Objection (${createdObj.objectionId}) within 24-hour grace window`,
           respondedAt: new Date(),
         },
       });
     }
 
-    // Business Logic: Submitting a Form N objection disputes the award.
+    // Business Logic: Submitting an objection disputes the award.
     // Update the offer letter status to REJECTED and the case status to OFFER_REJECTED.
     await tx.offerLetter.update({
       where: { offerId },
       data: {
         status: OfferStatus.REJECTED,
         rejectedAt: new Date(),
-        remarks: `Disputed via Form N Objection (${createdObj.objectionId}): ${objectionReason.slice(0, 100)}`,
+        remarks: `Disputed via Objection (${createdObj.objectionId}): ${objectionReason.slice(0, 100)}`,
       },
     });
 
@@ -461,7 +461,7 @@ export async function reviewObjection(input: ReviewObjectionInput) {
           status: OfferStatus.PENDING,
           acceptedAt: null,
           rejectedAt: null,
-          remarks: `Compensation revised via Form N Objection (${objectionId}). Please review and approve revised offer.`,
+          remarks: `Compensation revised via Objection (${objectionId}). Please review and approve revised offer.`,
         },
       });
 
@@ -471,7 +471,7 @@ export async function reviewObjection(input: ReviewObjectionInput) {
           where: { compensationReportId: updatedOffer.compensationReportId },
           data: {
             totalCompensation: finalRevisedAmount,
-            remarks: `Revised via approved Form N Objection (${objectionId})`,
+            remarks: `Revised via approved Objection (${objectionId})`,
           },
         });
       }
@@ -562,7 +562,7 @@ export async function deleteObjection(objectionId: string) {
         data: {
           status: OfferStatus.PENDING,
           rejectedAt: null,
-          remarks: "Form N objection withdrawn/deleted. Offer status reset to Pending.",
+          remarks: "Objection withdrawn/deleted. Offer status reset to Pending.",
         },
       });
 

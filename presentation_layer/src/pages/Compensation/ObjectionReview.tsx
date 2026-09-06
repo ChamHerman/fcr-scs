@@ -11,6 +11,7 @@ import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
+import { EditObjectionModal, DeleteObjectionModal } from "../../components/objection";
 import "../../index.css";
 import "./objection.css";
 
@@ -58,15 +59,9 @@ export const ObjectionReview: React.FC = () => {
   const [responseError, setResponseError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Edit Modal State
+  // Edit & Delete Modal States
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editReason, setEditReason] = useState("");
-  const [editAmount, setEditAmount] = useState<number | "">("");
-  const [updating, setUpdating] = useState(false);
-
-  // Delete Modal State
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     async function fetchObjection() {
@@ -101,7 +96,7 @@ export const ObjectionReview: React.FC = () => {
             month: "short",
             year: "numeric",
           }),
-          type: "Form N",
+          type: "Formal Objection",
           status: statusLabelMap[obj.status] || obj.status,
           rawStatus: obj.status,
           statusClass: statusClassMap[obj.status] || "status-objection-review",
@@ -249,70 +244,7 @@ export const ObjectionReview: React.FC = () => {
   };
 
   const handleOpenEdit = () => {
-    if (!objection) return;
-    setEditReason(objection.objectionText);
-    setEditAmount(objection.requestedAmount);
     setShowEditModal(true);
-  };
-
-  const handleSaveEdit = async () => {
-    if (!objection) return;
-    if (typeof editAmount === "number" && editAmount <= 0) {
-      notify({
-        type: 'general',
-        title: 'Invalid Amount',
-        message: 'Requested amount must be greater than 0.',
-      });
-      return;
-    }
-    setUpdating(true);
-    try {
-      await compensationApi.updateObjection(objection.id, {
-        objectionReason: editReason,
-        requestedAmount: Number(editAmount),
-      });
-      setObjection((prev) =>
-        prev
-          ? {
-              ...prev,
-              objectionText: editReason,
-              requestedAmount: Number(editAmount),
-            }
-          : null
-      );
-      setShowEditModal(false);
-    } catch (err: any) {
-      console.error("Update failed:", err);
-      notify({
-        type: 'error',
-        title: 'Update Failed',
-        message: err.message,
-      });
-    } finally {
-      setUpdating(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!objection) return;
-    setDeleting(true);
-    try {
-      await compensationApi.deleteObjection(objection.id);
-      notify({
-        type: 'success',
-        title: 'Objection Deleted',
-        message: 'The Form N objection has been deleted and the compensation offer status has been reset to Pending.',
-      });
-      navigate("/admin/compensation/objection");
-    } catch (err: any) {
-      console.error("Delete failed:", err);
-      notify({
-        type: 'error',
-        title: 'Delete Failed',
-        message: err.message,
-      });
-      setDeleting(false);
-    }
   };
 
   const formatCurrency = (val: number) => `RM ${val.toLocaleString("en-MY", { minimumFractionDigits: 2 })}`;
@@ -360,68 +292,44 @@ export const ObjectionReview: React.FC = () => {
   return (
     <>
       {/* Edit Modal */}
-      <Modal
+      <EditObjectionModal
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
-        title="Edit Objection Details"
-        subtitle={`Update statement and amount for ${objection.caseTitle}`}
-        footer={
-          <>
-            <Button variant="text" onClick={() => setShowEditModal(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="filled"
-              onClick={handleSaveEdit}
-              isLoading={updating}
-            >
-              Save Changes
-            </Button>
-          </>
+        objection={
+          objection
+            ? {
+                id: objection.id,
+                caseTitle: objection.caseTitle,
+                reason: objection.objectionText,
+                requestedAmount: objection.requestedAmount,
+              }
+            : null
         }
-      >
-        <div className="flex flex-col gap-4">
-          <CurrencyInput
-            label="Requested Amount (RM) *"
-            id="editAmount"
-            placeholder="0.00"
-            value={editAmount}
-            onValueChange={(_formatted, num) => setEditAmount(num > 0 ? num : "")}
-          />
-          <Textarea
-            label="Objection Statement *"
-            rows={5}
-            value={editReason}
-            onChange={(e) => setEditReason(e.target.value)}
-          />
-        </div>
-      </Modal>
+        showFileUpload={false}
+        onSuccess={(updated) => {
+          setObjection((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  objectionText: updated.reason,
+                  requestedAmount: updated.requestedAmount,
+                }
+              : null
+          );
+        }}
+      />
 
       {/* Delete Confirmation Modal */}
-      <Modal
+      <DeleteObjectionModal
         isOpen={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}
+        objectionId={objection.id}
         title="Confirm Deletion"
-        subtitle="This operation cannot be reverted."
-        footer={
-          <>
-            <Button variant="text" onClick={() => setShowDeleteModal(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              onClick={handleDelete}
-              isLoading={deleting}
-            >
-              Delete Permanently
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm text-md-on-surface-variant">
-          Are you sure you want to permanently delete objection <span className="font-mono">{objection.id}</span>?
-        </p>
-      </Modal>
+        subtitle={`This operation cannot be reverted. Are you sure you want to permanently delete objection ${objection.id}?`}
+        onSuccess={() => {
+          navigate("/admin/compensation/objection");
+        }}
+      />
 
       <div className="main blur-shape-bg">
         <div className="objection-review">
@@ -650,7 +558,7 @@ export const ObjectionReview: React.FC = () => {
                         Government Administrator View-Only Access
                       </div>
                       <p className="text-xs text-md-on-surface-variant leading-relaxed">
-                        Government Administrators have supervisory access and cannot accept or reject Form N objections. Official determinations must be performed by the assigned Government Officer.
+                        Government Administrators have supervisory access and cannot accept or reject objections. Official determinations must be performed by the assigned Government Officer.
                       </p>
                     </div>
                   </div>
@@ -681,7 +589,7 @@ export const ObjectionReview: React.FC = () => {
                         Awaiting Government Officer Evaluation
                       </div>
                       <p className="text-xs text-md-on-surface-variant leading-relaxed">
-                        Your Form N objection has been received and is currently under active assessment by the assigned Land Acquisition Government Officer.
+                        Your objection has been received and is currently under active assessment by the assigned Land Acquisition Government Officer.
                         Once an official determination is made, the remarks and any approved revised compensation award will appear here.
                       </p>
                     </div>
@@ -702,7 +610,7 @@ export const ObjectionReview: React.FC = () => {
               paddingTop: "18px",
             }}
           >
-            FCR-SCS · Form N Objection Assessment · Connected to Backend Service
+            FCR-SCS · Compensation Objection Assessment · Connected to Backend Service
           </div>
         </div>
       </div>
