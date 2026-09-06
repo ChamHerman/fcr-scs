@@ -695,11 +695,22 @@ export const MemberOfferLetter: React.FC = () => {
                     <FileText size={20} />
                   </div>
                   <div>
-                    <h3 className="text-sm sm:text-base font-bold text-slate-900">
-                      Form H: Notice of Award and Offer of Compensation
+                    <h3 className="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
+                      {isOfferAccepted && offer.rawOffer?.signedDocument ? (
+                        <>
+                          <span>Form H: Uploaded Signed Acceptance Document</span>
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[11px] font-bold border border-emerald-300/60">
+                            Signed Copy
+                          </span>
+                        </>
+                      ) : (
+                        <span>Form H: Notice of Award and Offer of Compensation</span>
+                      )}
                     </h3>
                     <p className="text-[11px] sm:text-xs text-slate-600 mt-0.5 font-medium">
-                      Land Acquisition Act 1960 • Statutory Award Schedule
+                      {isOfferAccepted && offer.rawOffer?.signedDocument
+                        ? 'Official Landowner Signed Form H Document • Read-Only View'
+                        : 'Land Acquisition Act 1960 • Statutory Award Schedule'}
                     </p>
                   </div>
                 </div>
@@ -752,7 +763,9 @@ export const MemberOfferLetter: React.FC = () => {
               <div className="sm:hidden mt-4 space-y-3">
                 <div className="bg-white/90 backdrop-blur-xs rounded-2xl p-4 border border-purple-200/70 space-y-2.5">
                   <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                    The official Form H statutory compensation schedule is formatted as an official A4 document. Tap below to view the complete PDF in a new browser tab with native zoom and full clarity.
+                    {isOfferAccepted && offer.rawOffer?.signedDocument
+                      ? 'Your uploaded signed Form H acceptance document is ready for review. Tap below to view the uploaded PDF in a new browser tab with full clarity.'
+                      : 'The official Form H statutory compensation schedule is formatted as an official A4 document. Tap below to view the complete PDF in a new browser tab with native zoom and full clarity.'}
                   </p>
                   <div className="flex items-center justify-between text-[11px] pt-2 border-t border-purple-100 text-slate-600">
                     <span>Reference: <strong className="font-mono text-violet-700">{offer.offerReferenceNo}</strong></span>
@@ -787,12 +800,15 @@ export const MemberOfferLetter: React.FC = () => {
               {/* On mobile, hidden from view but kept offscreen with fixed -left-[99999px] to enable canvas capture for PDF generation */}
               <div
                 className={`mt-4 ${
-                  isPreviewCollapsed ? 'hidden' : 'block'
-                } max-sm:fixed max-sm:-left-[99999px] max-sm:top-0 max-sm:opacity-0 max-sm:pointer-events-none sm:block`}
+                  isPreviewCollapsed
+                    ? 'hidden'
+                    : 'block max-sm:fixed max-sm:-left-[99999px] max-sm:top-0 max-sm:opacity-0 max-sm:pointer-events-none'
+                }`}
               >
                 <OfferLetterPreview
                   ref={previewRef}
                   offer={offer}
+                  uploadedPdf={isOfferAccepted ? offer.rawOffer?.signedDocument : null}
                   viewMode="pdf"
                   onDownloadingChange={setDownloadingPdf}
                   onPdfReady={(url) => setPdfBlobUrl(url)}
@@ -822,28 +838,6 @@ export const MemberOfferLetter: React.FC = () => {
                 {/* Status Badges & Quick Shortcuts */}
                 {isOfferAccepted ? (
                   <div className="flex items-center gap-2.5 flex-wrap">
-                    <Link
-                      to={`/member/bank-details?caseId=${offer.caseId}`}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition"
-                    >
-                      <CheckCircle2 size={15} />
-                      <span>Setup Bank Details</span>
-                    </Link>
-
-                    {offer.rawOffer?.signedDocument && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const cleanPath = offer.rawOffer.signedDocument.replace(/^\/+/, '');
-                          window.open(`${BASE_URL}/${cleanPath}`, '_blank', 'noopener,noreferrer');
-                        }}
-                        className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs flex items-center gap-1.5 transition cursor-pointer"
-                      >
-                        <FileText size={14} />
-                        <span>View Uploaded Copy</span>
-                      </button>
-                    )}
-
                     {offer.isWithinOneDay && (
                       <Button
                         variant="outlined"
