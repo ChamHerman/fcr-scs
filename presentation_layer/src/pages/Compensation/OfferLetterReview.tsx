@@ -514,39 +514,45 @@ export const OfferLetterReview: React.FC = () => {
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="flex items-center gap-2 text-md-primary font-bold text-sm sm:text-base">
                   <FileText size={18} />
-                  <span>Form H: Notice of Award and Offer of Compensation</span>
+                  <span>
+                    {offer.rawOffer?.signedDocument || signedFile
+                      ? "Form H: Uploaded Signed Acceptance Document"
+                      : "Form H: Notice of Award and Offer of Compensation"}
+                  </span>
                 </div>
 
-                {/* View Mode Switcher */}
-                <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("pdf")}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${
-                      viewMode === "pdf"
-                        ? "bg-md-primary text-white shadow-sm"
-                        : "text-slate-600 dark:text-slate-300 hover:text-slate-900"
-                    }`}
-                  >
-                    <FileText size={13} /> PDF Viewer
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("html")}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${
-                      viewMode === "html"
-                        ? "bg-md-primary text-white shadow-sm"
-                        : "text-slate-600 dark:text-slate-300 hover:text-slate-900"
-                    }`}
-                  >
-                    <Layers size={13} /> Sheet View
-                  </button>
-                </div>
+                {/* View Mode Switcher (Draft Template Only) */}
+                {!(offer.rawOffer?.signedDocument || signedFile) && (
+                  <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("pdf")}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${
+                        viewMode === "pdf"
+                          ? "bg-md-primary text-white shadow-sm"
+                          : "text-slate-600 dark:text-slate-300 hover:text-slate-900"
+                      }`}
+                    >
+                      <FileText size={13} /> PDF Viewer
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("html")}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${
+                        viewMode === "html"
+                          ? "bg-md-primary text-white shadow-sm"
+                          : "text-slate-600 dark:text-slate-300 hover:text-slate-900"
+                      }`}
+                    >
+                      <Layers size={13} /> Sheet View
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Action Controls */}
               <div className="flex items-center gap-2 flex-wrap">
-                {viewMode === "html" && (
+                {viewMode === "html" && !(offer.rawOffer?.signedDocument || signedFile) && (
                   <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
                     <button
                       type="button"
@@ -623,6 +629,7 @@ export const OfferLetterReview: React.FC = () => {
                 <OfferLetterPreview
                   ref={previewRef}
                   offer={offer}
+                  uploadedPdf={signedFile || offer.rawOffer?.signedDocument}
                   viewMode={viewMode}
                   zoomScale={zoomScale}
                   onDownloadingChange={setDownloadingPdf}
