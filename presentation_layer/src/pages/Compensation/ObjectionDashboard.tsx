@@ -271,7 +271,7 @@ export const ObjectionDashboard: React.FC = () => {
       notify({
         type: 'success',
         title: 'Objection Deleted',
-        message: 'The Form N objection has been deleted and the compensation offer letter status has been reset to Pending.',
+        message: 'The objection has been deleted and the compensation offer letter status has been reset to Pending.',
       });
       await loadScopedObjections();
     } catch (err: any) {
@@ -386,7 +386,7 @@ export const ObjectionDashboard: React.FC = () => {
         <div className="topbar-left">
           <h1 style={{ marginBottom: 0 }}>Objection Dashboard</h1>
           <div className="sub">
-            Review land owner compensation objections (Form N)
+            Review land owner compensation objections
           </div>
         </div>
         <div className="topbar-right" style={{ display: "flex", alignItems: "center", gap: "12px" }}>

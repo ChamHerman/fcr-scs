@@ -1,222 +1,230 @@
-import React from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { ShieldCheck, Home, CreditCard, CircleDollarSign, ScrollText, LogOut, ArrowLeft } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Outlet, useNavigate, Link } from 'react-router-dom';
+import { 
+  LogOut, 
+  Bell, 
+  ChevronDown, 
+  User, 
+  Settings, 
+  Landmark, 
+  CircleDollarSign, 
+  ScrollText, 
+  FileCheck2 
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useRole } from '../../hooks/useRole';
+import { Logo } from '../ui/Logo';
 
 export const MemberLayout: React.FC = () => {
-  const { logout, user } = useAuth();
+  const { logout } = useAuth();
+  const { user, userName, identificationNumber, role } = useRole();
   const navigate = useNavigate();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const displayName = userName || user?.name || 'Affected Landowner';
+  const displayEmail = user?.email || '';
+  const displayId = identificationNumber || user?.identificationNumber;
+  const initials = displayName
+    .split(' ')
+    .filter(Boolean)
+    .map((n: string) => n[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || 'AL';
+
+  const roleLabel = role === 'DISPLACED_COMMUNITY_MEMBER'
+    ? 'Affected Landowner'
+    : role ? role.replace(/_/g, ' ') : 'Affected Landowner';
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+
+    if (dropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [dropdownOpen]);
+
   return (
-    <>
-      <style>{`
-        .member-layout {
-          display: flex;
-          min-height: 100vh;
-          background: #f8fafc;
-          color: #0f172a;
-        }
-        
-        .member-sidebar {
-          width: 260px;
-          background: #ffffff;
-          border-right: 1px solid #e2e8f0;
-          display: flex;
-          flex-direction: column;
-          padding: 24px 16px;
-          position: sticky;
-          top: 0;
-          height: 100vh;
-          z-index: 30;
-        }
-
-        .member-brand {
-          font-size: 18px;
-          font-weight: 700;
-          margin-bottom: 28px;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          color: #6d28d9;
-          padding: 0 8px;
-        }
-
-        .member-nav {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-          flex: 1;
-        }
-
-        .member-nav a {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 10px 14px;
-          border-radius: 12px;
-          text-decoration: none;
-          color: #64748b;
-          font-size: 13px;
-          font-weight: 500;
-          transition: all 0.2s ease;
-        }
-
-        .member-nav a:hover {
-          background: #f1f5f9;
-          color: #0f172a;
-        }
-
-        .member-nav a.active {
-          background: #f5f3ff;
-          color: #6d28d9;
-          font-weight: 600;
-        }
-
-        .member-nav a .nav-icon { opacity: 0.75; }
-        .member-nav a.active .nav-icon { opacity: 1; color: #6d28d9; }
-
-        .member-main {
-          flex: 1;
-          width: 100%;
-          min-width: 0;
-          background: #f8fafc;
-        }
-
-        .bottom-nav { display: none; }
-
-        @media (max-width: 1024px) {
-          .member-sidebar {
-            width: 220px;
-          }
-        }
-
-        @media (max-width: 768px) {
-          .member-layout {
-            flex-direction: column;
-            padding-bottom: 88px; /* space for bottom nav and floating action bar */
-          }
-          .member-sidebar { display: none; }
-          .member-main { padding: 0; }
-
-          .bottom-nav {
-            display: flex;
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: rgba(255, 255, 255, 0.94);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border-top: 1px solid #e2e8f0;
-            justify-content: space-around;
-            padding: 8px 4px 12px 4px;
-            z-index: 50;
-            box-shadow: 0 -4px 20px rgba(0,0,0,0.06);
-          }
-          .bottom-nav a {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 2px;
-            font-size: 10px;
-            color: #64748b;
-            text-decoration: none;
-            font-weight: 500;
-            flex: 1;
-            padding: 4px 0;
-          }
-          .bottom-nav a.active {
-            color: #6d28d9;
-            font-weight: 600;
-          }
-          .bottom-nav-icon {
-            padding: 4px 12px;
-            border-radius: 14px;
-            transition: background 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-          .bottom-nav a.active .bottom-nav-icon {
-            background: #f5f3ff;
-          }
-        }
-      `}</style>
-      <div className="member-layout">
-        {/* Desktop & Tablet Sidebar */}
-        <aside className="member-sidebar">
-          <div className="member-brand">
-            <div className="p-1.5 rounded-lg bg-violet-100 text-violet-700">
-              <ShieldCheck size={22} />
+    <div className="min-h-screen bg-md-background text-md-on-surface flex flex-col font-sans antialiased">
+      {/* Topbar: Member Portal on left, Notification & Profile Dropdown on right */}
+      <header className="sticky top-0 z-40 bg-md-background border-b border-md-outline/15 shadow-sm transition-colors">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          {/* Left: Member Portal */}
+          <Link
+            to="/member"
+            className="flex items-center gap-3 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-primary rounded-full px-1 py-1"
+          >
+            <div className="w-10 h-10 rounded-full bg-md-secondary-container flex items-center justify-center text-md-primary group-hover:scale-105 transition-transform duration-200">
+              <Logo size={24} className="text-md-primary" />
             </div>
-            <span>Member Portal</span>
-          </div>
-
-          <nav className="member-nav">
-            <NavLink to="/member" end>
-              <Home size={18} className="nav-icon" />
-              <span>Workflow & Case</span>
-            </NavLink>
-            <NavLink to="/member/bank-details">
-              <CreditCard size={18} className="nav-icon" />
-              <span>Bank Details</span>
-            </NavLink>
-            <NavLink to="/member/payment-status">
-              <CircleDollarSign size={18} className="nav-icon" />
-              <span>Payment Status</span>
-            </NavLink>
-            <NavLink to="/member/verify-audit">
-              <ScrollText size={18} className="nav-icon" />
-              <span>Audit Trail</span>
-            </NavLink>
-          </nav>
-
-          <div className="pt-4 border-t border-slate-200 mt-auto">
-            <div className="px-2 py-2 mb-2 bg-slate-50 rounded-xl">
-              <p className="text-xs font-semibold text-slate-800 truncate">{user?.name || 'Ahmad bin Abdullah'}</p>
-              <p className="text-[10px] text-slate-500 truncate">{user?.email || 'ahmad.abdullah@example.com'}</p>
+            <div>
+              <span className="text-base sm:text-lg font-bold tracking-tight text-md-on-surface block leading-tight">
+                Member Portal
+              </span>
+              <span className="text-[11px] text-md-on-surface-variant block leading-tight">
+                Land Acquisition Resettlement
+              </span>
             </div>
+          </Link>
+
+          {/* Right: Notification & Profile Dropdown */}
+          <div className="flex items-center gap-3 sm:gap-4">
+            {/* Notification Bell */}
             <button
-              onClick={handleLogout}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 rounded-xl transition"
+              type="button"
+              className="p-2 rounded-full bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 relative shadow-sm transition cursor-pointer"
+              title="Notifications"
             >
-              <LogOut size={16} />
-              <span>Sign Out</span>
+              <Bell className="w-4 h-4" />
+              <span className="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full animate-pulse" />
             </button>
+
+            {/* Affected Landowner Profile Dropdown */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                type="button"
+                onClick={() => setDropdownOpen((prev) => !prev)}
+                className="flex items-center gap-2.5 p-1.5 pr-2.5 rounded-full hover:bg-md-surface-container-low border border-transparent hover:border-md-outline/20 transition-all duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-primary"
+                aria-expanded={dropdownOpen}
+                aria-haspopup="true"
+              >
+                {/* Avatar */}
+                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-violet-600 to-indigo-600 text-white font-bold flex items-center justify-center text-xs shadow-sm ring-2 ring-violet-200 shrink-0">
+                  {initials}
+                </div>
+
+                {/* Name & Subtitle */}
+                <div className="hidden sm:block text-left">
+                  <div className="text-[10px] text-slate-500 font-medium leading-none">
+                    {roleLabel}
+                  </div>
+                  <div className="text-xs font-bold text-slate-900 leading-tight mt-0.5">
+                    {displayName}
+                  </div>
+                </div>
+
+                {/* Dropdown Chevron Icon */}
+                <ChevronDown
+                  size={16}
+                  className={`text-slate-500 transition-transform duration-200 ${
+                    dropdownOpen ? 'rotate-180 text-md-primary' : ''
+                  }`}
+                />
+              </button>
+
+              {/* Dropdown Menu Panel */}
+              {dropdownOpen && (
+                <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-md-outline/20 overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-150">
+                  {/* User Info Header */}
+                  <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+                    <p className="text-xs font-bold text-slate-900">{displayName}</p>
+                    {displayEmail && <p className="text-[11px] text-slate-500 truncate">{displayEmail}</p>}
+                    {displayId && (
+                      <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200/60">
+                        ID: {displayId}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Menu Action Items */}
+                  <div className="py-1">
+                    <Link
+                      to="/member"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 transition"
+                    >
+                      <User size={16} className="text-md-primary" />
+                      <span>Profile & Case Overview</span>
+                    </Link>
+
+                    <Link
+                      to="/member/offer-letter"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 transition"
+                    >
+                      <FileCheck2 size={16} className="text-violet-600" />
+                      <span>Notice of Award (Form G)</span>
+                    </Link>
+
+                    <Link
+                      to="/member/bank-details"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 transition"
+                    >
+                      <Landmark size={16} className="text-emerald-600" />
+                      <span>Bank Payout Details</span>
+                    </Link>
+
+                    <Link
+                      to="/member/payment-status"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 transition"
+                    >
+                      <CircleDollarSign size={16} className="text-amber-600" />
+                      <span>Payment Status</span>
+                    </Link>
+
+                    <Link
+                      to="/member/verify-audit"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 transition"
+                    >
+                      <ScrollText size={16} className="text-violet-600" />
+                      <span>Verify Audit Trail</span>
+                    </Link>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDropdownOpen(false);
+                        alert('Profile Settings: Claimant personal details, contact preferences, and notifications.');
+                      }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 transition text-left cursor-pointer"
+                    >
+                      <Settings size={16} className="text-slate-500" />
+                      <span>Profile Settings</span>
+                    </button>
+                  </div>
+
+                  {/* Divider & Red Logout Button */}
+                  <div className="border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDropdownOpen(false);
+                        handleLogout();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-[#ef4444] hover:bg-red-50 transition text-left font-semibold cursor-pointer"
+                    >
+                      <LogOut size={16} className="text-[#ef4444]" />
+                      <span>Logout</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </aside>
+        </div>
+      </header>
 
-        {/* Main Content Area */}
-        <main className="member-main">
-          <Outlet />
-        </main>
-
-        {/* Mobile Bottom Navigation */}
-        <nav className="bottom-nav">
-          <NavLink to="/member" end>
-            <span className="bottom-nav-icon"><Home size={18} /></span>
-            <span>Case</span>
-          </NavLink>
-          <NavLink to="/member/bank-details">
-            <span className="bottom-nav-icon"><CreditCard size={18} /></span>
-            <span>Bank</span>
-          </NavLink>
-          <NavLink to="/member/payment-status">
-            <span className="bottom-nav-icon"><CircleDollarSign size={18} /></span>
-            <span>Payment</span>
-          </NavLink>
-          <NavLink to="/member/verify-audit">
-            <span className="bottom-nav-icon"><ScrollText size={18} /></span>
-            <span>Verify</span>
-          </NavLink>
-        </nav>
-      </div>
-    </>
+      {/* Main Content Area */}
+      <main className="flex-1 w-full">
+        <Outlet />
+      </main>
+    </div>
   );
 };
-

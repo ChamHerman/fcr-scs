@@ -101,7 +101,7 @@ export const ObjectionReview: React.FC = () => {
             month: "short",
             year: "numeric",
           }),
-          type: "Form N",
+          type: "Formal Objection",
           status: statusLabelMap[obj.status] || obj.status,
           rawStatus: obj.status,
           statusClass: statusClassMap[obj.status] || "status-objection-review",
@@ -301,7 +301,7 @@ export const ObjectionReview: React.FC = () => {
       notify({
         type: 'success',
         title: 'Objection Deleted',
-        message: 'The Form N objection has been deleted and the compensation offer status has been reset to Pending.',
+        message: 'The objection has been deleted and the compensation offer status has been reset to Pending.',
       });
       navigate("/admin/compensation/objection");
     } catch (err: any) {
@@ -650,7 +650,7 @@ export const ObjectionReview: React.FC = () => {
                         Government Administrator View-Only Access
                       </div>
                       <p className="text-xs text-md-on-surface-variant leading-relaxed">
-                        Government Administrators have supervisory access and cannot accept or reject Form N objections. Official determinations must be performed by the assigned Government Officer.
+                        Government Administrators have supervisory access and cannot accept or reject objections. Official determinations must be performed by the assigned Government Officer.
                       </p>
                     </div>
                   </div>
@@ -681,7 +681,7 @@ export const ObjectionReview: React.FC = () => {
                         Awaiting Government Officer Evaluation
                       </div>
                       <p className="text-xs text-md-on-surface-variant leading-relaxed">
-                        Your Form N objection has been received and is currently under active assessment by the assigned Land Acquisition Government Officer.
+                        Your objection has been received and is currently under active assessment by the assigned Land Acquisition Government Officer.
                         Once an official determination is made, the remarks and any approved revised compensation award will appear here.
                       </p>
                     </div>
@@ -702,7 +702,7 @@ export const ObjectionReview: React.FC = () => {
               paddingTop: "18px",
             }}
           >
-            FCR-SCS · Form N Objection Assessment · Connected to Backend Service
+            FCR-SCS · Compensation Objection Assessment · Connected to Backend Service
           </div>
         </div>
       </div>

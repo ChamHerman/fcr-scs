@@ -46,17 +46,17 @@ export const OFFER_STATUS_OPTIONS: SelectOption[] = [
   { value: "EXPIRED", label: "Expired" },
 ];
 
-// --- Form N Objection Enums & Statuses ---
+// --- Objection Enums & Statuses ---
 export const OBJECTION_TYPE_OPTIONS: SelectOption[] = [
   { value: "Measurement", label: "Discrepancy in Land / Boundary Measurement" },
   { value: "Valuation", label: "Disagreement with Market Value & Rate Per SqM" },
   { value: "Apportionment", label: "Dispute on Award Allocation & Co-Ownership Shares" },
   { value: "Damages", label: "Omission of Severance, Injurious Affection or Disturbance" },
-  { value: "Other", label: "Other Statutory Grounds under Land Acquisition Act" },
+  { value: "Other", label: "Other Grounds" },
 ];
 
 export const OBJECTION_FORM_TYPE_OPTIONS: SelectOption[] = [
-  { value: "Form N", label: "Form N – Formal Objection" },
+  { value: "Formal Objection", label: "Formal Objection" },
   { value: "Additional Evidence", label: "Additional Supporting Evidence" },
 ];
 
