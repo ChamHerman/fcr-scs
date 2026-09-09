@@ -6,7 +6,6 @@ import gsap from 'gsap';
 import { blockchainApi } from '../../services/blockchainApi';
 import { paymentApi } from '../../services/paymentApi';
 import { useWallet } from '../../hooks/useWallet';
-import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Button } from '../../components/ui/Button';
@@ -39,7 +38,6 @@ export const PublishLedger: React.FC = () => {
   const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
   const pageRef = useRef<HTMLDivElement>(null);
 
-  const { identityId } = useAdminIdentity();
   const { walletAddress, walletConnected, error: walletError, connectWallet } = useWallet();
 
   useGSAP(() => {
@@ -113,7 +111,7 @@ export const PublishLedger: React.FC = () => {
         <div className="topbar-right flex items-center gap-3">
           <NetworkSelector networkInfo={networkInfo} onNetworkChange={(net) => setNetworkInfo(net)} />
           {walletConnected ? (
-            <WalletButton walletAddress={walletAddress || undefined} adminId={identityId} />
+            <WalletButton walletAddress={walletAddress || undefined} label="Government Wallet" />
           ) : (
             <Button onClick={connectWallet} variant="animated-primary" className="font-semibold flex items-center gap-2">
               <Wallet size={16} /> Connect MetaMask

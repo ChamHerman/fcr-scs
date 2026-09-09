@@ -21,23 +21,38 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
       </div>
     );
   }
-
-  // Simplified role check. In reality, handle mapping between DB roles (e.g. SYSTEM_ADMINISTRATOR) and UI roles ('admin', 'member').
-  // The seeder creates 'SYSTEM_ADMINISTRATOR', so we check if the user role includes 'admin' (case insensitive for flexibility).
-  const normalizedRole = user.role.toLowerCase();
-  const hasRoleAccess = allowedRoles.some(allowedRole => normalizedRole.includes(allowedRole.toLowerCase()));
-  
-  // Also check dynamic page permissions
-  const hasPageAccess = allowedPages.includes('*') || allowedPages.some(page => 
-    location.pathname === page || location.pathname.startsWith(page + '/')
+  const userRole = (user.role || '').toUpperCase();
+  const isMember = userRole === 'DISPLACED_COMMUNITY_MEMBER' || userRole.includes('MEMBER');
+  const isAdmin = !isMember && (
+    userRole === 'SYSTEM_ADMINISTRATOR' ||
+    userRole === 'GOVERNMENT_ADMINISTRATOR' ||
+    userRole === 'GOVERNMENT_OFFICER' ||
+    userRole === 'LAND_VALUER' ||
+    userRole.includes('ADMIN')
   );
 
-  const hasAccess = hasRoleAccess || hasPageAccess;
-
-  if (!hasAccess) {
-    // If a user tries to access a route they don't have permission for, redirect to unauthorized
+  // Members can NEVER access /admin routes under any circumstances
+  if (isMember && (location.pathname === '/admin' || location.pathname.startsWith('/admin/'))) {
     return <Navigate to="/unauthorized" replace />;
   }
 
+  // Check role category access
+  let hasRoleAccess = false;
+  if (allowedRoles.includes('member') && isMember) hasRoleAccess = true;
+  if (allowedRoles.includes('admin') && isAdmin) hasRoleAccess = true;
+
+  // Dynamic page-level check for admin users
+  let hasPageAccess = true;
+  if (isAdmin && userRole !== 'SYSTEM_ADMINISTRATOR' && allowedPages.length > 0 && !allowedPages.includes('*')) {
+    hasPageAccess = allowedPages.some(page => 
+      location.pathname === page || location.pathname.startsWith(page + '/')
+    );
+  }
+
+  const hasAccess = hasRoleAccess && hasPageAccess;
+
+  if (!hasAccess) {
+    return <Navigate to="/unauthorized" replace />;
+  }
   return <Outlet />;
 };

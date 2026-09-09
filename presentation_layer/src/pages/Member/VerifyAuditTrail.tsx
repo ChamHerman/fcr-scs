@@ -1,12 +1,26 @@
 import React, { useState, useRef } from 'react';
-import { UploadCloud, CheckCircle, Shield, FileText, Search, Fingerprint, Lock, RefreshCw, XCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { 
+  UploadCloud, 
+  CheckCircle, 
+  Shield, 
+  FileText, 
+  Search, 
+  RefreshCw, 
+  XCircle,
+  ArrowLeft,
+  CheckCircle2,
+  Lock,
+  ExternalLink
+} from 'lucide-react';
 import { blockchainApi } from '../../services/blockchainApi';
+import { Button } from '../../components/ui/Button';
 
 export default function VerifyAuditTrail() {
-  const [dragActive, setDragActive] = useState(false);
+  const [dragActive, setDragActive] = useState<boolean>(false);
   const [file, setFile] = useState<File | null>(null);
-  const [verifying, setVerifying] = useState(false);
-  const [error, setError] = useState('');
+  const [verifying, setVerifying] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
   const [result, setResult] = useState<any>(null);
   
   const inputRef = useRef<HTMLInputElement>(null);
@@ -36,7 +50,7 @@ export default function VerifyAuditTrail() {
       const res = await blockchainApi.verify(selectedFile);
       setResult(res);
     } catch (err: any) {
-      setError(err.message || 'Verification failed');
+      setError(err.message || 'Verification failed. Document not found on the smart contract registry.');
     } finally {
       setVerifying(false);
     }
@@ -63,138 +77,201 @@ export default function VerifyAuditTrail() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--md-background)] p-4 sm:p-6 font-sans text-slate-900 flex items-center justify-center">
-      <div className="max-w-4xl w-full">
-        
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center p-4 bg-[var(--md-surface-container)] rounded-full mb-4 shadow-sm">
-            <Shield className="w-8 h-8 text-[var(--md-primary)]" />
+    <div className="max-w-3xl mx-auto space-y-6 text-md-on-surface">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-md-outline/15">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-md-primary/10 text-md-primary">
+              Cryptographic Notarisation
+            </span>
+            <span className="text-xs text-md-on-surface-variant">Immutable Audit Trail</span>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-3">
-            Public Verification Portal
+          <h1 className="text-xl sm:text-2xl font-bold text-md-on-surface">
+            Blockchain Settlement Verification
           </h1>
-          <p className="text-slate-600 max-w-lg mx-auto">
-            Verify the authenticity of digital settlement certificates using cryptographic hash cross-checking.
+          <p className="text-xs sm:text-sm text-md-on-surface-variant mt-0.5">
+            Verify the authenticity of digital compensation settlement certificates using on-chain SHA-256 hashes.
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6 items-stretch">
-          
-          {/* Upload Area */}
-          <div className="relative group">
-            <div 
-              className={`relative h-full bg-[var(--md-surface-container)] border-2 border-dashed rounded-[2rem] p-8 sm:p-12 text-center transition-all duration-300 flex flex-col justify-center ${dragActive ? 'border-[var(--md-primary)] bg-[var(--md-secondary-container)]' : 'border-slate-300 hover:border-[var(--md-primary)]/50'}`}
-              onDragEnter={handleDrag}
-              onDragLeave={handleDrag}
-              onDragOver={handleDrag}
-              onDrop={handleDrop}
-            >
-              <input 
-                ref={inputRef}
-                type="file" 
-                className="hidden" 
-                accept=".pdf"
-                onChange={handleChange}
-              />
-              
-              {!file ? (
-                <div className="flex flex-col items-center cursor-pointer" onClick={() => inputRef.current?.click()}>
-                  <div className="w-20 h-20 bg-[var(--md-background)] rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 shadow-sm">
-                    <UploadCloud className="w-10 h-10 text-[var(--md-primary)]" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-slate-900 mb-2">Upload Certificate</h3>
-                  <p className="text-sm text-slate-600 mb-6">Drag & drop your PDF file here, or click to browse</p>
-                  <span className="px-4 py-2 bg-[var(--md-background)] rounded-full text-xs text-slate-700 font-medium shadow-sm">
-                    Supports .PDF format
-                  </span>
+        <Link
+          to="/member"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-md-primary hover:underline self-start sm:self-center"
+        >
+          <ArrowLeft size={14} />
+          <span>Return to Dashboard</span>
+        </Link>
+      </div>
+
+      {/* Info Banner */}
+      <div className="p-4 rounded-xl bg-md-surface-container border border-md-outline/15 flex items-start gap-3">
+        <Shield size={20} className="text-md-primary shrink-0 mt-0.5" />
+        <div className="text-xs text-md-on-surface-variant leading-relaxed">
+          <span className="font-semibold text-md-on-surface">Zero-Knowledge Integrity Check: </span>
+          Every official compensation voucher and settlement certificate generated by FCR-SCS is cryptographically hashed and published to the Ethereum blockchain ledger. Drag & drop your PDF file to verify its on-chain validity.
+        </div>
+      </div>
+
+      {/* Main Verification Panels */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+        {/* Upload Area */}
+        <div className="relative group">
+          <div 
+            className={`relative h-full bg-md-surface-container border-2 border-dashed rounded-xl p-6 sm:p-8 text-center transition-all duration-200 ease-md-bouncy flex flex-col justify-center min-h-[300px] ${
+              dragActive 
+                ? 'border-md-primary bg-md-secondary-container/50' 
+                : 'border-md-outline/30 hover:border-md-primary/60'
+            }`}
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+          >
+            <input 
+              ref={inputRef}
+              type="file" 
+              className="hidden" 
+              accept=".pdf"
+              onChange={handleChange}
+            />
+            
+            {!file ? (
+              <div 
+                className="flex flex-col items-center cursor-pointer" 
+                onClick={() => inputRef.current?.click()}
+              >
+                <div className="w-16 h-16 bg-md-surface-container-low rounded-full flex items-center justify-center mb-4 group-hover:scale-105 transition-transform duration-200 shadow-sm text-md-primary">
+                  <UploadCloud size={32} />
                 </div>
-              ) : (
-                <div className="flex flex-col items-center">
-                  <div className="w-20 h-20 bg-[var(--md-background)] rounded-full flex items-center justify-center mb-6 shadow-sm">
-                    <FileText className="w-10 h-10 text-[var(--md-primary)]" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-slate-900 mb-1 truncate w-full max-w-[200px]">{file.name}</h3>
-                  <p className="text-xs text-slate-600 mb-6">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                  
-                  {!verifying && (
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); setFile(null); setResult(null); setError(''); }}
-                      className="text-xs px-4 py-2 bg-[var(--md-background)] hover:bg-slate-50 rounded-full text-[var(--md-primary)] font-medium transition-colors shadow-sm"
-                    >
-                      Verify another file
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Verification Status */}
-          <div className="bg-[var(--md-surface-container)] rounded-[2rem] p-6 sm:p-8 h-full min-h-[350px] flex flex-col justify-center shadow-sm">
-            {!result && !verifying && !error && (
-              <div className="text-center opacity-70">
-                <Search className="w-12 h-12 text-[var(--md-primary)] mx-auto mb-4" />
-                <p className="text-slate-600 text-sm max-w-[200px] mx-auto">Upload a PDF document to begin the live blockchain verification process.</p>
-              </div>
-            )}
-
-            {verifying && (
-              <div className="text-center space-y-4">
-                <RefreshCw className="w-10 h-10 text-[var(--md-primary)] animate-spin mx-auto" />
-                <p className="text-slate-800 font-medium">Hashing PDF & Querying Blockchain...</p>
-              </div>
-            )}
-
-            {error && (
-              <div className="text-center space-y-3">
-                <XCircle className="w-12 h-12 text-red-500 mx-auto" />
-                <p className="text-red-500 font-bold">{error}</p>
-              </div>
-            )}
-
-            {result && (
-              <div className="animate-in fade-in zoom-in duration-500 text-center space-y-4">
-                <div className="w-16 h-16 bg-[var(--md-background)] rounded-full flex items-center justify-center mx-auto shadow-sm">
-                  {result.verified ? (
-                    <CheckCircle className="w-10 h-10 text-green-600" />
-                  ) : (
-                    <XCircle className="w-10 h-10 text-red-500" />
-                  )}
-                </div>
-                
-                <h3 className={`text-2xl font-bold ${result.verified ? 'text-green-600' : 'text-red-500'}`}>
-                  {result.verified ? 'Verified Document' : 'Verification Unsuccessful'}
+                <h3 className="text-base font-bold text-md-on-surface mb-1">
+                  Upload Settlement PDF
                 </h3>
-                
-                <p className={`text-sm font-medium ${result.verified ? 'text-green-600' : 'text-red-500'}`}>
-                  {result.message}
+                <p className="text-xs text-md-on-surface-variant mb-4 max-w-xs">
+                  Drag & drop your official certificate PDF here, or click to browse files
+                </p>
+                <span className="px-3 py-1 bg-md-surface-container-low rounded-full text-[11px] text-md-on-surface-variant font-medium border border-md-outline/15">
+                  Official Form H & Voucher (.PDF)
+                </span>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center">
+                <div className="w-16 h-16 bg-md-surface-container-low rounded-full flex items-center justify-center mb-4 text-md-primary shadow-sm">
+                  <FileText size={32} />
+                </div>
+                <h3 className="text-sm font-bold text-md-on-surface mb-1 truncate w-full max-w-[220px]">
+                  {file.name}
+                </h3>
+                <p className="text-[11px] text-md-on-surface-variant mb-4">
+                  {(file.size / 1024 / 1024).toFixed(2)} MB
                 </p>
                 
-                <div className="bg-[var(--md-background)] rounded-2xl p-4 text-left shadow-sm space-y-2 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Status</span>
-                    <span className="font-semibold text-slate-800">{result.status}</span>
-                  </div>
-                  {result.timestamp && (
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Published Timestamp</span>
-                      <span className="font-mono text-slate-800">{new Date(result.timestamp * 1000).toLocaleString()}</span>
-                    </div>
-                  )}
-                  {result.voidReason && (
-                    <div className="flex justify-between">
-                      <span className="text-red-500 font-medium">Void Reason</span>
-                      <span className="text-red-600">{result.voidReason}</span>
-                    </div>
-                  )}
-                </div>
+                {!verifying && (
+                  <Button 
+                    variant="tonal"
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      setFile(null); 
+                      setResult(null); 
+                      setError(''); 
+                    }}
+                  >
+                    <span>Verify Another File</span>
+                  </Button>
+                )}
               </div>
             )}
           </div>
+        </div>
 
+        {/* Verification Result Display */}
+        <div className="bg-md-surface-container border border-md-outline/15 rounded-xl p-6 sm:p-8 flex flex-col justify-center min-h-[300px] shadow-sm">
+          {!result && !verifying && !error && (
+            <div className="text-center opacity-70">
+              <Search size={36} className="text-md-primary mx-auto mb-3 opacity-60" />
+              <h4 className="text-sm font-semibold text-md-on-surface mb-1">
+                Awaiting Document
+              </h4>
+              <p className="text-xs text-md-on-surface-variant max-w-[220px] mx-auto">
+                Select or drop a settlement PDF to begin instant cryptographic verification against the ledger.
+              </p>
+            </div>
+          )}
+
+          {verifying && (
+            <div className="text-center space-y-3">
+              <RefreshCw size={36} className="text-md-primary animate-spin mx-auto" />
+              <p className="text-xs font-semibold text-md-on-surface">
+                Computing SHA-256 Hash & Querying Blockchain...
+              </p>
+            </div>
+          )}
+
+          {error && (
+            <div className="text-center space-y-3">
+              <XCircle size={36} className="text-red-500 mx-auto" />
+              <h4 className="text-sm font-bold text-red-600 dark:text-red-400">
+                Verification Unsuccessful
+              </h4>
+              <p className="text-xs text-md-on-surface-variant max-w-xs mx-auto">
+                {error}
+              </p>
+            </div>
+          )}
+
+          {result && (
+            <div className="text-center space-y-4">
+              <div className="w-14 h-14 bg-md-surface-container-low rounded-full flex items-center justify-center mx-auto shadow-sm">
+                {result.verified ? (
+                  <CheckCircle2 size={32} className="text-emerald-600 dark:text-emerald-400" />
+                ) : (
+                  <XCircle size={32} className="text-red-500" />
+                )}
+              </div>
+              
+              <div>
+                <h3 className={`text-lg font-bold ${result.verified ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-600'}`}>
+                  {result.verified ? 'Cryptographically Verified' : 'Certificate Unverified'}
+                </h3>
+                <p className="text-xs text-md-on-surface-variant mt-1">
+                  {result.message}
+                </p>
+              </div>
+              
+              <div className="bg-md-surface-container-low rounded-xl p-4 text-left border border-md-outline/15 space-y-2 text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="text-md-on-surface-variant">Ledger Status</span>
+                  <span className="font-semibold text-md-on-surface px-2 py-0.5 rounded-full bg-md-secondary-container text-md-on-secondary-container text-[11px]">
+                    {result.status || 'PUBLISHED'}
+                  </span>
+                </div>
+                {result.timestamp && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-md-on-surface-variant">Timestamp</span>
+                    <span className="font-mono text-md-on-surface text-[11px]">
+                      {new Date(result.timestamp * 1000).toLocaleString('en-MY')}
+                    </span>
+                  </div>
+                )}
+                {result.transactionHash && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-md-on-surface-variant">Tx Hash</span>
+                    <span className="font-mono text-[11px] text-md-primary truncate max-w-[160px]">
+                      {result.transactionHash}
+                    </span>
+                  </div>
+                )}
+                {result.voidReason && (
+                  <div className="flex justify-between items-center text-red-600">
+                    <span className="font-medium">Void Reason</span>
+                    <span>{result.voidReason}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
-

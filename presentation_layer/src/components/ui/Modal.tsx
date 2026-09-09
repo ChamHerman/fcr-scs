@@ -22,8 +22,9 @@ export interface ModalProps {
   keepMounted?: boolean;
   maxWidth?: string;
   className?: string;
+  preventBackdropClose?: boolean;
+  showCloseButton?: boolean;
 }
-
 export const Modal: React.FC<ModalProps> = ({
   isOpen,
   onClose,
@@ -39,6 +40,8 @@ export const Modal: React.FC<ModalProps> = ({
   keepMounted = true,
   maxWidth = 'max-w-lg',
   className,
+  preventBackdropClose = false,
+  showCloseButton = true,
 }) => {
   const [hasOpened, setHasOpened] = useState(isOpen);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -72,6 +75,17 @@ export const Modal: React.FC<ModalProps> = ({
     const frame = requestAnimationFrame(measureBody);
     return () => cancelAnimationFrame(frame);
   }, [isOpen, measureBody]);
+  useEffect(() => {
+    if (!isOpen || preventBackdropClose) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, preventBackdropClose, onClose]);
+
 
   useGSAP(() => {
     if (!hasOpened) return;
@@ -122,6 +136,7 @@ export const Modal: React.FC<ModalProps> = ({
   if (!hasOpened) return null;
 
   const handleOverlayClick = (e: React.MouseEvent) => {
+    if (preventBackdropClose) return;
     if (e.target === overlayRef.current) {
       onClose();
     }
@@ -182,13 +197,15 @@ export const Modal: React.FC<ModalProps> = ({
               {title && <h3 className="text-xl font-bold text-md-on-surface">{title}</h3>}
               {subtitle && <p className="text-xs text-md-on-surface-variant mt-1">{subtitle}</p>}
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-md-on-surface-variant hover:text-md-on-surface p-1 rounded-full hover:bg-md-primary/10 transition-colors"
-            >
-              <X size={20} />
-            </button>
+            {showCloseButton && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="text-md-on-surface-variant hover:text-md-on-surface p-1 rounded-full hover:bg-md-primary/10 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            )}
           </div>
         )}
 

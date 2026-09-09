@@ -7,6 +7,8 @@
 export const PAYMENT_STATUSES = [
   'All',
   'Offer Accepted',
+  'Bank Details Pending',
+  'Ready to Initiate',
   'Bank Details Submitted',
   'Transfer Initiated',
   'Authorised',
@@ -35,11 +37,14 @@ export function normalizePaymentStatus(status: string): string {
   if (status === 'PAYMENT_DISPUTED') return 'Payment Disputed';
   if (status === 'SCHEDULED') return 'Scheduled';
   if (status === 'PENDING_NEW_BANK_DETAILS') return 'Pending New Bank Details';
+  if (status === 'Bank Details Pending') return 'Bank Details Pending';
+  if (status === 'Ready to Initiate') return 'Ready to Initiate';
   if (status === 'Approved') return 'Offer Accepted';
   return status;
 }
-
 export const paymentStatusLabelMap: Record<string, string> = {
+  'Bank Details Pending': 'Bank Details Pending',
+  'Ready to Initiate': 'Ready to Initiate',
   'Offer Accepted': 'Offer Accepted',
   'offer_accepted': 'Offer Accepted',
   'OFFER_ACCEPTED': 'Offer Accepted',
@@ -69,8 +74,9 @@ export const paymentStatusLabelMap: Record<string, string> = {
   'PENDING_NEW_BANK_DETAILS': 'Pending New Bank Details',
   'Approved': 'Offer Accepted',
 };
-
 export const paymentStatusClassMap: Record<string, string> = {
+  'Bank Details Pending': 'status-bank-details-pending',
+  'Ready to Initiate': 'status-ready-initiate',
   'Offer Accepted': 'status-offer-accepted',
   'offer_accepted': 'status-offer-accepted',
   'OFFER_ACCEPTED': 'status-offer-accepted',
@@ -100,6 +106,38 @@ export const paymentStatusClassMap: Record<string, string> = {
   'Pending New Bank Details': 'status-pending-details',
   'PENDING_NEW_BANK_DETAILS': 'status-pending-details',
 };
+export interface DetailedPaymentStatus {
+  caseStatus: string;
+  paymentStatus: string;
+}
+
+/**
+ * 2-tier dual status helper:
+ * - caseStatus: High-level statutory milestone (e.g. 'Offer Accepted')
+ * - paymentStatus: Granular operational payment readiness (e.g. 'Bank Details Pending' or 'Ready to Initiate')
+ */
+export function getDetailedPaymentStatus(pc: {
+  status: string;
+  bankName?: string | null;
+  accountNumber?: string | null;
+}): DetailedPaymentStatus {
+  const norm = normalizePaymentStatus(pc.status);
+  const hasBank = Boolean(pc.bankName && pc.accountNumber && pc.accountNumber.trim().length > 0);
+
+  const caseStatus =
+    norm === 'Offer Accepted' || norm === 'Bank Details Submitted' || norm === 'Bank Details Pending' || norm === 'Ready to Initiate'
+      ? 'Offer Accepted'
+      : norm;
+
+  let paymentStatus = norm;
+  if (norm === 'Offer Accepted' || norm === 'Bank Details Submitted') {
+    paymentStatus = hasBank ? 'Ready to Initiate' : 'Bank Details Pending';
+  } else if (norm === 'Bank Details Pending' || norm === 'Ready to Initiate') {
+    paymentStatus = norm;
+  }
+
+  return { caseStatus, paymentStatus };
+}
 
 export const BLOCKCHAIN_STATUSES = ['All', 'Ready to Publish', 'Published', 'Voided', 'Replacement'];
 

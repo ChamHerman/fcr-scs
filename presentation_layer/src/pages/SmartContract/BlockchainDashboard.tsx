@@ -180,7 +180,7 @@ export const BlockchainDashboard: React.FC = () => {
         <div className="topbar-right flex items-center gap-3">
           <NetworkSelector networkInfo={networkInfo} onNetworkChange={(net) => setNetworkInfo(net)} />
           {walletConnected ? (
-            <WalletButton walletAddress={walletAddress || undefined} adminId={identityId} />
+            <WalletButton walletAddress={walletAddress || undefined} label="Government Wallet" />
           ) : (
             <Button onClick={handleConnectWallet} variant="animated-primary" className="font-semibold flex items-center justify-center gap-2" style={{ minWidth: '180px' }}>
               <Wallet size={16} />

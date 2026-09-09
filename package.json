@@ -19,6 +19,17 @@
     "data_layer/*"
   ],
   "devDependencies": {
-    "concurrently": "^10.0.5"
+    "@playwright/cli": "^0.1.19",
+    "@playwright/mcp": "^0.0.80",
+    "concurrently": "^10.0.5",
+    "playwright": "^1.63.0"
+  },
+  "allowScripts": {
+    "bcrypt@6.0.0": true,
+    "core-js@3.50.0": true,
+    "keccak@3.0.4": true,
+    "prisma@7.9.1": true,
+    "secp256k1@4.0.4": true,
+    "@prisma/engines@7.9.1": true
   }
 }

@@ -6,13 +6,20 @@ export const BLOCKCHAIN_BASE = BASE_URL;
 export const PAYMENT_BASE = BASE_URL;
 
 export async function fetchJSON(url: string, options?: RequestInit) {
+  const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+  const headers = {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...options?.headers,
+  };
+
   let res: Response;
   try {
     res = await fetch(url, {
-      headers: { "Content-Type": "application/json", ...options?.headers },
       ...options,
+      headers,
     });
-  } catch (networkErr: any) {
+  } catch {
     throw new Error(`Network Error: Cannot connect to ${url}. Is the backend service running?`);
   }
 

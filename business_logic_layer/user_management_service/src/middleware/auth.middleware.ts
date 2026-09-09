@@ -1,5 +1,73 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../prisma';
+import { User, UserRole } from '@prisma/client';
+
+export interface AuthenticatedRequest extends Request {
+  user?: User;
+}
+
+export const authenticate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      res.status(401).json({ error: 'Unauthorized: Missing or invalid token' });
+      return;
+    }
+
+    const sessionToken = authHeader.startsWith('Bearer ')
+      ? authHeader.slice(7).trim()
+      : authHeader.split(' ')[1];
+
+    if (!sessionToken) {
+      res.status(401).json({ error: 'Unauthorized: Missing or invalid token' });
+      return;
+    }
+
+    const session = await prisma.userSession.findUnique({
+      where: { sessionToken },
+      include: { user: true }
+    });
+
+    if (
+      !session ||
+      session.expiresAt <= new Date() ||
+      !session.user ||
+      !session.user.isActive ||
+      session.user.deletedAt !== null
+    ) {
+      res.status(401).json({ error: 'Unauthorized: Invalid or expired session' });
+      return;
+    }
+
+    (req as AuthenticatedRequest).user = session.user;
+    next();
+  } catch (error) {
+    console.error('[Authenticate Middleware Error]', error);
+    res.status(500).json({ error: 'Internal server error during authentication' });
+  }
+};
+
+export const requireRole = (...allowedRoles: UserRole[]) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const user = (req as AuthenticatedRequest).user;
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized: Authentication required' });
+      return;
+    }
+
+    if (user.role === UserRole.SYSTEM_ADMINISTRATOR && !allowedRoles.includes(UserRole.SYSTEM_ADMINISTRATOR)) {
+      res.status(403).json({ error: 'System Administrators have view-only access and cannot perform disbursement mutations.' });
+      return;
+    }
+
+    if (!allowedRoles.includes(user.role)) {
+      res.status(403).json({ error: 'Forbidden: Insufficient role permissions' });
+      return;
+    }
+
+    next();
+  };
+};
 
 export const enforcePageAccess = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {

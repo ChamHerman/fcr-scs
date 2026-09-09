@@ -33,6 +33,7 @@ import {
   fmtDate,
   maskAccount,
 } from '../Payment/paymentModals';
+import { CaseDetailsModal } from '../Payment/CaseDetailsModal';
 import { normalizePaymentStatus } from '../Payment/statusMaps';
 import type { PaymentRow } from '../Payment/paymentModals';
 import '../LandAcquisition/case_management.css';
@@ -41,13 +42,18 @@ import '../Payment/payment.css';
 const FAILURE_REASONS: SelectOption[] = [
   { value: 'BENEFICIARY_NAME_MISMATCH', label: 'Beneficiary name does not match bank account records (Name Mismatch)' },
   { value: 'ACCOUNT_DORMANT_OR_FROZEN', label: 'Beneficiary bank account is dormant, frozen, or closed' },
-  { value: 'INVALID_ROUTING_OR_SWIFT', label: 'Invalid bank branch routing code / SWIFT identifier' },
+  { value: 'INVALID_ACCOUNT_OR_ROUTING', label: 'Invalid bank account number or branch routing code' },
   { value: 'DAILY_CLEARING_LIMIT_EXCEEDED', label: 'Daily interbank clearing quota exceeded by receiving bank' },
-  { value: 'AML_SANCTIONS_FLAG', label: 'Transaction flagged by AML / Sanctions automated screening' },
-  { value: 'INSUFFICIENT_ESCROW_LIQUIDITY', label: 'Clearing account insufficient settlement liquidity balance' },
-  { value: 'CUSTOM', label: 'Other Custom Failure Reason (specify below)' },
+  { value: 'INTERBANK_NETWORK_TIMEOUT', label: 'Interbank switch gateway communication timeout' },
 ];
 
+const FAILURE_SOLUTIONS: Record<string, string> = {
+  BENEFICIARY_NAME_MISMATCH: 'Solution: Request Bank Details Update',
+  ACCOUNT_DORMANT_OR_FROZEN: 'Solution: Request Bank Details Update',
+  INVALID_ACCOUNT_OR_ROUTING: 'Solution: Request Bank Details Update',
+  DAILY_CLEARING_LIMIT_EXCEEDED: 'Solution: Schedule Tomorrow',
+  INTERBANK_NETWORK_TIMEOUT: 'Solution: Retry Transfer',
+};
 const ITEMS_PER_PAGE = 10;
 
 export default function BankPortal() {
@@ -63,8 +69,8 @@ export default function BankPortal() {
 
   const [rejectModalCase, setRejectModalCase] = useState<PaymentRow | null>(null);
   const [detailModalCase, setDetailModalCase] = useState<PaymentRow | null>(null);
+  const [caseDetailsId, setCaseDetailsId] = useState<string | null>(null);
   const [selectedReason, setSelectedReason] = useState(FAILURE_REASONS[0].value);
-  const [customReasonText, setCustomReasonText] = useState('');
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   const { notify } = useNotification();
@@ -140,9 +146,7 @@ export default function BankPortal() {
   const handleRejectConfirm = async () => {
     if (!rejectModalCase) return;
     const finalReason =
-      selectedReason === 'CUSTOM'
-        ? customReasonText.trim() || 'Commercial bank settlement clearance declined'
-        : FAILURE_REASONS.find((r) => r.value === selectedReason)?.label || selectedReason;
+      FAILURE_REASONS.find((r) => r.value === selectedReason)?.label || selectedReason;
 
     setProcessingId(rejectModalCase.caseId);
     try {
@@ -156,7 +160,6 @@ export default function BankPortal() {
         message: `Case ${rejectModalCase.caseId} marked Transfer Failed. Logged in Failed Transactions queue.`,
       });
       setRejectModalCase(null);
-      setCustomReasonText('');
       loadData();
     } catch (e: any) {
       notify({
@@ -421,7 +424,7 @@ export default function BankPortal() {
                               <span className="font-mono font-bold text-xs text-md-primary">{paymentId}</span>
                             </td>
                             <td>
-                              <CaseIdCell caseId={pc.caseId} />
+                              <CaseIdCell caseId={pc.caseId} onClick={(cid) => setCaseDetailsId(cid)} />
                             </td>
                             <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
                             <td>
@@ -456,7 +459,6 @@ export default function BankPortal() {
                                   onClick={() => {
                                     setRejectModalCase(pc);
                                     setSelectedReason(FAILURE_REASONS[0].value);
-                                    setCustomReasonText('');
                                   }}
                                   className="h-8 px-3 text-xs inline-flex items-center gap-2 rounded-full font-medium shadow-sm"
                                 >
@@ -553,7 +555,7 @@ export default function BankPortal() {
                               <span className="font-mono font-bold text-xs text-md-primary">{paymentId}</span>
                             </td>
                             <td>
-                              <CaseIdCell caseId={c.caseId} />
+                              <CaseIdCell caseId={c.caseId} onClick={(cid) => setCaseDetailsId(cid)} />
                             </td>
                             <td>{c.accountHolderName || c.beneficiaryId || '—'}</td>
                             <td style={{ fontWeight: 600 }}>{fmtAmount(c.amount)}</td>
@@ -622,7 +624,7 @@ export default function BankPortal() {
               <strong>Transfer Failed</strong> and record the diagnostic error message in the admin Failed Transactions queue for resolution or retry.
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-2">
               <Select
                 label="Rejection / Failure Code"
                 options={FAILURE_REASONS}
@@ -630,25 +632,20 @@ export default function BankPortal() {
                 onChange={setSelectedReason}
                 placeholder="Select bank rejection reason"
               />
+              {FAILURE_SOLUTIONS[selectedReason] && (
+                <div className="text-xs bg-md-surface-container-highest rounded-lg px-3 py-2 text-md-on-surface-variant flex items-center gap-1.5 font-medium">
+                  <span className="text-md-primary font-bold">Standard SOP:</span>
+                  <span>{FAILURE_SOLUTIONS[selectedReason]}</span>
+                </div>
+              )}
             </div>
-
-            {selectedReason === 'CUSTOM' && (
-              <div className="space-y-1">
-                <Textarea
-                  label="Custom Failure Description"
-                  rows={3}
-                  placeholder="Enter detailed commercial bank error diagnostic..."
-                  value={customReasonText}
-                  onChange={(e) => setCustomReasonText(e.target.value)}
-                />
-              </div>
-            )}
           </div>
         )}
       </Modal>
 
       {/* Full Details Modal */}
       <ViewDetailsModal pc={detailModalCase} onClose={() => setDetailModalCase(null)} />
+      <CaseDetailsModal caseId={caseDetailsId} onClose={() => setCaseDetailsId(null)} />
     </div>
   );
 }

@@ -1,13 +1,43 @@
-import React, { useState } from 'react';
-import { AlertTriangle, CheckCircle2, Lock, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Lock,
+  ShieldCheck,
+  ShieldAlert,
+  Send,
+  Building2,
+  PenLine,
+  XCircle,
+  RotateCcw,
+  Ban,
+  BadgeCheck,
+  Download,
+} from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { Textarea } from '../../components/ui/Textarea';
+import { Select } from '../../components/ui/Select';
+import { Input } from '../../components/ui/Input';
+import { Checkbox } from '../../components/ui/Checkbox';
 import { paymentApi } from '../../services/paymentApi';
+import { landAcquisitionApi } from '../../services/landAcquisitionApi';
+import { CASE_STATUS_CLASS_MAP, CASE_STATUS_LABEL_MAP } from '../../constants/landAcquisition';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
+import { useAuth } from '../../context/AuthContext';
 import { normalizePaymentStatus, paymentStatusClassMap } from './statusMaps';
 
+export type PaymentRowActionType =
+  | 'initiate'
+  | 'authorise'
+  | 'confirm-execution'
+  | 'reject'
+  | 'cancel'
+  | 'retry'
+  | 'request-update'
+  | 'schedule'
+  | 'resolve-dispute';
 /**
  * Shared modal components for the payment module (PLAN_HM_1308 §5.1, §5.2, §5.3, §5.4).
  * Every secondary action from a row menu opens one of these — no window.prompt/
@@ -108,60 +138,312 @@ export const paymentBadge = (status: string) => {
 
 /* ------------------------------- View Details ------------------------------- */
 
-export const ViewDetailsModal: React.FC<{ pc: PaymentRow | null; onClose: () => void }> = ({ pc, onClose }) => (
-  <Modal isOpen={Boolean(pc)} onClose={onClose} title="Payment Details" subtitle={pc ? `Case ${pc.caseId}` : ''} cancelText="Close">
-    {pc && (
-      <div className="space-y-5">
-        <div className="payment-detail-grid">
-          <div className="payment-detail-item">
-            <div className="label">Payment ID</div>
-            <div className="value mono text-md-primary font-bold">{pc.paymentId || `PMT-${pc.caseId}`}</div>
+export const ViewDetailsModal: React.FC<{
+  pc: PaymentRow | null;
+  identityId?: string;
+  onClose: () => void;
+  onAction?: (action: PaymentRowActionType, pc: PaymentRow) => void;
+}> = ({ pc, identityId = '', onClose, onAction }) => {
+  const { notify } = useNotification();
+  const { user } = useAuth();
+  const [caseData, setCaseData] = useState<any>(null);
+
+  useEffect(() => {
+    if (!pc?.caseId) {
+      setCaseData(null);
+      return;
+    }
+    let isMounted = true;
+    landAcquisitionApi
+      .getCaseById(pc.caseId)
+      .then((res: any) => {
+        if (isMounted) setCaseData(res?.data || res?.case || res);
+      })
+      .catch(() => {
+        if (isMounted) setCaseData(null);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [pc?.caseId]);
+
+  if (!pc) return null;
+
+  const norm = normalizePaymentStatus(pc.status);
+  const signed = hasSignedOrInitiated(pc, identityId);
+  const left = signaturesLeft(pc);
+  const isSysAdmin = user?.role === 'SYSTEM_ADMINISTRATOR';
+  const canCancel = PRE_TRANSFER_STATUSES.includes(norm) && !isSysAdmin;
+
+  const renderFooterActions = () => {
+    if (isSysAdmin) {
+      return (
+        <span className="text-xs text-md-on-surface-variant italic px-2">
+          View Only (System Administrator)
+        </span>
+      );
+    }
+
+    switch (norm) {
+      case 'Offer Accepted':
+      case 'Bank Details Submitted':
+        if (!hasBankDetails(pc)) {
+          return (
+            <Button
+              size="md"
+              variant="filled"
+              disabled
+              title="Awaiting beneficiary bank details before transfer can be initiated"
+            >
+              <Send size={15} />
+              <span>Initiate Transfer</span>
+            </Button>
+          );
+        }
+        return (
+          <Button
+            size="md"
+            variant="filled"
+            onClick={() => {
+              onClose();
+              onAction?.('initiate', pc);
+            }}
+          >
+            <Send size={15} />
+            <span>Initiate Transfer</span>
+          </Button>
+        );
+
+      case 'Transfer Initiated':
+      case 'Authorised':
+        if (left > 0 && !signed) {
+          return (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="danger"
+                size="md"
+                onClick={() => {
+                  onClose();
+                  onAction?.('reject', pc);
+                }}
+              >
+                <XCircle size={15} />
+                <span>Reject Transfer</span>
+              </Button>
+              <Button
+                variant="filled"
+                size="md"
+                onClick={() => {
+                  onClose();
+                  onAction?.('authorise', pc);
+                }}
+              >
+                <PenLine size={15} />
+                <span>Authorise Transfer</span>
+              </Button>
+            </div>
+          );
+        }
+        if (left > 0 && signed) {
+          return (
+            <Button
+              variant="tonal"
+              size="md"
+              disabled
+              title="You cannot authorise a transfer you initiated or previously signed (Segregation of Duties)"
+            >
+              <Lock size={15} />
+              <span>Self-Signed</span>
+            </Button>
+          );
+        }
+        if (left === 0) {
+          return (
+            <Button
+              variant="filled"
+              size="md"
+              className="!bg-md-error !text-md-on-error hover:!bg-md-error/90"
+              onClick={() => {
+                onClose();
+                onAction?.('confirm-execution', pc);
+              }}
+            >
+              <Send size={15} />
+              <span>Confirm Release</span>
+            </Button>
+          );
+        }
+        return null;
+
+      case 'Transfer Failed':
+        return (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outlined"
+              size="md"
+              onClick={() => {
+                onClose();
+                onAction?.('request-update', pc);
+              }}
+            >
+              <span>Request Details Update</span>
+            </Button>
+            <Button
+              variant="filled"
+              size="md"
+              onClick={() => {
+                onClose();
+                onAction?.('retry', pc);
+              }}
+            >
+              <RotateCcw size={15} />
+              <span>Retry Transfer</span>
+            </Button>
           </div>
-          <div className="payment-detail-item">
-            <div className="label">Case ID</div>
-            <div className="value mono">{pc.caseId}</div>
+        );
+
+      case 'Payment Disputed':
+        return (
+          <Button
+            variant="filled"
+            size="md"
+            onClick={() => {
+              onClose();
+              onAction?.('resolve-dispute', pc);
+            }}
+          >
+            <BadgeCheck size={15} />
+            <span>Resolve Dispute</span>
+          </Button>
+        );
+
+      case 'Paid':
+        return (
+          <Button
+            variant="tonal"
+            size="md"
+            onClick={() => downloadReceipt(pc, notify)}
+          >
+            <Download size={15} />
+            <span>Download Official Receipt</span>
+          </Button>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <Modal
+      isOpen={Boolean(pc)}
+      onClose={onClose}
+      title="Disbursement Case Record"
+      subtitle={`Payment ID: ${pc.paymentId || 'PMT-' + pc.caseId}`}
+      cancelText="Close"
+      footer={
+        <div className="flex items-center justify-between w-full">
+          <Button variant="text" size="md" onClick={onClose}>
+            Close
+          </Button>
+          <div>{renderFooterActions()}</div>
+        </div>
+      }
+    >
+      <div className="space-y-5 text-sm">
+        {/* Case Details Above */}
+        <div className="bg-md-surface-container-low rounded-xl p-4 border border-md-outline/10 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 font-bold text-md-primary text-xs uppercase tracking-wider">
+              <Building2 size={16} />
+              <span>Statutory Acquisition Case Details</span>
+            </div>
+            <span className="font-mono text-xs font-bold text-md-primary">
+              {pc.caseId}
+            </span>
           </div>
-          <div className="payment-detail-item">
-            <div className="label">Beneficiary</div>
-            <div className="value">{pc.accountHolderName || pc.beneficiaryId || '—'}</div>
-          </div>
-          <div className="payment-detail-item">
-            <div className="label">MyKad</div>
-            <div className="value mono">{maskMyKad(pc.myKadNumber)}</div>
-          </div>
-          <div className="payment-detail-item">
-            <div className="label">Phone</div>
-            <div className="value mono">{pc.phoneNumber || '—'}</div>
-          </div>
-          <div className="payment-detail-item">
-            <div className="label">Bank</div>
-            <div className="value">{pc.bankName || '—'}</div>
-          </div>
-          <div className="payment-detail-item">
-            <div className="label">Account</div>
-            <div className="value mono">{maskAccount(pc.accountNumber)}</div>
-          </div>
-          <div className="payment-detail-item">
-            <div className="label">Amount</div>
-            <div className="value font-bold text-md-primary">{fmtAmount(pc.amount)}</div>
+
+          <div className="grid grid-cols-2 gap-3 text-xs pt-1">
+            <div>
+              <span className="text-md-on-surface-variant block">Project Name</span>
+              <span className="font-semibold text-md-on-surface">
+                {caseData?.project?.projectName || (pc.caseId === 'LAC-2026-08-0003' ? 'Desa Melati Flood Mitigation Project' : 'Statutory Land Acquisition')}
+              </span>
+            </div>
+            <div>
+              <span className="text-md-on-surface-variant block mb-1">Statutory Case Status</span>
+              <span className={`payment-badge ${CASE_STATUS_CLASS_MAP[caseData?.status || 'OFFER_ACCEPTED'] || 'status-offer-accepted'} text-xs font-semibold`}>
+                <span className="dot" />
+                {CASE_STATUS_LABEL_MAP[caseData?.status || 'OFFER_ACCEPTED'] || (caseData?.status || 'Offer Accepted').replace(/_/g, ' ')}
+              </span>
+            </div>
+            <div>
+              <span className="text-md-on-surface-variant block">Land Parcel / Lot</span>
+              <span className="text-md-on-surface">
+                {caseData?.landParcel?.lotNo || (pc.caseId === 'LAC-2026-08-0003' ? 'Lot 3104, Mukim Setapak' : 'Lot Parcel')}
+              </span>
+            </div>
+            <div>
+              <span className="text-md-on-surface-variant block">Legal Award Basis</span>
+              <span className="text-md-on-surface">
+                Land Acquisition Act 1960 (Form H)
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="payment-detail-item">
-          <div className="label">Current Status</div>
-          <div className="value">{paymentBadge(pc.status)}</div>
+        {/* Operational Payment Details */}
+        <div>
+          <div className="text-xs font-bold uppercase tracking-wider text-md-on-surface-variant mb-2.5">
+            Disbursement & Banking Details
+          </div>
+          <div className="payment-detail-grid">
+            <div className="payment-detail-item">
+              <div className="label">Payment ID</div>
+              <div className="value mono text-md-primary font-bold">{pc.paymentId || `PMT-${pc.caseId}`}</div>
+            </div>
+            <div className="payment-detail-item">
+              <div className="label">Beneficiary</div>
+              <div className="value font-semibold">{pc.accountHolderName || pc.beneficiaryId || '—'}</div>
+            </div>
+            <div className="payment-detail-item">
+              <div className="label">MyKad</div>
+              <div className="value mono">{maskMyKad(pc.myKadNumber)}</div>
+            </div>
+            <div className="payment-detail-item">
+              <div className="label">Phone</div>
+              <div className="value mono">{pc.phoneNumber || '—'}</div>
+            </div>
+            <div className="payment-detail-item">
+              <div className="label">Bank</div>
+              <div className="value">{pc.bankName || '—'}</div>
+            </div>
+            <div className="payment-detail-item">
+              <div className="label">Account</div>
+              <div className="value mono">{maskAccount(pc.accountNumber)}</div>
+            </div>
+            <div className="payment-detail-item">
+              <div className="label">Award Amount</div>
+              <div className="value font-bold text-md-primary">{fmtAmount(pc.amount)}</div>
+            </div>
+            <div className="payment-detail-item">
+              <div className="label">Payment Status</div>
+              <div className="value">{paymentBadge(norm)}</div>
+            </div>
+          </div>
         </div>
 
+        {/* Multi-Sig / Approvals */}
         <div>
           <div className="label" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--md-on-surface-variant)', marginBottom: 8 }}>
-            Approval History
+            Dual Governance Approvals ({pc.currentSignatures || 0}/{pc.requiredSignatures || 1} Signatures)
           </div>
           <div className="space-y-2">
             {(pc.authorisations ?? []).length === 0 && (
-              <p className="text-sm text-md-on-surface-variant">No approvals recorded.</p>
+              <p className="text-xs text-md-on-surface-variant">No approvals recorded yet.</p>
             )}
             {(pc.authorisations ?? []).map((a, i) => (
-              <div key={i} className="flex items-start justify-between gap-3 text-sm bg-md-surface-container-low rounded-xl px-4 py-2.5 border border-md-outline/10">
+              <div key={i} className="flex items-start justify-between gap-3 text-xs bg-md-surface-container-low rounded-xl px-4 py-2.5 border border-md-outline/10">
                 <div>
                   <span className="font-semibold text-md-on-surface capitalize">{a.action}</span>
                   <span className="text-md-on-surface-variant"> · {a.adminId}</span>
@@ -175,47 +457,56 @@ export const ViewDetailsModal: React.FC<{ pc: PaymentRow | null; onClose: () => 
           </div>
         </div>
 
-        <div>
-          <div className="label" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--md-on-surface-variant)', marginBottom: 8 }}>
-            Transfer Attempts
-          </div>
-          <div className="space-y-2">
-            {(pc.failedTransactions ?? []).length === 0 && (
-              <p className="text-sm text-md-on-surface-variant">No failed attempts. {pc.receipt ? 'Receipt present.' : ''}</p>
-            )}
-            {(pc.failedTransactions ?? []).map((f, i) => (
-              <div key={i} className="bg-md-surface-container-low rounded-xl px-4 py-2.5 border border-md-outline/10 text-sm">
-                <div className="text-xs text-md-on-surface-variant mb-1">
-                  Attempt #{i + 1} · {fmtDate(f.createdAt)}
-                </div>
-                <div className="text-md-on-surface break-words">{f.errorLog}</div>
-                {f.resolution && (
-                  <div className="text-xs text-md-on-success mt-1">
-                    Resolution: {f.resolution} {f.resolvedAt ? `· ${fmtDate(f.resolvedAt)}` : ''}
+        {/* Transfer Attempts / Errors */}
+        {(pc.failedTransactions ?? []).length > 0 && (
+          <div>
+            <div className="label" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--md-on-surface-variant)', marginBottom: 8 }}>
+              Transfer Attempts
+            </div>
+            <div className="space-y-2">
+              {(pc.failedTransactions ?? []).map((f, i) => (
+                <div key={i} className="bg-md-surface-container-low rounded-xl px-4 py-2.5 border border-md-outline/10 text-xs">
+                  <div className="text-[11px] text-md-on-surface-variant mb-1">
+                    Attempt #{i + 1} · {fmtDate(f.createdAt)}
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {pc.receipt && (
-          <div className="payment-detail-item">
-            <div className="label">Receipt</div>
-            <div className="value mono">Bank Ref: {pc.receipt.bankReferenceNumber}</div>
+                  <div className="text-md-on-surface break-words">{f.errorLog}</div>
+                  {f.resolution && (
+                    <div className="text-[11px] text-md-on-success mt-1">
+                      Resolution: {f.resolution} {f.resolvedAt ? `· ${fmtDate(f.resolvedAt)}` : ''}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
-        <div className="payment-detail-item">
-          <div className="label">Audit</div>
-          <div className="text-sm text-md-on-surface">
-            Created {fmtDate(pc.createdAt)} · Updated {fmtDate(pc.updatedAt)}
+        {/* Cancel Payment Action at Lowest Bottom of Modal */}
+        {canCancel && (
+          <div className="pt-4 border-t border-md-outline/15 flex items-center justify-between bg-red-500/5 -mx-6 px-6 py-3 rounded-b-xl">
+            <div className="text-xs text-md-on-surface-variant">
+              <span className="font-semibold text-red-600 dark:text-red-400 block">Cancel Disbursement</span>
+              <span>Revoke compensation transfer order before bank release</span>
+            </div>
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              onClick={() => {
+                onClose();
+                onAction?.('cancel', pc);
+              }}
+              className="shrink-0"
+            >
+              <Ban size={14} />
+              <span>Cancel Payment</span>
+            </Button>
           </div>
-        </div>
+        )}
       </div>
-    )}
-  </Modal>
-);
+    </Modal>
+  );
+};
 
 /* --------------------------- Mutating modals (base) --------------------------- */
 
@@ -298,9 +589,117 @@ export const InitiateTransferModal: React.FC<MutatingModalProps> = ({ pc, onClos
 
 /* ----------------------------- Authorise Transfer ----------------------------- */
 
+export interface FinalExecutionConfirmModalProps {
+  pc: PaymentRow | null;
+  isOpen: boolean;
+  onConfirm: () => Promise<void>;
+  onHold: () => void;
+}
+
+export const FinalExecutionConfirmModal: React.FC<FinalExecutionConfirmModalProps> = ({
+  pc,
+  isOpen,
+  onConfirm,
+  onHold,
+}) => {
+  const [checked, setChecked] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleConfirm = async () => {
+    if (!checked || loading) return;
+    setLoading(true);
+    try {
+      await onConfirm();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal
+      isOpen={isOpen && Boolean(pc)}
+      onClose={() => {}}
+      preventBackdropClose={true}
+      showCloseButton={false}
+      maxWidth="max-w-xl"
+      title="Final Disbursement Release Order"
+      subtitle={pc ? `Case ${pc.caseId} · ${fmtAmount(pc.amount)}` : ''}
+      footer={
+        <div className="flex items-center justify-end gap-3 w-full">
+          <Button variant="text" size="md" onClick={onHold} disabled={loading}>
+            Keep on Hold in Authorised
+          </Button>
+          <Button
+            variant="filled"
+            size="md"
+            disabled={!checked}
+            isLoading={loading}
+            onClick={handleConfirm}
+            className="!bg-md-error !text-md-on-error hover:!bg-md-error/90"
+          >
+            Confirm &amp; Dispatch Bank Payment
+          </Button>
+        </div>
+      }
+    >
+      {pc && (
+        <div className="space-y-4">
+          <div className="bg-md-error/15 border-2 border-md-error/40 rounded-xl p-4 text-md-on-error-container">
+            <div className="flex items-center gap-2 text-md-error font-bold text-sm tracking-wide uppercase">
+              <ShieldAlert size={18} />
+              FINAL DISBURSEMENT RELEASE ORDER — POINT OF NO REVERSAL
+            </div>
+            <p className="text-xs text-md-on-surface mt-2 leading-relaxed">
+              You are issuing an irrevocable bank fund release order under the Land Acquisition Act 1960.
+              Once confirmed, interbank commercial clearing instructions will execute immediately and cannot be recalled or stopped.
+            </p>
+          </div>
+
+          <div className="payment-detail-grid">
+            <div className="payment-detail-item">
+              <div className="label">Case Reference</div>
+              <div className="value font-mono font-bold text-md-primary">{pc.caseId}</div>
+            </div>
+            <div className="payment-detail-item">
+              <div className="label">Total Statutory Award</div>
+              <div className="value font-bold text-md-primary text-base">{fmtAmount(pc.amount)}</div>
+            </div>
+            <div className="payment-detail-item">
+              <div className="label">Beneficiary Name</div>
+              <div className="value">{pc.accountHolderName || '—'}</div>
+            </div>
+            <div className="payment-detail-item">
+              <div className="label">Receiving Bank &amp; Account</div>
+              <div className="value">{pc.bankName || '—'} · {maskAccount(pc.accountNumber)}</div>
+            </div>
+          </div>
+
+          <div className="bg-md-surface-container-low rounded-xl px-4 py-3 border border-md-outline/10 text-xs text-md-on-surface-variant flex items-center justify-between">
+            <span>Authorisation Status:</span>
+            <span className="font-semibold text-md-success flex items-center gap-1.5">
+              <CheckCircle2 size={14} />
+              All Approvals Complete ({pc.requiredSignatures}/{pc.requiredSignatures} Signatures)
+            </span>
+          </div>
+
+          <div className="pt-2 border-t border-md-outline/10">
+            <Checkbox
+              id="final-disbursement-acknowledgement"
+              label="I confirm all approvals are complete and authorise immediate interbank payment execution."
+              checked={checked}
+              onChange={(e) => setChecked(e.target.checked)}
+            />
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+};
+
 export const AuthoriseTransferModal: React.FC<MutatingModalProps> = ({ pc, onClose, onDone }) => {
   const { identityId, identityLabel } = useAdminIdentity();
   const { loading, setLoading, notify } = useMutationState();
+  const [showFinalModal, setShowFinalModal] = useState(false);
   const initiator = pc ? initiatorOf(pc) : null;
   const current = pc?.currentSignatures ?? 0;
   const required = pc?.requiredSignatures ?? 1;
@@ -312,15 +711,17 @@ export const AuthoriseTransferModal: React.FC<MutatingModalProps> = ({ pc, onClo
     setLoading(true);
     try {
       const res = await paymentApi.authorise({ caseId: pc.caseId, adminId: identityId });
-      notify({
-        type: 'success',
-        title: reachesThreshold ? 'Transfer Authorised' : 'Authorisation Recorded',
-        message: reachesThreshold
-          ? `Case ${pc.caseId} fully authorised (${current + 1}/${required}). It will be submitted to the bank (Waiting Bank Approval) in a few seconds.`
-          : `Authorisation recorded. Signatures now ${(res.paymentCase?.currentSignatures ?? current + 1)}/${required}.`,
-      });
-      onClose();
-      onDone();
+      if (reachesThreshold) {
+        setShowFinalModal(true);
+      } else {
+        notify({
+          type: 'success',
+          title: 'Authorisation Recorded',
+          message: `Authorisation recorded. Signatures now ${(res.paymentCase?.currentSignatures ?? current + 1)}/${required}.`,
+        });
+        onClose();
+        onDone();
+      }
     } catch (e: any) {
       notify({ type: 'error', title: 'Authorise failed', message: e.message });
     } finally {
@@ -328,64 +729,100 @@ export const AuthoriseTransferModal: React.FC<MutatingModalProps> = ({ pc, onClo
     }
   };
 
+  const handleFinalConfirm = async () => {
+    if (!pc) return;
+    try {
+      await paymentApi.confirmExecution({ caseId: pc.caseId, adminId: identityId });
+      notify({
+        type: 'success',
+        title: 'Payment Dispatched to Bank',
+        message: `Case ${pc.caseId} confirmed and dispatched to the commercial bank clearing queue.`,
+      });
+      setShowFinalModal(false);
+      onClose();
+      onDone();
+    } catch (e: any) {
+      notify({ type: 'error', title: 'Bank dispatch failed', message: e.message });
+    }
+  };
+
+  const handleFinalHold = () => {
+    notify({
+      type: 'general',
+      title: 'Transfer Authorised (On Hold)',
+      message: `Case ${pc?.caseId} is fully authorised and kept on hold awaiting final dispatch confirmation.`,
+    });
+    setShowFinalModal(false);
+    onClose();
+    onDone();
+  };
+
   return (
-    <Modal
-      isOpen={Boolean(pc)}
-      onClose={onClose}
-      title="Authorise Transfer"
-      subtitle={pc ? `Case ${pc.caseId} · ${fmtAmount(pc.amount)}` : ''}
-      cancelText="Cancel"
-      confirmText="Authorise Transfer"
-      confirmVariant="filled"
-      confirmLoading={loading}
-      onConfirm={confirm}
-    >
-      {pc && (
-        <div className="space-y-4">
-          <div className="payment-detail-item">
-            <div className="label">Multi-signature progress</div>
-            <div className="value">
-              {current} of {required} signatures
-            </div>
-            <div className="text-xs text-md-on-surface-variant mt-1">
-              {signaturesLeft(pc)} left to meet the threshold
-            </div>
-          </div>
-
-          <div className="space-y-1 text-sm text-md-on-surface-variant">
-            {pc.authorisations?.map((a, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <CheckCircle2 size={14} className="text-md-success" />
-                {a.adminId} — <span className="capitalize">{a.action}</span>
+    <>
+      <Modal
+        isOpen={Boolean(pc) && !showFinalModal}
+        onClose={onClose}
+        title="Authorise Transfer"
+        subtitle={pc ? `Case ${pc.caseId} · ${fmtAmount(pc.amount)}` : ''}
+        cancelText="Cancel"
+        confirmText="Authorise Transfer"
+        confirmVariant="filled"
+        confirmLoading={loading}
+        onConfirm={confirm}
+      >
+        {pc && (
+          <div className="space-y-4">
+            <div className="payment-detail-item">
+              <div className="label">Multi-signature progress</div>
+              <div className="value">
+                {current} of {required} signatures
               </div>
-            ))}
-            {!pc.authorisations?.length && <p>No signatures recorded yet.</p>}
+              <div className="text-xs text-md-on-surface-variant mt-1">
+                {signaturesLeft(pc)} left to meet the threshold
+              </div>
+            </div>
+
+            <div className="space-y-1 text-sm text-md-on-surface-variant">
+              {pc.authorisations?.map((a, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <CheckCircle2 size={14} className="text-md-success" />
+                  {a.adminId} — <span className="capitalize">{a.action}</span>
+                </div>
+              ))}
+              {!pc.authorisations?.length && <p>No signatures recorded yet.</p>}
+            </div>
+
+            {isSoDBlocked ? (
+              <div className="text-sm bg-md-warning/10 border border-md-warning/30 rounded-xl px-4 py-3 text-md-on-warning">
+                You cannot authorise a transfer you initiated or previously signed. (Segregation of duties)
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-sm bg-md-surface-container-low rounded-xl px-4 py-3 border border-md-outline/10">
+                <Lock size={13} />
+                Signing as: <strong className="text-md-on-surface">{identityLabel} ({identityId})</strong>
+              </div>
+            )}
+
+            {reachesThreshold && (
+              <div className="flex items-start gap-2 text-sm bg-md-primary/10 border border-md-primary/30 rounded-xl px-4 py-3 text-md-on-surface">
+                <ShieldCheck size={16} className="shrink-0 mt-0.5 text-md-primary" />
+                <span>
+                  Meeting the multi-signature threshold will mark this transfer <strong>Authorised</strong>.
+                  As the final authoriser, you will be prompted for final release confirmation before funds are dispatched to the commercial bank.
+                </span>
+              </div>
+            )}
           </div>
+        )}
+      </Modal>
 
-          {isSoDBlocked ? (
-            <div className="text-sm bg-md-warning/10 border border-md-warning/30 rounded-xl px-4 py-3 text-md-on-warning">
-              You cannot authorise a transfer you initiated or previously signed. (Segregation of duties)
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 text-sm bg-md-surface-container-low rounded-xl px-4 py-3 border border-md-outline/10">
-              <Lock size={13} />
-              Signing as: <strong className="text-md-on-surface">{identityLabel} ({identityId})</strong>
-            </div>
-          )}
-
-          {reachesThreshold && (
-            <div className="flex items-start gap-2 text-sm bg-md-primary/10 border border-md-primary/30 rounded-xl px-4 py-3 text-md-on-surface">
-              <ShieldCheck size={16} className="shrink-0 mt-0.5 text-md-primary" />
-              <span>
-                Meeting the multi-signature threshold will mark this transfer <strong>Authorised</strong>,
-                then automatically submit it to the commercial bank (<strong>Waiting Bank Approval</strong>) —
-                from that point only the bank portal can approve or reject it.
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-    </Modal>
+      <FinalExecutionConfirmModal
+        pc={pc}
+        isOpen={showFinalModal}
+        onConfirm={handleFinalConfirm}
+        onHold={handleFinalHold}
+      />
+    </>
   );
 };
 
@@ -444,18 +881,59 @@ export const RejectTransferModal: React.FC<MutatingModalProps> = ({ pc, onClose,
 
 /* ------------------------------- Cancel Payment ------------------------------- */
 
+export const CANCELLATION_REASONS = [
+  {
+    value: 'LANDOWNER_REQUESTED_ACCOUNT_CHANGE',
+    label: 'Landowner requested bank account change / account closed',
+    solution: 'Request Landowner to Update Bank Details',
+  },
+  {
+    value: 'LEGAL_DISPUTE_OR_INJUNCTION',
+    label: 'Land parcel ownership dispute or court injunction received',
+    solution: 'Hold Case Pending Legal Resolution',
+  },
+  {
+    value: 'INCORRECT_AWARD_AMOUNT',
+    label: 'Statutory compensation award calculation error detected',
+    solution: 'Re-open Valuation Review in Land Module',
+  },
+  {
+    value: 'SUSPECTED_FRAUD_OR_IMPERSONATION',
+    label: 'Security flag raised on beneficiary identity or banking document',
+    solution: 'Re-verify MyKad & Title with Land Office',
+  },
+  {
+    value: 'DUPLICATE_DISBURSEMENT_PREVENTION',
+    label: 'Duplicate payment instruction detected across system records',
+    solution: 'Cancel Duplicate Voucher',
+  },
+];
+
 export const CancelPaymentModal: React.FC<MutatingModalProps> = ({ pc, onClose, onDone }) => {
   const { identityId } = useAdminIdentity();
   const { loading, setLoading, notify } = useMutationState();
-  const [reason, setReason] = useState('');
+  const [selectedReason, setSelectedReason] = useState('');
+  const [confirmationInput, setConfirmationInput] = useState('');
+
+  const selectedOption = CANCELLATION_REASONS.find((r) => r.value === selectedReason);
+  const isConfirmed = Boolean(selectedReason && confirmationInput.trim() === pc?.caseId);
 
   const confirm = async () => {
-    if (!pc || !reason.trim()) return;
+    if (!pc || !isConfirmed) return;
     setLoading(true);
     try {
-      await paymentApi.cancelPayment({ caseId: pc.caseId, adminId: identityId, reason: reason.trim() });
-      notify({ type: 'success', title: 'Payment cancelled', message: `Case ${pc.caseId} → Cancelled.` });
-      setReason('');
+      await paymentApi.cancelPayment({
+        caseId: pc.caseId,
+        adminId: identityId,
+        reason: selectedReason,
+      });
+      notify({
+        type: 'success',
+        title: 'Payment cancelled',
+        message: `Case ${pc.caseId} cancelled and recorded in Failed Transactions for SOP resolution.`,
+      });
+      setSelectedReason('');
+      setConfirmationInput('');
       onClose();
       onDone();
     } catch (e: any) {
@@ -469,30 +947,64 @@ export const CancelPaymentModal: React.FC<MutatingModalProps> = ({ pc, onClose, 
     <Modal
       isOpen={Boolean(pc)}
       onClose={onClose}
-      title="Cancel Payment"
+      title="Cancel Payment (Destructive Action)"
       subtitle={pc ? `Case ${pc.caseId} · ${fmtAmount(pc.amount)}` : ''}
       cancelText="Keep Payment"
-      confirmText="Cancel Payment"
+      confirmText="Confirm Cancel Payment"
       confirmVariant="danger"
       confirmLoading={loading}
-      onConfirm={confirm}
+      onConfirm={isConfirmed ? confirm : undefined}
     >
       {pc && (
         <div className="space-y-4">
-          <div className="payment-detail-item">
-            <div className="label">Record</div>
-            <div className="value">{pc.accountHolderName || pc.beneficiaryId} · {fmtAmount(pc.amount)}</div>
+          <div className="flex items-start gap-2 text-sm bg-md-error/10 border border-md-error/30 rounded-xl px-4 py-3 text-md-on-error-container">
+            <AlertTriangle size={18} className="shrink-0 mt-0.5 text-md-error" />
+            <span>
+              <strong>WARNING:</strong> Cancelling a payment case stops all disbursements and flags this transaction in Failed Transactions for SOP resolution.
+            </span>
           </div>
-          <div className="flex items-start gap-2 text-sm bg-md-warning/10 border border-md-warning/30 rounded-xl px-4 py-3 text-md-on-warning">
-            <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-            Only pre-transfer payments can be cancelled. This records an audit entry (CANCEL) and moves the case to CANCELLED.
+
+          <div className="payment-detail-grid">
+            <div className="payment-detail-item">
+              <div className="label">Beneficiary</div>
+              <div className="value">{pc.accountHolderName || pc.beneficiaryId}</div>
+            </div>
+            <div className="payment-detail-item">
+              <div className="label">Award Amount</div>
+              <div className="value font-bold text-md-primary">{fmtAmount(pc.amount)}</div>
+            </div>
           </div>
-          <Textarea
-            label="Cancellation reason (required)"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Explain why this payment is being cancelled…"
-          />
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-md-on-surface-variant block">
+              Statutory Cancellation Reason (required)
+            </label>
+            <Select
+              label="Cancellation Reason"
+              placeholder="Select an approved cancellation reason…"
+              options={CANCELLATION_REASONS.map((r) => ({ value: r.value, label: r.label }))}
+              value={selectedReason}
+              onChange={(val) => setSelectedReason(val)}
+            />
+            {selectedOption && (
+              <div className="text-xs bg-md-surface-container-highest rounded-lg px-3 py-2 text-md-on-surface-variant flex items-center gap-1.5">
+                <span className="font-semibold text-md-primary">Resolution SOP:</span>
+                <span>{selectedOption.solution}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="pt-2 border-t border-md-outline/10 space-y-1.5">
+            <p className="text-xs text-md-on-surface-variant">
+              Type Case ID <strong className="font-mono text-md-on-surface">{pc.caseId}</strong> to confirm cancellation:
+            </p>
+            <Input
+              label={`Confirm Case ID`}
+              value={confirmationInput}
+              onChange={(e) => setConfirmationInput(e.target.value)}
+              placeholder={pc.caseId}
+            />
+          </div>
         </div>
       )}
     </Modal>

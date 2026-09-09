@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, Hourglass, Fingerprint, Loader2 } from 'lucide-react';
+import { Clock, User, Hourglass, Fingerprint, Loader2, ShieldAlert } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
@@ -8,19 +8,21 @@ import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Button } from '../../components/ui/Button';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
-import '../LandAcquisition/case_management.css';
+import { useAuth } from '../../context/AuthContext';
 import './payment.css';
 import {
   ViewDetailsModal,
   AuthoriseTransferModal,
   RejectTransferModal,
   CancelPaymentModal,
+  FinalExecutionConfirmModal,
   paymentBadge,
   fmtAmount,
   initiatorOf,
   hasSignedOrInitiated,
   signaturesLeft,
 } from './paymentModals';
+import { CaseDetailsModal } from './CaseDetailsModal';
 import { PaymentRowActions } from './PaymentRowActions';
 import type { PaymentRow } from './paymentModals';
 
@@ -40,7 +42,10 @@ export default function PendingAuthorisations() {
   const [searchQuery, setSearchQuery] = useState(deepLink || '');
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
+  const [caseDetailsId, setCaseDetailsId] = useState<string | null>(null);
+  const [finalConfirmCase, setFinalConfirmCase] = useState<PaymentRow | null>(null);
   const { identityId } = useAdminIdentity();
+  const { user } = useAuth();
   const pageRef = useRef<HTMLDivElement>(null);
 
   useGSAP(() => {
@@ -117,6 +122,14 @@ export default function PendingAuthorisations() {
         </div>
       </div>
 
+      {user?.role === 'SYSTEM_ADMINISTRATOR' && (
+        <div className="my-4 px-4 py-3 rounded-xl bg-md-surface-container-highest border border-md-outline/20 text-md-on-surface text-sm flex items-center gap-3">
+          <ShieldAlert className="text-amber-500 shrink-0" size={18} />
+          <span>
+            <strong>View-Only Mode:</strong> System Administrators have read-only access and cannot perform disbursement mutations.
+          </span>
+        </div>
+      )}
       {error && (
         <div className="my-4 px-4 py-3 rounded-xl bg-md-error/10 border border-md-error/30 text-md-on-error text-sm">
           {error}
@@ -152,26 +165,25 @@ export default function PendingAuthorisations() {
           <table>
             <thead>
               <tr>
-                <th>Payment ID</th>
-                <th>Case ID</th>
-                <th>Beneficiary</th>
-                <th>Amount</th>
-                <th>Sigs</th>
-                <th>Initiator</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th style={{ width: '135px' }}>Payment ID</th>
+                <th style={{ width: '175px' }}>Case ID</th>
+                <th style={{ width: '140px' }}>Beneficiary</th>
+                <th style={{ width: '130px' }}>Amount</th>
+                <th style={{ width: '85px', textAlign: 'center' }}>Approval</th>
+                <th style={{ width: '140px' }}>Initiator</th>
+                <th style={{ width: '160px' }}>Status</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="text-center text-gray-500 py-8">
+                  <td colSpan={7} className="text-center text-gray-500 py-8">
                     <Loader2 size={22} className="inline animate-spin" /><span className="ml-2">Loading pending authorisations…</span>
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center text-gray-500 py-8">No pending authorisations in queue.</td>
+                  <td colSpan={7} className="text-center text-gray-500 py-8">No pending authorisations in queue.</td>
                 </tr>
               ) : (
                 filtered.map((pc) => {
@@ -188,21 +200,14 @@ export default function PendingAuthorisations() {
                           {paymentId}
                         </span>
                       </td>
-                      <td><CaseIdCell caseId={pc.caseId} /></td>
+                      <td><CaseIdCell caseId={pc.caseId} onClick={(cid) => setCaseDetailsId(cid)} /></td>
                       <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
                       <td style={{ fontWeight: 600 }}>{fmtAmount(pc.amount)}</td>
-                      <td><span className="meta-text">{pc.currentSignatures}/{pc.requiredSignatures || 1}</span></td>
+                      <td style={{ textAlign: 'center' }}>
+                        <span className="meta-text">{pc.currentSignatures}/{pc.requiredSignatures || 1}</span>
+                      </td>
                       <td><span className="meta-text">{initiator || '—'}</span></td>
                       <td>{paymentBadge(pc.status)}</td>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <PaymentRowActions
-                          pc={pc}
-                          identityId={identityId}
-                          onAction={(type, target) => setModal({ type, pc: target } as ModalState)}
-                          activeMenu={activeMenu}
-                          setActiveMenu={setActiveMenu}
-                        />
-                      </td>
                     </tr>
                   );
                 })
@@ -216,18 +221,43 @@ export default function PendingAuthorisations() {
         FCR-SCS · Payments · Pending Authorisations · Connected to Live Backend Data
       </div>
 
-      <ViewDetailsModal pc={modal?.type === 'view' ? modal.pc : null} onClose={closeModal} />
+      <ViewDetailsModal
+        pc={modal?.type === 'view' ? modal.pc : null}
+        identityId={identityId}
+        onClose={closeModal}
+        onAction={(type, target) => {
+          if (type === 'confirm-execution') {
+            setFinalConfirmCase(target);
+          } else {
+            setModal({ type, pc: target } as ModalState);
+          }
+        }}
+      />
       <AuthoriseTransferModal
         pc={modal?.type === 'authorise' ? modal.pc : null}
         onClose={closeModal}
         onDone={() => {
           closeModal();
           loadData();
-          // The backend auto-submits AUTHORISED → WAITING_BANK_APPROVAL after
-          // 5s, which removes the case from this queue — refresh so the row
-          // disappears without a manual reload.
-          setTimeout(() => loadData(true), 5500);
         }}
+      />
+      <FinalExecutionConfirmModal
+        pc={finalConfirmCase}
+        isOpen={Boolean(finalConfirmCase)}
+        onConfirm={async () => {
+          if (!finalConfirmCase) return;
+          await paymentApi.confirmExecution({ caseId: finalConfirmCase.caseId, adminId: identityId });
+          setFinalConfirmCase(null);
+          loadData();
+        }}
+        onHold={() => {
+          setFinalConfirmCase(null);
+          loadData();
+        }}
+      />
+      <CaseDetailsModal
+        caseId={caseDetailsId}
+        onClose={() => setCaseDetailsId(null)}
       />
       <RejectTransferModal
         pc={modal?.type === 'reject' ? modal.pc : null}

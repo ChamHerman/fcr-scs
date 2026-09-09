@@ -703,7 +703,7 @@ export const DesignSystem: React.FC = () => {
         <Section id="wallet" index={11} title="Wallet Button" subtitle="3D flip on hover reveals auto-truncated wallet address (first6...last4); clicking copies full address to clipboard." icon={Wallet}>
           <DemoCard label="WalletButton" hint="Accepts full address, displays truncated address on back, copies full address.">
             <div className="flex items-center gap-8 flex-wrap">
-              <WalletButton adminId="Admin" walletAddress="0x71C7656EC7ab88b098defB751B7401B5f6d8976F" />
+              <WalletButton label="Government Wallet" walletAddress="0x71C7656EC7ab88b098defB751B7401B5f6d8976F" />
               <span className="text-xs text-md-on-surface-variant">Hover to flip · click to copy full address</span>
             </div>
           </DemoCard>

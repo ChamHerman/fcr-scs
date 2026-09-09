@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, DollarSign, User, XCircle, Hourglass, Loader2, Eye } from 'lucide-react';
+import { Clock, DollarSign, User, XCircle, Hourglass, Loader2, Eye, ShieldAlert } from 'lucide-react';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { paymentApi } from '../../services/paymentApi';
@@ -9,11 +9,13 @@ import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
 import { Pagination } from '../../components/ui/Pagination';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
+import { useAuth } from '../../context/AuthContext';
 import '../LandAcquisition/case_management.css';
 import './payment.css';
 import {
   PAYMENT_STATUSES,
   normalizePaymentStatus,
+  getDetailedPaymentStatus,
 } from './statusMaps';
 import {
   ViewDetailsModal,
@@ -25,15 +27,16 @@ import {
   RequestDetailsUpdateModal,
   ScheduleTomorrowModal,
   ResolveDisputeModal,
+  FinalExecutionConfirmModal,
   paymentBadge,
   fmtAmount,
   fmtDate,
   maskAccount,
   hasBankDetails,
 } from './paymentModals';
+import { CaseDetailsModal } from './CaseDetailsModal';
 import { PaymentRowActions } from './PaymentRowActions';
 import type { PaymentRow } from './paymentModals';
-
 type ModalState =
   | { type: 'view'; pc: PaymentRow }
   | { type: 'initiate'; pc: PaymentRow }
@@ -56,8 +59,11 @@ export default function PaymentDashboard() {
   const [error, setError] = useState('');
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
+  const [caseDetailsId, setCaseDetailsId] = useState<string | null>(null);
+  const [finalConfirmCase, setFinalConfirmCase] = useState<PaymentRow | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const { identityId } = useAdminIdentity();
+  const { user } = useAuth();
   const containerRef = useRef<HTMLDivElement>(null);
 
   useGSAP(() => {
@@ -102,7 +108,12 @@ export default function PaymentDashboard() {
   const filteredCases = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return allCases.filter((c) => {
-      const matchesStatus = statusFilter === 'All' || normalizePaymentStatus(c.status) === statusFilter;
+      const detailed = getDetailedPaymentStatus(c);
+      const matchesStatus =
+        statusFilter === 'All' ||
+        detailed.paymentStatus === statusFilter ||
+        detailed.caseStatus === statusFilter ||
+        normalizePaymentStatus(c.status) === statusFilter;
       const matchesSearch =
         !q ||
         c.caseId.toLowerCase().includes(q) ||
@@ -136,6 +147,14 @@ export default function PaymentDashboard() {
         </div>
       </div>
 
+      {user?.role === 'SYSTEM_ADMINISTRATOR' && (
+        <div className="my-4 px-4 py-3 rounded-xl bg-md-surface-container-highest border border-md-outline/20 text-md-on-surface text-sm flex items-center gap-3">
+          <ShieldAlert className="text-amber-500 shrink-0" size={18} />
+          <span>
+            <strong>View-Only Mode:</strong> System Administrators have read-only access and cannot perform disbursement mutations.
+          </span>
+        </div>
+      )}
       {error && (
         <div className="my-4 px-4 py-3 rounded-xl bg-md-error/10 border border-md-error/30 text-md-on-error text-sm flex items-center justify-between gap-4">
           <span>{error}</span>
@@ -196,34 +215,33 @@ export default function PaymentDashboard() {
           <table>
             <thead>
               <tr>
-                <th>Payment ID</th>
-                <th>Case ID</th>
-                <th>Beneficiary</th>
-                <th>Bank</th>
-                <th>Amount</th>
-                <th>Date &amp; Time</th>
-                <th>Approval</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th style={{ width: '135px' }}>Payment ID</th>
+                <th style={{ width: '175px' }}>Case ID</th>
+                <th style={{ width: '140px' }}>Beneficiary</th>
+                <th style={{ width: '150px' }}>Bank</th>
+                <th style={{ width: '130px' }}>Amount</th>
+                <th style={{ width: '150px' }}>Date &amp; Time</th>
+                <th style={{ width: '85px', textAlign: 'center' }}>Approval</th>
+                <th style={{ width: '160px' }}>Status</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="text-center text-gray-500 py-8">
+                  <td colSpan={8} className="text-center text-gray-500 py-8">
                     <Loader2 size={22} className="inline animate-spin" />
                     <span className="ml-2">Loading payment records…</span>
                   </td>
                 </tr>
               ) : pageRows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center text-gray-500 py-8">
+                  <td colSpan={8} className="text-center text-gray-500 py-8">
                     {error ? 'Failed to load data.' : 'No payment records match your filters.'}
                   </td>
                 </tr>
               ) : (
                 pageRows.map((pc) => {
-                  const needsBank = !hasBankDetails(pc);
+                  const detailed = getDetailedPaymentStatus(pc);
                   const openView = () => setModal({ type: 'view', pc });
                   const paymentId = pc.paymentId || `PMT-${pc.caseId}`;
                   return (
@@ -233,29 +251,17 @@ export default function PaymentDashboard() {
                           {paymentId}
                         </span>
                       </td>
-                      <td><CaseIdCell caseId={pc.caseId} /></td>
+                      <td><CaseIdCell caseId={pc.caseId} onClick={(cid) => setCaseDetailsId(cid)} /></td>
                       <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
                       <td>
-                        {pc.bankName ? `${pc.bankName} ${maskAccount(pc.accountNumber)}` : '—'}
-                        {needsBank && ['Offer Accepted', 'Bank Details Submitted'].includes(normalizePaymentStatus(pc.status)) && (
-                          <div className="payment-hint mt-1">
-                            <Eye size={12} /> Awaiting beneficiary bank details
-                          </div>
-                        )}
+                        {pc.bankName && pc.accountNumber ? `${pc.bankName} ${maskAccount(pc.accountNumber)}` : '—'}
                       </td>
                       <td style={{ fontWeight: 600 }}>{fmtAmount(pc.amount)}</td>
                       <td><span className="meta-text">{fmtDate(pc.updatedAt || pc.createdAt)}</span></td>
-                      <td><span className="meta-text">{pc.currentSignatures}/{pc.requiredSignatures || 1}</span></td>
-                      <td>{paymentBadge(pc.status)}</td>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <PaymentRowActions
-                          pc={pc}
-                          identityId={identityId}
-                          onAction={(type, target) => setModal({ type, pc: target } as ModalState)}
-                          activeMenu={activeMenu}
-                          setActiveMenu={setActiveMenu}
-                        />
+                      <td style={{ textAlign: 'center' }}>
+                        <span className="meta-text">{pc.currentSignatures}/{pc.requiredSignatures || 1}</span>
                       </td>
+                      <td>{paymentBadge(detailed.paymentStatus)}</td>
                     </tr>
                   );
                 })
@@ -281,7 +287,18 @@ export default function PaymentDashboard() {
       </div>
 
       {/* Modals */}
-      <ViewDetailsModal pc={modal?.type === 'view' ? modal.pc : null} onClose={closeModal} />
+      <ViewDetailsModal
+        pc={modal?.type === 'view' ? modal.pc : null}
+        identityId={identityId}
+        onClose={closeModal}
+        onAction={(type, target) => {
+          if (type === 'confirm-execution') {
+            setFinalConfirmCase(target);
+          } else {
+            setModal({ type, pc: target } as ModalState);
+          }
+        }}
+      />
       <InitiateTransferModal
         pc={modal?.type === 'initiate' ? modal.pc : null}
         onClose={closeModal}
@@ -293,10 +310,25 @@ export default function PaymentDashboard() {
         onDone={() => {
           closeModal();
           loadData();
-          // The backend auto-submits AUTHORISED → WAITING_BANK_APPROVAL after
-          // 5s; refresh once more so the status flip is visible in the list.
-          setTimeout(() => loadData(true, true), 5500);
         }}
+      />
+      <FinalExecutionConfirmModal
+        pc={finalConfirmCase}
+        isOpen={Boolean(finalConfirmCase)}
+        onConfirm={async () => {
+          if (!finalConfirmCase) return;
+          await paymentApi.confirmExecution({ caseId: finalConfirmCase.caseId, adminId: identityId });
+          setFinalConfirmCase(null);
+          loadData();
+        }}
+        onHold={() => {
+          setFinalConfirmCase(null);
+          loadData();
+        }}
+      />
+      <CaseDetailsModal
+        caseId={caseDetailsId}
+        onClose={() => setCaseDetailsId(null)}
       />
       <RejectTransferModal
         pc={modal?.type === 'reject' ? modal.pc : null}

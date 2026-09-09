@@ -1,6 +1,7 @@
 import { prisma } from "../prisma";
-import { CaseStatus, OfferStatus, ObjectionStatus, Prisma } from "@prisma/client";
+import { CaseStatus, OfferStatus, ObjectionStatus, Prisma, PaymentStatus } from "@prisma/client";
 import { buildNricConditions } from "../utils/nric.utils";
+import { newPaymentId } from "../../../payment_service/src/services/payment.service";
 
 export interface OfferLetterFilters {
   status?: string;
@@ -418,11 +419,30 @@ export async function acceptOffer(
           memberResponses: { include: { landOwner: true } },
         },
       });
-
       await tx.acquisitionCase.update({
         where: { caseId: offer.caseId },
         data: { status: CaseStatus.OFFER_ACCEPTED },
       });
+
+      // Dynamically ingest payment case
+      const primaryOwner = allOwners[0];
+      const existingPmt = await tx.paymentCase.findUnique({
+        where: { caseId: offer.caseId },
+      });
+      if (!existingPmt) {
+        await tx.paymentCase.create({
+          data: {
+            id: newPaymentId(),
+            caseId: offer.caseId,
+            beneficiaryId: primaryOwner?.ownerId || `BEN-${offer.caseId}`,
+            amount: Number(offer.offerAmount),
+            accountHolderName: primaryOwner?.name || null,
+            status: PaymentStatus.OFFER_ACCEPTED,
+            requiredSignatures: 0,
+            currentSignatures: 0,
+          },
+        });
+      }
     } else {
       // Partially accepted (multi-owner pending)
       updatedOffer = await tx.offerLetter.findUnique({

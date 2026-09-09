@@ -6,13 +6,16 @@ import { useNotification } from './NotificationSystem';
 
 interface WalletButtonProps {
   walletAddress?: string;
+  label?: string;
   adminId?: string;
 }
 
 export const WalletButton: React.FC<WalletButtonProps> = ({ 
   walletAddress = '0x71C7656EC7ab88b098defB751B7401B5f6d8976F', 
-  adminId = 'Admin' 
+  label,
+  adminId,
 }) => {
+  const displayLabel = label ?? adminId ?? 'Government Wallet';
   const containerRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const { notify } = useNotification();
@@ -69,13 +72,13 @@ export const WalletButton: React.FC<WalletButtonProps> = ({
         className="w-full h-full relative preserve-3d transition-shadow hover:shadow-md rounded-full"
         style={{ transformStyle: 'preserve-3d' }}
       >
-        {/* Front Face: Admin Label */}
+        {/* Front Face: Label */}
         <div 
-          className="absolute inset-0 backface-hidden rounded-full flex items-center justify-center bg-md-secondary-container text-md-on-secondary-container border border-md-outline/10 font-medium"
+          className="absolute inset-0 backface-hidden rounded-full flex items-center justify-center px-4 bg-md-secondary-container text-md-on-secondary-container border border-md-outline/10 text-sm font-medium whitespace-nowrap select-none"
           style={{ backfaceVisibility: 'hidden' }}
         >
-          <Wallet className="w-4 h-4 mr-2 text-md-primary" />
-          {adminId}
+          <Wallet className="w-4 h-4 mr-2 text-md-primary shrink-0" />
+          <span>{displayLabel}</span>
         </div>
 
         {/* Back Face: Wallet Address + Copy */}

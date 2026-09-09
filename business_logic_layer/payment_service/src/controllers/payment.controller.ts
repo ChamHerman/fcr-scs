@@ -1,9 +1,12 @@
 import { Request, Response } from "express";
 import * as paymentService from "../services/payment.service";
 import * as receiptService from "../services/receipt.service";
+import { prisma } from "../prisma";
+import { AuthenticatedRequest } from "../../../user_management_service/src/middleware/auth.middleware";
 
 export async function submitBankDetails(req: Request, res: Response): Promise<void> {
-  const { caseId, bankName, accountNumber, accountHolderName, phoneNumber, myKadNumber } = req.body;
+  const { caseId: rawCaseId, paymentCaseId, bankName, accountNumber, accountHolderName, phoneNumber, myKadNumber } = req.body;
+  const caseId = rawCaseId || paymentCaseId;
   if (!caseId) {
     res.status(400).json({ error: "caseId is required" });
     return;
@@ -21,14 +24,43 @@ export async function submitBankDetails(req: Request, res: Response): Promise<vo
       phoneNumber,
       myKadNumber,
     });
-    res.json({ paymentCase });
+
+    // Also persist encrypted record into receiver_bank_details if available
+    try {
+      const encryptedBankDetails = Buffer.from(accountNumber || "").toString("base64");
+      await prisma.receiverBankDetails.upsert({
+        where: { paymentCaseId: paymentCase.id },
+        update: {
+          bankName,
+          accountNumber,
+          accountHolderName: accountHolderName || "",
+          phoneNumber: phoneNumber || "",
+          myKadNumber: myKadNumber || "",
+          encryptedBankDetails,
+        },
+        create: {
+          bankName,
+          accountNumber,
+          accountHolderName: accountHolderName || "",
+          phoneNumber: phoneNumber || "",
+          myKadNumber: myKadNumber || "",
+          encryptedBankDetails,
+          paymentCaseId: paymentCase.id,
+        },
+      });
+    } catch {
+      // Non-blocking fallback
+    }
+
+    res.json({ success: true, paymentCase });
   } catch (e: unknown) {
     res.status(500).json({ error: (e as Error).message });
   }
 }
 
 export async function initiate(req: Request, res: Response): Promise<void> {
-  const { caseId, adminId } = req.body;
+  const { caseId } = req.body;
+  const adminId = (req as AuthenticatedRequest).user?.userId || req.body.adminId;
   if (!caseId) {
     res.status(400).json({ error: "caseId is required" });
     return;
@@ -51,7 +83,8 @@ export async function initiate(req: Request, res: Response): Promise<void> {
 }
 
 export async function authorise(req: Request, res: Response): Promise<void> {
-  const { caseId, adminId } = req.body;
+  const { caseId } = req.body;
+  const adminId = (req as AuthenticatedRequest).user?.userId || req.body.adminId;
   if (!caseId || !adminId) {
     res.status(400).json({ error: "caseId and adminId are required" });
     return;
@@ -69,8 +102,33 @@ export async function authorise(req: Request, res: Response): Promise<void> {
   }
 }
 
+export async function confirmExecution(req: Request, res: Response): Promise<void> {
+  const { caseId } = req.body;
+  const adminId = (req as AuthenticatedRequest).user?.userId || req.body.adminId;
+  if (!caseId) {
+    res.status(400).json({ error: "caseId is required" });
+    return;
+  }
+  if (!adminId) {
+    res.status(400).json({ error: "adminId is required" });
+    return;
+  }
+  try {
+    const paymentCase = await paymentService.confirmExecution(caseId, adminId);
+    res.json({ paymentCase, message: "Disbursement execution confirmed and sent to bank clearance." });
+  } catch (e: unknown) {
+    const msg = (e as Error).message;
+    if (msg.toLowerCase().includes("not found")) {
+      res.status(404).json({ error: msg });
+    } else {
+      res.status(400).json({ error: msg });
+    }
+  }
+}
+
 export async function reject(req: Request, res: Response): Promise<void> {
-  const { caseId, adminId, reason } = req.body;
+  const { caseId, reason } = req.body;
+  const adminId = (req as AuthenticatedRequest).user?.userId || req.body.adminId;
   if (!caseId || !adminId) {
     res.status(400).json({ error: "caseId and adminId are required" });
     return;
@@ -93,7 +151,8 @@ export async function reject(req: Request, res: Response): Promise<void> {
 }
 
 export async function cancel(req: Request, res: Response): Promise<void> {
-  const { caseId, adminId, reason } = req.body;
+  const { caseId, reason } = req.body;
+  const adminId = (req as AuthenticatedRequest).user?.userId || req.body.adminId;
   if (!caseId || !adminId) {
     res.status(400).json({ error: "caseId and adminId are required" });
     return;

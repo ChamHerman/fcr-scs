@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, CheckCircle2, Loader2, Eye } from 'lucide-react';
+import { Clock, User, CheckCircle2, Loader2, Eye, ShieldAlert } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
@@ -9,6 +9,7 @@ import { SearchInput } from '../../components/ui/SearchInput';
 import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
+import { useAuth } from '../../context/AuthContext';
 import '../LandAcquisition/case_management.css';
 import './payment.css';
 import {
@@ -21,6 +22,7 @@ import {
   hasBankDetails,
   isReadyToInitiate,
 } from './paymentModals';
+import { CaseDetailsModal } from './CaseDetailsModal';
 import { PaymentRowActions } from './PaymentRowActions';
 import { normalizePaymentStatus } from './statusMaps';
 import type { PaymentRow } from './paymentModals';
@@ -41,9 +43,10 @@ export default function InitiateTransfer() {
   const [bankFilter, setBankFilter] = useState('All banks');
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
+  const [caseDetailsId, setCaseDetailsId] = useState<string | null>(null);
   const { identityId } = useAdminIdentity();
+  const { user } = useAuth();
   const pageRef = useRef<HTMLDivElement>(null);
-
   useGSAP(() => {
     gsap.fromTo('.initiate-header', { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.45, ease: 'power2.out' });
     gsap.fromTo('.stats-grid, .filter-bar, .table-wrap', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.08, ease: 'back.out(1.2)', delay: 0.2 });
@@ -115,6 +118,14 @@ export default function InitiateTransfer() {
         </div>
       </div>
 
+      {user?.role === 'SYSTEM_ADMINISTRATOR' && (
+        <div className="my-4 px-4 py-3 rounded-xl bg-md-surface-container-highest border border-md-outline/20 text-md-on-surface text-sm flex items-center gap-3">
+          <ShieldAlert className="text-amber-500 shrink-0" size={18} />
+          <span>
+            <strong>View-Only Mode:</strong> System Administrators have read-only access and cannot perform disbursement mutations.
+          </span>
+        </div>
+      )}
       {error && (
         <div className="my-4 px-4 py-3 rounded-xl bg-md-error/10 border border-md-error/30 text-md-on-error text-sm">
           {error}
@@ -157,25 +168,24 @@ export default function InitiateTransfer() {
           <table>
             <thead>
               <tr>
-                <th>Payment ID</th>
-                <th>Case ID</th>
-                <th>Beneficiary</th>
-                <th>Bank</th>
-                <th>Amount</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th style={{ width: '135px' }}>Payment ID</th>
+                <th style={{ width: '175px' }}>Case ID</th>
+                <th style={{ width: '140px' }}>Beneficiary</th>
+                <th style={{ width: '150px' }}>Bank</th>
+                <th style={{ width: '130px' }}>Amount</th>
+                <th style={{ width: '160px' }}>Status</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="text-center text-gray-500 py-8">
+                  <td colSpan={6} className="text-center text-gray-500 py-8">
                     <Loader2 size={22} className="inline animate-spin" /><span className="ml-2">Loading eligible cases…</span>
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center text-gray-500 py-8">No cases eligible to initiate right now.</td>
+                  <td colSpan={6} className="text-center text-gray-500 py-8">No cases eligible to initiate right now.</td>
                 </tr>
               ) : (
                 filtered.map((pc) => {
@@ -191,20 +201,11 @@ export default function InitiateTransfer() {
                           {paymentId}
                         </span>
                       </td>
-                      <td><CaseIdCell caseId={pc.caseId} /></td>
+                      <td><CaseIdCell caseId={pc.caseId} onClick={(cid) => setCaseDetailsId(cid)} /></td>
                       <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
                       <td>{pc.bankName ? `${pc.bankName} ${maskAccount(pc.accountNumber)}` : '—'}</td>
                       <td style={{ fontWeight: 600 }}>{fmtAmount(pc.amount)}</td>
                       <td>{paymentBadge(pc.status)}</td>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <PaymentRowActions
-                          pc={pc}
-                          identityId={identityId}
-                          onAction={(type, target) => setModal({ type, pc: target } as ModalState)}
-                          activeMenu={activeMenu}
-                          setActiveMenu={setActiveMenu}
-                        />
-                      </td>
                     </tr>
                   );
                 })
@@ -218,7 +219,16 @@ export default function InitiateTransfer() {
         FCR-SCS · Payments · Initiate · Connected to Live Backend Data
       </div>
 
-      <ViewDetailsModal pc={modal?.type === 'view' ? modal.pc : null} onClose={closeModal} />
+      <CaseDetailsModal
+        caseId={caseDetailsId}
+        onClose={() => setCaseDetailsId(null)}
+      />
+      <ViewDetailsModal
+        pc={modal?.type === 'view' ? modal.pc : null}
+        identityId={identityId}
+        onClose={closeModal}
+        onAction={(type, target) => setModal({ type, pc: target } as ModalState)}
+      />
       <InitiateTransferModal
         pc={modal?.type === 'initiate' ? modal.pc : null}
         onClose={closeModal}

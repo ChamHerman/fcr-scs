@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, AlertOctagon, Loader2, FileWarning } from 'lucide-react';
+import { Clock, User, AlertOctagon, Loader2, FileWarning, ShieldAlert } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
@@ -9,7 +9,7 @@ import { SearchInput } from '../../components/ui/SearchInput';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
-import '../LandAcquisition/case_management.css';
+import { useAuth } from '../../context/AuthContext';
 import './payment.css';
 import {
   ViewDetailsModal,
@@ -21,10 +21,10 @@ import {
   fmtAmount,
   fmtDate,
 } from './paymentModals';
+import { CaseDetailsModal } from './CaseDetailsModal';
 import { PaymentRowActions } from './PaymentRowActions';
 import type { PaymentRow } from './paymentModals';
 import { normalizePaymentStatus } from './statusMaps';
-
 type ModalState =
   | { type: 'view'; pc: PaymentRow }
   | { type: 'error-log'; pc: PaymentRow }
@@ -43,9 +43,10 @@ export default function FailedTransactions() {
   const [searchQuery, setSearchQuery] = useState(deepLink || '');
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
+  const [caseDetailsId, setCaseDetailsId] = useState<string | null>(null);
   const { identityId } = useAdminIdentity();
+  const { user } = useAuth();
   const pageRef = useRef<HTMLDivElement>(null);
-
   useGSAP(() => {
     gsap.fromTo('.failed-header', { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.45, ease: 'power2.out' });
     gsap.fromTo('.stats-grid, .filter-bar, .table-wrap', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.08, ease: 'back.out(1.2)', delay: 0.2 });
@@ -106,6 +107,15 @@ export default function FailedTransactions() {
         </div>
       </div>
 
+      {user?.role === 'SYSTEM_ADMINISTRATOR' && (
+        <div className="my-4 px-4 py-3 rounded-xl bg-md-surface-container-highest border border-md-outline/20 text-md-on-surface text-sm flex items-center gap-3">
+          <ShieldAlert className="text-amber-500 shrink-0" size={18} />
+          <span>
+            <strong>View-Only Mode:</strong> System Administrators have read-only access and cannot perform disbursement mutations.
+          </span>
+        </div>
+      )}
+
       {error && (
         <div className="my-4 px-4 py-3 rounded-xl bg-md-error/10 border border-md-error/30 text-md-on-error text-sm">
           {error}
@@ -141,26 +151,25 @@ export default function FailedTransactions() {
           <table>
             <thead>
               <tr>
-                <th>Payment ID</th>
-                <th>Case ID</th>
-                <th>Beneficiary</th>
-                <th>Error</th>
-                <th>Attempted At</th>
-                <th>Resolution Status</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th style={{ width: '135px' }}>Payment ID</th>
+                <th style={{ width: '175px' }}>Case ID</th>
+                <th style={{ width: '140px' }}>Beneficiary</th>
+                <th style={{ width: '220px' }}>Error</th>
+                <th style={{ width: '140px' }}>Attempted At</th>
+                <th style={{ width: '150px' }}>Resolution Status</th>
+                <th style={{ width: '150px' }}>Status</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="text-center text-gray-500 py-8">
+                  <td colSpan={7} className="text-center text-gray-500 py-8">
                     <Loader2 size={22} className="inline animate-spin" /><span className="ml-2">Loading failed transactions…</span>
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center text-gray-500 py-8">No failed transactions requiring resolution.</td>
+                  <td colSpan={7} className="text-center text-gray-500 py-8">No failed transactions requiring resolution.</td>
                 </tr>
               ) : (
                 filtered.map((pc) => {
@@ -180,7 +189,7 @@ export default function FailedTransactions() {
                           {paymentId}
                         </span>
                       </td>
-                      <td><CaseIdCell caseId={pc.caseId} /></td>
+                      <td><CaseIdCell caseId={pc.caseId} onClick={(cid) => setCaseDetailsId(cid)} /></td>
                       <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
                       <td>
                         <span className="meta-text" style={{ display: 'block', maxWidth: 280 }}>
@@ -196,18 +205,6 @@ export default function FailedTransactions() {
                         )}
                       </td>
                       <td>{paymentBadge(pc.status)}</td>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <PaymentRowActions
-                          pc={pc}
-                          identityId={identityId}
-                          onAction={(type, target) => setModal({ type, pc: target } as ModalState)}
-                          activeMenu={activeMenu}
-                          setActiveMenu={setActiveMenu}
-                          extraMenuActions={[
-                            { label: 'View Error Logs', onClick: () => setModal({ type: 'error-log', pc }) },
-                          ]}
-                        />
-                      </td>
                     </tr>
                   );
                 })
@@ -220,6 +217,11 @@ export default function FailedTransactions() {
       <div style={{ marginTop: '24px', fontSize: '13px', color: 'var(--md-on-surface-variant)', opacity: 0.6, textAlign: 'center', borderTop: '1px solid rgba(121,116,126,0.08)', paddingTop: '18px' }}>
         FCR-SCS · Payments · Failed Transactions · Connected to Live Backend Data
       </div>
+
+      <CaseDetailsModal
+        caseId={caseDetailsId}
+        onClose={() => setCaseDetailsId(null)}
+      />
 
       {/* View Error Logs modal */}
       <Modal isOpen={Boolean(selectedErrorLog)} onClose={closeModal} title="Error Logs" subtitle={selectedErrorLog ? `Case ${selectedErrorLog.caseId} · ${fmtAmount(selectedErrorLog.amount)}` : ''} cancelText="Close">
@@ -256,7 +258,12 @@ export default function FailedTransactions() {
         )}
       </Modal>
 
-      <ViewDetailsModal pc={modal?.type === 'view' ? modal.pc : null} onClose={closeModal} />
+      <ViewDetailsModal
+        pc={modal?.type === 'view' ? modal.pc : null}
+        identityId={identityId}
+        onClose={closeModal}
+        onAction={(type, target) => setModal({ type, pc: target } as ModalState)}
+      />
       <RetryPaymentModal
         pc={modal?.type === 'retry' ? modal.pc : null}
         onClose={closeModal}

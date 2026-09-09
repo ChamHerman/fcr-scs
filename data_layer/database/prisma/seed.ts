@@ -715,45 +715,16 @@ async function main() {
   await prisma.paymentCase.deleteMany({});
   await prisma.blockchainRecord.deleteMany({});
 
-  const paymentUsers = [
-    { name: 'Ahmad bin Abu', bank: 'Maybank', account: '1234567890' },
-    { name: 'Lee Chong Wei', bank: 'CIMB', account: '0987654321' },
-    { name: 'Siti Nurhaliza', bank: 'Public Bank', account: '1122334455' },
-    { name: 'Ravi Kumar', bank: 'RHB', account: '5566778899' },
-    { name: 'Wong Choong Hann', bank: 'Hong Leong', account: '6677889900' },
-  ];
-
-  for (let i = 1; i <= 25; i++) {
-    const caseId = generateCaseId(i);
-    const user = paymentUsers[i % paymentUsers.length];
-    const paymentId = `PMT-${shortId()}`;
-
-    // Every 4th record is RM 1,000,000 → 3 signatures required; the rest need 2.
-    const amount =
-      i % 4 === 0 ? 1000000 : (Math.floor(Math.random() * 50) + 1) * 10000;
-    const requiredSignatures = 2 + Math.floor(amount / 1000000);
-
-    await prisma.paymentCase.create({
-      data: {
-        id: paymentId,
-        caseId,
-        beneficiaryId: `BEN-${String(i).padStart(3, '0')}`,
-        amount,
-        bankName: user.bank,
-        accountNumber: user.account,
-        accountHolderName: user.name,
-        phoneNumber: '012-3456789',
-        myKadNumber: '900101-14-1234',
-        status: PaymentStatus.OFFER_ACCEPTED,
-        requiredSignatures,
-        currentSignatures: 0,
-      },
-    });
-
-    console.log(
-      `✅ Created Payment Case: ${caseId} · ${paymentId} · Offer Accepted · ${requiredSignatures} signatures required`
-    );
-  }
+  // ===========================================================================
+  // 12. Payment Cases: Left empty by design for dynamic ingestion
+  // ===========================================================================
+  console.log('\n--- 12. Payment Module ---');
+  await prisma.paymentReceipt.deleteMany({});
+  await prisma.paymentAuthorisation.deleteMany({});
+  await prisma.failedTransaction.deleteMany({});
+  await prisma.receiverBankDetails.deleteMany({});
+  await prisma.paymentCase.deleteMany({});
+  console.log('ℹ️ Payment cases table cleared. Cases will be dynamically ingested when offers are accepted.');
 
   console.log('\n✨ Database seeding completed successfully!');
 }

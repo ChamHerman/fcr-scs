@@ -217,6 +217,37 @@
 .dark .payment-badge.status-pending-details .dot {
   background: #FACC15;
 }
+/* Bank Details Pending (Dual Status - Warm Amber / Orange) */
+.payment-badge.status-bank-details-pending {
+  background: #FFF3E0;
+  color: #E65100;
+}
+.payment-badge.status-bank-details-pending .dot {
+  background: #FF9800;
+}
+.dark .payment-badge.status-bank-details-pending {
+  background: rgba(230, 81, 0, 0.22);
+  color: #FFB74D;
+}
+.dark .payment-badge.status-bank-details-pending .dot {
+  background: #FFA726;
+}
+
+/* Ready to Initiate (Dual Status - Cyan / Azure) */
+.payment-badge.status-ready-initiate {
+  background: #E0F7FA;
+  color: #006064;
+}
+.payment-badge.status-ready-initiate .dot {
+  background: #00ACC1;
+}
+.dark .payment-badge.status-ready-initiate {
+  background: rgba(0, 172, 193, 0.22);
+  color: #80DEEA;
+}
+.dark .payment-badge.status-ready-initiate .dot {
+  background: #4DD0E1;
+}
 
 /* 12. Ready to Publish (Blockchain Queue - Electric Sky) */
 .payment-badge.status-ready-publish {
