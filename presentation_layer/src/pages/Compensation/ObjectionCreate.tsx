@@ -47,7 +47,7 @@ export const ObjectionCreate: React.FC = () => {
   const [loadingOffers, setLoadingOffers] = useState<boolean>(true);
 
   const [selectedOfferId, setSelectedOfferId] = useState<string>(paramOfferId);
-  const [objectionType, setObjectionType] = useState("Form N");
+  const [objectionType, setObjectionType] = useState("Objection");
   const [requestedAmount, setRequestedAmount] = useState<number | "">("");
   const [objectionText, setObjectionText] = useState("");
   const [files, setFiles] = useState<FileAttachment[]>([]);
@@ -329,7 +329,7 @@ export const ObjectionCreate: React.FC = () => {
           </div>
           <h2 className="text-2xl font-bold mb-2">Objection Submitted Successfully</h2>
           <p className="text-sm text-md-on-surface-variant max-w-md mx-auto mb-6 leading-relaxed">
-            Your formal Form N objection has been officially recorded in the system. The assigned Government Officer will evaluate your justification and proposed compensation revision.
+            Your objection has been officially recorded in the system. The assigned Government Officer will evaluate your justification and proposed compensation revision.
           </p>
 
           {createdId && (
@@ -574,7 +574,7 @@ export const ObjectionCreate: React.FC = () => {
                 onClick={handlePreSubmit}
                 isLoading={submitting}
               >
-                <Send size={16} /> Submit Objection (Form N)
+                <Send size={16} /> Submit Objection
               </Button>
             </div>
           </div>
@@ -607,7 +607,7 @@ export const ObjectionCreate: React.FC = () => {
                 <Lucide.AlertCircle size={18} /> Important Notice on Offer Status
               </div>
               <p className="text-xs leading-relaxed">
-                Submitting a formal Form N objection indicates that you dispute the current compensation assessment.
+                Submitting an objection indicates that you dispute the current compensation assessment.
               </p>
               <p className="text-xs font-semibold mt-2">
                 Once submitted, the offer letter status will automatically become <strong>"Rejected"</strong>, and the acquisition case status will change to <strong>"OFFER_REJECTED"</strong> while the Valuation & Compensation department reviews your requested amount.
@@ -630,7 +630,7 @@ export const ObjectionCreate: React.FC = () => {
             paddingTop: "18px",
           }}
         >
-          FCR-SCS · Objection Form (Form N) · For Displaced Community Members
+          FCR-SCS · Compensation Objection Form · For Displaced Community Members
         </div>
       </div>
     </div>

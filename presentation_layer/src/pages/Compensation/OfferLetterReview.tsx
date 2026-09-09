@@ -23,6 +23,12 @@ import {
   Calendar,
   UploadCloud,
   UserCheck,
+  Eye,
+  EyeOff,
+  ChevronDown,
+  ChevronUp,
+  RefreshCw,
+  Layers,
 } from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
 import { Modal } from "../../components/ui/Modal";
@@ -34,11 +40,18 @@ import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
 import { BASE_URL } from "../../services/api";
 import { formatCurrencyRM } from "../../utils/currency";
+import { OfferResponseModals } from "../../components/OfferResponseModals";
 import {
   OFFER_STATUS_CLASS_MAP as statusClassMap,
   OFFER_STATUS_LABEL_MAP as statusLabelMap,
 } from "../../constants";
-import { OfferLetterPreview, type OfferDetail, type OwnerApprovalStatus } from "./OfferLetterPreview";
+import {
+  OfferLetterPreview,
+  type OfferDetail,
+  type OwnerApprovalStatus,
+  type OfferLetterPreviewHandle,
+} from "./OfferLetterPreview";
+import { useOfferResponse } from "./hooks/useOfferResponse";
 import "../../index.css";
 import "./compensation.css";
 import "./offer_letter.css";
@@ -58,35 +71,15 @@ export const OfferLetterReview: React.FC = () => {
   const [offer, setOffer] = useState<OfferDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [showRejectModal, setShowRejectModal] = useState(false);
-  const [showAcceptConfirmModal, setShowAcceptConfirmModal] = useState(false);
-  const [showCancelApprovalModal, setShowCancelApprovalModal] = useState(false);
-  const [cancellingApproval, setCancellingApproval] = useState(false);
-  const [reason, setReason] = useState("");
-  const [reasonError, setReasonError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [signedFile, setSignedFile] = useState<File | null>(null);
-  const [signedFileError, setSignedFileError] = useState<string>("");
+  const [viewMode, setViewMode] = useState<"pdf" | "html">("pdf");
+  const [zoomScale, setZoomScale] = useState<number>(100);
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
+  const [downloadingPdf, setDownloadingPdf] = useState<boolean>(false);
+  const previewRef = useRef<OfferLetterPreviewHandle>(null);
 
-  const handleOpenSignedPdf = useCallback(() => {
-    if (!signedFile) return;
-    const blobUrl = URL.createObjectURL(signedFile);
-    const win = window.open(blobUrl, "_blank");
-    if (!win || win.closed || typeof win.closed === "undefined") {
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => document.body.removeChild(a), 300);
-    }
-  }, [signedFile]);
-
-  // Active Objection Check state
-  const [activeObjection, setActiveObjection] = useState<any | null>(null);
-  const [showObjectionPrompt, setShowObjectionPrompt] = useState(false);
-  const [withdrawingObjection, setWithdrawingObjection] = useState(false);
+  const handleZoomIn = () => setZoomScale((prev) => Math.min(prev + 10, 150));
+  const handleZoomOut = () => setZoomScale((prev) => Math.max(prev - 10, 70));
+  const handleResetZoom = () => setZoomScale(100);
 
   const fetchOffer = useCallback(async () => {
     if (!activeOfferId) {
@@ -355,200 +348,39 @@ export const OfferLetterReview: React.FC = () => {
     fetchOffer();
   }, [fetchOffer]);
 
-  const handleAcceptClick = () => {
-    if (!offer) return;
-    if (!canRespondToOffer) {
-      notify({
-        type: "error",
-        title: "Access Denied",
-        message: "Only land owners (Displaced Community Members) can accept this offer.",
-      });
-      return;
-    }
-    if (!signedFile) {
-      setSignedFileError("Please upload the signed Form H PDF before accepting the offer.");
-      notify({
-        type: "error",
-        title: "Signed Document Required",
-        message: "Please upload the signed Form H PDF before submitting your acceptance.",
-      });
-      return;
-    }
-    setSignedFileError("");
-    setShowAcceptConfirmModal(true);
-  };
-
-  const handleConfirmAccept = async (force?: boolean) => {
-    setShowAcceptConfirmModal(false);
-    await handleAccept(force);
-  };
-
-  const handleAccept = async (force?: boolean) => {
-    if (!offer) return;
-    if (!canRespondToOffer) {
-      notify({
-        type: "error",
-        title: "Access Denied",
-        message: "Only land owners (Displaced Community Members) can accept this offer.",
-      });
-      return;
-    }
-
-    if (!force) {
-      try {
-        const objRes = await compensationApi.getAllObjections({ search: offer.id });
-        const list = objRes.objections || [];
-        const pending = list.find((o: any) => o.status === "PENDING" || o.status === "Pending Review" || o.rawStatus === "PENDING");
-
-        if (pending) {
-          setActiveObjection(pending);
-          setShowObjectionPrompt(true);
-          return;
-        }
-      } catch (e) {
-        console.warn("Could not pre-check objections:", e);
-      }
-    }
-
-    setSubmitting(true);
-    try {
-      await compensationApi.acceptOffer(offer.id, signedFile, force, {
-        ownerNric: user?.identificationNumber,
-        userId: user?.userId,
-      });
-      setShowObjectionPrompt(false);
-      await fetchOffer();
-      notify({
-        type: "success",
-        title: "Offer Accepted",
-        message: "Your formal acceptance has been recorded successfully.",
-      });
-    } catch (err: any) {
-      console.error("Accept failed:", err);
-      if (err.code === "ACTIVE_OBJECTION_EXISTS" || err.activeObjection) {
-        setActiveObjection(
-          err.activeObjection || {
-            objectionId: "OBJ-PENDING",
-            objectionReason: "Active objection exists",
-          }
-        );
-        setShowObjectionPrompt(true);
-      } else {
-        notify({
-          type: "error",
-          title: "Accept Failed",
-          message: err.message || err,
-        });
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleCancelAcceptanceSubmit = async () => {
-    if (!offer) return;
-    if (!canRespondToOffer) {
-      notify({
-        type: "error",
-        title: "Access Denied",
-        message: "Only land owners (Displaced Community Members) can cancel offer approvals.",
-      });
-      return;
-    }
-
-    setCancellingApproval(true);
-    try {
-      await compensationApi.cancelOfferAcceptance(offer.id, {
-        ownerNric: user?.identificationNumber,
-        userId: user?.userId,
-      });
-      setShowCancelApprovalModal(false);
-      await fetchOffer();
-      notify({
-        type: "success",
-        title: "Approval Cancelled",
-        message: "Your approval has been cancelled. You can now re-evaluate or submit a Form N objection if needed.",
-      });
-    } catch (err: any) {
-      console.error("Cancel approval failed:", err);
-      notify({
-        type: "error",
-        title: "Cancellation Failed",
-        message: err.message || err,
-      });
-    } finally {
-      setCancellingApproval(false);
-    }
-  };
-
-  const handleWithdrawObjectionAndAccept = async () => {
-    if (!activeObjection || !offer) return;
-    if (!canRespondToOffer) {
-      notify({
-        type: "error",
-        title: "Access Denied",
-        message: "Only land owners (Displaced Community Members) can perform this action.",
-      });
-      return;
-    }
-    setWithdrawingObjection(true);
-    try {
-      if (activeObjection.objectionId) {
-        await compensationApi.deleteObjection(activeObjection.objectionId);
-      }
-      setShowObjectionPrompt(false);
-      await handleAccept(true);
-    } catch (err: any) {
-      console.error("Failed to withdraw objection:", err);
-      notify({
-        type: "error",
-        title: "Withdrawal Failed",
-        message: `Could not withdraw objection: ${err.message || err}`,
-      });
-    } finally {
-      setWithdrawingObjection(false);
-    }
-  };
-
-  const handleRejectSubmit = async () => {
-    if (!reason.trim()) {
-      setReasonError("Reason is required.");
-      return;
-    }
-    if (!offer) return;
-    if (!canRespondToOffer) {
-      notify({
-        type: "error",
-        title: "Access Denied",
-        message: "Only land owners (Displaced Community Members) can reject this offer.",
-      });
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await compensationApi.rejectOffer(offer.id, reason, {
-        ownerNric: user?.identificationNumber,
-        userId: user?.userId,
-      });
-      setShowRejectModal(false);
-      await fetchOffer();
-      notify({
-        type: "success",
-        title: "Offer Rejected",
-        message: "Offer rejection recorded. Case marked as OFFER_REJECTED.",
-      });
-    } catch (err: any) {
-      console.error("Reject failed:", err);
-      notify({
-        type: "error",
-        title: "Rejection Failed",
-        message: err.message || err,
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const {
+    showRejectModal,
+    setShowRejectModal,
+    showAcceptConfirmModal,
+    setShowAcceptConfirmModal,
+    showCancelApprovalModal,
+    setShowCancelApprovalModal,
+    cancellingApproval,
+    submitting,
+    reason,
+    setReason,
+    reasonError,
+    setReasonError,
+    signedFile,
+    setSignedFile,
+    signedFileError,
+    setSignedFileError,
+    activeObjection,
+    showObjectionPrompt,
+    setShowObjectionPrompt,
+    withdrawingObjection,
+    handleOpenSignedPdf,
+    handleAcceptClick,
+    handleConfirmAccept,
+    handleReject,
+    handleCancelApproval: handleCancelAcceptanceSubmit,
+    handleWithdrawObjectionAndAccept,
+  } = useOfferResponse({
+    offer,
+    canRespondToOffer,
+    user,
+    onRefresh: fetchOffer,
+  });
 
   if (loading) {
     return (
@@ -584,134 +416,33 @@ export const OfferLetterReview: React.FC = () => {
 
   return (
     <>
-      {/* Accept Modal */}
-      <Modal
-        isOpen={showAcceptConfirmModal}
-        onClose={() => setShowAcceptConfirmModal(false)}
-        title="Confirm Formal Acceptance"
-        subtitle="1-Day Grace Period Policy Notice"
-        footer={
-          <>
-            <Button variant="text" onClick={() => setShowAcceptConfirmModal(false)}>
-              Cancel
-            </Button>
-            <Button variant="filled" onClick={() => handleConfirmAccept()} isLoading={submitting}>
-              <CheckCircle size={16} /> Confirm & Accept Award
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4 py-2 text-sm text-md-on-surface-variant">
-          <p>
-            You are formally accepting the compensation award of{" "}
-            <strong className="text-md-primary font-bold">{formatCurrencyRM(offer.totalCompensation)}</strong>.
-          </p>
-
-          {signedFile && (
-            <div className="p-3 bg-md-surface-container-low rounded-xl text-xs flex items-center justify-between border border-md-outline/10">
-              <div className="flex items-center gap-2 text-md-on-surface min-w-0">
-                <FileCheck size={16} className="text-md-primary flex-shrink-0" />
-                <span className="font-medium truncate">{signedFile.name}</span>
-                <span className="text-md-on-surface-variant flex-shrink-0">
-                  ({(signedFile.size / 1024).toFixed(1)} KB)
-                </span>
-              </div>
-              <span className="text-green-600 font-semibold text-[11px] bg-green-500/10 px-2 py-0.5 rounded flex-shrink-0 ml-2">
-                Signed Attachment Attached
-              </span>
-            </div>
-          )}
-
-          <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-900 dark:text-amber-200 text-xs">
-            <div className="font-bold flex items-center gap-2 mb-1 text-amber-700 dark:text-amber-300">
-              <AlertTriangle size={16} /> 1-Day Approval Policy
-            </div>
-            You have a <strong>24-hour grace window</strong> to cancel this acceptance. After 24 hours, the approval is permanently finalized.
-          </div>
-        </div>
-      </Modal>
-
-      {/* Cancel Approval Modal */}
-      <Modal
-        isOpen={showCancelApprovalModal}
-        onClose={() => setShowCancelApprovalModal(false)}
-        title="Cancel Compensation Approval"
-        subtitle="Withdraw your formal acceptance within the 1-day grace period"
-        footer={
-          <>
-            <Button variant="text" onClick={() => setShowCancelApprovalModal(false)}>
-              Keep Approved
-            </Button>
-            <Button variant="danger" onClick={handleCancelAcceptanceSubmit} isLoading={cancellingApproval}>
-              <XCircle size={16} /> Yes, Cancel Approval
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm text-md-on-surface-variant py-2">
-          Are you sure you want to cancel your previous acceptance of this compensation offer? Status will be reset to Pending.
-        </p>
-      </Modal>
-
-      {/* Active Objection Warning Modal */}
-      <Modal
-        isOpen={Boolean(showObjectionPrompt && activeObjection)}
-        onClose={() => setShowObjectionPrompt(false)}
-        title="Active Objection Detected"
-        subtitle="Cannot accept offer while an active Form N objection is under review"
-        footer={
-          <>
-            <Button variant="text" onClick={() => setShowObjectionPrompt(false)}>
-              Keep Objection
-            </Button>
-            <Button variant="filled" onClick={handleWithdrawObjectionAndAccept} isLoading={withdrawingObjection}>
-              Withdraw Objection & Accept Offer
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-3 py-2 text-sm text-md-on-surface-variant">
-          <p>You currently have an active Form N objection filed for this case.</p>
-          <div className="p-3 bg-md-surface-container rounded-xl text-xs flex flex-col gap-1 border border-md-outline/10">
-            <div>
-              Objection ID: <strong className="font-mono text-md-primary">{activeObjection?.objectionId}</strong>
-            </div>
-            <div>Reason: <em>"{activeObjection?.objectionReason || "Under review"}"</em></div>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Reject Modal */}
-      <Modal
-        isOpen={showRejectModal}
-        onClose={() => setShowRejectModal(false)}
-        title="Reject Offer"
-        subtitle="Formal rejection recording"
-        footer={
-          <>
-            <Button variant="text" onClick={() => setShowRejectModal(false)}>
-              Cancel
-            </Button>
-            <Button variant="danger" onClick={handleRejectSubmit} isLoading={submitting}>
-              Confirm Reject
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <Textarea
-            label="Reason for Rejection *"
-            rows={3}
-            placeholder="State the formal reason for rejecting this offer..."
-            value={reason}
-            error={reasonError}
-            onChange={(e) => {
-              setReason(e.target.value);
-              if (reasonError) setReasonError("");
-            }}
-          />
-        </div>
-      </Modal>
+      <OfferResponseModals
+        // Accept
+        showAcceptConfirmModal={showAcceptConfirmModal}
+        onCloseAcceptModal={() => setShowAcceptConfirmModal(false)}
+        onConfirmAccept={() => handleConfirmAccept()}
+        submitting={submitting}
+        totalCompensation={offer.totalCompensation}
+        signedFile={signedFile}
+        // Cancel Approval
+        showCancelApprovalModal={showCancelApprovalModal}
+        onCloseCancelModal={() => setShowCancelApprovalModal(false)}
+        onCancelApproval={handleCancelAcceptanceSubmit}
+        cancellingApproval={cancellingApproval}
+        // Active Objection
+        showObjectionPrompt={showObjectionPrompt}
+        activeObjection={activeObjection}
+        onCloseObjectionModal={() => setShowObjectionPrompt(false)}
+        onWithdrawObjectionAndAccept={handleWithdrawObjectionAndAccept}
+        withdrawingObjection={withdrawingObjection}
+        // Reject
+        showRejectModal={showRejectModal}
+        onCloseRejectModal={() => setShowRejectModal(false)}
+        onConfirmReject={handleReject}
+        reason={reason}
+        onReasonChange={(val) => { setReason(val); if (reasonError) setReasonError(""); }}
+        reasonError={reasonError}
+      />
 
       <div className="main blur-shape-bg">
         <div className="review-container">
@@ -776,8 +507,140 @@ export const OfferLetterReview: React.FC = () => {
             </span>
           </div>
 
-          {/* Modular Form H PDF Preview & Viewer */}
-          <OfferLetterPreview offer={offer} />
+          {/* Modular Form H PDF Preview & Viewer with Admin Header Toolbar (Image 1) */}
+          <div className="pdf-preview-container bg-md-surface-container rounded-2xl border border-md-outline/15 shadow-sm overflow-hidden mb-6">
+            {/* TOP COMPACT TOOLBAR BAR (IMAGE 1) */}
+            <div className="pdf-preview-toolbar px-4 py-3 sm:px-6 sm:py-3.5 flex items-center justify-between flex-wrap gap-3 bg-md-surface border-b border-md-outline/15">
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2 text-md-primary font-bold text-sm sm:text-base">
+                  <FileText size={18} />
+                  <span>
+                    {(offer.rawStatus === "ACCEPTED" || offer.status === "Accepted" || offer.status === "ACCEPTED" || offer.currentUserStatus === "ACCEPTED") && offer.rawOffer?.signedDocument
+                      ? "Form H: Uploaded Signed Acceptance Document"
+                      : "Form H: Notice of Award and Offer of Compensation"}
+                  </span>
+                </div>
+
+                {/* View Mode Switcher (Draft Template Only) */}
+                {!((offer.rawStatus === "ACCEPTED" || offer.status === "Accepted" || offer.status === "ACCEPTED" || offer.currentUserStatus === "ACCEPTED") && offer.rawOffer?.signedDocument) && (
+                  <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("pdf")}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${
+                        viewMode === "pdf"
+                          ? "bg-md-primary text-white shadow-sm"
+                          : "text-slate-600 dark:text-slate-300 hover:text-slate-900"
+                      }`}
+                    >
+                      <FileText size={13} /> PDF Viewer
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("html")}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${
+                        viewMode === "html"
+                          ? "bg-md-primary text-white shadow-sm"
+                          : "text-slate-600 dark:text-slate-300 hover:text-slate-900"
+                      }`}
+                    >
+                      <Layers size={13} /> Sheet View
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Controls */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {viewMode === "html" && !((offer.rawStatus === "ACCEPTED" || offer.status === "Accepted" || offer.status === "ACCEPTED" || offer.currentUserStatus === "ACCEPTED") && offer.rawOffer?.signedDocument) && (
+                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
+                    <button
+                      type="button"
+                      onClick={handleZoomOut}
+                      disabled={zoomScale <= 70}
+                      className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded disabled:opacity-40"
+                      title="Zoom Out"
+                    >
+                      <ZoomOut size={14} />
+                    </button>
+                    <span className="w-10 text-center font-mono text-[11px] font-semibold">{zoomScale}%</span>
+                    <button
+                      type="button"
+                      onClick={handleZoomIn}
+                      disabled={zoomScale >= 150}
+                      className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded disabled:opacity-40"
+                      title="Zoom In"
+                    >
+                      <ZoomIn size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleResetZoom}
+                      className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded ml-0.5"
+                      title="Reset Zoom"
+                    >
+                      <RotateCcw size={13} />
+                    </button>
+                  </div>
+                )}
+
+                {viewMode === "pdf" && (
+                  <Button
+                    variant="outlined"
+                    size="sm"
+                    onClick={() => previewRef.current?.refreshPdf()}
+                    title="Re-generate PDF Document"
+                  >
+                    <RefreshCw size={14} /> Refresh PDF
+                  </Button>
+                )}
+
+                <Button
+                  variant="tonal"
+                  size="sm"
+                  onClick={() => setIsCollapsed(!isCollapsed)}
+                  className="hidden sm:inline-flex"
+                >
+                  {isCollapsed ? (
+                    <>
+                      <Eye size={15} /> Show Preview <ChevronDown size={14} />
+                    </>
+                  ) : (
+                    <>
+                      <EyeOff size={15} /> Collapse Preview <ChevronUp size={14} />
+                    </>
+                  )}
+                </Button>
+
+                <Button
+                  variant="filled"
+                  size="sm"
+                  onClick={() => previewRef.current?.downloadPdf()}
+                  isLoading={downloadingPdf}
+                >
+                  <Download size={15} /> {downloadingPdf ? "Generating PDF..." : "Download PDF"}
+                </Button>
+              </div>
+            </div>
+
+            {/* Collapsible Preview Content */}
+            {!isCollapsed && (
+              <div className="pdf-preview-panel border-t border-md-outline/15 flex flex-col items-center p-4 sm:p-6 bg-slate-900/10 dark:bg-slate-950/40 w-full min-h-[500px]">
+                <OfferLetterPreview
+                  ref={previewRef}
+                  offer={offer}
+                  uploadedPdf={
+                    (offer.rawStatus === "ACCEPTED" || offer.status === "Accepted" || offer.status === "ACCEPTED" || offer.currentUserStatus === "ACCEPTED")
+                      ? offer.rawOffer?.signedDocument
+                      : null
+                  }
+                  viewMode={viewMode}
+                  zoomScale={zoomScale}
+                  onDownloadingChange={setDownloadingPdf}
+                />
+              </div>
+            )}
+          </div>
 
             {/* Interactive Response Action Bar for Landowner */}
             {canRespondToOffer && (() => {
@@ -859,10 +722,23 @@ export const OfferLetterReview: React.FC = () => {
                           label="Signed Form H PDF Document *"
                           fileName={signedFile?.name}
                           onView={handleOpenSignedPdf}
-                          placeholder="Select signed Form H PDF or scanned copy (PDF, JPG, PNG)"
-                          accept=".pdf,.png,.jpg,.jpeg"
+                          placeholder="Select signed Form H PDF document (.pdf only)"
+                          accept=".pdf,application/pdf"
                           error={signedFileError}
                           onChange={(file) => {
+                            if (file) {
+                              const isPdf = file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf";
+                              if (!isPdf) {
+                                setSignedFile(null);
+                                setSignedFileError("Only PDF files (.pdf) are allowed.");
+                                notify({
+                                  type: "error",
+                                  title: "Invalid File Type",
+                                  message: "Only PDF documents (.pdf) can be uploaded.",
+                                });
+                                return;
+                              }
+                            }
                             setSignedFile(file);
                             if (file) setSignedFileError("");
                           }}
@@ -887,7 +763,7 @@ export const OfferLetterReview: React.FC = () => {
                               })
                             }
                           >
-                            <AlertTriangle size={16} /> File Form N Objection
+                            <AlertTriangle size={16} /> Submit Objection
                           </Button>
                         </div>
 

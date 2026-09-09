@@ -1,19 +1,14 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo, useImperativeHandle } from "react";
 import {
   FileText,
-  Download,
-  ZoomIn,
-  ZoomOut,
-  RotateCcw,
-  Eye,
-  EyeOff,
-  ChevronDown,
-  ChevronUp,
+  FileCheck,
   RefreshCw,
-  Layers,
+  Download,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { useNotification } from "../../components/ui/NotificationSystem";
+import { BASE_URL } from "../../services/api";
 import { formatCurrencyRM } from "../../utils/currency";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
@@ -97,8 +92,21 @@ export type OfferDetail = {
   rawStatus?: string;
 };
 
-interface OfferLetterPreviewProps {
+export interface OfferLetterPreviewHandle {
+  downloadPdf: () => Promise<void>;
+  refreshPdf: () => Promise<string | null>;
+  generatePdfBlob: () => Promise<string | null>;
+  getPdfUrl: () => string | null;
+}
+
+export interface OfferLetterPreviewProps {
   offer: OfferDetail;
+  uploadedPdf?: File | string | null;
+  viewMode?: "pdf" | "html";
+  zoomScale?: number;
+  className?: string;
+  onDownloadingChange?: (isDownloading: boolean) => void;
+  onPdfReady?: (url: string | null) => void;
 }
 
 type SectionId = "sec1" | "sec2" | "sec3" | "sec4" | "sec5" | "sec6";
@@ -108,201 +116,303 @@ interface PageLayout {
   sections: SectionId[];
 }
 
-export const OfferLetterPreview: React.FC<OfferLetterPreviewProps> = ({ offer }) => {
-  const { notify } = useNotification();
-  const [zoomScale, setZoomScale] = useState<number>(100);
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
+export const OfferLetterPreview = React.forwardRef<OfferLetterPreviewHandle, OfferLetterPreviewProps>(
+  (
+    {
+      offer,
+      uploadedPdf,
+      viewMode: propViewMode,
+      zoomScale: propZoomScale,
+      className = "",
+      onDownloadingChange,
+      onPdfReady,
+    },
+    ref
+  ) => {
+    const { notify } = useNotification();
+    const zoomScale = propZoomScale ?? 100;
+    const viewMode = propViewMode ?? "pdf";
+    const [downloadingPdf, setDownloadingPdf] = useState(false);
+    const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+    const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
+    const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
 
-  // PDF View mode: 'pdf' (native embedded PDF viewer iframe) or 'html' (dynamic A4 sheet view)
-  const [viewMode, setViewMode] = useState<"pdf" | "html">("pdf");
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
+    const isOfferAccepted = useMemo(() => {
+      if (!offer) return false;
+      return (
+        offer.rawStatus === "ACCEPTED" ||
+        offer.status === "Accepted" ||
+        offer.status === "ACCEPTED" ||
+        offer.currentUserStatus === "ACCEPTED" ||
+        offer.rawOffer?.status === "ACCEPTED"
+      );
+    }, [offer]);
 
-  // Dynamic layout state calculated from actual DOM section heights
-  const [pageLayouts, setPageLayouts] = useState<PageLayout[]>([
-    { pageNumber: 1, sections: ["sec1", "sec2"] },
-    { pageNumber: 2, sections: ["sec3", "sec4", "sec5"] },
-    { pageNumber: 3, sections: ["sec6"] },
-  ]);
-
-  // DOM references for measurement and capture
-  const measureContainerRef = useRef<HTMLDivElement>(null);
-  const dynamicPageRefs = useRef<(HTMLDivElement | null)[]>([]);
-
-  const handleZoomIn = () => setZoomScale((prev) => Math.min(prev + 10, 150));
-  const handleZoomOut = () => setZoomScale((prev) => Math.max(prev - 10, 70));
-  const handleResetZoom = () => setZoomScale(100);
-
-  // Dynamic Page Break Algorithm:
-  // Measures exact heights of all sections and groups them into pages without splitting any section across pages
-  const calculateDynamicLayout = (): PageLayout[] => {
-    if (!measureContainerRef.current) return pageLayouts;
-
-    const container = measureContainerRef.current;
-    const headerEl = container.querySelector('[data-sec="header"]') as HTMLElement;
-    const metaEl = container.querySelector('[data-sec="meta"]') as HTMLElement;
-    const sec1El = container.querySelector('[data-sec="sec1"]') as HTMLElement;
-    const sec2El = container.querySelector('[data-sec="sec2"]') as HTMLElement;
-    const sec3El = container.querySelector('[data-sec="sec3"]') as HTMLElement;
-    const sec4El = container.querySelector('[data-sec="sec4"]') as HTMLElement;
-    const sec5El = container.querySelector('[data-sec="sec5"]') as HTMLElement;
-    const sec6El = container.querySelector('[data-sec="sec6"]') as HTMLElement;
-
-    const sectionsList: { id: SectionId; el: HTMLElement | null }[] = [
-      { id: "sec1", el: sec1El },
-      { id: "sec2", el: sec2El },
-      { id: "sec3", el: sec3El },
-      { id: "sec4", el: sec4El },
-      { id: "sec5", el: sec5El },
-      { id: "sec6", el: sec6El },
-    ];
-
-    // Total A4 page height (1123px) minus padding (72px) and footer/header clearance (~111px)
-    const MAX_PAGE_SECTION_HEIGHT = 940;
-
-    const headerH = headerEl ? headerEl.offsetHeight : 180;
-    const metaH = metaEl ? metaEl.offsetHeight : 100;
-    const secondaryHeaderH = 75;
-
-    const pages: PageLayout[] = [];
-    let pageNum = 1;
-    let currentSections: SectionId[] = [];
-    let currentHeight = headerH + metaH;
-
-    for (const sec of sectionsList) {
-      const secH = sec.el ? sec.el.offsetHeight : 160;
-
-      // If adding this section exceeds page capacity AND we already have sections on this page,
-      // push the WHOLE section to the next page!
-      if (currentSections.length > 0 && currentHeight + secH > MAX_PAGE_SECTION_HEIGHT) {
-        pages.push({ pageNumber: pageNum, sections: [...currentSections] });
-        pageNum++;
-        currentSections = [sec.id];
-        currentHeight = secondaryHeaderH + secH;
+    // Track File object URL creation & cleanup ONLY when offer is accepted
+    useEffect(() => {
+      if (isOfferAccepted && uploadedPdf instanceof File) {
+        const url = URL.createObjectURL(uploadedPdf);
+        setUploadedFileUrl(url);
+        return () => {
+          URL.revokeObjectURL(url);
+        };
       } else {
-        currentSections.push(sec.id);
-        currentHeight += secH;
+        setUploadedFileUrl(null);
       }
-    }
+    }, [uploadedPdf, isOfferAccepted]);
 
-    if (currentSections.length > 0) {
-      pages.push({ pageNumber: pageNum, sections: [...currentSections] });
-    }
+    // Resolve active PDF URL prioritizing uploaded file / document ONLY when offer is accepted
+    const activePdfUrl = useMemo(() => {
+      if (isOfferAccepted) {
+        if (uploadedFileUrl) return uploadedFileUrl;
+        if (typeof uploadedPdf === "string" && uploadedPdf.trim()) {
+          const str = uploadedPdf.trim();
+          return str.startsWith("blob:") || str.startsWith("http:") || str.startsWith("https:") || str.startsWith("data:")
+            ? str
+            : `${BASE_URL}/${str.replace(/^\/+/, "")}`;
+        }
+        if (offer?.rawOffer?.signedDocument) {
+          const raw = String(offer.rawOffer.signedDocument).trim();
+          return raw.startsWith("blob:") || raw.startsWith("http:") || raw.startsWith("https:") || raw.startsWith("data:")
+            ? raw
+            : `${BASE_URL}/${raw.replace(/^\/+/, "")}`;
+        }
+      }
+      return pdfUrl;
+    }, [isOfferAccepted, uploadedFileUrl, uploadedPdf, offer?.rawOffer?.signedDocument, pdfUrl]);
 
-    return pages;
-  };
+    const hasUploadedPdf = Boolean(
+      isOfferAccepted &&
+      (uploadedFileUrl ||
+        (typeof uploadedPdf === "string" && uploadedPdf.trim()) ||
+        offer?.rawOffer?.signedDocument)
+    );
 
-  // Compile PDF Blob using dynamic page refs
-  const generatePdfBlob = async (): Promise<string | null> => {
-    if (!offer) return null;
-    setIsGeneratingPdf(true);
-    try {
-      // 1. Compute dynamic section page breaks first based on actual DOM measurements
-      const newLayouts = calculateDynamicLayout();
-      setPageLayouts(newLayouts);
+    // Dynamic layout state calculated from actual DOM section heights
+    const [pageLayouts, setPageLayouts] = useState<PageLayout[]>([
+      { pageNumber: 1, sections: ["sec1", "sec2"] },
+      { pageNumber: 2, sections: ["sec3", "sec4", "sec5"] },
+      { pageNumber: 3, sections: ["sec6"] },
+    ]);
 
-      // Brief pause to allow React to render dynamic pages into DOM refs
-      await new Promise((resolve) => setTimeout(resolve, 100));
+    // DOM references for measurement and capture
+    const measureContainerRef = useRef<HTMLDivElement>(null);
+    const dynamicPageRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-      const pageElements = dynamicPageRefs.current.filter((el): el is HTMLDivElement => el !== null);
-      if (pageElements.length === 0) return null;
+    // Dynamic Page Break Algorithm:
+    // Measures exact heights of all sections and groups them into pages without splitting any section across pages
+    const calculateDynamicLayout = (): PageLayout[] => {
+      if (!measureContainerRef.current) return pageLayouts;
 
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-      });
+      const container = measureContainerRef.current;
+      const headerEl = container.querySelector('[data-sec="header"]') as HTMLElement;
+      const metaEl = container.querySelector('[data-sec="meta"]') as HTMLElement;
+      const sec1El = container.querySelector('[data-sec="sec1"]') as HTMLElement;
+      const sec2El = container.querySelector('[data-sec="sec2"]') as HTMLElement;
+      const sec3El = container.querySelector('[data-sec="sec3"]') as HTMLElement;
+      const sec4El = container.querySelector('[data-sec="sec4"]') as HTMLElement;
+      const sec5El = container.querySelector('[data-sec="sec5"]') as HTMLElement;
+      const sec6El = container.querySelector('[data-sec="sec6"]') as HTMLElement;
 
-      for (let i = 0; i < pageElements.length; i++) {
-        const pageEl = pageElements[i];
-        const canvas = await html2canvas(pageEl, {
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          backgroundColor: "#ffffff",
-          width: 794,
-          height: 1123,
-          windowWidth: 794,
-          windowHeight: 1123,
+      const sectionsList: { id: SectionId; el: HTMLElement | null }[] = [
+        { id: "sec1", el: sec1El },
+        { id: "sec2", el: sec2El },
+        { id: "sec3", el: sec3El },
+        { id: "sec4", el: sec4El },
+        { id: "sec5", el: sec5El },
+        { id: "sec6", el: sec6El },
+      ];
+
+      // Total A4 page height (1123px) minus padding (72px) and footer/header clearance (~111px)
+      const MAX_PAGE_SECTION_HEIGHT = 940;
+
+      const headerH = headerEl ? headerEl.offsetHeight : 180;
+      const metaH = metaEl ? metaEl.offsetHeight : 100;
+      const secondaryHeaderH = 75;
+
+      const pages: PageLayout[] = [];
+      let pageNum = 1;
+      let currentSections: SectionId[] = [];
+      let currentHeight = headerH + metaH;
+
+      for (const sec of sectionsList) {
+        const secH = sec.el ? sec.el.offsetHeight : 160;
+
+        // If adding this section exceeds page capacity AND we already have sections on this page,
+        // push the WHOLE section to the next page!
+        if (currentSections.length > 0 && currentHeight + secH > MAX_PAGE_SECTION_HEIGHT) {
+          pages.push({ pageNumber: pageNum, sections: [...currentSections] });
+          pageNum++;
+          currentSections = [sec.id];
+          currentHeight = secondaryHeaderH + secH;
+        } else {
+          currentSections.push(sec.id);
+          currentHeight += secH;
+        }
+      }
+
+      if (currentSections.length > 0) {
+        pages.push({ pageNumber: pageNum, sections: [...currentSections] });
+      }
+
+      return pages;
+    };
+
+    // Ref to prevent repeat generation loops
+    const generatedForOfferRef = useRef<string | null>(null);
+
+    // Compile PDF Blob using dynamic page refs (or return uploaded PDF)
+    const generatePdfBlob = async (): Promise<string | null> => {
+      if (hasUploadedPdf && activePdfUrl) {
+        onPdfReady?.(activePdfUrl);
+        return activePdfUrl;
+      }
+      if (!offer) return null;
+      setIsGeneratingPdf(true);
+      try {
+        // 1. Compute dynamic section page breaks first based on actual DOM measurements
+        const newLayouts = calculateDynamicLayout();
+        setPageLayouts(newLayouts);
+
+        // Brief pause to allow React to render dynamic pages into DOM refs
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        const pageElements = dynamicPageRefs.current.filter((el): el is HTMLDivElement => el !== null);
+        if (pageElements.length === 0) return null;
+
+        const pdf = new jsPDF({
+          orientation: "portrait",
+          unit: "mm",
+          format: "a4",
         });
 
-        if (i > 0) {
-          pdf.addPage();
+        for (let i = 0; i < pageElements.length; i++) {
+          const pageEl = pageElements[i];
+          const canvas = await html2canvas(pageEl, {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            backgroundColor: "#ffffff",
+            width: 794,
+            height: 1123,
+            windowWidth: 794,
+            windowHeight: 1123,
+          });
+
+          if (i > 0) {
+            pdf.addPage();
+          }
+
+          const imgData = canvas.toDataURL("image/png");
+          pdf.addImage(imgData, "PNG", 0, 0, 210, 297, undefined, "FAST");
         }
 
-        const imgData = canvas.toDataURL("image/png");
-        pdf.addImage(imgData, "PNG", 0, 0, 210, 297, undefined, "FAST");
-      }
-
-      const blob = pdf.output("blob");
-      const url = URL.createObjectURL(blob);
-      setPdfUrl((prevUrl) => {
-        if (prevUrl) URL.revokeObjectURL(prevUrl);
+        const blob = pdf.output("blob");
+        const url = URL.createObjectURL(blob);
+        setPdfUrl((prevUrl) => {
+          if (prevUrl) URL.revokeObjectURL(prevUrl);
+          return url;
+        });
+        generatedForOfferRef.current = offer.id || offer.offerReferenceNo;
+        onPdfReady?.(url);
         return url;
-      });
-      return url;
-    } catch (err) {
-      console.error("Failed to generate dynamic section PDF blob:", err);
-      return null;
-    } finally {
-      setIsGeneratingPdf(false);
-    }
-  };
-
-  useEffect(() => {
-    let isMounted = true;
-    const timer = setTimeout(() => {
-      if (isMounted) {
-        generatePdfBlob();
+      } catch (err) {
+        console.error("Failed to generate dynamic section PDF blob:", err);
+        return null;
+      } finally {
+        setIsGeneratingPdf(false);
       }
-    }, 400);
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timer);
     };
-  }, [offer]);
 
-  const handleDownload = async () => {
-    if (!offer) return;
-    setDownloadingPdf(true);
-    try {
-      let currentUrl = pdfUrl;
-      if (!currentUrl) {
-        currentUrl = await generatePdfBlob();
+    const offerKey = offer?.id || offer?.offerReferenceNo;
+
+    useEffect(() => {
+      if (hasUploadedPdf && activePdfUrl) {
+        onPdfReady?.(activePdfUrl);
+        return;
       }
+      if (!offerKey || hasUploadedPdf) return;
 
-      const safeFilename = `Form_H_Offer_Letter_${offer.offerReferenceNo || offer.id}.pdf`.replace(
-        /[^a-zA-Z0-9._-]/g,
-        "_"
-      );
+      // Only generate if not already generated for this specific offer
+      if (generatedForOfferRef.current !== offerKey || !pdfUrl) {
+        let isMounted = true;
+        const timer = setTimeout(() => {
+          if (isMounted && !hasUploadedPdf) {
+            generatePdfBlob();
+          }
+        }, 400);
 
-      if (currentUrl) {
-        const a = document.createElement("a");
-        a.href = currentUrl;
-        a.download = safeFilename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        return () => {
+          isMounted = false;
+          clearTimeout(timer);
+        };
       }
+    }, [offerKey, hasUploadedPdf]);
 
-      notify({
-        type: "success",
-        title: "Download Complete",
-        message: `Form H PDF (${pageLayouts.length} pages) saved as ${safeFilename}`,
-      });
-    } catch (err: any) {
-      console.error("PDF download failed:", err);
-      notify({
-        type: "error",
-        title: "Download Failed",
-        message: "Failed to download PDF. Please try again.",
-      });
-    } finally {
-      setDownloadingPdf(false);
-    }
-  };
+    const handleDownload = async () => {
+      if (!offer) return;
+      setDownloadingPdf(true);
+      onDownloadingChange?.(true);
+      try {
+        const currentUrl = activePdfUrl || (await generatePdfBlob());
+
+        const isSigned = hasUploadedPdf;
+        const safeFilename = (isSigned
+          ? `Signed_Form_H_${offer.offerReferenceNo || offer.id}.pdf`
+          : `Form_H_Offer_Letter_${offer.offerReferenceNo || offer.id}.pdf`
+        ).replace(/[^a-zA-Z0-9._-]/g, "_");
+
+        if (currentUrl) {
+          try {
+            const res = await fetch(currentUrl);
+            const blob = await res.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = blobUrl;
+            a.download = safeFilename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+          } catch (fetchErr) {
+            const a = document.createElement("a");
+            a.href = currentUrl;
+            a.download = safeFilename;
+            a.target = "_blank";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+          }
+        }
+
+        notify({
+          type: "success",
+          title: "Download Complete",
+          message: `${isSigned ? "Signed Form H Document" : `Form H PDF (${pageLayouts.length} pages)`} saved as ${safeFilename}`,
+        });
+      } catch (err: any) {
+        console.error("PDF download failed:", err);
+        notify({
+          type: "error",
+          title: "Download Failed",
+          message: "Failed to download PDF. Please try again.",
+        });
+      } finally {
+        setDownloadingPdf(false);
+        onDownloadingChange?.(false);
+      }
+    };
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        downloadPdf: handleDownload,
+        refreshPdf: hasUploadedPdf ? async () => activePdfUrl : generatePdfBlob,
+        generatePdfBlob: hasUploadedPdf ? async () => activePdfUrl : generatePdfBlob,
+        getPdfUrl: () => activePdfUrl,
+      }),
+      [handleDownload, generatePdfBlob, activePdfUrl, hasUploadedPdf]
+    );
 
   // Reusable Component: Official Header
   const renderOfficialHeader = () => (
@@ -749,295 +859,202 @@ export const OfferLetterPreview: React.FC<OfferLetterPreviewProps> = ({ offer })
   );
 
   return (
-    <div className="pdf-viewer-container mt-6 bg-md-surface-container rounded-2xl border border-md-outline/15 shadow-sm overflow-hidden">
-      {/* PDF Toolbar Header */}
-      <div className="pdf-toolbar flex justify-between items-center p-3.5 flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-md-on-surface font-semibold text-sm">
-            <FileText size={18} className="text-md-primary" />
-            <span>Form H: Notice of Award and Offer of Compensation</span>
-          </div>
-
-          {/* Mode Switcher Tabs */}
-          <div className="hidden sm:flex items-center bg-md-surface-container-low border border-md-outline/15 rounded-lg p-1 text-xs">
-            <button
-              onClick={() => setViewMode("pdf")}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded transition font-medium ${
-                viewMode === "pdf"
-                  ? "bg-md-primary text-white shadow-xs"
-                  : "text-md-on-surface-variant hover:bg-md-outline/10"
-              }`}
-              title="Native PDF Viewer (Exact compiled document)"
-            >
-              <FileText size={13} />
-              <span>PDF Viewer</span>
-            </button>
-            <button
-              onClick={() => setViewMode("html")}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded transition font-medium ${
-                viewMode === "html"
-                  ? "bg-md-primary text-white shadow-xs"
-                  : "text-md-on-surface-variant hover:bg-md-outline/10"
-              }`}
-              title="Dynamic Synchronized HTML Sheet View"
-            >
-              <Layers size={13} />
-              <span>Sheet View</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Refresh PDF Blob Button */}
-          {viewMode === "pdf" && (
-            <button
-              onClick={() => generatePdfBlob()}
-              disabled={isGeneratingPdf}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-md-outline/20 text-xs font-medium text-md-on-surface hover:bg-md-outline/10 transition disabled:opacity-50"
-              title="Re-generate PDF Document"
-            >
-              <RefreshCw size={13} className={isGeneratingPdf ? "animate-spin text-md-primary" : ""} />
-              <span className="hidden md:inline">Refresh PDF</span>
-            </button>
+    <div className={`pdf-viewer-embed w-full ${className}`}>
+      {/* MODE 1: NATIVE EMBEDDED PDF VIEWER (BLACK COLOUR BOX) */}
+      {viewMode === "pdf" && (
+        <div className="w-full space-y-3">
+          {hasUploadedPdf && (
+            <div className="flex items-center justify-between px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800">
+              <div className="flex items-center gap-2 font-semibold">
+                <FileCheck size={16} className="text-emerald-600 shrink-0" />
+                <span>Uploaded Signed Document • Official Submission (Read-Only)</span>
+              </div>
+              <span className="text-[11px] font-mono bg-white/80 px-2 py-0.5 rounded border border-emerald-200 font-bold">
+                Signed PDF
+              </span>
+            </div>
           )}
 
-          {/* Collapse / Expand Toggle for Desktop */}
-          <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-md-outline/20 text-xs font-medium text-md-on-surface hover:bg-md-outline/10 transition"
-            title={isCollapsed ? "Expand PDF Preview" : "Collapse PDF Preview"}
+          {isGeneratingPdf && !activePdfUrl && (
+            <div className="flex flex-col items-center justify-center h-[500px] sm:h-[650px] bg-slate-900/5 rounded-2xl border border-slate-300/40 space-y-4">
+              <RefreshCw size={36} className="animate-spin text-md-primary" />
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Compiling Official Form H PDF Document...
+              </p>
+            </div>
+          )}
+
+          {activePdfUrl ? (
+            <div className="w-full rounded-2xl overflow-hidden shadow-2xl border border-slate-700 bg-slate-800">
+              <iframe
+                src={`${activePdfUrl}#toolbar=1&navpanes=0&view=FitH`}
+                className="w-full h-[650px] sm:h-[850px] border-none"
+                title="Form H PDF Official Viewer"
+              />
+            </div>
+          ) : (
+            !isGeneratingPdf && (
+              <div className="flex flex-col items-center justify-center h-[400px] bg-slate-900/5 rounded-2xl border border-dashed border-slate-300 space-y-3">
+                <FileText size={40} className="text-slate-400" />
+                <p className="text-sm text-slate-600">PDF Preview could not be loaded automatically.</p>
+                <Button variant="tonal" size="sm" onClick={() => generatePdfBlob()}>
+                  <RefreshCw size={14} /> Generate PDF Viewer
+                </Button>
+              </div>
+            )
+          )}
+        </div>
+      )}
+
+      {/* MODE 2: SYNCHRONIZED DYNAMIC A4 HTML SHEET VIEW (Draft Template Only) */}
+      {viewMode === "html" && (
+        hasUploadedPdf ? (
+          <div className="w-full space-y-3">
+            <div className="flex items-center justify-between px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800">
+              <div className="flex items-center gap-2 font-semibold">
+                <FileCheck size={16} className="text-emerald-600 shrink-0" />
+                <span>Uploaded Signed Document • Official Submission (Read-Only)</span>
+              </div>
+              <span className="text-[11px] font-mono bg-white/80 px-2 py-0.5 rounded border border-emerald-200 font-bold">
+                Signed PDF
+              </span>
+            </div>
+            <div className="w-full rounded-2xl overflow-hidden shadow-2xl border border-slate-700 bg-slate-800">
+              <iframe
+                src={`${activePdfUrl}#toolbar=1&navpanes=0&view=FitH`}
+                className="w-full h-[650px] sm:h-[850px] border-none"
+                title="Form H PDF Official Viewer"
+              />
+            </div>
+          </div>
+        ) : (
+          <div
+            style={{
+              fontFamily: "'Times New Roman', Times, serif",
+              transform: `scale(${zoomScale / 100})`,
+              transformOrigin: "top center",
+              transition: "transform 0.2s ease-out",
+            }}
+            className="space-y-8 py-4 flex flex-col items-center w-full"
           >
-            {isCollapsed ? (
-              <>
-                <Eye size={14} className="text-md-primary" />
-                <span>Show Preview</span>
-                <ChevronDown size={14} />
-              </>
-            ) : (
-              <>
-                <EyeOff size={14} className="text-md-on-surface-variant" />
-                <span>Collapse Preview</span>
-                <ChevronUp size={14} />
-              </>
-            )}
-          </button>
-
-          {/* Zoom Controls for HTML Sheet View */}
-          {!isCollapsed && viewMode === "html" && (
-            <div className="hidden md:flex items-center bg-md-surface-container-low border border-md-outline/15 rounded-lg p-1 text-xs">
-              <button
-                onClick={handleZoomOut}
-                className="px-2 py-1 hover:bg-md-outline/10 rounded transition text-md-on-surface"
-                title="Zoom Out"
-              >
-                <ZoomOut size={14} />
-              </button>
-              <span className="px-2 font-mono text-xs">{zoomScale}%</span>
-              <button
-                onClick={handleZoomIn}
-                className="px-2 py-1 hover:bg-md-outline/10 rounded transition text-md-on-surface"
-                title="Zoom In"
-              >
-                <ZoomIn size={14} />
-              </button>
-              <button
-                onClick={handleResetZoom}
-                className="px-1.5 py-1 hover:bg-md-outline/10 rounded transition text-md-on-surface-variant ml-1"
-                title="Reset Zoom"
-              >
-                <RotateCcw size={12} />
-              </button>
-            </div>
-          )}
-
-          <Button variant="filled" size="sm" onClick={handleDownload} isLoading={downloadingPdf}>
-            <Download size={15} /> {downloadingPdf ? "Generating PDF..." : "Download PDF"}
-          </Button>
-        </div>
-      </div>
-
-      {/* MOBILE HELPER CARD */}
-      <div className="md:hidden p-4 border-t border-md-outline/15 text-center space-y-3 bg-md-surface-container-low">
-        <div className="flex items-center justify-center gap-2 text-md-on-surface font-semibold text-sm">
-          <FileText size={18} className="text-md-primary" />
-          <span>Form H PDF Ready</span>
-        </div>
-        <p className="text-xs text-md-on-surface-variant leading-relaxed">
-          Full interactive document preview is optimized for desktop. Download the official Form H PDF below to view or print the full document.
-        </p>
-        <Button
-          variant="filled"
-          size="sm"
-          className="w-full justify-center"
-          onClick={handleDownload}
-          isLoading={downloadingPdf}
-        >
-          <Download size={15} /> {downloadingPdf ? "Generating PDF..." : "Download Form H PDF"}
-        </Button>
-      </div>
-
-      {/* ──────────────────────────────────────────────────────────── */}
-      {/* ON-SCREEN PREVIEW DROPDOWN PANEL (ATTACHED DIRECTLY TO TOOLBAR) */}
-      {/* ──────────────────────────────────────────────────────────── */}
-      {!isCollapsed && (
-        <div className="pdf-preview-panel border-t border-md-outline/15 hidden md:flex flex-col items-center p-4 sm:p-6 bg-slate-900/10 dark:bg-slate-950/40 w-full min-h-[500px]">
-          {/* MODE 1: NATIVE EMBEDDED PDF VIEWER (EXACT GENERATED PDF FILE) */}
-          {viewMode === "pdf" && (
-            <div className="w-full space-y-3">
-              {isGeneratingPdf && !pdfUrl && (
-                <div className="flex flex-col items-center justify-center h-[600px] bg-slate-900/5 rounded-2xl border border-slate-300/40 space-y-4">
-                  <RefreshCw size={36} className="animate-spin text-md-primary" />
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Compiling Official Form H PDF Document...
-                  </p>
+            {pageLayouts.map((page) => (
+              <div key={page.pageNumber} className="relative">
+                <div className="absolute -top-6 left-0 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Page {page.pageNumber} of {pageLayouts.length}
                 </div>
-              )}
+                <div
+                  style={{ width: "794px", minHeight: "1123px", padding: "36px 40px" }}
+                  className="bg-white text-slate-900 border border-slate-300 shadow-2xl rounded-sm leading-relaxed relative space-y-3"
+                >
+                  {page.pageNumber === 1 ? (
+                    <>
+                      {renderOfficialHeader()}
+                      {renderMetadataBox()}
+                    </>
+                  ) : (
+                    renderSecondaryHeader(page.pageNumber)
+                  )}
 
-              {pdfUrl ? (
-                <div className="w-full rounded-xl overflow-hidden shadow-2xl border border-slate-300 bg-slate-800">
-                  <iframe
-                    src={`${pdfUrl}#toolbar=1&navpanes=0&view=FitH`}
-                    className="w-full h-[850px] border-none"
-                    title="Form H PDF Official Viewer"
-                  />
+                  {page.sections.map((secId) => (
+                    <React.Fragment key={secId}>
+                      {secId === "sec1" && renderSection1()}
+                      {secId === "sec2" && renderSection2(false)}
+                      {secId === "sec3" && renderSection3()}
+                      {secId === "sec4" && renderSection4()}
+                      {secId === "sec5" && renderSection5(false)}
+                      {secId === "sec6" && renderSection6()}
+                    </React.Fragment>
+                  ))}
+
+                  {renderPageFooter(page.pageNumber, pageLayouts.length)}
                 </div>
-              ) : (
-                !isGeneratingPdf && (
-                  <div className="flex flex-col items-center justify-center h-[400px] bg-slate-900/5 rounded-2xl border border-dashed border-slate-300 space-y-3">
-                    <FileText size={40} className="text-slate-400" />
-                    <p className="text-sm text-slate-600">PDF Preview could not be loaded automatically.</p>
-                    <Button variant="tonal" size="sm" onClick={() => generatePdfBlob()}>
-                      <RefreshCw size={14} /> Generate PDF Viewer
-                    </Button>
-                  </div>
-                )
-              )}
-            </div>
-          )}
-
-          {/* MODE 2: SYNCHRONIZED DYNAMIC A4 HTML SHEET VIEW */}
-          {viewMode === "html" && (
-            <div
-              style={{
-                fontFamily: "'Times New Roman', Times, serif",
-                transform: `scale(${zoomScale / 100})`,
-                transformOrigin: "top center",
-                transition: "transform 0.2s ease-out",
-              }}
-              className="space-y-8 py-4 flex flex-col items-center w-full"
-            >
-              {pageLayouts.map((page) => (
-                <div key={page.pageNumber} className="relative">
-                  <div className="absolute -top-6 left-0 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Page {page.pageNumber} of {pageLayouts.length}
-                  </div>
-                  <div
-                    style={{ width: "794px", minHeight: "1123px", padding: "36px 40px" }}
-                    className="bg-white text-slate-900 border border-slate-300 shadow-2xl rounded-sm leading-relaxed relative space-y-3"
-                  >
-                    {page.pageNumber === 1 ? (
-                      <>
-                        {renderOfficialHeader()}
-                        {renderMetadataBox()}
-                      </>
-                    ) : (
-                      renderSecondaryHeader(page.pageNumber)
-                    )}
-
-                    {page.sections.map((secId) => (
-                      <React.Fragment key={secId}>
-                        {secId === "sec1" && renderSection1()}
-                        {secId === "sec2" && renderSection2(false)}
-                        {secId === "sec3" && renderSection3()}
-                        {secId === "sec4" && renderSection4()}
-                        {secId === "sec5" && renderSection5(false)}
-                        {secId === "sec6" && renderSection6()}
-                      </React.Fragment>
-                    ))}
-
-                    {renderPageFooter(page.pageNumber, pageLayouts.length)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+              </div>
+            ))}
+          </div>
+        )
       )}
 
       {/* ──────────────────────────────────────────────────────────── */}
       {/* 1. HIDDEN DOM CONTAINER FOR DYNAMIC SECTION MEASUREMENT     */}
       {/* ──────────────────────────────────────────────────────────── */}
-      <div
-        ref={measureContainerRef}
-        style={{
-          position: "fixed",
-          left: "-99999px",
-          top: 0,
-          width: "794px",
-          fontFamily: "'Times New Roman', Times, serif",
-          padding: "36px 40px",
-          boxSizing: "border-box",
-          visibility: "hidden",
-          pointerEvents: "none",
-        }}
-        aria-hidden="true"
-      >
-        <div data-sec="header">{renderOfficialHeader()}</div>
-        <div data-sec="meta">{renderMetadataBox()}</div>
-        <div data-sec="sec1">{renderSection1()}</div>
-        <div data-sec="sec2">{renderSection2(true)}</div>
-        <div data-sec="sec3">{renderSection3()}</div>
-        <div data-sec="sec4">{renderSection4()}</div>
-        <div data-sec="sec5">{renderSection5(true)}</div>
-        <div data-sec="sec6">{renderSection6()}</div>
-      </div>
+      {!hasUploadedPdf && (
+        <div
+          ref={measureContainerRef}
+          style={{
+            position: "fixed",
+            left: "-99999px",
+            top: 0,
+            width: "794px",
+            fontFamily: "'Times New Roman', Times, serif",
+            padding: "36px 40px",
+            boxSizing: "border-box",
+            visibility: "hidden",
+            pointerEvents: "none",
+          }}
+          aria-hidden="true"
+        >
+          <div data-sec="header">{renderOfficialHeader()}</div>
+          <div data-sec="meta">{renderMetadataBox()}</div>
+          <div data-sec="sec1">{renderSection1()}</div>
+          <div data-sec="sec2">{renderSection2(true)}</div>
+          <div data-sec="sec3">{renderSection3()}</div>
+          <div data-sec="sec4">{renderSection4()}</div>
+          <div data-sec="sec5">{renderSection5(true)}</div>
+          <div data-sec="sec6">{renderSection6()}</div>
+        </div>
+      )}
 
       {/* ──────────────────────────────────────────────────────────── */}
       {/* 2. DYNAMIC PAGES CONTAINER FOR JSPDF CANVAS CAPTURE         */}
       {/* ──────────────────────────────────────────────────────────── */}
-      <div className="pdf-print-container" aria-hidden="true">
-        {pageLayouts.map((page, idx) => (
-          <div
-            key={page.pageNumber}
-            ref={(el) => {
-              dynamicPageRefs.current[idx] = el;
-            }}
-            style={{
-              fontFamily: "'Times New Roman', Times, serif",
-              backgroundColor: "#ffffff",
-              width: "794px",
-              height: "1123px",
-              padding: "36px 40px",
-              boxSizing: "border-box",
-              position: "relative",
-            }}
-            className="pdf-sheet pdf-print-page bg-white text-slate-900 leading-relaxed"
-          >
-            <div className="space-y-3">
-              {page.pageNumber === 1 ? (
-                <>
-                  {renderOfficialHeader()}
-                  {renderMetadataBox()}
-                </>
-              ) : (
-                renderSecondaryHeader(page.pageNumber)
-              )}
+      {!hasUploadedPdf && (
+        <div className="pdf-print-container" aria-hidden="true">
+          {pageLayouts.map((page, idx) => (
+            <div
+              key={page.pageNumber}
+              ref={(el) => {
+                dynamicPageRefs.current[idx] = el;
+              }}
+              style={{
+                fontFamily: "'Times New Roman', Times, serif",
+                backgroundColor: "#ffffff",
+                width: "794px",
+                height: "1123px",
+                padding: "36px 40px",
+                boxSizing: "border-box",
+                position: "relative",
+              }}
+              className="pdf-sheet pdf-print-page bg-white text-slate-900 leading-relaxed"
+            >
+              <div className="space-y-3">
+                {page.pageNumber === 1 ? (
+                  <>
+                    {renderOfficialHeader()}
+                    {renderMetadataBox()}
+                  </>
+                ) : (
+                  renderSecondaryHeader(page.pageNumber)
+                )}
 
-              {page.sections.map((secId) => (
-                <React.Fragment key={secId}>
-                  {secId === "sec1" && renderSection1()}
-                  {secId === "sec2" && renderSection2(false)}
-                  {secId === "sec3" && renderSection3()}
-                  {secId === "sec4" && renderSection4()}
-                  {secId === "sec5" && renderSection5(false)}
-                  {secId === "sec6" && renderSection6()}
-                </React.Fragment>
-              ))}
+                {page.sections.map((secId) => (
+                  <React.Fragment key={secId}>
+                    {secId === "sec1" && renderSection1()}
+                    {secId === "sec2" && renderSection2(false)}
+                    {secId === "sec3" && renderSection3()}
+                    {secId === "sec4" && renderSection4()}
+                    {secId === "sec5" && renderSection5(false)}
+                    {secId === "sec6" && renderSection6()}
+                  </React.Fragment>
+                ))}
+              </div>
+              {renderPageFooter(page.pageNumber, pageLayouts.length)}
             </div>
-            {renderPageFooter(page.pageNumber, pageLayouts.length)}
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
-};
+});
+
+OfferLetterPreview.displayName = "OfferLetterPreview";
+export default OfferLetterPreview;
