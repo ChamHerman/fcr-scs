@@ -17,7 +17,6 @@ import pandas as pd
 from flask import Flask, jsonify, request, send_file
 from werkzeug.utils import secure_filename
 
-import generate_datasets as generator
 import ml_core as core
 
 app = Flask(__name__)
@@ -55,11 +54,16 @@ def model_info():
 
 @app.get('/dataset/template')
 def dataset_template():
-    df = generator.generate_unified_valuation_dataset(n_samples=25, random_seed=7, case_prefix="TP")
-    buffer = BytesIO()
-    df.to_csv(buffer, index=False)
-    buffer.seek(0)
-    return send_file(buffer, mimetype='text/csv', as_attachment=True, download_name='valuation_dataset_template.csv')
+    """Serves the dataset the current model was trained on, so officers can
+    download it, tweak values, and re-upload to compare a retrained model."""
+    if not os.path.exists(core.current_training_dataset_path()):
+        return _error('No current training dataset is available yet. Train the baseline model first.', 404)
+    return send_file(
+        core.current_training_dataset_path(),
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name='fcr_scs_valuation_current_dataset.csv',
+    )
 
 
 @app.post('/predict')
@@ -68,20 +72,17 @@ def predict():
         return _error('No active model available. Train the model first.', 503)
 
     payload = request.get_json(silent=True) or {}
-    errors = core.validate_feature_payload(payload)
+    cleaned, errors = core.normalise_payload(payload)
     if errors:
         return _error('; '.join(errors), 400)
 
-    features = pd.DataFrame([{
-        col: payload[col] if col in core.CATEGORICAL_FEATURES else float(payload[col])
-        for col in core.FEATURE_COLUMNS
-    }])
+    features = pd.DataFrame([cleaned])
 
     predictions, stds = core.predict_with_range(_state['model'], features)
     market_value = float(predictions[0])
     spread = float(stds[0]) * 1.96
 
-    breakdown = core.derive_compensation(market_value, payload.get('built_up_area_sqft'))
+    breakdown = core.derive_compensation(market_value, cleaned.get('built_up_area_m2'))
     breakdown['estimateRangeLowMyr'] = max(0, int(round((market_value - spread) / 100) * 100))
     breakdown['estimateRangeHighMyr'] = int(round((market_value + spread) / 100) * 100)
     breakdown['modelVersion'] = _state['version']
@@ -106,54 +107,29 @@ def train():
     if errors:
         return _error(' '.join(errors), 400)
 
-    # Optional validation-split fraction (of the uploaded file) as a form field.
-    try:
-        split_ratio = float(request.form.get('splitRatio', 0.2))
-    except (TypeError, ValueError):
-        return _error("'splitRatio' must be a number between 0.1 and 0.5", 400)
-    if not 0.1 <= split_ratio <= 0.5:
-        return _error("'splitRatio' must be between 0.1 and 0.5", 400)
+    if not os.path.exists(core.TEST_DATASET_PATH):
+        return _error('Evaluation dataset is missing - run generate_datasets.py first.', 500)
 
-    total_rows = len(df)
-    holdout_size = int(total_rows * split_ratio)
-    train_size = total_rows - holdout_size
-    if holdout_size < 20:
-        return _error(
-            f"Dataset too small for a {int(split_ratio * 100)}/{int((1 - split_ratio) * 100)} split: "
-            f"the validation holdout would only have {holdout_size} rows (need at least 20 - "
-            f"upload at least {int(20 / split_ratio) + 1} rows)",
-            400,
-        )
-    if train_size < 80:
-        return _error(
-            f"Dataset too small: only {train_size} training rows after the split (need at least 80)",
-            400,
-        )
-
-    # Deterministic split so both models are scored on the identical holdout.
-    df_shuffled = df.sample(frac=1.0, random_state=42).reset_index(drop=True)
-    holdout = df_shuffled.iloc[:holdout_size]
-    train_df = df_shuffled.iloc[holdout_size:]
-
-    X_holdout = holdout[core.FEATURE_COLUMNS]
-    y_holdout = holdout[core.TARGET_COLUMN]
+    # The candidate trains on the FULL uploaded dataset (no split). Both the
+    # current model and the candidate are scored on the same fixed independent
+    # evaluation set, so the old-vs-new comparison is fair and reproducible.
+    df_test = pd.read_csv(core.TEST_DATASET_PATH)
+    X_test = df_test[core.FEATURE_COLUMNS]
+    y_test = df_test[core.TARGET_COLUMN]
 
     candidate_model = core.build_pipeline()
-    candidate_model.fit(train_df[core.FEATURE_COLUMNS], train_df[core.TARGET_COLUMN])
-    candidate_metrics = core.evaluate(candidate_model, X_holdout, y_holdout)
+    candidate_model.fit(df[core.FEATURE_COLUMNS], df[core.TARGET_COLUMN])
+    candidate_metrics = core.evaluate(candidate_model, X_test, y_test)
 
     registry = core.read_registry()
     current_metrics = None
     current_version = None
     with model_lock:
         active = registry['activeModel']
-        if active and _state['model'] is not None:
-            current_metrics = core.evaluate(_state['model'], X_holdout, y_holdout)
-            current_version = active['version']
-        elif active:
-            loaded = core.load_active_model()
+        if active:
+            loaded = _state['model'] if _state['model'] is not None else core.load_active_model()
             if loaded is not None:
-                current_metrics = core.evaluate(loaded, X_holdout, y_holdout)
+                current_metrics = core.evaluate(loaded, X_test, y_test)
                 current_version = active['version']
 
         candidate_id = f"cand_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')[:-3]}"
@@ -161,9 +137,9 @@ def train():
         core.save_model(candidate_model, os.path.join(core.MODELS_DIR, candidate_file))
 
         os.makedirs(core.UPLOADS_DIR, exist_ok=True)
-        upload_name = secure_filename(file.filename)
+        source_name = f"{candidate_id}_{secure_filename(file.filename)}"
         file.stream.seek(0)
-        file.save(os.path.join(core.UPLOADS_DIR, f"{candidate_id}_{upload_name}"))
+        file.save(os.path.join(core.UPLOADS_DIR, source_name))
 
         registry['candidates'].append({
             'candidateId': candidate_id,
@@ -171,7 +147,7 @@ def train():
             'trainedAt': datetime.now(timezone.utc).isoformat(),
             'metrics': candidate_metrics,
             'datasetRows': int(len(df)),
-            'sourceFile': upload_name,
+            'sourceFile': source_name,
         })
         core.write_registry(registry)
 
@@ -185,8 +161,8 @@ def train():
         'data': {
             'candidateId': candidate_id,
             'verdict': verdict,
-            'rows': total_rows,
-            'split': {'trainRows': train_size, 'holdoutRows': holdout_size},
+            'rows': int(len(df)),
+            'evaluatedOn': {'testRows': int(len(df_test))},
             'current': ({'version': current_version, 'metrics': current_metrics} if current_metrics else None),
             'candidate': {'candidateId': candidate_id, 'metrics': candidate_metrics},
         },

@@ -31,34 +31,42 @@ export interface RetrainComparison {
   candidateId: string;
   verdict: 'better' | 'worse' | 'equal';
   rows: number;
-  split: { trainRows: number; holdoutRows: number };
+  evaluatedOn: { testRows: number };
   current: { version: string; metrics: ModelMetrics } | null;
   candidate: { candidateId: string; metrics: ModelMetrics };
 }
 
-// The 8 valuation attributes — must match the model feature schema.
-export const VALUATION_OPTIONS = {
-  states: ['Selangor', 'Penang', 'Johor', 'Melaka', 'Pahang', 'Perak', 'Terengganu', 'Sabah', 'Sarawak'],
-  landCategories: ['Residential', 'Commercial', 'Agricultural', 'Industrial'],
-  locationTypes: ['Urban', 'Suburban', 'Rural_Coastal'],
-  tenureTypes: ['Freehold', 'Leasehold_99', 'Malay_Reserve'],
-  buildingConditions: ['Excellent', 'Good', 'Fair', 'Poor'],
-};
-
+// The 7 valuation attributes — must match the model feature schema (vocabulary
+// aligned with the Valuation module constants: title land categories, m2 areas,
+// 16 states, no building condition). Dropdown values come from src/constants.
 export interface ValuationInput {
   state: string;
   land_category: string;
   location_type: string;
   tenure_type: string;
-  building_condition: string;
+  land_area_m2: number;
+  built_up_area_m2: number;
+  building_age_years: number;
+}
+
+// Legacy payload shape still sent by the manual ValuationCreate form
+// (pre-alignment keys). The backend normaliser folds these onto the m2 schema.
+export interface LegacyValuationCall {
+  state: string;
+  land_category: string;
+  location_type: string;
+  tenure_type: string;
+  building_condition?: string;
   land_area_sqft: number;
   built_up_area_sqft: number;
   building_age_years: number;
 }
 
+export type ValuationPayload = ValuationInput | LegacyValuationCall;
+
 // --- Endpoints ---
 
-export async function valuateProperty(input: ValuationInput): Promise<ValuationBreakdown> {
+export async function valuateProperty(input: ValuationPayload): Promise<ValuationBreakdown> {
   const res = await fetchJSON(`${BASE_URL}/api/prediction/valuate`, {
     method: 'POST',
     body: JSON.stringify(input),
@@ -71,10 +79,9 @@ export async function getModelInfo(): Promise<ModelInfo> {
   return res.data;
 }
 
-export async function retrainModel(file: File, splitRatio = 0.2): Promise<RetrainComparison> {
+export async function retrainModel(file: File): Promise<RetrainComparison> {
   const form = new FormData();
   form.append('dataset', file);
-  form.append('splitRatio', String(splitRatio));
   const res = await fetchMultipart(`${BASE_URL}/api/prediction/retrain`, form);
   return res.data;
 }

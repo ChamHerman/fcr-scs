@@ -1,12 +1,12 @@
 {
   "activeModel": {
-    "version": "v1.0",
+    "version": "v1.2",
     "file": "fcr_scs_property_valuation_rf.joblib",
-    "trainedAt": "2026-08-24T20:24:28.660571+00:00",
+    "trainedAt": "2026-09-09T19:24:29.648219+00:00",
     "metrics": {
-      "mae": 147368.17,
-      "rmse": 258197.69,
-      "r2": 0.9767
+      "mae": 682229.84,
+      "rmse": 1473149.63,
+      "r2": 0.9843
     },
     "datasetRows": 6000,
     "features": [
@@ -14,13 +14,25 @@
       "land_category",
       "location_type",
       "tenure_type",
-      "building_condition",
-      "land_area_sqft",
-      "built_up_area_sqft",
+      "land_area_m2",
+      "built_up_area_m2",
       "building_age_years"
     ]
   },
-  "candidates": [],
+  "candidates": [
+    {
+      "candidateId": "cand_20260909192340794",
+      "file": "cand_20260909192340794.joblib",
+      "trainedAt": "2026-09-09T19:23:40.831970+00:00",
+      "metrics": {
+        "mae": 682229.84,
+        "rmse": 1473149.63,
+        "r2": 0.9843
+      },
+      "datasetRows": 6000,
+      "sourceFile": "cand_20260909192340794_valuation_dataset_template.csv"
+    }
+  ],
   "history": [
     {
       "version": "v1.0",
@@ -43,6 +55,48 @@
         "building_age_years"
       ],
       "replacedAt": "2026-08-24T20:24:13.226667+00:00"
+    },
+    {
+      "version": "v1.0",
+      "file": "fcr_scs_property_valuation_rf.joblib",
+      "trainedAt": "2026-09-09T19:11:15.967956+00:00",
+      "metrics": {
+        "mae": 682229.84,
+        "rmse": 1473149.63,
+        "r2": 0.9843
+      },
+      "datasetRows": 6000,
+      "features": [
+        "state",
+        "land_category",
+        "location_type",
+        "tenure_type",
+        "land_area_m2",
+        "built_up_area_m2",
+        "building_age_years"
+      ],
+      "replacedAt": "2026-09-09T19:24:22.606273+00:00"
+    },
+    {
+      "version": "v1.1",
+      "file": "fcr_scs_property_valuation_rf.joblib",
+      "trainedAt": "2026-09-09T19:24:13.533610+00:00",
+      "metrics": {
+        "mae": 682229.84,
+        "rmse": 1473149.63,
+        "r2": 0.9843
+      },
+      "datasetRows": 6000,
+      "features": [
+        "state",
+        "land_category",
+        "location_type",
+        "tenure_type",
+        "land_area_m2",
+        "built_up_area_m2",
+        "building_age_years"
+      ],
+      "replacedAt": "2026-09-09T19:24:30.759391+00:00"
     }
   ]
 }

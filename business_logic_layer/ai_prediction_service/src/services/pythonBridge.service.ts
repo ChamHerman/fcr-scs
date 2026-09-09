@@ -159,10 +159,9 @@ export async function getModelInfo(): Promise<ModelInfo> {
   return res.data;
 }
 
-export async function retrainModel(csvBuffer: Buffer, filename: string, splitRatio = 0.2): Promise<RetrainComparison> {
+export async function retrainModel(csvBuffer: Buffer, filename: string): Promise<RetrainComparison> {
   const form = new FormData();
   form.append("dataset", new Blob([new Uint8Array(csvBuffer)], { type: "text/csv" }), filename);
-  form.append("splitRatio", String(splitRatio));
   const res = await requestJson<{ data: RetrainComparison }>("/train", { method: "POST", body: form }, TIMEOUT_MS.train);
   return res.data;
 }

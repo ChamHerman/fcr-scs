@@ -4,6 +4,11 @@ Shared ML logic for the FCR-SCS AI Valuation service.
 Used by train_model.py (baseline CLI) and app.py (Flask sidecar):
 feature definitions, pipeline construction, evaluation, model persistence,
 and the JSON registry that tracks the active model / retraining candidates.
+
+Attribute vocabulary is aligned with the manual Valuation module
+(presentation_layer/src/constants): 7 features, title land categories,
+m2 areas, no building condition. A tolerant value normaliser accepts DB-enum
+spellings and older aliases so callers that predate the alignment keep working.
 """
 
 import json
@@ -31,19 +36,82 @@ REGISTRY_PATH = os.path.join(MODELS_DIR, 'model_registry.json')
 TRAIN_DATASET_PATH = os.path.join(DATASETS_DIR, 'fcr_scs_valuation_train_dataset.csv')
 TEST_DATASET_PATH = os.path.join(DATASETS_DIR, 'fcr_scs_valuation_test_dataset.csv')
 
-CATEGORICAL_FEATURES = ['state', 'land_category', 'location_type', 'tenure_type', 'building_condition']
-NUMERIC_FEATURES = ['land_area_sqft', 'built_up_area_sqft', 'building_age_years']
+CATEGORICAL_FEATURES = ['state', 'land_category', 'location_type', 'tenure_type']
+NUMERIC_FEATURES = ['land_area_m2', 'built_up_area_m2', 'building_age_years']
 FEATURE_COLUMNS = CATEGORICAL_FEATURES + NUMERIC_FEATURES
 TARGET_COLUMN = 'market_value_myr'
 
-# Allowed values mirror generate_datasets.py so uploads can be validated.
+# Canonical allowed values (mirrors the shared frontend constants).
 VALID_VALUES = {
-    'state': ['Selangor', 'Penang', 'Johor', 'Melaka', 'Pahang', 'Perak', 'Terengganu', 'Sabah', 'Sarawak'],
-    'land_category': ['Residential', 'Commercial', 'Agricultural', 'Industrial'],
-    'location_type': ['Urban', 'Suburban', 'Rural_Coastal'],
-    'tenure_type': ['Freehold', 'Leasehold_99', 'Malay_Reserve'],
-    'building_condition': ['Excellent', 'Good', 'Fair', 'Poor'],
+    'state': [
+        'Johor', 'Kedah', 'Kelantan', 'Melaka', 'Negeri Sembilan', 'Pahang', 'Perak',
+        'Perlis', 'Pulau Pinang', 'Sabah', 'Sarawak', 'Selangor', 'Terengganu',
+        'Wilayah Persekutuan Kuala Lumpur', 'Wilayah Persekutuan Labuan',
+        'Wilayah Persekutuan Putrajaya',
+    ],
+    'land_category': ['Agriculture', 'Building', 'Industry'],
+    'location_type': ['Urban', 'Suburban', 'Rural'],
+    'tenure_type': ['Freehold', 'Leasehold', 'Malay Reserve'],
 }
+
+# Legacy / DB-enum spellings -> canonical values, so uploads and manual-form
+# calls that pre-date the vocabulary alignment still work.
+_VALUE_ALIASES = {
+    'land_category': {
+        'agriculture': 'Agriculture', 'agricultural': 'Agriculture',
+        'building': 'Building', 'residential': 'Building', 'commercial': 'Building',
+        'industry': 'Industry', 'industrial': 'Industry',
+    },
+    'tenure_type': {
+        'freehold': 'Freehold',
+        'leasehold': 'Leasehold', 'leasehold_99': 'Leasehold', 'leasehold99': 'Leasehold',
+        'malay_reserve': 'Malay Reserve', 'malayreserve': 'Malay Reserve',
+    },
+    'location_type': {
+        'urban': 'Urban', 'suburban': 'Suburban',
+        'rural': 'Rural', 'rural_coastal': 'Rural', 'ruralcoastal': 'Rural',
+    },
+    'state': {
+        'penang': 'Pulau Pinang', 'pulau pinang': 'Pulau Pinang',
+        'kuala lumpur': 'Wilayah Persekutuan Kuala Lumpur',
+        'w.p. kuala lumpur': 'Wilayah Persekutuan Kuala Lumpur',
+        'wpkl': 'Wilayah Persekutuan Kuala Lumpur',
+        'wilayah persekutuan kuala lumpur': 'Wilayah Persekutuan Kuala Lumpur',
+        'putrajaya': 'Wilayah Persekutuan Putrajaya',
+        'w.p. putrajaya': 'Wilayah Persekutuan Putrajaya',
+        'labuan': 'Wilayah Persekutuan Labuan',
+        'w.p. labuan': 'Wilayah Persekutuan Labuan',
+    },
+}
+
+# Old numeric payload key names accepted as aliases for the m2 features.
+_NUMERIC_ALIASES = {
+    'land_area_m2': ['land_area_sqft'],
+    'built_up_area_m2': ['built_up_area_sqft'],
+}
+
+
+def normalize_value(column: str, raw) -> str | None:
+    """Returns the canonical value for a categorical column, or None if invalid."""
+    if raw is None:
+        return None
+    value = str(raw).strip()
+    lowered = value.lower()
+    for canonical in VALID_VALUES[column]:
+        if canonical.lower() == lowered:
+            return canonical
+    alias = _VALUE_ALIASES.get(column, {}).get(lowered)
+    if alias is not None and alias in VALID_VALUES[column]:
+        return alias
+    return None
+
+
+def numeric_payload_value(payload: dict, column: str):
+    """Reads a numeric feature allowing its legacy alias keys (sqft names)."""
+    for key in [column] + _NUMERIC_ALIASES.get(column, []):
+        if key in payload and payload[key] is not None and str(payload[key]).strip() != '':
+            return payload[key]
+    return None
 
 
 def build_pipeline():
@@ -82,9 +150,9 @@ def load_active_model():
 
 # --- Compensation derivation (Land Acquisition Act 1960 style) ---
 
-def derive_compensation(market_value_myr: float, built_up_area_sqft) -> dict:
+def derive_compensation(market_value_myr: float, built_up_area_value) -> dict:
     statutory_disturbance = int(round((market_value_myr * 0.15) / 100) * 100)
-    relocation_allowance = 8000 if built_up_area_sqft and built_up_area_sqft > 0 else 2000
+    relocation_allowance = 8000 if built_up_area_value and built_up_area_value > 0 else 2000
     recommended = int(round(market_value_myr)) + statutory_disturbance + relocation_allowance
     return {
         'marketValueMyr': int(round(market_value_myr)),
@@ -187,39 +255,52 @@ def _next_version(registry: dict) -> str:
     return f'v1.{minor}'
 
 
-def validate_feature_payload(payload: dict) -> list:
-    """Validates a single prediction payload; returns a list of error strings."""
+def current_training_dataset_path() -> str:
+    """Path to the dataset the active model was trained on, if its source upload
+    is still present; otherwise the canonical training CSV (baseline)."""
+    registry = read_registry()
+    source_file = registry['activeModel'].get('sourceFile') if registry['activeModel'] else None
+    if source_file:
+        upload = os.path.join(UPLOADS_DIR, source_file)
+        if os.path.exists(upload):
+            return upload
+    return TRAIN_DATASET_PATH
+
+
+def normalise_payload(payload: dict) -> tuple:
+    """Validates and normalises a single prediction payload.
+
+    Returns (cleaned_payload, errors). Categorical values are canonicalised;
+    numeric aliases (e.g. legacy sqft keys) are folded onto the m2 key.
+    """
     errors = []
+    cleaned = {}
     for col in CATEGORICAL_FEATURES:
-        value = payload.get(col)
-        if value is None or str(value).strip() == '':
-            errors.append(f"'{col}' is required")
-        elif value not in VALID_VALUES[col]:
+        canonical = normalize_value(col, payload.get(col))
+        if canonical is None:
             errors.append(f"'{col}' must be one of: {', '.join(VALID_VALUES[col])}")
+        else:
+            cleaned[col] = canonical
+
     for col in NUMERIC_FEATURES:
+        raw = numeric_payload_value(payload, col)
+        if raw is None:
+            errors.append(f"'{col}' is required")
+            continue
         try:
-            value = float(payload.get(col))
+            value = float(raw)
         except (TypeError, ValueError):
             errors.append(f"'{col}' must be a number")
             continue
         if value < 0:
             errors.append(f"'{col}' cannot be negative")
-        elif col == 'land_area_sqft' and value == 0:
-            errors.append("'land_area_sqft' must be greater than 0")
-    if not errors and float(payload.get('building_age_years', 0)) > 120:
+        elif col == 'land_area_m2' and value == 0:
+            errors.append("'land_area_m2' must be greater than 0")
+        else:
+            cleaned[col] = value
+    if not errors and cleaned.get('building_age_years', 0) > 120:
         errors.append("'building_age_years' must be 120 or below")
-
-    # Built-up structures cannot exceed the plot; require a visible margin.
-    try:
-        land_area_value = float(payload.get('land_area_sqft'))
-        built_up_value = float(payload.get('built_up_area_sqft'))
-        if built_up_value >= land_area_value:
-            errors.append("'built_up_area_sqft' must be smaller than 'land_area_sqft'")
-        elif land_area_value - built_up_value < 100:
-            errors.append("'land_area_sqft' must exceed 'built_up_area_sqft' by at least 100 sqft")
-    except (TypeError, ValueError):
-        pass  # already reported by the numeric checks above
-    return errors
+    return cleaned, errors
 
 
 def validate_dataset_dataframe(df: pd.DataFrame) -> list:
@@ -230,10 +311,13 @@ def validate_dataset_dataframe(df: pd.DataFrame) -> list:
         return [f"Missing required columns: {', '.join(missing)}"]
     if len(df) < 2000:
         return [f"Dataset too small: {len(df)} rows found, at least 2,000 rows required to train the model properly"]
-    for col, allowed in VALID_VALUES.items():
-        unknown = sorted(set(df[col].dropna().astype(str).unique()) - set(allowed))
-        if unknown:
-            return [f"Column '{col}' has unexpected values: {', '.join(unknown[:5])}"]
+    for col in CATEGORICAL_FEATURES:
+        df[col] = df[col].astype(str).str.strip()
+        unmapped = [v for v in df[col].unique() if normalize_value(col, v) is None]
+        if unmapped:
+            return [f"Column '{col}' has unexpected values: {', '.join(unmapped[:5])}"]
+        # Rewrite aliases onto canonical values in place for training.
+        df[col] = df[col].map(lambda v: normalize_value(col, v))
     for col in NUMERIC_FEATURES + [TARGET_COLUMN]:
         df[col] = pd.to_numeric(df[col], errors='coerce')
         if df[col].isna().any():
