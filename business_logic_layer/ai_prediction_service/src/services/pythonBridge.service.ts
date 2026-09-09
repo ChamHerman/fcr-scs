@@ -8,12 +8,36 @@
  */
 
 import { spawn } from "child_process";
+import fs from "fs";
 import path from "path";
 import { ModelInfo, RetrainComparison, ValuationBreakdown, ValuationInput } from "../interfaces/prediction.types";
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://127.0.0.1:5001";
 // src/services -> ai_prediction_service root
 const SIDECAR_DIR = path.resolve(__dirname, "..", "..");
+
+function resolvePythonCommand(): string {
+  const candidates = [
+    // Inside ai_prediction_service (.venv / venv)
+    path.join(SIDECAR_DIR, ".venv", "Scripts", "python.exe"),
+    path.join(SIDECAR_DIR, "venv", "Scripts", "python.exe"),
+    path.join(SIDECAR_DIR, ".venv", "bin", "python"),
+    path.join(SIDECAR_DIR, "venv", "bin", "python"),
+    // Repository root (.venv / venv)
+    path.join(SIDECAR_DIR, "..", "..", ".venv", "Scripts", "python.exe"),
+    path.join(SIDECAR_DIR, "..", "..", "venv", "Scripts", "python.exe"),
+    path.join(SIDECAR_DIR, "..", "..", ".venv", "bin", "python"),
+    path.join(SIDECAR_DIR, "..", "..", "venv", "bin", "python"),
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return process.platform === "win32" ? "python" : "python3";
+}
 
 const TIMEOUT_MS = {
   predict: 20_000,
@@ -52,7 +76,7 @@ async function ensureSidecarRunning(): Promise<"healthy" | "restarted" | "unavai
   sidecarAutoStartAttempted = true;
 
   console.log("[ai_prediction_service] Sidecar not reachable - auto-starting Python sidecar...");
-  const command = process.platform === "win32" ? "python" : "python3";
+  const command = resolvePythonCommand();
   const child = spawn(command, ["app.py"], { cwd: SIDECAR_DIR, stdio: "ignore" });
   child.on("error", (err) => {
     console.error("[ai_prediction_service] Could not auto-start sidecar:", err.message);
