@@ -9,6 +9,7 @@ import { useWallet } from '../../hooks/useWallet';
 import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Button } from '../../components/ui/Button';
+import { CopyButton } from '../../components/ui/CopyButton';
 import { WalletButton } from '../../components/ui/WalletButton';
 import { NetworkSelector } from './NetworkSelector';
 import type { NetworkInfo } from './NetworkSelector';
@@ -183,9 +184,12 @@ export const PublishLedger: React.FC = () => {
                     onClick={() => setModal({ type: 'view', row })}
                   >
                     <td>
-                      <span className="font-mono font-bold text-xs text-md-primary">
-                        {row.publicId ?? row.caseId}
-                      </span>
+                      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        <span className="font-mono font-bold text-xs text-md-primary">
+                          {row.publicId ?? row.caseId}
+                        </span>
+                        <CopyButton value={row.publicId ?? row.caseId} title="Copy Record ID" />
+                      </div>
                     </td>
                     <td><CaseIdCell caseId={row.caseId} /></td>
                     <td>{row.beneficiary || '—'}</td>

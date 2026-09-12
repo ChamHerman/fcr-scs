@@ -50,7 +50,7 @@ export const ledgerBadge = (status: string, extra?: string) => {
   );
 };
 
-export const fmtAmount = (v?: string | number) => `RM ${Number(v || 0).toLocaleString('en-MY')}`;
+export const fmtAmount = (v?: string | number) => `RM ${Number(v || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const fmtDate = (d?: string | null) =>
   d ? new Date(d).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';

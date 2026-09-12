@@ -437,7 +437,7 @@ export async function acceptOffer(
             beneficiaryId: primaryOwner?.ownerId || `BEN-${offer.caseId}`,
             amount: Number(offer.offerAmount),
             accountHolderName: primaryOwner?.name || null,
-            status: PaymentStatus.OFFER_ACCEPTED,
+            status: PaymentStatus.BANK_DETAILS_PENDING,
             requiredSignatures: 0,
             currentSignatures: 0,
           },

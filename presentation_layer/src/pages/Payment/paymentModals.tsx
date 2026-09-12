@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
+  Clock,
   Lock,
   ShieldCheck,
   ShieldAlert,
@@ -37,7 +38,8 @@ export type PaymentRowActionType =
   | 'retry'
   | 'request-update'
   | 'schedule'
-  | 'resolve-dispute';
+  | 'resolve-dispute'
+  | 'confirm-receipt';
 /**
  * Shared modal components for the payment module (PLAN_HM_1308 §5.1, §5.2, §5.3, §5.4).
  * Every secondary action from a row menu opens one of these — no window.prompt/
@@ -62,7 +64,7 @@ export interface PaymentRow {
   createdAt: string;
   updatedAt: string;
   authorisations?: Array<{ adminId: string; action: string; reason?: string | null; createdAt: string }>;
-  receipt?: { bankReferenceNumber: string } | null;
+  receipt?: { bankReferenceNumber: string; generatedAt?: string | null } | null;
   failedTransactions?: Array<{ errorLog: string; resolution?: string | null; resolvedAt?: string | null; createdAt: string }>;
 }
 
@@ -82,13 +84,30 @@ export const hasBankDetails = (pc: PaymentRow) =>
 export const isReadyToInitiate = (pc: PaymentRow) => {
   const norm = normalizePaymentStatus(pc.status);
   return (
-    (norm === 'Offer Accepted' || norm === 'Approved' || norm === 'Bank Details Submitted') &&
+    (norm === 'Ready to Initiate' || norm === 'Bank Details Submitted') &&
     hasBankDetails(pc)
   );
 };
 
-export const initiatorOf = (pc: PaymentRow) =>
-  pc.authorisations?.find((a) => a.action === 'initiate')?.adminId ?? null;
+export const formatAdminDisplay = (adminId?: string | null, adminName?: string | null): string => {
+  if (adminName && adminName.trim()) return adminName;
+  if (!adminId) return 'Gov Admin 1';
+  if (/^Gov(ernment)?\s*Admin/i.test(adminId)) return adminId;
+  const gaMatch = adminId.match(/^ga(\d+)/i);
+  if (gaMatch) return `Gov Admin ${gaMatch[1]}`;
+  const emailMatch = adminId.match(/^ga(\d+)@/i);
+  if (emailMatch) return `Gov Admin ${emailMatch[1]}`;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(adminId)) {
+    return 'Gov Admin 1';
+  }
+  return adminId;
+};
+
+export const initiatorOf = (pc: PaymentRow) => {
+  const auth = pc.authorisations?.find((a) => a.action === 'initiate');
+  if (!auth) return null;
+  return formatAdminDisplay(auth.adminId, (auth as any).adminName);
+};
 
 export const signersOf = (pc: PaymentRow) =>
   pc.authorisations?.filter((a) => a.action === 'authorise').map((a) => a.adminId) ?? [];
@@ -114,7 +133,7 @@ export const isAuthoriseable = (pc: PaymentRow, adminId: string) => {
   );
 };
 
-export const fmtAmount = (v: string | number) => `RM ${Number(v || 0).toLocaleString('en-MY')}`;
+export const fmtAmount = (v: string | number) => `RM ${Number(v || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const maskAccount = (n?: string | null) =>
   n && n.length > 4 ? `•••• ${n.slice(-4)}` : n || '—';
@@ -125,13 +144,17 @@ export const maskMyKad = (n?: string | null) =>
 export const fmtDate = (d?: string | null) =>
   d ? new Date(d).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
-export const paymentBadge = (status: string) => {
+export const paymentBadge = (status: string, currentSigs?: number, requiredSigs?: number) => {
   const s = normalizePaymentStatus(status);
-  const cls = paymentStatusClassMap[s] ?? 'pending';
+  const cls = paymentStatusClassMap[s] ?? 'status-pending-approval';
+  let label = s;
+  if (s === 'Pending Approval') {
+    label = `Pending Approval (${currentSigs || 0}/${requiredSigs || 1})`;
+  }
   return (
     <span className={`payment-badge ${cls}`}>
       <span className="dot" />
-      {s}
+      {label}
     </span>
   );
 };
@@ -185,25 +208,28 @@ export const ViewDetailsModal: React.FC<{
     }
 
     switch (norm) {
-      case 'Offer Accepted':
-      case 'Bank Details Submitted':
-        if (!hasBankDetails(pc)) {
-          return (
-            <Button
-              size="md"
-              variant="filled"
-              disabled
-              title="Awaiting beneficiary bank details before transfer can be initiated"
-            >
-              <Send size={15} />
-              <span>Initiate Transfer</span>
-            </Button>
-          );
-        }
+      case 'Bank Details Pending':
+      case 'New Bank Details Pending':
         return (
           <Button
             size="md"
             variant="filled"
+            disabled
+            title="Awaiting beneficiary bank details submission before transfer can be initiated"
+          >
+            <Send size={15} />
+            <span>Initiate Transfer</span>
+          </Button>
+        );
+
+      case 'Ready to Initiate':
+      case 'Bank Details Submitted':
+        return (
+          <Button
+            size="md"
+            variant="filled"
+            disabled={!hasBankDetails(pc)}
+            title={!hasBankDetails(pc) ? 'Awaiting beneficiary bank details before transfer can be initiated' : undefined}
             onClick={() => {
               onClose();
               onAction?.('initiate', pc);
@@ -214,6 +240,7 @@ export const ViewDetailsModal: React.FC<{
           </Button>
         );
 
+      case 'Pending Approval':
       case 'Transfer Initiated':
       case 'Authorised':
         if (left > 0 && !signed) {
@@ -250,10 +277,11 @@ export const ViewDetailsModal: React.FC<{
               variant="tonal"
               size="md"
               disabled
+              className="opacity-50 cursor-not-allowed"
               title="You cannot authorise a transfer you initiated or previously signed (Segregation of Duties)"
             >
               <Lock size={15} />
-              <span>Self-Signed</span>
+              <span>Authorise (Already Signed)</span>
             </Button>
           );
         }
@@ -275,6 +303,30 @@ export const ViewDetailsModal: React.FC<{
         }
         return null;
 
+      case 'Bank Approval Pending':
+      case 'Waiting Bank Approval':
+        return (
+          <div className="flex items-center gap-2 text-xs text-md-on-surface-variant italic">
+            <Clock size={14} className="text-md-primary" />
+            <span>Awaiting bank clearance</span>
+          </div>
+        );
+
+      case 'Transfer Rejected':
+      case 'Cancelled':
+        return (
+          <Button
+            variant="filled"
+            size="md"
+            onClick={() => {
+              onClose();
+              onAction?.('request-update', pc);
+            }}
+          >
+            <span>Request New Bank Details</span>
+          </Button>
+        );
+
       case 'Transfer Failed':
         return (
           <div className="flex items-center gap-2">
@@ -283,25 +335,73 @@ export const ViewDetailsModal: React.FC<{
               size="md"
               onClick={() => {
                 onClose();
-                onAction?.('request-update', pc);
+                onAction?.('schedule', pc);
               }}
             >
-              <span>Request Details Update</span>
+              <span>Schedule Tomorrow</span>
             </Button>
             <Button
               variant="filled"
               size="md"
               onClick={() => {
                 onClose();
-                onAction?.('retry', pc);
+                onAction?.('request-update', pc);
               }}
             >
-              <RotateCcw size={15} />
-              <span>Retry Transfer</span>
+              <span>Request New Bank Details</span>
             </Button>
           </div>
         );
 
+      case 'Transfer Succeed': {
+        const transferDate = pc.receipt?.generatedAt || pc.updatedAt || pc.createdAt;
+        const daysElapsed = transferDate
+          ? Math.floor((Date.now() - new Date(transferDate).getTime()) / (1000 * 60 * 60 * 24))
+          : 0;
+        const isEligible = daysElapsed >= 7;
+
+        return (
+          <div className="flex flex-col items-end gap-1.5">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="filled"
+                size="md"
+                disabled={!isEligible}
+                className={!isEligible ? '!opacity-50 !cursor-not-allowed' : '!bg-emerald-600 !text-white hover:!bg-emerald-700'}
+                onClick={async () => {
+                  try {
+                    await paymentApi.confirmReceipt({ caseId: pc.caseId, isAutoOrAdminOverride: true });
+                    notify({
+                      type: 'success',
+                      title: 'Payment Confirmed',
+                      message: `Case ${pc.caseId} marked as Paid. Now eligible for blockchain publishing.`,
+                    });
+                    onClose();
+                    onAction?.('confirm-receipt', pc);
+                  } catch (err: unknown) {
+                    const e = err as Error;
+                    notify({
+                      type: 'error',
+                      title: 'Confirmation Failed',
+                      message: e.message || 'Could not mark payment as Paid.',
+                    });
+                  }
+                }}
+              >
+                <CheckCircle2 size={15} />
+                <span>Confirm Receipt (Mark Paid)</span>
+              </Button>
+            </div>
+            {!isEligible && (
+              <span className="text-[11px] text-md-on-surface-variant font-medium">
+                Member confirmation window active. Admin manual confirmation unlocks in {7 - daysElapsed} day(s) (7-day rule).
+              </span>
+            )}
+          </div>
+        );
+      }
+
+      case 'Disputed':
       case 'Payment Disputed':
         return (
           <Button
@@ -400,7 +500,7 @@ export const ViewDetailsModal: React.FC<{
           <div className="payment-detail-grid">
             <div className="payment-detail-item">
               <div className="label">Payment ID</div>
-              <div className="value mono text-md-primary font-bold">{pc.paymentId || `PMT-${pc.caseId}`}</div>
+              <div className="value mono font-mono text-md-primary font-bold">{pc.paymentId || `PMT-${pc.caseId}`}</div>
             </div>
             <div className="payment-detail-item">
               <div className="label">Beneficiary</div>
@@ -408,19 +508,27 @@ export const ViewDetailsModal: React.FC<{
             </div>
             <div className="payment-detail-item">
               <div className="label">MyKad</div>
-              <div className="value mono">{maskMyKad(pc.myKadNumber)}</div>
+              <div className="value mono font-mono">{maskMyKad(pc.myKadNumber)}</div>
             </div>
             <div className="payment-detail-item">
               <div className="label">Phone</div>
-              <div className="value mono">{pc.phoneNumber || '—'}</div>
+              <div className="value mono font-mono">{pc.phoneNumber || '—'}</div>
             </div>
             <div className="payment-detail-item">
               <div className="label">Bank</div>
-              <div className="value">{pc.bankName || '—'}</div>
+              <div className="value">
+                {norm === 'Bank Details Pending' || norm === 'New Bank Details Pending'
+                  ? 'Awaiting Submission'
+                  : pc.bankName || '—'}
+              </div>
             </div>
             <div className="payment-detail-item">
               <div className="label">Account</div>
-              <div className="value mono">{maskAccount(pc.accountNumber)}</div>
+              <div className="value mono font-mono">
+                {norm === 'Bank Details Pending' || norm === 'New Bank Details Pending'
+                  ? 'Awaiting Submission'
+                  : maskAccount(pc.accountNumber)}
+              </div>
             </div>
             <div className="payment-detail-item">
               <div className="label">Award Amount</div>
@@ -428,11 +536,10 @@ export const ViewDetailsModal: React.FC<{
             </div>
             <div className="payment-detail-item">
               <div className="label">Payment Status</div>
-              <div className="value">{paymentBadge(norm)}</div>
+              <div className="value">{paymentBadge(norm, pc.currentSignatures, pc.requiredSignatures)}</div>
             </div>
           </div>
         </div>
-
         {/* Multi-Sig / Approvals */}
         <div>
           <div className="label" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--md-on-surface-variant)', marginBottom: 8 }}>
@@ -446,10 +553,10 @@ export const ViewDetailsModal: React.FC<{
               <div key={i} className="flex items-start justify-between gap-3 text-xs bg-md-surface-container-low rounded-xl px-4 py-2.5 border border-md-outline/10">
                 <div>
                   <span className="font-semibold text-md-on-surface capitalize">{a.action}</span>
-                  <span className="text-md-on-surface-variant"> · {a.adminId}</span>
+                  <span className="text-md-on-surface-variant font-medium text-[11px]"> · {formatAdminDisplay(a.adminId, (a as any).adminName)}</span>
                 </div>
                 <div className="text-right">
-                  <div className="text-xs text-md-on-surface-variant">{fmtDate(a.createdAt)}</div>
+                  <div className="text-xs text-md-on-surface-variant font-mono">{fmtDate(a.createdAt)}</div>
                   {a.reason && <div className="text-xs text-md-on-surface-variant italic">{a.reason}</div>}
                 </div>
               </div>
@@ -785,8 +892,9 @@ export const AuthoriseTransferModal: React.FC<MutatingModalProps> = ({ pc, onClo
             <div className="space-y-1 text-sm text-md-on-surface-variant">
               {pc.authorisations?.map((a, i) => (
                 <div key={i} className="flex items-center gap-2">
-                  <CheckCircle2 size={14} className="text-md-success" />
-                  {a.adminId} — <span className="capitalize">{a.action}</span>
+                  <CheckCircle2 size={14} className="text-md-success shrink-0" />
+                  <span className="font-medium text-md-on-surface">{formatAdminDisplay(a.adminId, (a as any).adminName)}</span>
+                  <span>— <span className="capitalize">{a.action}</span></span>
                 </div>
               ))}
               {!pc.authorisations?.length && <p>No signatures recorded yet.</p>}
@@ -826,60 +934,7 @@ export const AuthoriseTransferModal: React.FC<MutatingModalProps> = ({ pc, onClo
   );
 };
 
-/* ------------------------------- Reject Transfer ------------------------------- */
-
-export const RejectTransferModal: React.FC<MutatingModalProps> = ({ pc, onClose, onDone }) => {
-  const { identityId } = useAdminIdentity();
-  const { loading, setLoading, notify } = useMutationState();
-  const [reason, setReason] = useState('');
-
-  const confirm = async () => {
-    if (!pc || !reason.trim()) return;
-    setLoading(true);
-    try {
-      await paymentApi.reject({ caseId: pc.caseId, adminId: identityId, reason: reason.trim() });
-      notify({ type: 'success', title: 'Transfer rejected', message: `Case ${pc.caseId} → Transfer Rejected.` });
-      setReason('');
-      onClose();
-      onDone();
-    } catch (e: any) {
-      notify({ type: 'error', title: 'Reject failed', message: e.message });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <Modal
-      isOpen={Boolean(pc)}
-      onClose={onClose}
-      title="Reject Transfer"
-      subtitle={pc ? `Case ${pc.caseId} · ${fmtAmount(pc.amount)}` : ''}
-      cancelText="Cancel"
-      confirmText="Reject Transfer"
-      confirmVariant="danger"
-      confirmLoading={loading}
-      onConfirm={confirm}
-    >
-      {pc && (
-        <div className="space-y-4">
-          <div className="payment-detail-item">
-            <div className="label">Record</div>
-            <div className="value">{pc.accountHolderName || pc.beneficiaryId} · {fmtAmount(pc.amount)}</div>
-          </div>
-          <Textarea
-            label="Rejection reason (required)"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Explain why this transfer is being rejected…"
-          />
-        </div>
-      )}
-    </Modal>
-  );
-};
-
-/* ------------------------------- Cancel Payment ------------------------------- */
+/* ------------------------------- Cancellation / Rejection Reasons ------------------------------- */
 
 export const CANCELLATION_REASONS = [
   {
@@ -909,6 +964,76 @@ export const CANCELLATION_REASONS = [
   },
 ];
 
+/* ------------------------------- Reject Transfer ------------------------------- */
+
+export const RejectTransferModal: React.FC<MutatingModalProps> = ({ pc, onClose, onDone }) => {
+  const { identityId } = useAdminIdentity();
+  const { loading, setLoading, notify } = useMutationState();
+  const [selectedReason, setSelectedReason] = useState('');
+
+  const selectedOption = CANCELLATION_REASONS.find((r) => r.value === selectedReason);
+
+  const confirm = async () => {
+    if (!pc || !selectedReason) return;
+    setLoading(true);
+    try {
+      await paymentApi.reject({ caseId: pc.caseId, adminId: identityId, reason: selectedReason });
+      notify({ type: 'success', title: 'Transfer rejected', message: `Case ${pc.caseId} → Transfer Rejected.` });
+      setSelectedReason('');
+      onClose();
+      onDone();
+    } catch (e: any) {
+      notify({ type: 'error', title: 'Reject failed', message: e.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal
+      isOpen={Boolean(pc)}
+      onClose={onClose}
+      title="Reject Transfer"
+      subtitle={pc ? `Case ${pc.caseId} · ${fmtAmount(pc.amount)}` : ''}
+      cancelText="Cancel"
+      confirmText="Reject Transfer"
+      confirmVariant="danger"
+      confirmLoading={loading}
+      confirmDisabled={!selectedReason}
+      onConfirm={selectedReason ? confirm : undefined}
+    >
+      {pc && (
+        <div className="space-y-4">
+          <div className="payment-detail-item">
+            <div className="label">Record</div>
+            <div className="value">{pc.accountHolderName || pc.beneficiaryId} · {fmtAmount(pc.amount)}</div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-md-on-surface flex items-center gap-1">
+              <span>Standardized Rejection Reason (Required)</span>
+              <span className="text-md-error">*</span>
+            </label>
+            <Select
+              label="Rejection Reason"
+              placeholder="Select an approved rejection reason…"
+              options={CANCELLATION_REASONS.map((r) => ({ value: r.value, label: r.label }))}
+              value={selectedReason}
+              onChange={(val) => setSelectedReason(val)}
+            />
+            {selectedOption && (
+              <div className="text-xs bg-md-surface-container-highest rounded-lg px-3 py-2 text-md-on-surface-variant flex items-center gap-1.5">
+                <span className="font-semibold text-md-on-surface">Recommended SOP:</span>
+                <span>{selectedOption.solution}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+};
+
+/* ------------------------------- Cancel Payment ------------------------------- */
 export const CancelPaymentModal: React.FC<MutatingModalProps> = ({ pc, onClose, onDone }) => {
   const { identityId } = useAdminIdentity();
   const { loading, setLoading, notify } = useMutationState();
@@ -953,6 +1078,7 @@ export const CancelPaymentModal: React.FC<MutatingModalProps> = ({ pc, onClose, 
       confirmText="Confirm Cancel Payment"
       confirmVariant="danger"
       confirmLoading={loading}
+      confirmDisabled={!isConfirmed}
       onConfirm={isConfirmed ? confirm : undefined}
     >
       {pc && (

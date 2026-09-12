@@ -7,6 +7,7 @@ import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
+import { CopyButton } from '../../components/ui/CopyButton';
 import { Pagination } from '../../components/ui/Pagination';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { useAuth } from '../../context/AuthContext';
@@ -221,21 +222,20 @@ export default function PaymentDashboard() {
                 <th style={{ width: '150px' }}>Bank</th>
                 <th style={{ width: '130px' }}>Amount</th>
                 <th style={{ width: '150px' }}>Date &amp; Time</th>
-                <th style={{ width: '85px', textAlign: 'center' }}>Approval</th>
-                <th style={{ width: '160px' }}>Status</th>
+                <th style={{ width: '180px' }}>Status</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="text-center text-gray-500 py-8">
+                  <td colSpan={7} className="text-center text-gray-500 py-8">
                     <Loader2 size={22} className="inline animate-spin" />
                     <span className="ml-2">Loading payment records…</span>
                   </td>
                 </tr>
               ) : pageRows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center text-gray-500 py-8">
+                  <td colSpan={7} className="text-center text-gray-500 py-8">
                     {error ? 'Failed to load data.' : 'No payment records match your filters.'}
                   </td>
                 </tr>
@@ -247,21 +247,32 @@ export default function PaymentDashboard() {
                   return (
                     <tr key={pc.caseId} className="row-clickable" onClick={openView}>
                       <td>
-                        <span className="font-mono font-bold text-xs text-md-primary">
-                          {paymentId}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-bold text-xs text-md-primary">
+                            {paymentId}
+                          </span>
+                          <CopyButton value={paymentId} title="Copy Payment ID" />
+                        </div>
                       </td>
                       <td><CaseIdCell caseId={pc.caseId} onClick={(cid) => setCaseDetailsId(cid)} /></td>
                       <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
                       <td>
-                        {pc.bankName && pc.accountNumber ? `${pc.bankName} ${maskAccount(pc.accountNumber)}` : '—'}
+                        {detailed.paymentStatus !== 'Bank Details Pending' &&
+                        detailed.paymentStatus !== 'New Bank Details Pending' &&
+                        pc.bankName &&
+                        pc.accountNumber ? (
+                          <div className="flex items-center gap-1.5">
+                            <span>{pc.bankName}</span>
+                            <span className="font-mono text-xs text-md-on-surface-variant">{maskAccount(pc.accountNumber)}</span>
+                            <CopyButton value={pc.accountNumber} title="Copy Account Number" />
+                          </div>
+                        ) : (
+                          '—'
+                        )}
                       </td>
-                      <td style={{ fontWeight: 600 }}>{fmtAmount(pc.amount)}</td>
-                      <td><span className="meta-text">{fmtDate(pc.updatedAt || pc.createdAt)}</span></td>
-                      <td style={{ textAlign: 'center' }}>
-                        <span className="meta-text">{pc.currentSignatures}/{pc.requiredSignatures || 1}</span>
-                      </td>
-                      <td>{paymentBadge(detailed.paymentStatus)}</td>
+                      <td className="font-semibold">{fmtAmount(pc.amount)}</td>
+                      <td><span className="meta-text font-mono text-xs">{fmtDate(pc.updatedAt || pc.createdAt)}</span></td>
+                      <td>{paymentBadge(detailed.paymentStatus, pc.currentSignatures, pc.requiredSignatures)}</td>
                     </tr>
                   );
                 })

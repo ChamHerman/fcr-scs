@@ -6,106 +6,160 @@
 
 export const PAYMENT_STATUSES = [
   'All',
-  'Offer Accepted',
   'Bank Details Pending',
   'Ready to Initiate',
-  'Bank Details Submitted',
-  'Transfer Initiated',
-  'Authorised',
-  'Waiting Bank Approval',
-  'Paid',
-  'Transfer Failed',
+  'Pending Approval',
+  'Bank Approval Pending',
+  'Transfer Succeed',
   'Transfer Rejected',
+  'Transfer Failed',
+  'Disputed',
+  'Paid',
   'Cancelled',
-  'Payment Disputed',
   'Scheduled',
-  'Pending New Bank Details',
+  'New Bank Details Pending',
 ];
 
 /** Normalise any backend/seed variant to the canonical display name. */
 export function normalizePaymentStatus(status: string): string {
-  if (!status) return 'Offer Accepted';
-  if (status === 'Failed' || status === 'FAILED' || status === 'TRANSFER_FAILED') return 'Transfer Failed';
-  if (status === 'CANCEL' || status === 'CANCELLED' || status === 'Cancelled' || status === 'cancelled') return 'Cancelled';
-  if (status === 'offer_accepted' || status === 'OFFER_ACCEPTED') return 'Offer Accepted';
-  if (status === 'BANK_DETAILS_SUBMITTED') return 'Bank Details Submitted';
-  if (status === 'TRANSFER_INITIATED') return 'Transfer Initiated';
-  if (status === 'AUTHORISED') return 'Authorised';
-  if (status === 'WAITING_BANK_APPROVAL' || status === 'waiting_bank_approval') return 'Waiting Bank Approval';
-  if (status === 'PAID' || status === 'Confirmed') return 'Paid';
-  if (status === 'TRANSFER_REJECTED') return 'Transfer Rejected';
-  if (status === 'PAYMENT_DISPUTED') return 'Payment Disputed';
-  if (status === 'SCHEDULED') return 'Scheduled';
-  if (status === 'PENDING_NEW_BANK_DETAILS') return 'Pending New Bank Details';
-  if (status === 'Bank Details Pending') return 'Bank Details Pending';
-  if (status === 'Ready to Initiate') return 'Ready to Initiate';
-  if (status === 'Approved') return 'Offer Accepted';
+  if (!status) return 'Bank Details Pending';
+  if (status === 'BANK_DETAILS_PENDING' || status === 'Bank Details Pending') return 'Bank Details Pending';
+  if (status === 'READY_TO_INITIATE' || status === 'Ready to Initiate') return 'Ready to Initiate';
+  if (
+    status === 'PENDING_APPROVAL' ||
+    status === 'Pending Approval' ||
+    status === 'TRANSFER_INITIATED' ||
+    status === 'Transfer Initiated' ||
+    status === 'AUTHORISED' ||
+    status === 'Authorised'
+  )
+    return 'Pending Approval';
+  if (
+    status === 'BANK_APPROVAL_PENDING' ||
+    status === 'Bank Approval Pending' ||
+    status === 'WAITING_BANK_APPROVAL' ||
+    status === 'Waiting Bank Approval' ||
+    status === 'waiting_bank_approval'
+  )
+    return 'Bank Approval Pending';
+  if (status === 'TRANSFER_SUCCEED' || status === 'Transfer Succeed') return 'Transfer Succeed';
+  if (status === 'TRANSFER_REJECTED' || status === 'Transfer Rejected') return 'Transfer Rejected';
+  if (status === 'TRANSFER_FAILED' || status === 'Transfer Failed' || status === 'Failed' || status === 'FAILED')
+    return 'Transfer Failed';
+  if (status === 'DISPUTED' || status === 'Disputed' || status === 'PAYMENT_DISPUTED' || status === 'Payment Disputed')
+    return 'Disputed';
+  if (status === 'PAID' || status === 'Paid' || status === 'Confirmed') return 'Paid';
+  if (status === 'CANCELLED' || status === 'Cancelled' || status === 'CANCEL' || status === 'cancelled')
+    return 'Cancelled';
+  if (status === 'SCHEDULED' || status === 'Scheduled') return 'Scheduled';
+  if (
+    status === 'NEW_BANK_DETAILS_PENDING' ||
+    status === 'New Bank Details Pending' ||
+    status === 'PENDING_NEW_BANK_DETAILS' ||
+    status === 'Pending New Bank Details'
+  )
+    return 'New Bank Details Pending';
+
+  // Legacy fallbacks
+  if (status === 'OFFER_ACCEPTED' || status === 'offer_accepted' || status === 'Offer Accepted' || status === 'Approved')
+    return 'Bank Details Pending';
+  if (status === 'BANK_DETAILS_SUBMITTED' || status === 'Bank Details Submitted') return 'Ready to Initiate';
+
   return status;
 }
+
 export const paymentStatusLabelMap: Record<string, string> = {
   'Bank Details Pending': 'Bank Details Pending',
+  'BANK_DETAILS_PENDING': 'Bank Details Pending',
   'Ready to Initiate': 'Ready to Initiate',
-  'Offer Accepted': 'Offer Accepted',
-  'offer_accepted': 'Offer Accepted',
-  'OFFER_ACCEPTED': 'Offer Accepted',
-  'Bank Details Submitted': 'Bank Details Submitted',
-  'BANK_DETAILS_SUBMITTED': 'Bank Details Submitted',
-  'Transfer Initiated': 'Transfer Initiated',
-  'TRANSFER_INITIATED': 'Transfer Initiated',
-  'Authorised': 'Authorised',
-  'AUTHORISED': 'Authorised',
-  'Waiting Bank Approval': 'Waiting Bank Approval',
-  'WAITING_BANK_APPROVAL': 'Waiting Bank Approval',
-  'Paid': 'Paid',
-  'PAID': 'Paid',
-  'Confirmed': 'Paid',
-  'Transfer Failed': 'Transfer Failed',
-  'TRANSFER_FAILED': 'Transfer Failed',
-  'Failed': 'Transfer Failed',
+  'READY_TO_INITIATE': 'Ready to Initiate',
+  'Pending Approval': 'Pending Approval',
+  'PENDING_APPROVAL': 'Pending Approval',
+  'Bank Approval Pending': 'Bank Approval Pending',
+  'BANK_APPROVAL_PENDING': 'Bank Approval Pending',
+  'Transfer Succeed': 'Transfer Succeed',
+  'TRANSFER_SUCCEED': 'Transfer Succeed',
   'Transfer Rejected': 'Transfer Rejected',
   'TRANSFER_REJECTED': 'Transfer Rejected',
+  'Transfer Failed': 'Transfer Failed',
+  'TRANSFER_FAILED': 'Transfer Failed',
+  'Disputed': 'Disputed',
+  'DISPUTED': 'Disputed',
+  'Paid': 'Paid',
+  'PAID': 'Paid',
   'Cancelled': 'Cancelled',
   'CANCELLED': 'Cancelled',
-  'Payment Disputed': 'Payment Disputed',
-  'PAYMENT_DISPUTED': 'Payment Disputed',
   'Scheduled': 'Scheduled',
   'SCHEDULED': 'Scheduled',
-  'Pending New Bank Details': 'Pending New Bank Details',
-  'PENDING_NEW_BANK_DETAILS': 'Pending New Bank Details',
-  'Approved': 'Offer Accepted',
+  'New Bank Details Pending': 'New Bank Details Pending',
+  'NEW_BANK_DETAILS_PENDING': 'New Bank Details Pending',
+  // Legacy mappings
+  'Offer Accepted': 'Bank Details Pending',
+  'offer_accepted': 'Bank Details Pending',
+  'OFFER_ACCEPTED': 'Bank Details Pending',
+  'Approved': 'Bank Details Pending',
+  'Bank Details Submitted': 'Ready to Initiate',
+  'BANK_DETAILS_SUBMITTED': 'Ready to Initiate',
+  'Transfer Initiated': 'Pending Approval',
+  'TRANSFER_INITIATED': 'Pending Approval',
+  'Authorised': 'Pending Approval',
+  'AUTHORISED': 'Pending Approval',
+  'Waiting Bank Approval': 'Bank Approval Pending',
+  'WAITING_BANK_APPROVAL': 'Bank Approval Pending',
+  'Payment Disputed': 'Disputed',
+  'PAYMENT_DISPUTED': 'Disputed',
+  'Pending New Bank Details': 'New Bank Details Pending',
+  'PENDING_NEW_BANK_DETAILS': 'New Bank Details Pending',
+  'Confirmed': 'Paid',
+  'Failed': 'Transfer Failed',
 };
+
 export const paymentStatusClassMap: Record<string, string> = {
   'Bank Details Pending': 'status-bank-details-pending',
-  'Ready to Initiate': 'status-ready-initiate',
-  'Offer Accepted': 'status-offer-accepted',
-  'offer_accepted': 'status-offer-accepted',
-  'OFFER_ACCEPTED': 'status-offer-accepted',
-  'Approved': 'status-offer-accepted',
-  'Bank Details Submitted': 'status-bank-submitted',
-  'BANK_DETAILS_SUBMITTED': 'status-bank-submitted',
-  'Transfer Initiated': 'status-transfer-initiated',
-  'TRANSFER_INITIATED': 'status-transfer-initiated',
-  'Authorised': 'status-authorised',
-  'AUTHORISED': 'status-authorised',
-  'Waiting Bank Approval': 'status-waiting-bank',
-  'WAITING_BANK_APPROVAL': 'status-waiting-bank',
-  'Paid': 'status-paid',
-  'PAID': 'status-paid',
-  'Confirmed': 'status-paid',
-  'Transfer Failed': 'status-transfer-failed',
-  'TRANSFER_FAILED': 'status-transfer-failed',
-  'Failed': 'status-transfer-failed',
+  'BANK_DETAILS_PENDING': 'status-bank-details-pending',
+  'Ready to Initiate': 'status-ready-to-initiate',
+  'READY_TO_INITIATE': 'status-ready-to-initiate',
+  'Pending Approval': 'status-pending-approval',
+  'PENDING_APPROVAL': 'status-pending-approval',
+  'Bank Approval Pending': 'status-bank-approval-pending',
+  'BANK_APPROVAL_PENDING': 'status-bank-approval-pending',
+  'Transfer Succeed': 'status-transfer-succeed',
+  'TRANSFER_SUCCEED': 'status-transfer-succeed',
   'Transfer Rejected': 'status-transfer-rejected',
   'TRANSFER_REJECTED': 'status-transfer-rejected',
+  'Transfer Failed': 'status-transfer-failed',
+  'TRANSFER_FAILED': 'status-transfer-failed',
+  'Disputed': 'status-disputed',
+  'DISPUTED': 'status-disputed',
+  'Paid': 'status-paid',
+  'PAID': 'status-paid',
   'Cancelled': 'status-cancelled',
   'CANCELLED': 'status-cancelled',
-  'Payment Disputed': 'status-payment-disputed',
-  'PAYMENT_DISPUTED': 'status-payment-disputed',
   'Scheduled': 'status-scheduled',
   'SCHEDULED': 'status-scheduled',
-  'Pending New Bank Details': 'status-pending-details',
-  'PENDING_NEW_BANK_DETAILS': 'status-pending-details',
+  'New Bank Details Pending': 'status-new-bank-details-pending',
+  'NEW_BANK_DETAILS_PENDING': 'status-new-bank-details-pending',
+  // Legacy class mappings
+  'Offer Accepted': 'status-bank-details-pending',
+  'offer_accepted': 'status-bank-details-pending',
+  'OFFER_ACCEPTED': 'status-bank-details-pending',
+  'Approved': 'status-bank-details-pending',
+  'Bank Details Submitted': 'status-ready-to-initiate',
+  'BANK_DETAILS_SUBMITTED': 'status-ready-to-initiate',
+  'Transfer Initiated': 'status-pending-approval',
+  'TRANSFER_INITIATED': 'status-pending-approval',
+  'Authorised': 'status-pending-approval',
+  'AUTHORISED': 'status-pending-approval',
+  'Waiting Bank Approval': 'status-bank-approval-pending',
+  'WAITING_BANK_APPROVAL': 'status-bank-approval-pending',
+  'Payment Disputed': 'status-disputed',
+  'PAYMENT_DISPUTED': 'status-disputed',
+  'Pending New Bank Details': 'status-new-bank-details-pending',
+  'PENDING_NEW_BANK_DETAILS': 'status-new-bank-details-pending',
+  'Confirmed': 'status-paid',
+  'Failed': 'status-transfer-failed',
 };
+
 export interface DetailedPaymentStatus {
   caseStatus: string;
   paymentStatus: string;
@@ -122,19 +176,17 @@ export function getDetailedPaymentStatus(pc: {
   accountNumber?: string | null;
 }): DetailedPaymentStatus {
   const norm = normalizePaymentStatus(pc.status);
-  const hasBank = Boolean(pc.bankName && pc.accountNumber && pc.accountNumber.trim().length > 0);
-
-  const caseStatus =
-    norm === 'Offer Accepted' || norm === 'Bank Details Submitted' || norm === 'Bank Details Pending' || norm === 'Ready to Initiate'
-      ? 'Offer Accepted'
-      : norm;
 
   let paymentStatus = norm;
-  if (norm === 'Offer Accepted' || norm === 'Bank Details Submitted') {
-    paymentStatus = hasBank ? 'Ready to Initiate' : 'Bank Details Pending';
-  } else if (norm === 'Bank Details Pending' || norm === 'Ready to Initiate') {
-    paymentStatus = norm;
+  if (norm === 'Bank Details Pending') {
+    paymentStatus = 'Bank Details Pending';
+  } else if (norm === 'Ready to Initiate') {
+    paymentStatus = 'Ready to Initiate';
   }
+  const caseStatus =
+    paymentStatus === 'Bank Details Pending' || paymentStatus === 'Ready to Initiate'
+      ? 'Offer Accepted'
+      : paymentStatus;
 
   return { caseStatus, paymentStatus };
 }
@@ -162,3 +214,165 @@ export const blockchainStatusClassMap: Record<string, string> = {
   'Replacement': 'status-replacement',
   'REPLACEMENT': 'status-replacement',
 };
+
+export interface MemberDisplayStatus {
+  label: string;
+  badgeClass: string;
+  stepIndex: number;
+}
+
+/**
+ * Member-Facing Status Normalizer (PLAN_HM_1308 §2).
+ * Maps internal GA operational statuses to clean claimant milestone statuses.
+ */
+export function getMemberDisplayStatus(status: string): MemberDisplayStatus {
+  if (!status) {
+    return {
+      label: 'Bank Details Pending',
+      badgeClass: 'status-bank-details-pending',
+      stepIndex: 1,
+    };
+  }
+
+  const s = status.trim();
+
+  // 1. Bank Details Pending
+  if (
+    s === 'BANK_DETAILS_PENDING' ||
+    s === 'Bank Details Pending' ||
+    s === 'Offer Accepted' ||
+    s === 'offer_accepted' ||
+    s === 'OFFER_ACCEPTED' ||
+    s === 'Approved'
+  ) {
+    return {
+      label: 'Bank Details Pending',
+      badgeClass: 'status-bank-details-pending',
+      stepIndex: 1,
+    };
+  }
+
+  // 2. New Bank Details Pending
+  if (
+    s === 'NEW_BANK_DETAILS_PENDING' ||
+    s === 'New Bank Details Pending' ||
+    s === 'PENDING_NEW_BANK_DETAILS' ||
+    s === 'Pending New Bank Details'
+  ) {
+    return {
+      label: 'New Bank Details Pending',
+      badgeClass: 'status-new-bank-details-pending',
+      stepIndex: 1,
+    };
+  }
+
+  // 3. Payment In Progress (Internal GA operational statuses mapped cleanly for claimants)
+  if (
+    s === 'READY_TO_INITIATE' ||
+    s === 'Ready to Initiate' ||
+    s === 'Ready To Initiate' ||
+    s === 'BANK_DETAILS_SUBMITTED' ||
+    s === 'Bank Details Submitted' ||
+    s === 'PENDING_APPROVAL' ||
+    s === 'Pending Approval' ||
+    s === 'TRANSFER_INITIATED' ||
+    s === 'Transfer Initiated' ||
+    s === 'AUTHORISED' ||
+    s === 'Authorised' ||
+    s === 'BANK_APPROVAL_PENDING' ||
+    s === 'Bank Approval Pending' ||
+    s === 'WAITING_BANK_APPROVAL' ||
+    s === 'Waiting Bank Approval' ||
+    s === 'waiting_bank_approval' ||
+    s === 'SCHEDULED' ||
+    s === 'Scheduled' ||
+    s === 'Payment In Progress' ||
+    s === 'PAYMENT_IN_PROGRESS'
+  ) {
+    return {
+      label: 'Payment In Progress',
+      badgeClass: 'status-transfer-initiated',
+      stepIndex: 3,
+    };
+  }
+
+  // 4. Payment Completed (Transfer clearance succeed, awaiting member confirmation)
+  if (
+    s === 'TRANSFER_SUCCEED' ||
+    s === 'Transfer Succeed' ||
+    s === 'Payment Completed' ||
+    s === 'PAYMENT_COMPLETED'
+  ) {
+    return {
+      label: 'Payment Completed',
+      badgeClass: 'status-transfer-succeed',
+      stepIndex: 4,
+    };
+  }
+
+  // 5. Paid (Final Confirmed)
+  if (s === 'PAID' || s === 'Paid' || s === 'Confirmed') {
+    return {
+      label: 'Paid',
+      badgeClass: 'status-paid',
+      stepIndex: 5,
+    };
+  }
+
+  // 6. Disputed
+  if (
+    s === 'DISPUTED' ||
+    s === 'Disputed' ||
+    s === 'PAYMENT_DISPUTED' ||
+    s === 'Payment Disputed'
+  ) {
+    return {
+      label: 'Payment Disputed',
+      badgeClass: 'status-disputed',
+      stepIndex: 4,
+    };
+  }
+
+  // 7. Transfer Rejected
+  if (s === 'TRANSFER_REJECTED' || s === 'Transfer Rejected') {
+    return {
+      label: 'Transfer Rejected',
+      badgeClass: 'status-transfer-rejected',
+      stepIndex: 1,
+    };
+  }
+
+  // 8. Transfer Failed
+  if (
+    s === 'TRANSFER_FAILED' ||
+    s === 'Transfer Failed' ||
+    s === 'Failed' ||
+    s === 'FAILED'
+  ) {
+    return {
+      label: 'Transfer Failed',
+      badgeClass: 'status-transfer-failed',
+      stepIndex: 3,
+    };
+  }
+
+  // 9. Cancelled
+  if (
+    s === 'CANCELLED' ||
+    s === 'Cancelled' ||
+    s === 'CANCEL' ||
+    s === 'cancelled'
+  ) {
+    return {
+      label: 'Cancelled',
+      badgeClass: 'status-cancelled',
+      stepIndex: 1,
+    };
+  }
+
+  return {
+    label: s,
+    badgeClass: paymentStatusClassMap[s] || 'status-bank-details-pending',
+    stepIndex: 1,
+  };
+}

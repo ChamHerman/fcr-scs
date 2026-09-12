@@ -63,7 +63,7 @@ describe("POST /api/payments/cancel (RBAC & SOP Hardening)", () => {
   });
 
   it("403 when System Administrator attempts cancellation (view-only)", async () => {
-    await makeCase(PaymentStatus.OFFER_ACCEPTED);
+    await makeCase(PaymentStatus.BANK_DETAILS_PENDING);
     const r = await request(app)
       .post("/api/payments/cancel")
       .set("Authorization", `Bearer ${sysAdminToken}`)
@@ -108,7 +108,7 @@ describe("POST /api/payments/cancel (RBAC & SOP Hardening)", () => {
   });
 
   it("400 when the case is waiting for bank approval (the bank owns it)", async () => {
-    await makeCase(PaymentStatus.WAITING_BANK_APPROVAL);
+    await makeCase(PaymentStatus.BANK_APPROVAL_PENDING);
     const r = await request(app)
       .post("/api/payments/cancel")
       .set("Authorization", `Bearer ${gaToken}`)
@@ -117,8 +117,8 @@ describe("POST /api/payments/cancel (RBAC & SOP Hardening)", () => {
     expect(r.body.error).toMatch(/cancel/i);
   });
 
-  it("200 cancels an Offer Accepted case, writes audit row, creates FailedTransaction, status becomes CANCELLED", async () => {
-    await makeCase(PaymentStatus.OFFER_ACCEPTED);
+  it("200 cancels a Bank Details Pending case, writes audit row, creates FailedTransaction, status becomes CANCELLED", async () => {
+    await makeCase(PaymentStatus.BANK_DETAILS_PENDING);
     const r = await request(app)
       .post("/api/payments/cancel")
       .set("Authorization", `Bearer ${gaToken}`)

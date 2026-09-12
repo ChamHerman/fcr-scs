@@ -428,7 +428,7 @@ export const ValuationCreate: React.FC = () => {
           {/* Final Market Value */}
           <div className="flex justify-between items-center p-4 rounded-xl bg-md-surface-container-low border border-md-outline/15">
             <span className="text-sm font-semibold text-md-on-surface-variant">Final Market Value</span>
-            <span className="text-base font-bold text-md-on-surface font-mono">
+            <span className="text-base font-bold text-md-on-surface">
               {formatCurrencyRM(calculatedMarketTotal)}
             </span>
           </div>
@@ -438,7 +438,7 @@ export const ValuationCreate: React.FC = () => {
             <span className="text-sm font-semibold text-md-primary flex items-center gap-1.5">
               <Sparkles size={14} /> Final AI Prediction Value
             </span>
-            <span className="text-base font-bold text-md-primary font-mono">
+            <span className="text-base font-bold text-md-primary">
               {isCalculatingAi ? (
                 <span className="text-xs text-md-on-surface-variant flex items-center gap-1 font-sans font-normal">
                   <Loader2 size={13} className="animate-spin inline" /> Estimating...
@@ -454,7 +454,7 @@ export const ValuationCreate: React.FC = () => {
           {/* Final Recommended Value */}
           <div className="flex justify-between items-center p-4 rounded-xl bg-md-surface-container-low border border-green-500/30">
             <span className="text-sm font-semibold text-green-700 dark:text-green-400">Final Recommended Value</span>
-            <span className="text-base font-bold text-green-700 dark:text-green-400 font-mono">
+            <span className="text-base font-bold text-green-700 dark:text-green-400">
               {formatCurrencyRM(calculatedCompTotal)}
             </span>
           </div>

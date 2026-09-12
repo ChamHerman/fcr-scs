@@ -67,6 +67,201 @@ export function formatPaymentResponse<T extends { id: string; caseId: string }>(
     paymentId: pc.id,
   };
 }
+export async function enrichPaymentWithAdminNames<T extends { authorisations?: any[] }>(pc: T): Promise<T> {
+  if (!pc || !pc.authorisations || !Array.isArray(pc.authorisations) || pc.authorisations.length === 0) {
+    return pc;
+  }
+  try {
+    const adminUsers = await prisma.user.findMany({
+      select: { userId: true, name: true, email: true },
+    });
+    const userMap = new Map<string, string>();
+    for (const u of adminUsers) {
+      if (u.userId) userMap.set(u.userId.toLowerCase(), u.name);
+      if (u.email) userMap.set(u.email.toLowerCase(), u.name);
+      if (u.name) userMap.set(u.name.toLowerCase(), u.name);
+    }
+    const enrichedAuths = pc.authorisations.map((auth: any) => {
+      const key = String(auth.adminId || "").toLowerCase();
+      let adminName = userMap.get(key);
+      if (!adminName) {
+        const gaMatch = key.match(/^ga(\d+)/i);
+        if (gaMatch) {
+          adminName = `Gov Admin ${gaMatch[1]}`;
+        } else {
+          adminName = "Gov Admin 1";
+        }
+      }
+      return {
+        ...auth,
+        adminName,
+      };
+    });
+    return {
+      ...pc,
+      authorisations: enrichedAuths,
+    };
+  } catch {
+    return pc;
+  }
+}
+
+export interface SavedAccountRecord {
+  userId?: string;
+  bankName: string;
+  accountNumber: string;
+  accountHolderName: string;
+  phoneNumber: string;
+  myKadNumber: string;
+  verified: boolean;
+}
+
+export const profileSavedAccountsStore = new Map<string, SavedAccountRecord>();
+
+export async function validateAccountNumberUniqueness(
+  accountNumber: string,
+  myKadNumber: string,
+  opts?: {
+    currentCaseId?: string;
+    userId?: string;
+    userName?: string;
+  }
+): Promise<void> {
+  const cleanAccount = (accountNumber || "").replace(/[\s-]/g, "");
+  if (!cleanAccount) return;
+
+  const cleanMyKad = (myKadNumber || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  const cleanUserName = (opts?.userName || "").trim().toLowerCase();
+  const userId = opts?.userId;
+  const currentCaseId = opts?.currentCaseId;
+
+  // 1. Check existing PaymentCases
+  const existingCases = await prisma.paymentCase.findMany({
+    where: {
+      accountNumber: { not: null },
+      ...(currentCaseId ? { caseId: { not: currentCaseId } } : {}),
+    },
+  });
+
+  for (const pc of existingCases) {
+    const pcAcc = (pc.accountNumber || "").replace(/[\s-]/g, "");
+    if (pcAcc === cleanAccount) {
+      const pcMyKad = (pc.myKadNumber || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+      const pcHolder = (pc.accountHolderName || "").trim().toLowerCase();
+      const pcBeneficiary = pc.beneficiaryId;
+
+      let isOwnerMatch = false;
+      if (pc.caseId) {
+        const ac = await prisma.acquisitionCase.findUnique({
+          where: { caseId: pc.caseId },
+          include: {
+            landParcel: {
+              include: {
+                ownerships: {
+                  include: { landOwner: true },
+                },
+              },
+            },
+          },
+        });
+        const owners = ac?.landParcel?.ownerships?.map((o: any) => o.landOwner).filter(Boolean) || [];
+        isOwnerMatch = owners.some((ow: any) => {
+          const owIc = (ow.icNumber || ow.nric || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+          return (
+            (cleanMyKad && owIc === cleanMyKad) ||
+            (userId && ow.ownerId === userId) ||
+            (cleanUserName && ow.name && ow.name.trim().toLowerCase() === cleanUserName)
+          );
+        });
+      }
+
+      const isSameMember =
+        (cleanMyKad && pcMyKad && pcMyKad === cleanMyKad) ||
+        (userId && pcBeneficiary === userId) ||
+        (cleanUserName && pcHolder && pcHolder === cleanUserName) ||
+        isOwnerMatch;
+
+      if (!isSameMember) {
+        throw new Error(
+          "This bank account number is already registered by another beneficiary. Bank accounts must be unique to the registered MyKad holder."
+        );
+      }
+    }
+  }
+
+  // 2. Check ReceiverBankDetails
+  const existingBankDetails = await prisma.receiverBankDetails.findMany({
+    where: {
+      ...(currentCaseId ? { paymentCase: { caseId: { not: currentCaseId } } } : {}),
+    },
+    include: {
+      paymentCase: true,
+    },
+  });
+
+  for (const rbd of existingBankDetails) {
+    const rbdAcc = (rbd.accountNumber || "").replace(/[\s-]/g, "");
+    if (rbdAcc === cleanAccount) {
+      const rbdMyKad = (rbd.myKadNumber || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+      const rbdHolder = (rbd.accountHolderName || "").trim().toLowerCase();
+      const pcBeneficiary = rbd.paymentCase?.beneficiaryId;
+
+      let isOwnerMatch = false;
+      if (rbd.paymentCase?.caseId) {
+        const ac = await prisma.acquisitionCase.findUnique({
+          where: { caseId: rbd.paymentCase.caseId },
+          include: {
+            landParcel: {
+              include: {
+                ownerships: {
+                  include: { landOwner: true },
+                },
+              },
+            },
+          },
+        });
+        const owners = ac?.landParcel?.ownerships?.map((o: any) => o.landOwner).filter(Boolean) || [];
+        isOwnerMatch = owners.some((ow: any) => {
+          const owIc = (ow.icNumber || ow.nric || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+          return (
+            (cleanMyKad && owIc === cleanMyKad) ||
+            (userId && ow.ownerId === userId) ||
+            (cleanUserName && ow.name && ow.name.trim().toLowerCase() === cleanUserName)
+          );
+        });
+      }
+
+      const isSameMember =
+        (cleanMyKad && rbdMyKad && rbdMyKad === cleanMyKad) ||
+        (userId && pcBeneficiary === userId) ||
+        (cleanUserName && rbdHolder && rbdHolder === cleanUserName) ||
+        isOwnerMatch;
+
+      if (!isSameMember) {
+        throw new Error(
+          "This bank account number is already registered by another beneficiary. Bank accounts must be unique to the registered MyKad holder."
+        );
+      }
+    }
+  }
+
+  // 3. Check profileSavedAccountsStore
+  for (const record of profileSavedAccountsStore.values()) {
+    const recAcc = (record.accountNumber || "").replace(/[\s-]/g, "");
+    if (recAcc === cleanAccount) {
+      const recMyKad = (record.myKadNumber || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+      const recUser = record.userId;
+      const isSame =
+        (cleanMyKad && recMyKad && recMyKad === cleanMyKad) ||
+        (userId && recUser && recUser === userId);
+      if (!isSame) {
+        throw new Error(
+          "This bank account number is already registered by another beneficiary. Bank accounts must be unique to the registered MyKad holder."
+        );
+      }
+    }
+  }
+}
 
 export async function submitBankDetails(data: {
   caseId: string;
@@ -76,58 +271,111 @@ export async function submitBankDetails(data: {
   phoneNumber: string;
   myKadNumber: string;
 }) {
-  await bankService.validateBankAccount(data.bankName, data.accountNumber);
+  const cleanAccountNumber = data.accountNumber.replace(/[\s-]/g, "");
+  const cleanMyKad = data.myKadNumber.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+
+  await bankService.validateBankAccount(data.bankName, cleanAccountNumber);
+
+  const ac = await prisma.acquisitionCase.findUnique({
+    where: { caseId: data.caseId },
+    include: {
+      landParcel: {
+        include: {
+          ownerships: {
+            include: { landOwner: true },
+          },
+        },
+      },
+    },
+  });
+  const owner = ac?.landParcel?.ownerships?.[0]?.landOwner;
+
+  await validateAccountNumberUniqueness(cleanAccountNumber, cleanMyKad, {
+    currentCaseId: data.caseId,
+    userId: owner?.ownerId,
+    userName: data.accountHolderName || owner?.name,
+  });
 
   const pc = await prisma.paymentCase.upsert({
     where: { caseId: data.caseId },
     update: {
       bankName: data.bankName,
-      accountNumber: data.accountNumber,
+      accountNumber: cleanAccountNumber,
       accountHolderName: data.accountHolderName,
       phoneNumber: data.phoneNumber,
       myKadNumber: data.myKadNumber,
-      status: PaymentStatus.BANK_DETAILS_SUBMITTED,
+      status: PaymentStatus.READY_TO_INITIATE,
     },
     create: {
       id: newPaymentId(),
       caseId: data.caseId,
-      beneficiaryId: "BEN-" + data.caseId,
+      beneficiaryId: owner?.ownerId || "BEN-" + data.caseId,
       amount: 0,
       bankName: data.bankName,
-      accountNumber: data.accountNumber,
+      accountNumber: cleanAccountNumber,
       accountHolderName: data.accountHolderName,
       phoneNumber: data.phoneNumber,
       myKadNumber: data.myKadNumber,
-      status: PaymentStatus.BANK_DETAILS_SUBMITTED,
+      status: PaymentStatus.READY_TO_INITIATE,
     },
   });
+
+  if (owner?.ownerId) {
+    profileSavedAccountsStore.set(`user:${owner.ownerId}`, {
+      userId: owner.ownerId,
+      bankName: data.bankName,
+      accountNumber: cleanAccountNumber,
+      accountHolderName: data.accountHolderName,
+      phoneNumber: data.phoneNumber,
+      myKadNumber: data.myKadNumber,
+      verified: true,
+    });
+  }
+  if (cleanMyKad) {
+    profileSavedAccountsStore.set(`mykad:${cleanMyKad}`, {
+      userId: owner?.ownerId,
+      bankName: data.bankName,
+      accountNumber: cleanAccountNumber,
+      accountHolderName: data.accountHolderName,
+      phoneNumber: data.phoneNumber,
+      myKadNumber: data.myKadNumber,
+      verified: true,
+    });
+  }
+
   return formatPaymentResponse(pc);
 }
 
 // Starting eligible statuses for payment initiation
 export const ELIGIBLE_INITIATION_STATUSES: (PaymentStatus | string)[] = [
-  PaymentStatus.OFFER_ACCEPTED,
-  PaymentStatus.BANK_DETAILS_SUBMITTED,
+  PaymentStatus.READY_TO_INITIATE,
+  PaymentStatus.BANK_DETAILS_PENDING,
+  "Ready to Initiate",
+  "Ready To Initiate",
+  "READY_TO_INITIATE",
+  "Bank Details Pending",
+  "BANK_DETAILS_PENDING",
   "Offer Accepted",
   "offer_accepted",
   "Approved",
   "Bank Details Submitted",
+  "BANK_DETAILS_SUBMITTED",
 ];
-
-// Cancel (new) → Approval(CANCEL, reason) + CANCELLED; only pre-transfer.
 const PRE_TRANSFER_STATUSES: (PaymentStatus | string)[] = [
-  PaymentStatus.OFFER_ACCEPTED,
-  PaymentStatus.BANK_DETAILS_SUBMITTED,
-  PaymentStatus.TRANSFER_INITIATED,
-  PaymentStatus.AUTHORISED,
+  PaymentStatus.BANK_DETAILS_PENDING,
+  PaymentStatus.READY_TO_INITIATE,
+  PaymentStatus.PENDING_APPROVAL,
   PaymentStatus.SCHEDULED,
+  "Bank Details Pending",
+  "Ready to Initiate",
+  "Pending Approval",
+  "Scheduled",
   "Offer Accepted",
   "offer_accepted",
   "Approved",
   "Bank Details Submitted",
   "Transfer Initiated",
   "Authorised",
-  "Scheduled",
 ];
 
 export async function initiateTransfer(caseId: string, rawAdminId: string) {
@@ -137,7 +385,9 @@ export async function initiateTransfer(caseId: string, rawAdminId: string) {
   if (!ELIGIBLE_INITIATION_STATUSES.includes(pc.status)) {
     throw new Error(`Case cannot be initiated from status '${pc.status}'. Case must be in 'Offer Accepted' state.`);
   }
-
+  if (!pc.bankName) {
+    throw new Error(`Cannot initiate transfer without submitted bank details.`);
+  }
   const adminId = await resolveAdminUuid(rawAdminId);
 
   const totalActiveGAs = await prisma.user.count({
@@ -159,11 +409,12 @@ export async function initiateTransfer(caseId: string, rawAdminId: string) {
     data: {
       requiredSignatures: requiredSigs,
       currentSignatures: 1,
-      status: PaymentStatus.TRANSFER_INITIATED,
+      status: PaymentStatus.PENDING_APPROVAL,
     },
     include: { authorisations: true, receipt: true },
   });
-  return formatPaymentResponse(updated);
+  const enriched = await enrichPaymentWithAdminNames(updated);
+  return formatPaymentResponse(enriched);
 }
 
 export async function authoriseTransfer(caseId: string, rawAdminId: string) {
@@ -189,18 +440,18 @@ export async function authoriseTransfer(caseId: string, rawAdminId: string) {
   });
 
   const newCurrentSigs = pc.currentSignatures + 1;
-  const reachesThreshold = newCurrentSigs >= pc.requiredSignatures;
 
   const updated = await prisma.paymentCase.update({
     where: { caseId },
     data: {
       currentSignatures: newCurrentSigs,
-      ...(reachesThreshold ? { status: PaymentStatus.AUTHORISED } : {}),
+      status: PaymentStatus.PENDING_APPROVAL,
     },
     include: { authorisations: true, receipt: true },
   });
 
-  return formatPaymentResponse(updated);
+  const enriched = await enrichPaymentWithAdminNames(updated);
+  return formatPaymentResponse(enriched);
 }
 
 export async function confirmExecution(caseId: string, rawAdminId: string) {
@@ -210,8 +461,13 @@ export async function confirmExecution(caseId: string, rawAdminId: string) {
   });
   if (!pc) throw new Error("Case not found");
 
-  if (pc.status !== PaymentStatus.AUTHORISED) {
-    throw new Error(`Case cannot be executed from status '${pc.status}'. Case must be in 'Authorised' state.`);
+  const rawStatus = String(pc.status);
+  if (
+    pc.status !== PaymentStatus.PENDING_APPROVAL &&
+    rawStatus !== "Authorised" &&
+    rawStatus !== "AUTHORISED"
+  ) {
+    throw new Error(`Case cannot be executed from status '${pc.status}'. Case must be in 'Pending Approval' state.`);
   }
 
   if (pc.currentSignatures < pc.requiredSignatures) {
@@ -238,10 +494,11 @@ export async function confirmExecution(caseId: string, rawAdminId: string) {
 
   const updated = await prisma.paymentCase.update({
     where: { caseId },
-    data: { status: PaymentStatus.WAITING_BANK_APPROVAL },
+    data: { status: PaymentStatus.BANK_APPROVAL_PENDING },
     include: { authorisations: true, receipt: true },
   });
-  return formatPaymentResponse(updated);
+  const enriched = await enrichPaymentWithAdminNames(updated);
+  return formatPaymentResponse(enriched);
 }
 
 export async function rejectTransfer(caseId: string, rawAdminId: string, reason: string) {
@@ -251,13 +508,15 @@ export async function rejectTransfer(caseId: string, rawAdminId: string, reason:
   });
   if (!pc) throw new Error("Case not found");
 
+  const rawStatus = String(pc.status);
   if (
     ![
-      PaymentStatus.TRANSFER_INITIATED,
-      PaymentStatus.AUTHORISED,
+      PaymentStatus.PENDING_APPROVAL,
+      "PENDING_APPROVAL",
+      "Pending Approval",
       "Transfer Initiated",
       "Authorised",
-    ].includes(pc.status as PaymentStatus | string)
+    ].includes(rawStatus)
   ) {
     throw new Error(`Transfer cannot be rejected from status '${pc.status}'. Only pending transfers can be rejected.`);
   }
@@ -355,7 +614,7 @@ export async function retryPayment(caseId: string) {
   // Already fully authorised — retry re-queues the transfer with the bank.
   const updated = await prisma.paymentCase.update({
     where: { caseId },
-    data: { status: PaymentStatus.WAITING_BANK_APPROVAL },
+    data: { status: PaymentStatus.BANK_APPROVAL_PENDING },
     include: { authorisations: true, failedTransactions: true },
   });
   return formatPaymentResponse(updated);
@@ -378,7 +637,7 @@ export async function requestDetailsUpdate(caseId: string) {
 
   const updated = await prisma.paymentCase.update({
     where: { caseId },
-    data: { status: PaymentStatus.PENDING_NEW_BANK_DETAILS },
+    data: { status: PaymentStatus.NEW_BANK_DETAILS_PENDING },
     include: { authorisations: true, failedTransactions: true },
   });
   return formatPaymentResponse(updated);
@@ -407,29 +666,80 @@ export async function scheduleTomorrow(caseId: string) {
   return formatPaymentResponse(updated);
 }
 
-export async function getPaymentStatus(caseId: string) {
+export async function getPaymentStatus(caseId: string, userRole?: string, userId?: string) {
   const pc = await prisma.paymentCase.findUnique({
     where: { caseId },
-    include: { authorisations: true, receipt: true, failedTransactions: true },
+    include: {
+      authorisations: true,
+      receipt: true,
+      failedTransactions: true,
+    },
   });
   if (!pc) throw new Error("Case not found");
-  return formatPaymentResponse(pc);
+
+  if (userRole === UserRole.DISPLACED_COMMUNITY_MEMBER || userRole === "DISPLACED_COMMUNITY_MEMBER") {
+    let currentUser: { userId: string; name: string; email: string; identificationNumber: string | null } | null = null;
+    if (userId) {
+      currentUser = await prisma.user.findUnique({
+        where: { userId },
+        select: { userId: true, name: true, email: true, identificationNumber: true },
+      });
+    }
+
+    if (currentUser) {
+      const cleanIc = (currentUser.identificationNumber || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+      const memberName = currentUser.name.toLowerCase();
+
+      const isDirectMatch =
+        (pc.accountHolderName && pc.accountHolderName.toLowerCase() === memberName) ||
+        pc.beneficiaryId === currentUser.userId ||
+        (pc.myKadNumber && cleanIc && pc.myKadNumber.replace(/[^a-zA-Z0-9]/g, "").toLowerCase() === cleanIc);
+
+      if (!isDirectMatch) {
+        const ownsCase = await prisma.acquisitionCase.findFirst({
+          where: {
+            caseId,
+            landParcel: {
+              ownerships: {
+                some: {
+                  landOwner: {
+                    OR: [
+                      { ownerId: currentUser.userId },
+                      { name: currentUser.name },
+                      { email: currentUser.email },
+                      ...(currentUser.identificationNumber ? [{ nric: currentUser.identificationNumber }, { nric: cleanIc }] : []),
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        if (!ownsCase) {
+          throw new Error("Access denied: Case does not belong to your account.");
+        }
+      }
+    }
+  }
+
+  const enriched = await enrichPaymentWithAdminNames(pc);
+  return formatPaymentResponse(enriched);
 }
 
 export async function getPendingAuthorisations() {
   const cases = await prisma.paymentCase.findMany({
     where: {
-      status: {
-        in: [PaymentStatus.TRANSFER_INITIATED, PaymentStatus.AUTHORISED],
-      },
+      status: PaymentStatus.PENDING_APPROVAL,
     },
     include: { authorisations: true },
     orderBy: { updatedAt: "desc" },
   });
-  return cases.map(formatPaymentResponse);
+  const enriched = await Promise.all(cases.map(enrichPaymentWithAdminNames));
+  return enriched.map(formatPaymentResponse);
 }
 
-export async function getAllCases() {
+export async function getAllCases(userRole?: string, userId?: string) {
   try {
     const existingPaymentCases = await prisma.paymentCase.findMany({
       select: { caseId: true },
@@ -469,7 +779,7 @@ export async function getAllCases() {
           beneficiaryId: primaryOwner?.ownerId || `BEN-${ac.caseId}`,
           amount,
           accountHolderName: primaryOwner?.name || null,
-          status: PaymentStatus.OFFER_ACCEPTED,
+          status: PaymentStatus.BANK_DETAILS_PENDING,
           requiredSignatures: 0,
           currentSignatures: 0,
         },
@@ -480,10 +790,292 @@ export async function getAllCases() {
   }
 
   const cases = await prisma.paymentCase.findMany({
-    include: { authorisations: true, receipt: true, failedTransactions: true },
+    include: {
+      authorisations: true,
+      receipt: true,
+      failedTransactions: true,
+    },
     orderBy: { updatedAt: "desc" },
   });
-  return cases.map(formatPaymentResponse);
+
+  if (userRole === UserRole.DISPLACED_COMMUNITY_MEMBER || userRole === "DISPLACED_COMMUNITY_MEMBER") {
+    let currentUser: { userId: string; name: string; email: string; identificationNumber: string | null } | null = null;
+    if (userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+      currentUser = await prisma.user.findUnique({
+        where: { userId },
+        select: { userId: true, name: true, email: true, identificationNumber: true },
+      });
+    }
+
+    if (currentUser) {
+      const cleanIc = (currentUser.identificationNumber || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+      const memberName = currentUser.name.toLowerCase();
+      const memberEmail = currentUser.email.toLowerCase();
+
+      const ownedAcquisitions = await prisma.acquisitionCase.findMany({
+        where: {
+          landParcel: {
+            ownerships: {
+              some: {
+                landOwner: {
+                  OR: [
+                    { ownerId: currentUser.userId },
+                    { name: currentUser.name },
+                    { email: memberEmail },
+                    ...(currentUser.identificationNumber ? [{ nric: currentUser.identificationNumber }, { nric: cleanIc }] : []),
+                  ],
+                },
+              },
+            },
+          },
+        },
+        select: { caseId: true },
+      });
+      const ownedCaseIds = new Set(ownedAcquisitions.map((a) => a.caseId));
+
+      const filtered = cases.filter((pc) => {
+        if (ownedCaseIds.has(pc.caseId)) return true;
+        if (pc.accountHolderName && pc.accountHolderName.toLowerCase() === memberName) return true;
+        if (pc.beneficiaryId === currentUser.userId) return true;
+        if (pc.myKadNumber && cleanIc && pc.myKadNumber.replace(/[^a-zA-Z0-9]/g, "").toLowerCase() === cleanIc) return true;
+        return false;
+      });
+
+      const enriched = await Promise.all(filtered.map(enrichPaymentWithAdminNames));
+      return enriched.map(formatPaymentResponse);
+    }
+  }
+
+  const enriched = await Promise.all(cases.map(enrichPaymentWithAdminNames));
+  return enriched.map(formatPaymentResponse);
+}
+
+export async function getSavedBankDetails(userId?: string, myKadNumber?: string, userName?: string) {
+  let currentUser: { userId: string; name: string; email: string; identificationNumber: string | null } | null = null;
+  if (userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+    currentUser = await prisma.user.findUnique({
+      where: { userId },
+      select: { userId: true, name: true, email: true, identificationNumber: true },
+    });
+  }
+
+  const cleanIc = (currentUser?.identificationNumber || myKadNumber || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  const name = (currentUser?.name || userName || "").toLowerCase();
+
+  const seen = new Set<string>();
+  const savedAccounts: Array<{
+    bankName: string;
+    accountNumber: string;
+    accountHolderName: string;
+    phoneNumber: string;
+    myKadNumber: string;
+    verified: boolean;
+  }> = [];
+
+  // 1. Profile store lookup
+  const profileRecords: SavedAccountRecord[] = [];
+  if (userId && profileSavedAccountsStore.has(`user:${userId}`)) {
+    profileRecords.push(profileSavedAccountsStore.get(`user:${userId}`)!);
+  }
+  if (cleanIc && profileSavedAccountsStore.has(`mykad:${cleanIc}`)) {
+    profileRecords.push(profileSavedAccountsStore.get(`mykad:${cleanIc}`)!);
+  }
+
+  for (const rec of profileRecords) {
+    const cleanAcc = (rec.accountNumber || "").replace(/[\s-]/g, "");
+    const key = `${rec.bankName}-${cleanAcc}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      savedAccounts.push({
+        bankName: rec.bankName,
+        accountNumber: rec.accountNumber,
+        accountHolderName: rec.accountHolderName,
+        phoneNumber: rec.phoneNumber,
+        myKadNumber: rec.myKadNumber,
+        verified: rec.verified,
+      });
+    }
+  }
+
+  // 2. Query submitted PaymentCases
+  let ownedCaseIds = new Set<string>();
+  if (currentUser) {
+    const ownedAcquisitions = await prisma.acquisitionCase.findMany({
+      where: {
+        landParcel: {
+          ownerships: {
+            some: {
+              landOwner: {
+                OR: [
+                  { ownerId: currentUser.userId },
+                  { name: currentUser.name },
+                  { email: currentUser.email.toLowerCase() },
+                  ...(cleanIc ? [{ nric: cleanIc }] : []),
+                ],
+              },
+            },
+          },
+        },
+      },
+      select: { caseId: true },
+    });
+    ownedCaseIds = new Set(ownedAcquisitions.map((a) => a.caseId));
+  }
+
+  const paymentCasesWithBank = await prisma.paymentCase.findMany({
+    where: {
+      bankName: { not: null },
+      accountNumber: { not: null },
+      status: {
+        notIn: [
+          PaymentStatus.BANK_DETAILS_PENDING,
+          "BANK_DETAILS_PENDING" as any,
+          PaymentStatus.NEW_BANK_DETAILS_PENDING,
+          "NEW_BANK_DETAILS_PENDING" as any,
+          "Bank Details Pending" as any,
+          "New Bank Details Pending" as any,
+        ],
+      },
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  const matchingCases = paymentCasesWithBank.filter((pc) => {
+    if (ownedCaseIds.has(pc.caseId)) return true;
+    if (pc.accountHolderName && pc.accountHolderName.toLowerCase() === name) return true;
+    if (pc.beneficiaryId === userId) return true;
+    if (pc.myKadNumber && cleanIc && pc.myKadNumber.replace(/[^a-zA-Z0-9]/g, "").toLowerCase() === cleanIc) return true;
+    return false;
+  });
+
+  for (const pc of matchingCases) {
+    if (pc.bankName && pc.accountNumber) {
+      const cleanAcc = pc.accountNumber.replace(/[\s-]/g, "");
+      const key = `${pc.bankName}-${cleanAcc}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        savedAccounts.push({
+          bankName: pc.bankName,
+          accountNumber: pc.accountNumber,
+          accountHolderName: pc.accountHolderName || currentUser?.name || name,
+          phoneNumber: pc.phoneNumber || "",
+          myKadNumber: pc.myKadNumber || currentUser?.identificationNumber || myKadNumber || "",
+          verified: pc.status !== PaymentStatus.TRANSFER_FAILED && pc.status !== PaymentStatus.TRANSFER_REJECTED,
+        });
+      }
+    }
+  }
+
+  return savedAccounts;
+}
+
+export async function saveMemberBankDetails(
+  userId: string,
+  data: {
+    bankName: string;
+    accountNumber: string;
+    accountHolderName: string;
+    phoneNumber: string;
+    myKadNumber: string;
+  }
+) {
+  const cleanAccountNumber = data.accountNumber.replace(/[\s-]/g, "");
+  await bankService.validateBankAccount(data.bankName, cleanAccountNumber);
+
+  const user = userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)
+    ? await prisma.user.findUnique({ where: { userId } })
+    : null;
+  const cleanIc = (user?.identificationNumber || data.myKadNumber || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  const userName = (user?.name || data.accountHolderName || "").trim();
+
+  await validateAccountNumberUniqueness(cleanAccountNumber, cleanIc, {
+    userId,
+    userName,
+  });
+
+  const record: SavedAccountRecord = {
+    userId,
+    bankName: data.bankName,
+    accountNumber: cleanAccountNumber,
+    accountHolderName: userName || data.accountHolderName,
+    phoneNumber: data.phoneNumber || user?.contactNumber || "",
+    myKadNumber: user?.identificationNumber || data.myKadNumber || "",
+    verified: true,
+  };
+
+  profileSavedAccountsStore.set(`user:${userId}`, record);
+  if (cleanIc) {
+    profileSavedAccountsStore.set(`mykad:${cleanIc}`, record);
+  }
+
+  // If the user has any ALREADY SUBMITTED payment case (not in BANK_DETAILS_PENDING), sync receiverBankDetails
+  const submittedCases = await prisma.paymentCase.findMany({
+    where: {
+      status: {
+        notIn: [
+          PaymentStatus.BANK_DETAILS_PENDING,
+          "BANK_DETAILS_PENDING" as any,
+          PaymentStatus.NEW_BANK_DETAILS_PENDING,
+          "NEW_BANK_DETAILS_PENDING" as any,
+        ],
+      },
+      bankName: { not: null },
+    },
+  });
+
+  for (const pc of submittedCases) {
+    let isOwner = false;
+    if (pc.caseId) {
+      const ac = await prisma.acquisitionCase.findUnique({
+        where: { caseId: pc.caseId },
+        include: {
+          landParcel: {
+            include: {
+              ownerships: {
+                include: { landOwner: true },
+              },
+            },
+          },
+        },
+      });
+      const owners = ac?.landParcel?.ownerships?.map((o: any) => o.landOwner).filter(Boolean) || [];
+      isOwner = owners.some((ow: any) => ow.ownerId === userId || (ow.nric && ow.nric.replace(/[^a-zA-Z0-9]/g, "").toLowerCase() === cleanIc));
+    }
+    if (isOwner || pc.beneficiaryId === userId) {
+      try {
+        const encryptedBankDetails = Buffer.from(cleanAccountNumber).toString("base64");
+        await prisma.receiverBankDetails.upsert({
+          where: { paymentCaseId: pc.id },
+          update: {
+            bankName: data.bankName,
+            accountNumber: cleanAccountNumber,
+            accountHolderName: data.accountHolderName,
+            phoneNumber: data.phoneNumber,
+            myKadNumber: data.myKadNumber,
+            encryptedBankDetails,
+          },
+          create: {
+            bankName: data.bankName,
+            accountNumber: cleanAccountNumber,
+            accountHolderName: data.accountHolderName,
+            phoneNumber: data.phoneNumber,
+            myKadNumber: data.myKadNumber,
+            encryptedBankDetails,
+            paymentCaseId: pc.id,
+          },
+        });
+      } catch {}
+    }
+  }
+
+  return {
+    bankName: data.bankName,
+    accountNumber: cleanAccountNumber,
+    accountHolderName: record.accountHolderName,
+    phoneNumber: record.phoneNumber,
+    myKadNumber: record.myKadNumber,
+    verified: true,
+  };
 }
 
 export async function getFailedTransactions() {
@@ -495,14 +1087,27 @@ export async function getFailedTransactions() {
   return cases.map(formatPaymentResponse);
 }
 
-export async function disputePayment(caseId: string) {
+export async function disputePayment(caseId: string, reason?: string) {
   const pc = await prisma.paymentCase.findUnique({ where: { caseId } });
   if (!pc) throw new Error("Case not found");
 
+  if (pc.status !== PaymentStatus.TRANSFER_SUCCEED && pc.status !== PaymentStatus.PAID) {
+    throw new Error(`Payment can only be disputed from 'TRANSFER_SUCCEED' or 'PAID' (current: '${pc.status}')`);
+  }
+
+  if (reason) {
+    await prisma.failedTransaction.create({
+      data: {
+        paymentCaseId: pc.id,
+        errorLog: `DISPUTE: ${reason}`,
+      },
+    });
+  }
+
   const updated = await prisma.paymentCase.update({
     where: { caseId },
-    data: { status: PaymentStatus.PAYMENT_DISPUTED },
-    include: { authorisations: true, receipt: true },
+    data: { status: PaymentStatus.DISPUTED },
+    include: { authorisations: true, receipt: true, failedTransactions: true },
   });
   return formatPaymentResponse(updated);
 }
@@ -513,7 +1118,7 @@ export async function disputePayment(caseId: string) {
 
 export async function getBankPendingTransfers() {
   const cases = await prisma.paymentCase.findMany({
-    where: { status: PaymentStatus.WAITING_BANK_APPROVAL },
+    where: { status: PaymentStatus.BANK_APPROVAL_PENDING },
     include: { authorisations: true, failedTransactions: true },
     orderBy: { updatedAt: "desc" },
   });
@@ -523,7 +1128,11 @@ export async function getBankPendingTransfers() {
 export async function approveBankTransfer(caseId: string, bankReferenceNumber?: string) {
   const pc = await prisma.paymentCase.findUnique({ where: { caseId } });
   if (!pc) throw new Error("Case not found");
-  if (pc.status !== PaymentStatus.WAITING_BANK_APPROVAL) {
+  const rawStatus = String(pc.status);
+  if (
+    pc.status !== PaymentStatus.BANK_APPROVAL_PENDING &&
+    rawStatus !== "WAITING_BANK_APPROVAL"
+  ) {
     throw new Error(`Transfer is not awaiting bank approval (current status '${pc.status}')`);
   }
 
@@ -531,21 +1140,25 @@ export async function approveBankTransfer(caseId: string, bankReferenceNumber?: 
   await prisma.paymentReceipt.upsert({
     where: { paymentCaseId: pc.id },
     update: { bankReferenceNumber: bankRef, generatedAt: new Date() },
-    create: { paymentCaseId: pc.id, bankReferenceNumber: bankRef },
+    create: { paymentCaseId: pc.id, bankReferenceNumber: bankRef, generatedAt: new Date() },
   });
 
   const updated = await prisma.paymentCase.update({
     where: { caseId },
-    data: { status: PaymentStatus.PAID },
+    data: { status: PaymentStatus.TRANSFER_SUCCEED },
     include: { authorisations: true, receipt: true },
   });
   return formatPaymentResponse(updated);
 }
 
-export async function rejectBankTransfer(caseId: string, errorReason: string) {
+export async function rejectBankTransfer(caseId: string, errorReason: string, isRejectedCategory = false) {
   const pc = await prisma.paymentCase.findUnique({ where: { caseId } });
   if (!pc) throw new Error("Case not found");
-  if (pc.status !== PaymentStatus.WAITING_BANK_APPROVAL) {
+  const rawStatus = String(pc.status);
+  if (
+    pc.status !== PaymentStatus.BANK_APPROVAL_PENDING &&
+    rawStatus !== "WAITING_BANK_APPROVAL"
+  ) {
     throw new Error(`Transfer is not awaiting bank approval (current status '${pc.status}')`);
   }
 
@@ -556,9 +1169,11 @@ export async function rejectBankTransfer(caseId: string, errorReason: string) {
     },
   });
 
+  const targetStatus = isRejectedCategory ? PaymentStatus.TRANSFER_REJECTED : PaymentStatus.TRANSFER_FAILED;
+
   const updated = await prisma.paymentCase.update({
     where: { caseId },
-    data: { status: PaymentStatus.TRANSFER_FAILED },
+    data: { status: targetStatus },
     include: { authorisations: true, failedTransactions: true },
   });
   return formatPaymentResponse(updated);
@@ -567,11 +1182,49 @@ export async function rejectBankTransfer(caseId: string, errorReason: string) {
 export async function getBankHistory() {
   const cases = await prisma.paymentCase.findMany({
     where: {
-      status: { in: [PaymentStatus.PAID, PaymentStatus.TRANSFER_FAILED] },
+      status: { in: [PaymentStatus.TRANSFER_SUCCEED, PaymentStatus.PAID, PaymentStatus.TRANSFER_FAILED, PaymentStatus.TRANSFER_REJECTED] },
     },
     include: { receipt: true, failedTransactions: true, authorisations: true },
     orderBy: { updatedAt: "desc" },
     take: 30,
   });
   return cases.map(formatPaymentResponse);
+}
+
+export async function confirmPaymentReceipt(
+  caseId: string,
+  confirmedByRole = "GOVERNMENT_ADMINISTRATOR",
+  isAutoOrAdminOverride = false
+) {
+  const pc = await prisma.paymentCase.findUnique({
+    where: { caseId },
+    include: { receipt: true },
+  });
+  if (!pc) throw new Error("Case not found");
+
+  if (pc.status !== PaymentStatus.TRANSFER_SUCCEED) {
+    throw new Error(
+      `Payment receipt cannot be confirmed from status '${pc.status}'. Status must be 'TRANSFER_SUCCEED'.`
+    );
+  }
+
+  // 7-day rule for Government Administrator
+  if (confirmedByRole === UserRole.GOVERNMENT_ADMINISTRATOR || confirmedByRole === "GOVERNMENT_ADMINISTRATOR") {
+    if (!isAutoOrAdminOverride) {
+      const transferDate = pc.receipt?.generatedAt || pc.updatedAt;
+      const elapsedDays = (Date.now() - new Date(transferDate).getTime()) / (1000 * 60 * 60 * 24);
+      if (elapsedDays < 7) {
+        throw new Error(
+          `7-day rule active: Government Administrator can only manually confirm receipt after 7 days have elapsed. (${Math.ceil(7 - elapsedDays)} day(s) remaining)`
+        );
+      }
+    }
+  }
+
+  const updated = await prisma.paymentCase.update({
+    where: { caseId },
+    data: { status: PaymentStatus.PAID },
+    include: { authorisations: true, receipt: true },
+  });
+  return formatPaymentResponse(updated);
 }

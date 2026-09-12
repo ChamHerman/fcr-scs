@@ -9,7 +9,7 @@ export async function generateReceipt(caseId: string): Promise<Buffer> {
   });
 
   if (!pc) throw new Error("Case not found");
-  if (pc.status !== PaymentStatus.PAID || !pc.receipt) {
+  if ((pc.status !== PaymentStatus.PAID && pc.status !== PaymentStatus.TRANSFER_SUCCEED) || !pc.receipt) {
     throw new Error("No receipt available for this case");
   }
 
@@ -40,7 +40,7 @@ export async function generateReceipt(caseId: string): Promise<Buffer> {
     doc.text(`Account Holder: ${pc.accountHolderName || "N/A"}`);
     doc.text(`Bank Name: ${pc.bankName || "N/A"}`);
     doc.text(`Account Number: ${pc.accountNumber || "N/A"}`);
-    doc.text(`Amount: RM ${Number(pc.amount).toFixed(2)}`);
+    doc.text(`Amount: RM ${Number(pc.amount).toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
     doc.moveDown(1);
 
     doc.fontSize(14).text(`Status: PAID`, { align: "right" });

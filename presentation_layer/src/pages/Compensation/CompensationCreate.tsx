@@ -444,7 +444,7 @@ export const CompensationCreate: React.FC = () => {
                 {/* Live Total Card */}
                 <div className="p-4 rounded-xl bg-md-surface-container-low border border-green-500/30 flex items-center justify-between">
                   <span className="text-sm font-semibold text-green-700 dark:text-green-400">Total Compensation Value</span>
-                  <span className="text-xl font-bold text-green-700 dark:text-green-400 font-mono">
+                  <span className="text-xl font-bold text-green-700 dark:text-green-400">
                     {formatCurrencyRM(calculatedTotal)}
                   </span>
                 </div>
@@ -497,7 +497,7 @@ export const CompensationCreate: React.FC = () => {
                   <div className="budget-metrics-grid">
                     <div className="metric-box">
                       <span className="metric-label">Total Project Budget</span>
-                      <span className="metric-value font-mono">
+                      <span className="metric-value">
                         {formatCurrencyRM(projectBudget)}
                       </span>
                       <span className="metric-sub">Allocated Project Budget</span>
@@ -505,7 +505,7 @@ export const CompensationCreate: React.FC = () => {
 
                     <div className="metric-box">
                       <span className="metric-label">Total Approved Under Project</span>
-                      <span className="metric-value font-mono text-amber-700 dark:text-amber-400">
+                      <span className="metric-value text-amber-700 dark:text-amber-400">
                         {formatCurrencyRM(totalApprovedUnderProject)}
                       </span>
                       <span className="metric-sub">Across All Project Cases</span>
@@ -513,7 +513,7 @@ export const CompensationCreate: React.FC = () => {
 
                     <div className="metric-box highlight-current">
                       <span className="metric-label">Remaining Fund</span>
-                      <span className="metric-value font-mono text-blue-700 dark:text-blue-400">
+                      <span className="metric-value text-blue-700 dark:text-blue-400">
                         {formatCurrencyRM(currentRemainingFund)}
                       </span>
                       <span className="metric-sub">Prior to This Report</span>
@@ -526,7 +526,7 @@ export const CompensationCreate: React.FC = () => {
                     >
                       <span className="metric-label">Remaining Fund After Report</span>
                       <span
-                        className={`metric-value font-mono font-bold ${
+                        className={`metric-value font-bold ${
                           remainingFundAfterReport < 0
                             ? "text-amber-700 dark:text-amber-400"
                             : "text-emerald-700 dark:text-emerald-400"

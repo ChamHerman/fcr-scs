@@ -396,7 +396,10 @@ export const CaseManagementDashboard: React.FC = () => {
                           <span className="meta-text line-clamp-2 leading-snug block">{c.project?.projectName || "—"}</span>
                         </td>
                         <td title={c.landParcel?.landTitleNo || "—"}>
-                          <span className="meta-text font-mono text-xs truncate block">{c.landParcel?.landTitleNo || "—"}</span>
+                          <div className="flex items-center gap-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+                            <span className="meta-text font-mono text-xs truncate block">{c.landParcel?.landTitleNo || "—"}</span>
+                            {c.landParcel?.landTitleNo && <CopyButton value={c.landParcel.landTitleNo} title="Copy Land Title No." />}
+                          </div>
                         </td>
                         <td title={assignedValuer || ""}>
                           {assignedValuer ? (

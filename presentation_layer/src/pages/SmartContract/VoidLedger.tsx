@@ -8,6 +8,7 @@ import { useWallet } from '../../hooks/useWallet';
 import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Button } from '../../components/ui/Button';
+import { CopyButton } from '../../components/ui/CopyButton';
 import { WalletButton } from '../../components/ui/WalletButton';
 import { NetworkSelector } from './NetworkSelector';
 import type { NetworkInfo } from './NetworkSelector';
@@ -159,13 +160,24 @@ export const VoidLedger: React.FC = () => {
                     onClick={() => setModal({ type: 'view', row })}
                   >
                     <td>
-                      <span className="font-mono font-bold text-xs text-md-primary">
-                        {row.publicId ?? row.caseId}
-                      </span>
+                      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        <span className="font-mono font-bold text-xs text-md-primary">
+                          {row.publicId ?? row.caseId}
+                        </span>
+                        <CopyButton value={row.publicId ?? row.caseId} title="Copy Record ID" />
+                      </div>
                     </td>
                     <td><CaseIdCell caseId={row.caseId} /></td>
-                    <td style={{ fontFamily: 'monospace', color: 'var(--md-on-surface-variant)' }}>{fmtTx(row.transactionHash)}</td>
-                    <td><span className="meta-text">{fmtDate(row.publishedAt)}</span></td>
+                    <td className="font-mono text-xs text-md-on-surface-variant">
+                      {row.transactionHash ? (
+                        <div className="flex items-center gap-1.5">
+                          <span>{fmtTx(row.transactionHash)}</span>
+                          <CopyButton value={row.transactionHash} title="Copy Transaction Hash" />
+                        </div>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td>{ledgerBadge(row.status)}</td>
                     <td onClick={(e) => e.stopPropagation()}>
                       <div className="row-actions">

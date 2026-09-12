@@ -35,7 +35,10 @@ export const submitBankDetails = async (req: Request, res: Response) => {
         phoneNumber: phoneNumber || "",
         myKadNumber,
       });
-    } catch {
+    } catch (e: any) {
+      if (e?.message && (e.message.includes("already registered") || e.message.includes("must be unique") || e.message.includes("Invalid"))) {
+        return res.status(400).json({ success: false, error: e.message });
+      }
       // Graceful fallback if database mock or isolated test environment
     }
 

@@ -44,25 +44,42 @@ export const paymentApi = {
     }
     return res.blob();
   },
-  dispute: async (caseId: string, file: File) => {
+  dispute: async (caseId: string, fileOrReason?: File | string) => {
     const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
-    const form = new FormData();
-    form.append("caseId", caseId);
-    form.append("file", file);
-    const res = await fetch(PAYMENT_BASE + "/api/payments/dispute", {
-      method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: form,
-    });
-    const d = await res.json();
-    if (!res.ok) throw new Error(d.error ?? "HTTP " + res.status);
-    return d;
+    if (fileOrReason instanceof File) {
+      const form = new FormData();
+      form.append("caseId", caseId);
+      form.append("file", fileOrReason);
+      const res = await fetch(PAYMENT_BASE + "/api/payments/dispute", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error ?? "HTTP " + res.status);
+      return d;
+    } else {
+      return paymentFetch("/api/payments/dispute", {
+        method: "POST",
+        body: JSON.stringify({ caseId, reason: fileOrReason }),
+      });
+    }
   },
+  confirmReceipt: (d: { caseId: string; role?: string; isAutoOrAdminOverride?: boolean }) =>
+    paymentFetch("/api/payments/confirm-receipt", { method: "POST", body: JSON.stringify(d) }),
   // Bank Clearance Portal APIs
   getBankPending: () => paymentFetch("/api/payments/bank/pending"),
   approveBank: (d: { caseId: string; bankReferenceNumber?: string }) =>
     paymentFetch("/api/payments/bank/approve", { method: "POST", body: JSON.stringify(d) }),
-  rejectBank: (d: { caseId: string; errorReason: string }) =>
+  rejectBank: (d: { caseId: string; errorReason: string; isRejectedCategory?: boolean }) =>
     paymentFetch("/api/payments/bank/reject", { method: "POST", body: JSON.stringify(d) }),
   getBankHistory: () => paymentFetch("/api/payments/bank/history"),
+  getSavedBankDetails: () => paymentFetch("/api/payments/saved-bank-details"),
+  saveDefaultBankDetails: (d: {
+    bankName: string;
+    accountNumber: string;
+    accountHolderName?: string;
+    phoneNumber?: string;
+    myKadNumber?: string;
+  }) => paymentFetch("/api/payments/saved-bank-details", { method: "POST", body: JSON.stringify(d) }),
 };

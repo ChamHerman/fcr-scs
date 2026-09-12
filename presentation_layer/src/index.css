@@ -73,6 +73,33 @@
   body {
     @apply bg-md-background text-md-on-surface font-sans antialiased overflow-x-hidden transition-colors duration-300;
   }
+
+  .font-mono,
+  .mono,
+  .case-id,
+  code,
+  pre,
+  kbd,
+  samp {
+    font-family: 'JetBrains Mono', monospace !important;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+  table th,
+  table td {
+    border-bottom: 1px solid rgba(121, 116, 126, 0.08);
+    border-right: 1px solid rgba(121, 116, 126, 0.08);
+  }
+
+  table th:last-child,
+  table td:last-child {
+    border-right: none;
+  }
+
+  .dark table th,
+  .dark table td {
+    border-bottom-color: rgba(202, 196, 208, 0.08);
+    border-right-color: rgba(202, 196, 208, 0.08);
+  }
 }
 
 @layer components {

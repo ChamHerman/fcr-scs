@@ -7,6 +7,7 @@ import { paymentApi } from '../../services/paymentApi';
 import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Button } from '../../components/ui/Button';
+import { CopyButton } from '../../components/ui/CopyButton';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { useAuth } from '../../context/AuthContext';
 import './payment.css';
@@ -169,21 +170,20 @@ export default function PendingAuthorisations() {
                 <th style={{ width: '175px' }}>Case ID</th>
                 <th style={{ width: '140px' }}>Beneficiary</th>
                 <th style={{ width: '130px' }}>Amount</th>
-                <th style={{ width: '85px', textAlign: 'center' }}>Approval</th>
                 <th style={{ width: '140px' }}>Initiator</th>
-                <th style={{ width: '160px' }}>Status</th>
+                <th style={{ width: '180px' }}>Status</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="text-center text-gray-500 py-8">
+                  <td colSpan={6} className="text-center text-gray-500 py-8">
                     <Loader2 size={22} className="inline animate-spin" /><span className="ml-2">Loading pending authorisations…</span>
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center text-gray-500 py-8">No pending authorisations in queue.</td>
+                  <td colSpan={6} className="text-center text-gray-500 py-8">No pending authorisations in queue.</td>
                 </tr>
               ) : (
                 filtered.map((pc) => {
@@ -196,18 +196,18 @@ export default function PendingAuthorisations() {
                       onClick={() => setModal({ type: 'view', pc })}
                     >
                       <td>
-                        <span className="font-mono font-bold text-xs text-md-primary">
-                          {paymentId}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-bold text-xs text-md-primary">
+                            {paymentId}
+                          </span>
+                          <CopyButton value={paymentId} title="Copy Payment ID" />
+                        </div>
                       </td>
                       <td><CaseIdCell caseId={pc.caseId} onClick={(cid) => setCaseDetailsId(cid)} /></td>
                       <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
-                      <td style={{ fontWeight: 600 }}>{fmtAmount(pc.amount)}</td>
-                      <td style={{ textAlign: 'center' }}>
-                        <span className="meta-text">{pc.currentSignatures}/{pc.requiredSignatures || 1}</span>
-                      </td>
+                      <td className="font-semibold">{fmtAmount(pc.amount)}</td>
                       <td><span className="meta-text">{initiator || '—'}</span></td>
-                      <td>{paymentBadge(pc.status)}</td>
+                      <td>{paymentBadge(pc.status, pc.currentSignatures, pc.requiredSignatures)}</td>
                     </tr>
                   );
                 })

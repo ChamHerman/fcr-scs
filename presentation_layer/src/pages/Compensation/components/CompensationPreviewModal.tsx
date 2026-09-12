@@ -61,19 +61,19 @@ export const CompensationPreviewModal: React.FC<CompensationPreviewModalProps> =
         <div className="p-4 rounded-xl bg-md-surface-container-low border border-md-outline/15 space-y-2 text-sm">
           <div className="flex justify-between items-center text-md-on-surface-variant">
             <span>Land Value</span>
-            <span className="font-mono font-semibold text-md-on-surface">
+            <span className="font-semibold text-md-on-surface">
               {formData.landValue ? formatCurrencyRM(formData.landValue) : "RM 0.00"}
             </span>
           </div>
           <div className="flex justify-between items-center text-md-on-surface-variant">
             <span>Building / Structure Value</span>
-            <span className="font-mono font-semibold text-md-on-surface">
+            <span className="font-semibold text-md-on-surface">
               {formData.buildingValue ? formatCurrencyRM(formData.buildingValue) : "RM 0.00"}
             </span>
           </div>
           <div className="flex justify-between items-center text-md-on-surface-variant">
             <span>Crop / Plantation Value</span>
-            <span className="font-mono font-semibold text-md-on-surface">
+            <span className="font-semibold text-md-on-surface">
               {formData.cropValue ? formatCurrencyRM(formData.cropValue) : "RM 0.00"}
             </span>
           </div>
@@ -83,7 +83,7 @@ export const CompensationPreviewModal: React.FC<CompensationPreviewModalProps> =
             parseCurrencyToNumber(formData.otherEligible) > 0) && (
             <div className="flex justify-between items-center text-md-on-surface-variant pt-1 border-t border-md-outline/10">
               <span>Other Allowances & Disturbance</span>
-              <span className="font-mono font-semibold text-md-on-surface">
+              <span className="font-semibold text-md-on-surface">
                 {formatCurrencyRM(
                   parseCurrencyToNumber(formData.businessDisruption) +
                     parseCurrencyToNumber(formData.disturbanceCompensation) +
@@ -98,7 +98,7 @@ export const CompensationPreviewModal: React.FC<CompensationPreviewModalProps> =
         {/* Total Calculated Compensation */}
         <div className="flex justify-between items-center p-4 rounded-xl bg-md-surface-container-low border border-green-500/30">
           <span className="text-sm font-semibold text-green-700 dark:text-green-400">Total Compensation Value</span>
-          <span className="text-base font-bold text-green-700 dark:text-green-400 font-mono">
+          <span className="text-base font-bold text-green-700 dark:text-green-400">
             {formatCurrencyRM(calculatedTotal)}
           </span>
         </div>
@@ -108,20 +108,20 @@ export const CompensationPreviewModal: React.FC<CompensationPreviewModalProps> =
           <div className="p-3.5 rounded-xl bg-md-surface-container-low border border-md-outline/15 text-xs space-y-1.5">
             <div className="flex justify-between items-center text-md-on-surface-variant">
               <span>Total Project Budget:</span>
-              <span className="font-mono font-semibold text-md-on-surface">
+              <span className="font-semibold text-md-on-surface">
                 {formatCurrencyRM(projectBudget)}
               </span>
             </div>
             <div className="flex justify-between items-center text-md-on-surface-variant">
               <span>Current Remaining Fund:</span>
-              <span className="font-mono font-semibold text-blue-700 dark:text-blue-400">
+              <span className="font-semibold text-blue-700 dark:text-blue-400">
                 {formatCurrencyRM(currentRemainingFund)}
               </span>
             </div>
             <div className="flex justify-between items-center text-md-on-surface-variant pt-1 border-t border-md-outline/10">
               <span>Remaining Fund After This Report:</span>
               <span
-                className={`font-mono font-bold ${
+                className={`font-bold ${
                   remainingFundAfterReport < 0
                     ? "text-amber-700 dark:text-amber-400"
                     : "text-emerald-700 dark:text-emerald-400"
@@ -136,7 +136,7 @@ export const CompensationPreviewModal: React.FC<CompensationPreviewModalProps> =
         {/* Approved Valuation Recommended Reference */}
         <div className="flex justify-between items-center p-4 rounded-xl bg-md-surface-container-low border border-md-primary/30">
           <span className="text-sm font-semibold text-md-primary">Approved Recommended Valuation</span>
-          <span className="text-base font-bold text-md-primary font-mono">
+          <span className="text-base font-bold text-md-primary">
             {recommendedValuation > 0 ? formatCurrencyRM(recommendedValuation) : "—"}
           </span>
         </div>

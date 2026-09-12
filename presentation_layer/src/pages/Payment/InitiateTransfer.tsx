@@ -8,6 +8,7 @@ import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
+import { CopyButton } from '../../components/ui/CopyButton';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { useAuth } from '../../context/AuthContext';
 import '../LandAcquisition/case_management.css';
@@ -173,7 +174,7 @@ export default function InitiateTransfer() {
                 <th style={{ width: '140px' }}>Beneficiary</th>
                 <th style={{ width: '150px' }}>Bank</th>
                 <th style={{ width: '130px' }}>Amount</th>
-                <th style={{ width: '160px' }}>Status</th>
+                <th style={{ width: '180px' }}>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -197,15 +198,30 @@ export default function InitiateTransfer() {
                       onClick={() => setModal({ type: 'view', pc })}
                     >
                       <td>
-                        <span className="font-mono font-bold text-xs text-md-primary">
-                          {paymentId}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-bold text-xs text-md-primary">
+                            {paymentId}
+                          </span>
+                          <CopyButton value={paymentId} title="Copy Payment ID" />
+                        </div>
                       </td>
                       <td><CaseIdCell caseId={pc.caseId} onClick={(cid) => setCaseDetailsId(cid)} /></td>
                       <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
-                      <td>{pc.bankName ? `${pc.bankName} ${maskAccount(pc.accountNumber)}` : '—'}</td>
-                      <td style={{ fontWeight: 600 }}>{fmtAmount(pc.amount)}</td>
-                      <td>{paymentBadge(pc.status)}</td>
+                      <td>
+                        {pc.bankName && pc.accountNumber ? (
+                          <div className="flex items-center gap-1.5">
+                            <span>{pc.bankName}</span>
+                            <span className="font-mono text-xs text-md-on-surface-variant">{maskAccount(pc.accountNumber)}</span>
+                            <CopyButton value={pc.accountNumber} title="Copy Account Number" />
+                          </div>
+                        ) : pc.bankName ? (
+                          pc.bankName
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td className="font-semibold">{fmtAmount(pc.amount)}</td>
+                      <td>{paymentBadge(pc.status, pc.currentSignatures, pc.requiredSignatures)}</td>
                     </tr>
                   );
                 })

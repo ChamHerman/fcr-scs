@@ -102,18 +102,18 @@ enum LogType {
 }
 
 enum PaymentStatus {
-  OFFER_ACCEPTED
-  BANK_DETAILS_SUBMITTED
-  TRANSFER_INITIATED
-  AUTHORISED
-  WAITING_BANK_APPROVAL
-  PAID
-  TRANSFER_FAILED
+  BANK_DETAILS_PENDING
+  READY_TO_INITIATE
+  PENDING_APPROVAL
+  BANK_APPROVAL_PENDING
+  TRANSFER_SUCCEED
   TRANSFER_REJECTED
+  TRANSFER_FAILED
+  DISPUTED
+  PAID
   CANCELLED
-  PAYMENT_DISPUTED
   SCHEDULED
-  PENDING_NEW_BANK_DETAILS
+  NEW_BANK_DETAILS_PENDING
 }
 
 enum BlockchainStatus {
@@ -153,7 +153,7 @@ model PaymentCase {
   phoneNumber          String?
   encryptedBankDetails String?
   myKadNumber          String?
-  status               PaymentStatus          @default(OFFER_ACCEPTED)
+  status               PaymentStatus          @default(BANK_DETAILS_PENDING)
   requiredSignatures   Int                    @default(1)
   currentSignatures     Int                    @default(0)
   createdAt            DateTime               @default(now())

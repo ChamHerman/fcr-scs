@@ -30,6 +30,7 @@ export default {
       },
       fontFamily: {
         sans: ['Roboto', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
       },
       borderRadius: {
         'xs': '8px',

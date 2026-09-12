@@ -20,6 +20,7 @@ import {
   EyeOff,
   ChevronDown,
   ChevronUp,
+  Check,
   X, 
   UserCheck, 
   AlertCircle, 
@@ -83,15 +84,37 @@ export const MemberOfferLetter: React.FC = () => {
     let isMounted = true;
     async function loadCases() {
       try {
-        const res = await landAcquisitionApi.getAllCases({ limit: 50 });
-        const list = res.cases || res || [];
-        if (!isMounted) return;
-        setCasesList(list);
+        const res = await landAcquisitionApi.getAllCases({
+          limit: 50,
+          ownerNric: identificationNumber || user?.identificationNumber,
+          userId: user?.userId,
+          userRole: user?.role,
+        });
+        const allList = res.cases || res || [];
+        const cleanIc = (identificationNumber || user?.identificationNumber || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        const memberName = (userName || user?.name || '').toLowerCase();
+        const memberEmail = (user?.email || '').toLowerCase();
 
-        if (!selectedCaseId && list.length > 0) {
+        const memberCases = allList.filter((c: any) => {
+          if (c.createdById === user?.userId) return true;
+          const owners = c.landParcel?.ownerships?.map((o: any) => o.landOwner).filter(Boolean) || [];
+          return owners.some((ow: any) => {
+            const owIc = (ow.icNumber || ow.nric || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            return (
+              (cleanIc && owIc === cleanIc) ||
+              ow.ownerId === user?.userId ||
+              (ow.name && ow.name.toLowerCase() === memberName) ||
+              (ow.email && ow.email.toLowerCase() === memberEmail)
+            );
+          });
+        });
+        if (!isMounted) return;
+        setCasesList(memberCases);
+
+        if (!selectedCaseId && memberCases.length > 0) {
           // Default to first case that has an offer letter, or first case
-          const caseWithOffer = list.find((c: any) => c.offerLetters && c.offerLetters.length > 0);
-          const defaultCase = caseWithOffer || list[0];
+          const caseWithOffer = memberCases.find((c: any) => c.offerLetters && c.offerLetters.length > 0);
+          const defaultCase = caseWithOffer || memberCases[0];
           setSelectedCaseId(defaultCase.caseId);
         }
       } catch (err) {
@@ -100,7 +123,7 @@ export const MemberOfferLetter: React.FC = () => {
     }
     loadCases();
     return () => { isMounted = false; };
-  }, []);
+  }, [identificationNumber, user, userName, selectedCaseId]);
 
   // 2. Fetch Offer Letter Data
   const loadOfferData = useCallback(async () => {
@@ -670,7 +693,7 @@ export const MemberOfferLetter: React.FC = () => {
                   <span className="text-[11px] font-bold text-violet-900/70 uppercase tracking-wider block">
                     Total Statutory Award (Form H)
                   </span>
-                  <div className="text-2xl sm:text-3xl font-black text-emerald-700 mt-1 font-mono">
+                  <div className="text-2xl sm:text-3xl font-black text-emerald-700 mt-1">
                     {formatCurrencyRM(offer.totalCompensation)}
                   </div>
                   <div className="text-[11px] text-slate-600 mt-1 flex items-center md:justify-end gap-1 font-medium">
@@ -968,14 +991,29 @@ export const MemberOfferLetter: React.FC = () => {
                           </div>
                         </div>
 
-                        <span className={`px-2.5 py-1 rounded-xl text-xs font-bold ${
+                        <span className={`px-2.5 py-1 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 ${
                           ow.status === 'ACCEPTED'
                             ? 'bg-emerald-100 text-emerald-800'
                             : ow.status === 'REJECTED'
                             ? 'bg-rose-100 text-rose-800'
                             : 'bg-amber-100 text-amber-800'
                         }`}>
-                          {ow.status === 'ACCEPTED' ? '✓ Accepted' : ow.status === 'REJECTED' ? '✕ Rejected' : '⏳ Pending'}
+                          {ow.status === 'ACCEPTED' ? (
+                            <span className="inline-flex items-center gap-1">
+                              <Check size={13} strokeWidth={2.5} />
+                              <span>Accepted</span>
+                            </span>
+                          ) : ow.status === 'REJECTED' ? (
+                            <span className="inline-flex items-center gap-1">
+                              <X size={13} strokeWidth={2.5} />
+                              <span>Rejected</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1">
+                              <Clock size={13} strokeWidth={2.5} />
+                              <span>Pending</span>
+                            </span>
+                          )}
                         </span>
                       </div>
                       {ow.respondedAt && (

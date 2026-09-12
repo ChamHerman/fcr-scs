@@ -1,17 +1,20 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   AlertCircle,
+  Building2,
   Layers, 
   FileText, 
   UserCheck, 
   ExternalLink,
   CheckCircle2,
   Loader2,
-  ChevronDown
+  ChevronDown,
+  RotateCw,
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
+import { useNotification } from '../../components/ui/NotificationSystem';
 import { useRole } from '../../hooks/useRole';
 import { landAcquisitionApi } from '../../services/landAcquisitionApi';
 import { compensationApi } from '../../services/compensationApi';
@@ -38,8 +41,8 @@ import { useMemberWorkflow } from './hooks/useMemberWorkflow';
 
 export const MemberDashboard: React.FC = () => {
   const { user, userName, identificationNumber, userId, role, isMember, isSysAdmin } = useRole();
+  const { notify } = useNotification();
   const [searchParams, setSearchParams] = useSearchParams();
-
   // Active Member Identification Number State
   const [userIc, setUserIc] = useState<string>(() => user?.identificationNumber || '');
 
@@ -104,20 +107,22 @@ export const MemberDashboard: React.FC = () => {
       let userCases = allFetched;
       if (!isAdm && user) {
         const cleanIc = (user.identificationNumber || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        const userNameClean = (user.name || '').toLowerCase();
+        const userEmailClean = (user.email || '').toLowerCase();
+
         userCases = allFetched.filter((c: any) => {
           if (c.createdById === user.userId) return true;
           const owners = c.landParcel?.ownerships?.map((o: any) => o.landOwner).filter(Boolean) || [];
           return owners.some((ow: any) => {
-            const owIc = (ow.nric || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-            return (cleanIc && owIc === cleanIc) || ow.ownerId === user.userId || ow.email === user.email;
+            const owIc = (ow.nric || ow.icNumber || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            return (
+              (cleanIc && owIc === cleanIc) ||
+              ow.ownerId === user.userId ||
+              (ow.email && ow.email.toLowerCase() === userEmailClean) ||
+              (ow.name && ow.name.toLowerCase() === userNameClean)
+            );
           });
         });
-
-        // Fallback: If no cases explicitly match user NRIC (e.g. testing in dev with different account),
-        // show fetched cases so the user can still test all views
-        if (userCases.length === 0 && allFetched.length > 0) {
-          userCases = allFetched;
-        }
       }
 
       setCases(userCases);
@@ -330,6 +335,79 @@ export const MemberDashboard: React.FC = () => {
       setExpandedStep(currentStageNum);
     }
   }, [currentStageNum]);
+  // ---------------------------------------------------------------------------
+  // Mobile Viewport Pull-to-Refresh Gesture Handler & Animation
+  // ---------------------------------------------------------------------------
+  const [pullDistance, setPullDistance] = useState<number>(0);
+  const [isPulling, setIsPulling] = useState<boolean>(false);
+  const [isMobileReloading, setIsMobileReloading] = useState<boolean>(false);
+  const touchStartYRef = useRef<number>(0);
+
+  const handleMobileReload = useCallback(async () => {
+    setIsMobileReloading(true);
+    setPullDistance(55);
+    try {
+      if (selectedCaseId) {
+        await fetchSelectedCaseDetails(selectedCaseId);
+      }
+      await fetchMemberCases();
+      await loadMemberObjections();
+      notify({ type: 'success', title: 'Data Reloaded', message: 'Case information is up to date.' });
+    } catch {
+      notify({ type: 'general', title: 'Reloaded', message: 'Case view refreshed.' });
+    } finally {
+      setTimeout(() => {
+        setIsMobileReloading(false);
+        setPullDistance(0);
+        setIsPulling(false);
+      }, 600);
+    }
+  }, [selectedCaseId, fetchSelectedCaseDetails, fetchMemberCases, loadMemberObjections, notify]);
+
+  useEffect(() => {
+    const handleTouchStart = (e: TouchEvent) => {
+      if (window.scrollY <= 0 && e.touches.length === 1) {
+        touchStartYRef.current = e.touches[0].clientY;
+        setIsPulling(true);
+      } else {
+        setIsPulling(false);
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!touchStartYRef.current || isMobileReloading) return;
+      if (window.scrollY <= 0 && e.touches.length === 1) {
+        const currentY = e.touches[0].clientY;
+        const diff = currentY - touchStartYRef.current;
+        if (diff > 0) {
+          const damped = Math.min(Math.pow(diff, 0.82) * 1.6, 80);
+          setPullDistance(damped);
+        }
+      }
+    };
+
+    const handleTouchEnd = () => {
+      if (!touchStartYRef.current) return;
+      touchStartYRef.current = 0;
+      setIsPulling(false);
+      if (pullDistance >= 45 && !isMobileReloading) {
+        handleMobileReload();
+      } else if (!isMobileReloading) {
+        setPullDistance(0);
+      }
+    };
+
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchmove', handleTouchMove, { passive: true });
+    window.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [pullDistance, isMobileReloading, handleMobileReload]);
+
 
   // Dynamic Tab Content
   const tabContent = (
@@ -343,6 +421,7 @@ export const MemberDashboard: React.FC = () => {
           selectedCaseId={selectedCaseId}
           activeOffer={activeOffer}
           isOfferAccepted={isOfferAccepted}
+          totalCompensation={totalCompensation}
         />
       )}
 
@@ -384,9 +463,53 @@ export const MemberDashboard: React.FC = () => {
     );
   }
 
+  if (!loadingCases && cases.length === 0) {
+    return (
+      <div className="max-w-2xl mx-auto py-12 text-center space-y-4">
+        <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
+          <Building2 size={32} />
+        </div>
+        <h2 className="text-lg font-bold text-slate-800">No Cases Registered Under Your Identity</h2>
+        <p className="text-xs text-slate-500 max-w-md mx-auto">
+          There are currently no gazetted land acquisition cases associated with your account ({user?.identificationNumber || user?.email || user?.name}). Contact your appointed Land Administrator if you believe this is in error.
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-5 max-w-7xl mx-auto pb-12 px-[20px] sm:px-6 lg:px-8">
+    <div className="space-y-6 max-w-7xl mx-auto pt-6 sm:pt-8 pb-12 px-4 sm:px-6 lg:px-8 relative">
       {/* ------------------------------------------------------------- */}
+      {/* MOBILE PULL-TO-REFRESH FLOATING ANIMATION INDICATOR           */}
+      {/* ------------------------------------------------------------- */}
+      <div
+        className={`sm:hidden fixed left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 ease-md-bouncy flex flex-col items-center gap-1 ${
+          pullDistance > 10 || isMobileReloading
+            ? 'opacity-100 scale-100'
+            : 'opacity-0 scale-75 pointer-events-none'
+        }`}
+        style={{
+          top: `${Math.max(16, pullDistance)}px`,
+        }}
+      >
+        <div className="w-11 h-11 rounded-full bg-white dark:bg-md-surface-container border border-md-outline/25 shadow-xl flex items-center justify-center text-md-primary ring-4 ring-md-primary/15">
+          <RotateCw
+            size={20}
+            className={`transition-transform duration-150 ${
+              isMobileReloading ? 'animate-spin text-md-primary' : ''
+            }`}
+            style={{
+              transform: isMobileReloading ? undefined : `rotate(${pullDistance * 4.5}deg)`,
+            }}
+          />
+        </div>
+        {isMobileReloading && (
+          <span className="text-[10px] font-mono font-bold text-md-primary bg-white/95 dark:bg-md-surface px-2.5 py-0.5 rounded-full shadow-sm border border-md-outline/15">
+            Reloading...
+          </span>
+        )}
+      </div>
+
       {/* CASE SWITCHER & HERO SUMMARY CARD                             */}
       {/* ------------------------------------------------------------- */}
       <MemberCaseSummaryCard
@@ -418,14 +541,14 @@ export const MemberDashboard: React.FC = () => {
       {/* ------------------------------------------------------------- */}
       {/* MOBILE VIEW: TAB CARD (DROPDOWN + CONTENT LIKE ACQUISITION)   */}
       {/* ------------------------------------------------------------- */}
-      <div className="sm:hidden bg-white rounded-3xl p-5 border border-slate-200 shadow-xs space-y-4">
-        {/* Mobile Tab Selector (Custom Dropdown with Rounded White Option Box) */}
+      <div className="sm:hidden bg-md-surface-container border border-md-outline/15 rounded-3xl p-5 shadow-xs space-y-4">
+        {/* Mobile Tab Selector (Custom Dropdown with Rounded Option Box) */}
         <div className="relative z-30" ref={tabDropdownRef}>
           {/* Dropdown Trigger Button */}
           <button
             type="button"
             onClick={() => setTabDropdownOpen((prev) => !prev)}
-            className="w-full bg-white border border-slate-300 hover:border-slate-400 text-slate-800 font-bold text-xs rounded-2xl py-3 pl-3.5 pr-4 focus:outline-none focus:ring-2 focus:ring-violet-500 shadow-xs flex items-center justify-between cursor-pointer transition select-none"
+            className="w-full bg-md-surface border border-md-outline/25 hover:border-md-outline/40 text-md-on-surface font-bold text-xs rounded-2xl py-3 pl-3.5 pr-4 focus:outline-none focus:ring-2 focus:ring-md-primary shadow-xs flex items-center justify-between cursor-pointer transition select-none"
             aria-expanded={tabDropdownOpen}
             aria-haspopup="listbox"
           >
@@ -457,7 +580,7 @@ export const MemberDashboard: React.FC = () => {
 
           {/* Dropdown Option Box with Border Radius and White Background */}
           {tabDropdownOpen && (
-            <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-xl border border-slate-200/90 p-1.5 z-40 animate-in fade-in zoom-in-95 duration-150">
+            <div className="absolute left-0 right-0 top-full mt-2 bg-md-surface border border-md-outline/25 rounded-2xl shadow-xl p-1.5 z-40 animate-in fade-in zoom-in-95 duration-150">
               <div className="space-y-1" role="listbox">
                 <button
                   type="button"
@@ -469,8 +592,8 @@ export const MemberDashboard: React.FC = () => {
                   }}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer text-left ${
                     activeTab === 'workflow'
-                      ? 'bg-violet-50 text-violet-700 font-bold'
-                      : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900'
+                      ? 'bg-md-primary/10 text-md-primary font-bold'
+                      : 'text-md-on-surface-variant hover:bg-md-surface-container hover:text-md-on-surface'
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
@@ -579,32 +702,32 @@ export const MemberDashboard: React.FC = () => {
       {/* ------------------------------------------------------------- */}
       <div className="hidden sm:block space-y-5">
         {/* Desktop Tab Selector (Pills) */}
-        <div className="flex bg-slate-200/80 p-1 rounded-2xl text-xs font-semibold overflow-x-auto no-scrollbar gap-1">
+        <div className="flex bg-md-surface-container-low p-1.5 rounded-2xl text-xs font-semibold overflow-x-auto no-scrollbar gap-1.5 border border-md-outline/15 shadow-xs">
           <button
             onClick={() => setActiveTab('workflow')}
-            className={`flex-1 min-w-[100px] py-2 px-3 rounded-xl transition text-center flex items-center justify-center gap-1.5 cursor-pointer ${
+            className={`flex-1 min-w-[100px] py-2 px-3.5 rounded-xl transition text-center flex items-center justify-center gap-2 cursor-pointer ${
               activeTab === 'workflow'
-                ? 'bg-white text-violet-700 shadow-sm font-bold'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-md-surface text-md-primary shadow-sm font-bold ring-1 ring-md-outline/10'
+                : 'text-md-on-surface-variant hover:text-md-on-surface hover:bg-md-surface-container/60'
             }`}
           >
-            <Layers className="w-3.5 h-3.5" />
+            <Layers className="w-4 h-4 shrink-0" />
             <span>Workflow</span>
           </button>
 
           <button
             onClick={() => setActiveTab('objections')}
-            className={`flex-1 min-w-[100px] py-2 px-3 rounded-xl transition text-center flex items-center justify-center gap-1.5 cursor-pointer ${
+            className={`flex-1 min-w-[100px] py-2 px-3.5 rounded-xl transition text-center flex items-center justify-center gap-2 cursor-pointer ${
               activeTab === 'objections'
-                ? 'bg-white text-violet-700 shadow-sm font-bold'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-md-surface text-md-primary shadow-sm font-bold ring-1 ring-md-outline/10'
+                : 'text-md-on-surface-variant hover:text-md-on-surface hover:bg-md-surface-container/60'
             }`}
           >
-            <AlertCircle className="w-3.5 h-3.5" />
+            <AlertCircle className="w-4 h-4 shrink-0" />
             <span>Objections</span>
             {allMemberObjections.length > 0 && (
               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                activeTab === 'objections' ? 'bg-violet-100 text-violet-800' : 'bg-slate-300 text-slate-700'
+                activeTab === 'objections' ? 'bg-md-primary/15 text-md-primary' : 'bg-md-surface-container-highest text-md-on-surface-variant'
               }`}>
                 {allMemberObjections.length}
               </span>
@@ -613,29 +736,28 @@ export const MemberDashboard: React.FC = () => {
 
           <button
             onClick={() => setActiveTab('documents')}
-            className={`flex-1 min-w-[100px] py-2 px-3 rounded-xl transition text-center flex items-center justify-center gap-1.5 cursor-pointer ${
+            className={`flex-1 min-w-[100px] py-2 px-3.5 rounded-xl transition text-center flex items-center justify-center gap-2 cursor-pointer ${
               activeTab === 'documents'
-                ? 'bg-white text-violet-700 shadow-sm font-bold'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-md-surface text-md-primary shadow-sm font-bold ring-1 ring-md-outline/10'
+                : 'text-md-on-surface-variant hover:text-md-on-surface hover:bg-md-surface-container/60'
             }`}
           >
-            <FileText className="w-3.5 h-3.5" />
+            <FileText className="w-4 h-4 shrink-0" />
             <span>Forms</span>
           </button>
 
           <button
             onClick={() => setActiveTab('officer')}
-            className={`flex-1 min-w-[100px] py-2 px-3 rounded-xl transition text-center flex items-center justify-center gap-1.5 cursor-pointer ${
+            className={`flex-1 min-w-[100px] py-2 px-3.5 rounded-xl transition text-center flex items-center justify-center gap-2 cursor-pointer ${
               activeTab === 'officer'
-                ? 'bg-white text-violet-700 shadow-sm font-bold'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-md-surface text-md-primary shadow-sm font-bold ring-1 ring-md-outline/10'
+                : 'text-md-on-surface-variant hover:text-md-on-surface hover:bg-md-surface-container/60'
             }`}
           >
-            <UserCheck className="w-3.5 h-3.5" />
+            <UserCheck className="w-4 h-4 shrink-0" />
             <span>Officer</span>
           </button>
         </div>
-
         {/* Desktop Tab Content */}
         <div>
           {tabContent}

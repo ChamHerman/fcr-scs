@@ -9,8 +9,11 @@ import {
   ShieldCheck,
   Eye,
   Check,
+  Zap,
+  RotateCw,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { Select } from '../../../components/ui/Select';
 import { Button } from '../../../components/ui/Button';
 import { formatCurrencyRM } from '../../../utils/currency';
 import { CASE_STATUS_LABEL_MAP } from '../../../constants/landAcquisition';
@@ -70,63 +73,40 @@ export const MemberCaseSummaryCard: React.FC<MemberCaseSummaryCardProps> = ({
     <>
       {/* Multi-Case Switcher (if member owns multiple properties) */}
       {cases.length > 1 ? (
-        <div className="bg-slate-100/90 border border-slate-300/80 rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center shrink-0">
-              <Layers className="w-4 h-4" />
+        <div className="bg-md-surface-container border border-md-outline/15 rounded-3xl p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-md-secondary-container text-md-primary flex items-center justify-center shrink-0">
+              <Layers className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-xs font-bold text-slate-800 block">Switch Land Parcel Case</span>
-              <p className="text-[11px] text-slate-500">
+              <span className="text-sm font-bold text-md-on-surface block">Switch Land Parcel Case</span>
+              <p className="text-xs text-md-on-surface-variant mt-0.5">
                 You have multiple registered acquisition cases. Switch below to view property details.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <label htmlFor="case-select" className="sr-only">
-              Select Case
-            </label>
-            <div className="relative">
-              <select
-                id="case-select"
-                value={selectedCaseId}
-                onChange={(e) => onCaseChange(e.target.value)}
-                className="appearance-none bg-slate-50 hover:bg-slate-100 border border-slate-300 text-slate-900 font-bold text-xs rounded-xl py-2 pl-3 pr-8 focus:outline-none focus:ring-2 focus:ring-violet-500 cursor-pointer shadow-sm transition"
-              >
-                {cases.map((c: any) => {
-                  const parcelLot = c.landParcel?.lotNo ? `Lot ${c.landParcel.lotNo}` : c.caseTitle || c.caseId;
-                  const mukim = c.landParcel?.mukim ? ` (${c.landParcel.mukim})` : '';
-                  const statusLabel = CASE_STATUS_LABEL_MAP[c.status] || c.status;
-                  return (
-                    <option key={c.caseId} value={c.caseId}>
-                      {c.caseId} • {parcelLot}
-                      {mukim} [{statusLabel}]
-                    </option>
-                  );
-                })}
-              </select>
-              <ChevronDown className="w-4 h-4 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
-
-            <button
-              onClick={() => onRefreshCase(selectedCaseId)}
-              title="Refresh case data"
-              disabled={loadingDetails}
-              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition cursor-pointer disabled:opacity-50"
-            >
-              <div
-                className={`w-3.5 h-3.5 rounded-full border border-slate-600 border-t-transparent ${
-                  loadingDetails ? 'animate-spin' : ''
-                }`}
-              />
-            </button>
+          <div className="shrink-0 w-full lg:w-auto flex-1 lg:flex-initial lg:min-w-[420px]">
+            <Select
+              label="Acquisition Case"
+              value={selectedCaseId}
+              onChange={(val) => onCaseChange(val)}
+              options={cases.map((c: any) => {
+                const parcelLot = c.landParcel?.lotNo ? `Lot ${c.landParcel.lotNo}` : c.caseTitle || c.caseId;
+                const mukim = c.landParcel?.mukim ? ` (${c.landParcel.mukim})` : '';
+                const statusLabel = CASE_STATUS_LABEL_MAP[c.status] || c.status;
+                return {
+                  value: c.caseId,
+                  label: `${c.caseId} • ${parcelLot}${mukim} [${statusLabel}]`,
+                };
+              })}
+            />
           </div>
         </div>
       ) : null}
 
       {/* HERO CARD */}
-      <div className="mt-5 bg-gradient-to-br from-[#f8f5fc] via-[#f3edf7] to-[#e8def8] text-slate-900 rounded-3xl p-6 sm:p-8 shadow-sm relative overflow-hidden border border-purple-200/80">
+      <div className="mt-5 bg-gradient-to-br from-md-surface-container via-md-surface-container/80 to-md-secondary-container/40 text-md-on-surface rounded-3xl p-6 sm:p-8 shadow-sm relative overflow-hidden border border-md-outline/15">
         {/* Subtle Ambient Light Glow */}
         <div className="absolute top-0 right-0 -mt-10 -mr-10 w-56 h-56 bg-purple-300/25 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-56 h-56 bg-violet-300/25 rounded-full blur-3xl pointer-events-none" />
@@ -134,7 +114,7 @@ export const MemberCaseSummaryCard: React.FC<MemberCaseSummaryCardProps> = ({
         {/* Lot & Case Header */}
         <div className="relative z-10 flex items-start justify-between gap-3 mb-4">
           <div>
-            <span className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full text-[11px] font-bold bg-violet-600/10 text-violet-800 border border-violet-300/70 uppercase tracking-wider">
+            <span className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full text-[11px] font-mono font-bold bg-md-primary/10 text-md-primary border border-md-primary/20 tracking-wider">
               {caseDetails?.caseId || selectedCaseId || '—'}
             </span>
             <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 mt-2 tracking-tight">
@@ -198,7 +178,7 @@ export const MemberCaseSummaryCard: React.FC<MemberCaseSummaryCardProps> = ({
               <Button
                 variant="filled"
                 size="md"
-                className="w-full !rounded-2xl !py-3 bg-violet-700 hover:bg-violet-800 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition"
+                className="w-full !rounded-2xl !py-3 font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition"
               >
                 <FileCheck2 className="w-4 h-4" />
                 <span>Review Offer Letter (Form H)</span>
@@ -209,7 +189,7 @@ export const MemberCaseSummaryCard: React.FC<MemberCaseSummaryCardProps> = ({
               variant="filled"
               size="md"
               disabled
-              className="w-full !rounded-2xl !py-3 bg-slate-300 text-slate-500 font-bold text-xs flex items-center justify-center gap-2 cursor-not-allowed opacity-60"
+              className="w-full !rounded-2xl !py-3 font-bold text-xs flex items-center justify-center gap-2"
             >
               <FileCheck2 className="w-4 h-4" />
               <span>Offer Letter (Form H) Pending</span>
@@ -394,14 +374,17 @@ export const MemberCaseSummaryCard: React.FC<MemberCaseSummaryCardProps> = ({
           </div>
 
           <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5">
-            <span className={currentStageNum >= 1 ? 'text-emerald-700 font-semibold' : ''}>
-              1. Notice & Registration ✓
+            <span className={`inline-flex items-center gap-1.5 ${currentStageNum >= 1 ? 'text-emerald-700 font-semibold' : ''}`}>
+              <span>1. Notice & Registration</span>
+              <Check size={12} className="text-emerald-600 shrink-0" />
             </span>
-            <span className={currentStageNum === 3 ? 'text-violet-700 font-bold' : ''}>
-              3. Form H Offer ⚡
+            <span className={`inline-flex items-center gap-1.5 ${currentStageNum === 3 ? 'text-violet-700 font-bold' : ''}`}>
+              <span>3. Form H Offer</span>
+              <Zap size={12} className="text-violet-600 shrink-0" />
             </span>
-            <span className={currentStageNum >= 6 ? 'text-emerald-700 font-bold' : ''}>
-              6. Handover ⏳
+            <span className={`inline-flex items-center gap-1.5 ${currentStageNum >= 6 ? 'text-emerald-700 font-bold' : ''}`}>
+              <span>6. Handover</span>
+              <Clock size={12} className="text-slate-400 shrink-0" />
             </span>
           </div>
         </div>

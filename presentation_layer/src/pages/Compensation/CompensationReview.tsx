@@ -596,7 +596,7 @@ export const CompensationReview: React.FC = () => {
                 <div className="budget-metrics-grid">
                   <div className="metric-box">
                     <span className="metric-label">Total Project Budget</span>
-                    <span className="metric-value font-mono">
+                    <span className="metric-value">
                       {formatCurrencyRM(report.projectBudgetSummary.totalBudget)}
                     </span>
                     <span className="metric-sub">Allocated Project Budget</span>
@@ -604,7 +604,7 @@ export const CompensationReview: React.FC = () => {
 
                   <div className="metric-box">
                     <span className="metric-label">Total Approved Under Project</span>
-                    <span className="metric-value font-mono text-amber-700 dark:text-amber-400">
+                    <span className="metric-value text-amber-700 dark:text-amber-400">
                       {formatCurrencyRM(report.projectBudgetSummary.totalApprovedUnderProject)}
                     </span>
                     <span className="metric-sub">Across All Project Cases</span>
@@ -612,7 +612,7 @@ export const CompensationReview: React.FC = () => {
 
                   <div className="metric-box highlight-current">
                     <span className="metric-label">Remaining Fund</span>
-                    <span className="metric-value font-mono text-blue-700 dark:text-blue-400">
+                    <span className="metric-value text-blue-700 dark:text-blue-400">
                       {formatCurrencyRM(report.projectBudgetSummary.remainingFund)}
                     </span>
                     <span className="metric-sub">Prior to This Approval</span>
@@ -625,7 +625,7 @@ export const CompensationReview: React.FC = () => {
                   >
                     <span className="metric-label">Remaining Fund After Approval</span>
                     <span
-                      className={`metric-value font-mono font-bold ${
+                      className={`metric-value font-bold ${
                         report.projectBudgetSummary.remainingFundAfter < 0
                           ? "text-amber-700 dark:text-amber-400"
                           : "text-emerald-700 dark:text-emerald-400"

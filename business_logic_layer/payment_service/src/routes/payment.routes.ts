@@ -27,9 +27,15 @@ router.get("/pending-authorisations", authenticate, requireRole(UserRole.GOVERNM
 router.get("/failed", authenticate, requireRole(UserRole.GOVERNMENT_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR), ctrl.getFailedTransactions);
 router.get("/cases/:caseId/receipt", authenticate, requireRole(UserRole.GOVERNMENT_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR, UserRole.DISPLACED_COMMUNITY_MEMBER), ctrl.downloadReceipt);
 
+// Receipt confirmation route (Member and Government Administrator)
+router.post("/confirm-receipt", ctrl.confirmReceipt);
+
 // Dispute route
 router.post("/dispute", upload.single("file"), ctrl.dispute);
 
+// Saved bank details for members
+router.get("/saved-bank-details", authenticate, ctrl.getSavedBankDetails);
+router.post("/saved-bank-details", authenticate, ctrl.saveDefaultBankDetails);
 // Bank clearance simulation portal routes
 router.get("/bank/pending", ctrl.getBankPending);
 router.post("/bank/approve", ctrl.approveBank);

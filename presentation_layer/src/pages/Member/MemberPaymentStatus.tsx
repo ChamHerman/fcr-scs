@@ -20,7 +20,7 @@ import {
   UploadCloud
 } from 'lucide-react';
 import { paymentApi } from '../../services/paymentApi';
-import { normalizePaymentStatus, paymentStatusClassMap } from '../Payment/statusMaps';
+import { normalizePaymentStatus, paymentStatusClassMap, getMemberDisplayStatus } from '../Payment/statusMaps';
 import { Button } from '../../components/ui/Button';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { useAuth } from '../../context/AuthContext';
@@ -76,48 +76,49 @@ export default function MemberPaymentStatus() {
         const res = await paymentApi.getAllCases();
         const cases: any[] = res.cases || [];
 
-        const mapped: CaseOption[] = cases.map((c) => ({
+        const cleanIc = (user?.identificationNumber || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        const memberName = (user?.name || '').toLowerCase();
+        const memberEmail = (user?.email || '').toLowerCase();
+
+        const memberCases = cases.filter((c: any) => {
+          if (c.accountHolderName && c.accountHolderName.toLowerCase() === memberName) return true;
+          if (c.beneficiaryId === user?.userId) return true;
+          if (c.myKadNumber && cleanIc && c.myKadNumber.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === cleanIc) return true;
+          const owners = c.acquisitionCase?.landParcel?.ownerships?.map((o: any) => o.landOwner).filter(Boolean) || [];
+          return owners.some((ow: any) => {
+            const owIc = (ow.icNumber || ow.nric || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            return (
+              (cleanIc && owIc === cleanIc) ||
+              ow.ownerId === user?.userId ||
+              (ow.name && ow.name.toLowerCase() === memberName) ||
+              (ow.email && ow.email.toLowerCase() === memberEmail)
+            );
+          });
+        });
+
+        const mapped: CaseOption[] = memberCases.map((c: any) => ({
           caseId: c.caseId,
-          projectName: c.caseId === 'LAC-2026-08-0003'
-            ? 'Desa Melati Flood Mitigation Project'
-            : `Acquisition Project ${c.caseId}`,
-          lotNo: c.caseId === 'LAC-2026-08-0003'
-            ? 'Lot 3104, Mukim Setapak'
-            : 'Lot Parcel',
+          projectName: c.acquisitionCase?.project?.projectName || `Acquisition Project ${c.caseId}`,
+          lotNo: c.acquisitionCase?.landParcel?.lotNo || 'Lot Parcel',
           amount: Number(c.amount) || 0,
           status: c.status,
         }));
 
         if (isMounted) {
+          setAvailableCases(mapped);
           if (mapped.length > 0) {
-            setAvailableCases(mapped);
             const target = requestedCaseId
               ? mapped.find((item) => item.caseId.toLowerCase() === requestedCaseId.toLowerCase())
               : mapped[0];
             setSelectedCaseId(target ? target.caseId : mapped[0].caseId);
           } else {
-            const fallback: CaseOption = {
-              caseId: 'LAC-2026-08-0003',
-              projectName: 'Desa Melati Flood Mitigation Project',
-              lotNo: 'Lot 3104, Mukim Setapak',
-              amount: 3200000,
-              status: 'Offer Accepted',
-            };
-            setAvailableCases([fallback]);
-            setSelectedCaseId(fallback.caseId);
+            setSelectedCaseId('');
           }
         }
       } catch {
         if (isMounted) {
-          const fallback: CaseOption = {
-            caseId: requestedCaseId || 'LAC-2026-08-0003',
-            projectName: 'Desa Melati Flood Mitigation Project',
-            lotNo: 'Lot 3104, Mukim Setapak',
-            amount: 3200000,
-            status: 'Offer Accepted',
-          };
-          setAvailableCases([fallback]);
-          setSelectedCaseId(fallback.caseId);
+          setAvailableCases([]);
+          setSelectedCaseId('');
         }
       } finally {
         if (isMounted) setLoadingCases(false);
@@ -170,63 +171,67 @@ export default function MemberPaymentStatus() {
     return availableCases.find((c) => c.caseId === selectedCaseId) || availableCases[0];
   }, [availableCases, selectedCaseId]);
 
-  const rawStatus = paymentCase?.status || activeCaseInfo?.status || 'Offer Accepted';
-  const canonicalStatus = normalizePaymentStatus(rawStatus);
-  const statusBadgeClass = paymentStatusClassMap[canonicalStatus] || 'status-offer-accepted';
+  const rawStatus = paymentCase?.status || activeCaseInfo?.status || 'BANK_DETAILS_PENDING';
+  const memberDisplay = getMemberDisplayStatus(rawStatus);
+  const memberStatusLabel = memberDisplay.label;
+  const memberBadgeClass = memberDisplay.badgeClass;
 
-  // Has bank details
-  const hasBankDetails = Boolean(paymentCase?.bankName && paymentCase?.accountNumber);
+  const isBankPending = memberStatusLabel === 'Bank Details Pending' || memberStatusLabel === 'New Bank Details Pending';
+  const isPaymentInProgress = memberStatusLabel === 'Payment In Progress';
+  const isTransferSucceed = memberStatusLabel === 'Payment Completed';
+  const isPaid = memberStatusLabel === 'Paid';
 
-  // Compute Milestone Step Index (0 to 4)
-  // 0: Offer Accepted
-  // 1: Bank Details Submitted / Verified
-  // 2: Multi-Signature Governance
-  // 3: Bank Clearing House Clearance
-  // 4: Disbursement Executed (Paid)
+  // Step 2 is completed ONLY when bank details have been submitted and the case is in an operational disbursement status
+  const isBankVerified = !isBankPending && Boolean(paymentCase?.bankName && paymentCase?.accountNumber);
+
   const currentStep = useMemo(() => {
-    if (canonicalStatus === 'Paid') return 4;
-    if (canonicalStatus === 'Waiting Bank Approval') return 3;
-    if (canonicalStatus === 'Authorised') return 3;
-    if (canonicalStatus === 'Transfer Initiated') return 2;
-    if (canonicalStatus === 'Bank Details Submitted' || hasBankDetails) return 2;
-    return 1; // Needs bank details
-  }, [canonicalStatus, hasBankDetails]);
+    if (isPaid) return 5;
+    if (isTransferSucceed) return 4;
+    if (isPaymentInProgress) return 3;
+    if (isBankVerified) return 2;
+    return 1; // Bank details pending -> Step 2 is active, requiring action
+  }, [isPaid, isTransferSucceed, isPaymentInProgress, isBankVerified]);
 
   const steps = [
     {
       step: 1,
       title: 'Offer Accepted',
-      subtitle: 'Statutory Form H statutory award accepted by landowner',
+      subtitle: 'Statutory Form H award accepted by landowner',
       completed: true,
     },
     {
       step: 2,
       title: 'Bank Details Verified',
-      subtitle: hasBankDetails
+      subtitle: isBankVerified
         ? `${paymentCase?.bankName} (•••• ${paymentCase?.accountNumber?.slice(-4)}) recorded`
-        : 'Awaiting beneficiary bank details submission',
-      completed: currentStep >= 2 || hasBankDetails,
-      actionRequired: !hasBankDetails && currentStep < 2,
+        : isBankPending
+        ? 'Awaiting beneficiary bank details submission'
+        : 'Bank details submission verified',
+      completed: isBankVerified,
+      isCurrent: isBankPending,
+      actionRequired: isBankPending,
     },
     {
       step: 3,
       title: 'Multi-Signature Governance',
-      subtitle: paymentCase?.requiredSignatures
+      subtitle: isBankPending
+        ? 'Dual administrative governance approval (Pending Step 2)'
+        : paymentCase?.requiredSignatures
         ? `Cryptographic dual authorisation (${paymentCase.currentSignatures || 0}/${paymentCase.requiredSignatures} signatures)`
         : 'Dual administrative governance approval',
-      completed: currentStep >= 3,
+      completed: currentStep >= 4 || isTransferSucceed || isPaid,
     },
     {
       step: 4,
       title: 'Bank Clearing House',
       subtitle: 'Electronic Fund Transfer clearance by commercial bank network',
-      completed: currentStep >= 4,
+      completed: currentStep >= 5 || isPaid,
     },
     {
       step: 5,
-      title: 'Disbursement Executed',
-      subtitle: 'Statutory funds credited to landowner beneficiary account',
-      completed: currentStep === 4 && canonicalStatus === 'Paid',
+      title: 'Disbursement Confirmed',
+      subtitle: 'Statutory funds verified and confirmed received by landowner beneficiary',
+      completed: isPaid,
     },
   ];
 
@@ -275,11 +280,16 @@ export default function MemberPaymentStatus() {
       });
       setShowDisputeModal(false);
       setDisputeFile(null);
-    } catch (err: any) {
+      try {
+        const res = await paymentApi.getStatus(selectedCaseId);
+        if (res.paymentCase) setPaymentCase(res.paymentCase);
+      } catch {}
+    } catch (err: unknown) {
+      const e = err as Error;
       notify({
         type: 'error',
         title: 'Dispute Submission Failed',
-        message: err.message || 'Unable to register dispute.',
+        message: e.message || 'Unable to register dispute.',
       });
     } finally {
       setSubmittingDispute(false);
@@ -287,7 +297,7 @@ export default function MemberPaymentStatus() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto pt-6 sm:pt-8 pb-12 px-4 sm:px-6 space-y-6">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-md-outline/15">
         <div>
@@ -339,8 +349,21 @@ export default function MemberPaymentStatus() {
           ))}
         </div>
       )}
+      {/* Empty State */}
+      {!loadingCases && availableCases.length === 0 && (
+        <div className="bg-md-surface-container border border-md-outline/15 rounded-xl p-8 text-center space-y-3 shadow-sm">
+          <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto text-slate-400">
+            <CircleDollarSign size={28} />
+          </div>
+          <h2 className="text-base font-bold text-md-on-surface">No Payment Records Under Your Account</h2>
+          <p className="text-xs text-md-on-surface-variant max-w-sm mx-auto">
+            There are currently no statutory compensation payment records issued under your account ({user?.name || user?.email}). Cases progress to payment status once an official Form H award notice has been accepted.
+          </p>
+        </div>
+      )}
 
-      {/* Case Overview & Status Banner */}
+      {availableCases.length > 0 && (
+        <>
       <div className="bg-md-surface-container border border-md-outline/15 rounded-xl p-5 sm:p-6 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-md-outline/10">
           <div>
@@ -356,9 +379,9 @@ export default function MemberPaymentStatus() {
               >
                 {copiedId ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
               </button>
-              <span className={`payment-badge ${statusBadgeClass}`}>
+              <span className={`payment-badge ${memberBadgeClass}`}>
                 <span className="dot" />
-                {canonicalStatus}
+                {memberStatusLabel}
               </span>
             </div>
             <h2 className="text-sm sm:text-base font-semibold text-md-on-surface mt-1">
@@ -393,7 +416,7 @@ export default function MemberPaymentStatus() {
           <div>
             <span className="text-md-on-surface-variant block">Beneficiary Bank</span>
             <span className="font-semibold text-md-on-surface truncate block">
-              {paymentCase?.bankName || (hasBankDetails ? 'Registered' : 'Pending Submission')}
+              {paymentCase?.bankName || (isBankVerified ? 'Registered' : 'Pending Submission')}
             </span>
           </div>
           <div>
@@ -407,14 +430,14 @@ export default function MemberPaymentStatus() {
             <span className="font-semibold text-md-on-surface">
               {paymentCase?.requiredSignatures
                 ? `${paymentCase.currentSignatures || 0} of ${paymentCase.requiredSignatures} Signatures`
-                : canonicalStatus === 'Paid' ? 'Fully Approved' : 'In Governance'}
+                : isPaid ? 'Fully Approved' : 'In Governance'}
             </span>
           </div>
         </div>
       </div>
 
       {/* Action Prompt if Bank Details Missing */}
-      {!hasBankDetails && canonicalStatus === 'Offer Accepted' && (
+      {isBankPending && (
         <div className="p-4 sm:p-5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
           <div className="flex items-start gap-3">
             <CreditCard size={20} className="text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
@@ -435,6 +458,59 @@ export default function MemberPaymentStatus() {
             <span>Submit Bank Details</span>
             <ArrowRight size={16} />
           </Button>
+        </div>
+      )}
+
+      {/* Prominent Transfer Succeed Confirmation Banner adhering to Phase 6 */}
+      {isTransferSucceed && (
+        <div className="p-5 rounded-xl bg-emerald-500/10 border-2 border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-md">
+          <div className="flex items-start gap-3.5">
+            <CheckCircle2 size={24} className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+            <div>
+              <h3 className="text-sm sm:text-base font-bold text-emerald-950 dark:text-emerald-100">
+                Payment Completed & Disbursed
+              </h3>
+              <p className="text-xs sm:text-sm text-emerald-800 dark:text-emerald-300 mt-1 leading-relaxed">
+                Payment has been disbursed by the bank to your account. Please check your bank balance and confirm receipt below.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto shrink-0">
+            <Button
+              variant="filled"
+              className="!bg-emerald-600 !text-white hover:!bg-emerald-700 w-full sm:w-auto font-semibold"
+              onClick={async () => {
+                try {
+                  await paymentApi.confirmReceipt({ caseId: selectedCaseId, role: 'DISPLACED_COMMUNITY_MEMBER' });
+                  notify({
+                    type: 'success',
+                    title: 'Receipt Confirmed',
+                    message: 'Thank you for confirming receipt of payment. Your case is now marked as Paid.',
+                  });
+                  const res = await paymentApi.getStatus(selectedCaseId);
+                  if (res.paymentCase) setPaymentCase(res.paymentCase);
+                } catch (err: unknown) {
+                  const e = err as Error;
+                  notify({
+                    type: 'error',
+                    title: 'Confirmation Failed',
+                    message: e.message || 'Could not confirm receipt.',
+                  });
+                }
+              }}
+            >
+              <CheckCircle2 size={16} />
+              <span>Confirm Payment Received</span>
+            </Button>
+            <Button
+              variant="outlined"
+              className="w-full sm:w-auto"
+              onClick={() => setShowDisputeModal(true)}
+            >
+              <AlertTriangle size={15} />
+              <span>Payment Not Received</span>
+            </Button>
+          </div>
         </div>
       )}
 
@@ -504,7 +580,7 @@ export default function MemberPaymentStatus() {
                       to={`/member/bank-details?caseId=${encodeURIComponent(selectedCaseId)}`}
                       className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-400 underline mt-1"
                     >
-                      <span>Submit Now</span>
+                      <span>Submit Bank Details Now</span>
                       <ArrowRight size={12} />
                     </Link>
                   )}
@@ -547,7 +623,8 @@ export default function MemberPaymentStatus() {
           </Button>
         </div>
       </div>
-
+      </>
+      )}
       {/* Dispute Modal */}
       {showDisputeModal && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">

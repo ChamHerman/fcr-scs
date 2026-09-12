@@ -11,6 +11,7 @@ import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
+import { CopyButton } from '../../components/ui/CopyButton';
 import { WalletButton } from '../../components/ui/WalletButton';
 import { ActionMenuPortal } from '../../components/ui/ActionMenuPortal';
 import { NetworkSelector } from './NetworkSelector';
@@ -272,9 +273,12 @@ export const BlockchainDashboard: React.FC = () => {
                 filtered.map((row) => (
                   <tr key={row.id} className="row-clickable" onClick={() => setModal({ type: 'view', row })}>
                     <td>
-                      <span className="font-mono font-bold text-xs text-md-primary">
-                        {row.publicId ?? row.caseId}
-                      </span>
+                      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        <span className="font-mono font-bold text-xs text-md-primary">
+                          {row.publicId ?? row.caseId}
+                        </span>
+                        <CopyButton value={row.publicId ?? row.caseId} title="Copy Record ID" />
+                      </div>
                     </td>
                     <td><CaseIdCell caseId={row.caseId} /></td>
                     <td>
@@ -283,8 +287,16 @@ export const BlockchainDashboard: React.FC = () => {
                         <div className="payment-hint mt-1">{followUps[row.caseId]}</div>
                       )}
                     </td>
-                    <td style={{ fontFamily: 'monospace', color: 'var(--md-on-surface-variant)' }}>{fmtTx(row.transactionHash)}</td>
-                    <td><span className="meta-text">{fmtDate(row.publishedAt ?? row.createdAt)}</span></td>
+                    <td className="font-mono text-xs text-md-on-surface-variant">
+                      {row.transactionHash ? (
+                        <div className="flex items-center gap-1.5">
+                          <span>{fmtTx(row.transactionHash)}</span>
+                          <CopyButton value={row.transactionHash} title="Copy Transaction Hash" />
+                        </div>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td>{ledgerBadge(row.status)}</td>
                     <td onClick={(e) => e.stopPropagation()}>
                       <div className="row-actions">

@@ -42,6 +42,11 @@ export const MemberLayout: React.FC = () => {
     navigate('/login');
   };
 
+  // Strict Light Theme enforcement for Member Portal (DESIGN.md)
+  useEffect(() => {
+    document.documentElement.classList.remove('dark');
+  }, []);
+
   // Close dropdown on click outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -187,17 +192,14 @@ export const MemberLayout: React.FC = () => {
                       <span>Verify Audit Trail</span>
                     </Link>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDropdownOpen(false);
-                        alert('Profile Settings: Claimant personal details, contact preferences, and notifications.');
-                      }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 transition text-left cursor-pointer"
+                    <Link
+                      to="/member/settings"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 transition"
                     >
                       <Settings size={16} className="text-slate-500" />
-                      <span>Profile Settings</span>
-                    </button>
+                      <span>Settings & Payout Account</span>
+                    </Link>
                   </div>
 
                   {/* Divider & Red Logout Button */}

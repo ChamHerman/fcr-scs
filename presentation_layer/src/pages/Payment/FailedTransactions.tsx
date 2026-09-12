@@ -7,6 +7,7 @@ import { paymentApi } from '../../services/paymentApi';
 import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Button } from '../../components/ui/Button';
+import { CopyButton } from '../../components/ui/CopyButton';
 import { Modal } from '../../components/ui/Modal';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { useAuth } from '../../context/AuthContext';
@@ -185,9 +186,12 @@ export default function FailedTransactions() {
                       onClick={() => setModal({ type: 'view', pc })}
                     >
                       <td>
-                        <span className="font-mono font-bold text-xs text-md-primary">
-                          {paymentId}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-bold text-xs text-md-primary">
+                            {paymentId}
+                          </span>
+                          <CopyButton value={paymentId} title="Copy Payment ID" />
+                        </div>
                       </td>
                       <td><CaseIdCell caseId={pc.caseId} onClick={(cid) => setCaseDetailsId(cid)} /></td>
                       <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
@@ -196,7 +200,7 @@ export default function FailedTransactions() {
                           {errorLog.length > 70 ? `${errorLog.slice(0, 70)}…` : errorLog}
                         </span>
                       </td>
-                      <td><span className="meta-text">{latest ? fmtDate(latest.createdAt) : fmtDate(pc.updatedAt)}</span></td>
+                      <td><span className="meta-text font-mono text-xs">{latest ? fmtDate(latest.createdAt) : fmtDate(pc.updatedAt)}</span></td>
                       <td>
                         {unresolved ? (
                           <span className="payment-badge status-transfer-failed"><span className="dot" />Pending resolution</span>
@@ -204,7 +208,7 @@ export default function FailedTransactions() {
                           <span className="payment-badge status-paid"><span className="dot" />Resolved</span>
                         )}
                       </td>
-                      <td>{paymentBadge(pc.status)}</td>
+                      <td>{paymentBadge(pc.status, pc.currentSignatures, pc.requiredSignatures)}</td>
                     </tr>
                   );
                 })

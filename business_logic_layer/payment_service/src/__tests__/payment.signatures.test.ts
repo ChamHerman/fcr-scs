@@ -33,7 +33,7 @@ describe("Signature model & Final Execution Confirmation", () => {
         amount,
         bankName: "Maybank",
         accountHolderName: "Test Beneficiary",
-        status: PaymentStatus.OFFER_ACCEPTED,
+        status: PaymentStatus.BANK_DETAILS_PENDING,
         requiredSignatures: 0,
         currentSignatures: 0,
       },
@@ -67,7 +67,7 @@ describe("Signature model & Final Execution Confirmation", () => {
       .set("Authorization", `Bearer ${ga1Token}`)
       .send({ caseId: createdCaseId });
     expect(r.status).toBe(200);
-    expect(r.body.paymentCase.status).toBe(PaymentStatus.TRANSFER_INITIATED);
+    expect(r.body.paymentCase.status).toBe(PaymentStatus.PENDING_APPROVAL);
     expect(r.body.paymentCase.requiredSignatures).toBe(3);
     expect(r.body.paymentCase.currentSignatures).toBe(1);
     expect(r.body.paymentCase.paymentId).toMatch(/^PMT-[A-Z0-9]{8}$/);
@@ -122,7 +122,7 @@ describe("Signature model & Final Execution Confirmation", () => {
     expect(r2.body.error).toMatch(/segregation/i);
   });
 
-  it("1M: partial signatures stay Transfer Initiated; final signature marks AUTHORISED; remains on hold until explicit confirmExecution", async () => {
+  it("1M: signatures accumulate as PENDING_APPROVAL; remains on hold until explicit confirmExecution", async () => {
     await makeCase(1_000_000);
     await request(app)
       .post("/api/payments/initiate")
@@ -135,7 +135,7 @@ describe("Signature model & Final Execution Confirmation", () => {
       .send({ caseId: createdCaseId });
     expect(first.status).toBe(200);
     expect(first.body.paymentCase.currentSignatures).toBe(2);
-    expect(first.body.paymentCase.status).toBe(PaymentStatus.TRANSFER_INITIATED);
+    expect(first.body.paymentCase.status).toBe(PaymentStatus.PENDING_APPROVAL);
 
     const second = await request(app)
       .post("/api/payments/authorise")
@@ -143,7 +143,7 @@ describe("Signature model & Final Execution Confirmation", () => {
       .send({ caseId: createdCaseId });
     expect(second.status).toBe(200);
     expect(second.body.paymentCase.currentSignatures).toBe(3);
-    expect(second.body.paymentCase.status).toBe(PaymentStatus.AUTHORISED);
+    expect(second.body.paymentCase.status).toBe(PaymentStatus.PENDING_APPROVAL);
 
     // CRITICAL: Remains in AUTHORISED; bank queue does NOT have this case
     const bankPendingBefore = await request(app).get("/api/payments/bank/pending");
@@ -173,11 +173,18 @@ describe("Signature model & Final Execution Confirmation", () => {
       .post("/api/payments/bank/approve")
       .send({ caseId: createdCaseId, bankReferenceNumber: "BNK-TEST-REF" });
     expect(bankApprove.status).toBe(200);
-    expect(bankApprove.body.paymentCase.status).toBe(PaymentStatus.PAID);
+    expect(bankApprove.body.paymentCase.status).toBe(PaymentStatus.TRANSFER_SUCCEED);
     expect(bankApprove.body.paymentCase.receipt).toBeDefined();
+
+    // Member confirms payment receipt -> marks PAID
+    const memberConfirm = await request(app)
+      .post("/api/payments/confirm-receipt")
+      .send({ caseId: createdCaseId, role: UserRole.DISPLACED_COMMUNITY_MEMBER });
+    expect(memberConfirm.status).toBe(200);
+    expect(memberConfirm.body.paymentCase.status).toBe(PaymentStatus.PAID);
   });
 
-  it("pending authorisations include partially-signed (Transfer Initiated) cases", async () => {
+  it("pending authorisations include partially-signed (Pending Approval) cases", async () => {
     await makeCase(1_000_000);
     await request(app)
       .post("/api/payments/initiate")
@@ -190,6 +197,6 @@ describe("Signature model & Final Execution Confirmation", () => {
     expect(r.status).toBe(200);
     const found = r.body.cases.find((c: { caseId: string }) => c.caseId === createdCaseId);
     expect(found).toBeDefined();
-    expect(found.status).toBe(PaymentStatus.TRANSFER_INITIATED);
+    expect(found.status).toBe(PaymentStatus.PENDING_APPROVAL);
   });
 });

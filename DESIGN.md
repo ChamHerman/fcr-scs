@@ -64,11 +64,26 @@ Defined in `tailwind.config.js` and `index.css`.
 - **`--md-scrollbar-thumb`**: Light `rgba(121,116,126,0.4)` / Dark `rgba(147,143,153,0.45)` — used by `.md-scroll-thin`
 
 ### Typography
-- **Font Family**: Roboto (imported via Google Fonts).
-- Headings use medium (500) and bold (700) weights for friendly impact.
-- Body text uses regular (400) weight for optimal readability.
-
-### Border Radius
+- **Primary Sans-Serif (UI Body, Headings & Currency Figures)**: Roboto (`font-sans`, imported via Google Fonts).
+  - Headings use medium (500) and bold (700) weights for friendly impact.
+  - Body text uses regular (400) weight for optimal readability.
+  - **Currency and Monetary Figures**: All currency, RM numbers, statutory awards, and compensation amounts must strictly use the default font style **Roboto** (`font-sans` / default font). Do NOT use JetBrains Mono for currency/RM amounts.
+- **Monospace Standard (Technical Identifiers, Hashes & Cryptographic Keys)**: JetBrains Mono (`font-mono`, weights: 400, 500, 600, 700, imported via Google Fonts).
+  - Configured in `tailwind.config.js` (`mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace']`) and `index.css`:
+    ```css
+    .font-mono, .mono, .case-id, code, pre, kbd, samp {
+      font-family: 'JetBrains Mono', monospace !important;
+      font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    }
+    ```
+  - **Mandatory Monospace Application**:
+    1. **Case IDs**: `LAC-YYYY-MM-XXXX` (always rendered with `font-mono font-bold`).
+    2. **Payment IDs**: `PMT-LAC-YYYY-MM-XXXX` (always rendered with `font-mono font-bold`).
+    3. **Public Ledger & Record IDs**: `FCR-XXXX-XXXX` (always rendered with `font-mono font-bold`).
+    4. **Blockchain Hashes & Addresses**: `0x...`, transaction hashes, and wallet addresses (`font-mono`).
+    5. **Bank Accounts**: Masked account numbers (e.g. `•••• 1234`) and account references (`font-mono`).
+    6. **Identification Numbers**: Malaysian MyKad / NRIC numbers (`font-mono`).
+    *(Note: All monetary figures/currency `RM X,XXX,XXX.XX` must use the default font Roboto, never JetBrains Mono).*
 Defined in `tailwind.config.js`. Standard card, input, and modal radius is **`xl` (28px)**.
 - `xs` (8px), `sm` (12px), `md` (16px)
 - **`lg` / `xl` (28px)**: Standard card, container, form input, and modal radius.
@@ -225,3 +240,15 @@ Every status in the Payment and Blockchain modules is mapped to a dedicated CSS 
 10. **Case IDs are interactive**: clicking the case ID opens its detail modal, and a copy icon sits beside every case ID.
 11. **Filters apply on selection**: no Apply button — changing the dropdown value filters immediately.
 12. **Distinct sidebar icons**: sibling nav items within a module never share an icon.
+13. **Strict Monospace for Identifiers & Hashes**: Never render Case IDs, Payment IDs, Ledger Record Keys, Hashes, Bank Account Numbers, or NRICs in generic sans-serif. Always apply `font-mono` (`JetBrains Mono`). Currency and monetary figures (`RM` amounts) must use the default font style **Roboto** (never JetBrains Mono).
+14. **Topbar & Content Vertical Spacing**: Every page view must provide at least 24px–32px (`pt-6 sm:pt-8`) of breathing space below the sticky top navbar before the first card/container to prevent elements sticking to the header.
+15. **Mobile + Desktop Responsive UI Standard (Member Portal & Core Views)**:
+    - Every single page in the Member Portal must be strictly responsive across all screen sizes (Mobile: 360px–480px, Tablet: 768px, Desktop: 1024px–1440px).
+    - **Adaptive Layout Structure**:
+      - Headers, stat summaries, and metadata bars must collapse vertically on mobile (`flex flex-col sm:flex-row`, `items-start sm:items-center`, `justify-between`) with clean gap spacing (`gap-3 sm:gap-4`).
+      - Multi-column grids must adapt responsively (`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3`).
+      - Action buttons must stretch full-width on mobile (`w-full sm:w-auto`) to provide accessible touch targets ($\ge 44\text{px}$ touch height).
+      - Horizontal button toolbars must reverse on mobile (`flex flex-col-reverse sm:flex-row justify-end gap-3`) so primary confirming actions appear at top on mobile and rightmost on desktop.
+      - Tab navigation must provide an adaptive pattern: an adaptive dropdown or scrollable pill container on mobile (`overflow-x-auto no-scrollbar`), and segmented pill buttons on desktop.
+      - Steppers and timeline cards must adapt from vertical linear steps on mobile (`sm:hidden`) to multi-column segmented progress bars on desktop (`hidden sm:block`).
+      - Modals and forms must constrain maximum width with responsive margins (`max-w-lg sm:max-w-xl`, `mx-4 sm:mx-auto`, `max-h-[85vh]`).

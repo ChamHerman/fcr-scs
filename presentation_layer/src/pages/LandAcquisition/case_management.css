@@ -360,12 +360,27 @@ table th {
   letter-spacing: 0.3px;
   color: var(--md-on-surface-variant);
   white-space: nowrap;
+  border-bottom: 1px solid rgba(121, 116, 126, 0.08);
+  border-right: 1px solid rgba(121, 116, 126, 0.08);
+}
+table th:last-child {
+  border-right: none;
 }
 table td {
   padding: 12px 10px;
-  border-bottom: 1px solid rgba(121, 116, 126, 0.06);
+  border-bottom: 1px solid rgba(121, 116, 126, 0.08);
+  border-right: 1px solid rgba(121, 116, 126, 0.08);
   vertical-align: middle;
   word-break: break-word;
+}
+table td:last-child {
+  border-right: none;
+}
+
+.dark table th,
+.dark table td {
+  border-bottom-color: rgba(202, 196, 208, 0.08);
+  border-right-color: rgba(202, 196, 208, 0.08);
 }
 table tbody tr {
   transition: background 0.15s;

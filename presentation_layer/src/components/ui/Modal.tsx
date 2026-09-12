@@ -19,6 +19,7 @@ export interface ModalProps {
   onConfirm?: () => void;
   confirmVariant?: 'filled' | 'danger';
   confirmLoading?: boolean;
+  confirmDisabled?: boolean;
   keepMounted?: boolean;
   maxWidth?: string;
   className?: string;
@@ -37,6 +38,7 @@ export const Modal: React.FC<ModalProps> = ({
   onConfirm,
   confirmVariant = 'filled',
   confirmLoading = false,
+  confirmDisabled = false,
   keepMounted = true,
   maxWidth = 'max-w-lg',
   className,
@@ -158,6 +160,7 @@ export const Modal: React.FC<ModalProps> = ({
             size="md"
             onClick={onConfirm}
             isLoading={confirmLoading}
+            disabled={confirmDisabled || confirmLoading || !onConfirm}
           >
             {confirmText}
           </Button>

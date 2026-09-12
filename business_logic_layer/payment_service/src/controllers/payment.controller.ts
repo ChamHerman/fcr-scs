@@ -54,7 +54,17 @@ export async function submitBankDetails(req: Request, res: Response): Promise<vo
 
     res.json({ success: true, paymentCase });
   } catch (e: unknown) {
-    res.status(500).json({ error: (e as Error).message });
+    const msg = (e as Error).message;
+    if (
+      msg.includes("already registered") ||
+      msg.includes("must be unique") ||
+      msg.includes("Invalid") ||
+      msg.includes("required")
+    ) {
+      res.status(400).json({ error: msg });
+    } else {
+      res.status(500).json({ error: msg });
+    }
   }
 }
 
@@ -233,13 +243,16 @@ export async function scheduleTomorrow(req: Request, res: Response): Promise<voi
 
 export async function getStatus(req: Request, res: Response): Promise<void> {
   const caseId = req.params.caseId as string;
+  const user = (req as AuthenticatedRequest).user;
   try {
-    const paymentCase = await paymentService.getPaymentStatus(caseId);
+    const paymentCase = await paymentService.getPaymentStatus(caseId, user?.role, user?.userId);
     res.json({ paymentCase });
   } catch (e: unknown) {
     const msg = (e as Error).message;
     if (msg.toLowerCase().includes("not found")) {
       res.status(404).json({ error: msg });
+    } else if (msg.toLowerCase().includes("access denied")) {
+      res.status(403).json({ error: msg });
     } else {
       res.status(500).json({ error: msg });
     }
@@ -255,12 +268,54 @@ export async function getPendingAuthorisations(_req: Request, res: Response): Pr
   }
 }
 
-export async function getAllCases(_req: Request, res: Response): Promise<void> {
+export async function getAllCases(req: Request, res: Response): Promise<void> {
   try {
-    const cases = await paymentService.getAllCases();
+    const user = (req as AuthenticatedRequest).user;
+    const cases = await paymentService.getAllCases(user?.role, user?.userId);
     res.json({ cases });
   } catch (e: unknown) {
     res.status(500).json({ error: (e as Error).message });
+  }
+}
+
+export async function getSavedBankDetails(req: Request, res: Response): Promise<void> {
+  try {
+    const user = (req as AuthenticatedRequest).user;
+    const savedAccounts = await paymentService.getSavedBankDetails(user?.userId, user?.identificationNumber, user?.name);
+    res.json({ success: true, savedAccounts });
+  } catch (e: unknown) {
+    res.status(500).json({ error: (e as Error).message });
+  }
+}
+
+export async function saveDefaultBankDetails(req: Request, res: Response): Promise<void> {
+  try {
+    const user = (req as AuthenticatedRequest).user;
+    const { bankName, accountNumber, accountHolderName, phoneNumber, myKadNumber } = req.body;
+    if (!bankName || !accountNumber) {
+      res.status(400).json({ error: "bankName and accountNumber are required" });
+      return;
+    }
+    const result = await paymentService.saveMemberBankDetails(user?.userId || "", {
+      bankName,
+      accountNumber,
+      accountHolderName: accountHolderName || user?.name || "",
+      phoneNumber: phoneNumber || user?.contactNumber || "",
+      myKadNumber: myKadNumber || user?.identificationNumber || "",
+    });
+    res.json({ success: true, savedAccount: result, message: "Bank details saved successfully." });
+  } catch (e: unknown) {
+    const msg = (e as Error).message;
+    if (
+      msg.includes("already registered") ||
+      msg.includes("must be unique") ||
+      msg.includes("Invalid") ||
+      msg.includes("required")
+    ) {
+      res.status(400).json({ error: msg });
+    } else {
+      res.status(500).json({ error: msg });
+    }
   }
 }
 
@@ -291,14 +346,34 @@ export async function downloadReceipt(req: Request, res: Response): Promise<void
 }
 
 export async function dispute(req: Request, res: Response): Promise<void> {
-  const caseId = req.body.caseId;
+  const { caseId, reason } = req.body;
   if (!caseId) {
     res.status(400).json({ error: "caseId is required" });
     return;
   }
   try {
-    const paymentCase = await paymentService.disputePayment(caseId);
-    res.json({ paymentCase });
+    const paymentCase = await paymentService.disputePayment(caseId, reason);
+    res.json({ paymentCase, message: "Payment dispute recorded." });
+  } catch (e: unknown) {
+    const msg = (e as Error).message;
+    if (msg.toLowerCase().includes("not found")) {
+      res.status(404).json({ error: msg });
+    } else {
+      res.status(400).json({ error: msg });
+    }
+  }
+}
+
+export async function confirmReceipt(req: Request, res: Response): Promise<void> {
+  const { caseId, isAutoOrAdminOverride } = req.body;
+  const userRole = (req as AuthenticatedRequest).user?.role || req.body.role || "GOVERNMENT_ADMINISTRATOR";
+  if (!caseId) {
+    res.status(400).json({ error: "caseId is required" });
+    return;
+  }
+  try {
+    const paymentCase = await paymentService.confirmPaymentReceipt(caseId, userRole, Boolean(isAutoOrAdminOverride));
+    res.json({ success: true, paymentCase, message: "Payment receipt confirmed. Status updated to PAID." });
   } catch (e: unknown) {
     const msg = (e as Error).message;
     if (msg.toLowerCase().includes("not found")) {
@@ -338,14 +413,28 @@ export async function approveBank(req: Request, res: Response): Promise<void> {
 }
 
 export async function rejectBank(req: Request, res: Response): Promise<void> {
-  const { caseId, errorReason } = req.body;
+  const { caseId, errorReason, isRejectedCategory } = req.body;
   if (!caseId) {
     res.status(400).json({ error: "caseId is required" });
     return;
   }
   try {
-    const paymentCase = await paymentService.rejectBankTransfer(caseId, errorReason);
-    res.json({ paymentCase, message: "Bank transfer rejected and recorded in failed logs." });
+    const isCatA = Boolean(
+      isRejectedCategory ||
+      errorReason?.includes("RECIPIENT_ACCOUNT") ||
+      errorReason?.includes("NAME_MISMATCH") ||
+      errorReason?.toLowerCase().includes("not found") ||
+      errorReason?.toLowerCase().includes("dormant") ||
+      errorReason?.toLowerCase().includes("frozen") ||
+      errorReason?.toLowerCase().includes("mismatch")
+    );
+    const paymentCase = await paymentService.rejectBankTransfer(caseId, errorReason, isCatA);
+    res.json({
+      paymentCase,
+      message: isCatA
+        ? "Transfer marked as Transfer Rejected (recipient account issue)."
+        : "Transfer marked as Transfer Failed (gateway/switch issue).",
+    });
   } catch (e: unknown) {
     const msg = (e as Error).message;
     if (msg.toLowerCase().includes("not found")) {
