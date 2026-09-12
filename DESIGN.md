@@ -39,6 +39,7 @@ The application uses standard `react-router-dom` routing. All pages are rendered
 1. **Auto-hiding Navbar**: A sticky `<Navbar />` with SVG Logo mark and "Smart Contract Resettlement" wordmark that listens to scroll direction.
 2. **Global Footer**: A `<Footer />` consistently applied at the bottom of every page.
 3. **Notification Provider**: Root-level state for triggering MD3-compliant toast notifications from any page or component.
+4. **Toast Stacking Rule (LOCKED)**: The right-hand toast stack (`NotificationSystem`) always renders at the very front of the screen — `z-index: 100000`, above every modal overlay (`md-modal-overlay` sits at `99999`) and above any page content. Success, error, warning, and info toasts must never be hidden behind a modal. **Toast duration rule (LOCKED 2026-09-12)**: success auto-dismisses after 5s, general/info after 8s, and **errors never auto-dismiss** — an error toast stays on screen until the user closes it manually (industry standard: transient confirmations are brief, failures persist until acknowledged). Every toast keeps a visible close button.
 
 ## Design Tokens
 
@@ -64,26 +65,26 @@ Defined in `tailwind.config.js` and `index.css`.
 - **`--md-scrollbar-thumb`**: Light `rgba(121,116,126,0.4)` / Dark `rgba(147,143,153,0.45)` — used by `.md-scroll-thin`
 
 ### Typography
-- **Primary Sans-Serif (UI Body, Headings & Currency Figures)**: Roboto (`font-sans`, imported via Google Fonts).
+- **Single Typeface — Roboto (JetBrains Mono REVOKED 2026-09-12)**: the whole system uses ONE Google font, Roboto (`font-sans`, weights 400/500/700). Running JetBrains Mono beside Roboto produced inconsistent text spacing and line rhythm across portals, so the dual-font standard was revoked.
   - Headings use medium (500) and bold (700) weights for friendly impact.
   - Body text uses regular (400) weight for optimal readability.
-  - **Currency and Monetary Figures**: All currency, RM numbers, statutory awards, and compensation amounts must strictly use the default font style **Roboto** (`font-sans` / default font). Do NOT use JetBrains Mono for currency/RM amounts.
-- **Monospace Standard (Technical Identifiers, Hashes & Cryptographic Keys)**: JetBrains Mono (`font-mono`, weights: 400, 500, 600, 700, imported via Google Fonts).
-  - Configured in `tailwind.config.js` (`mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace']`) and `index.css`:
+  - Identifiers, hashes, masked accounts, MyKad numbers, and **all currency figures (`RM X,XXX,XXX.XX`)** all render in Roboto.
+- **Tabular Numerals (column alignment without a second font)**: the `font-mono` / `.mono` / `.case-id` / `code` / `pre` / `kbd` / `samp` slots keep their semantic hook but render Roboto with fixed-width figures:
+  - Configured in `tailwind.config.js` (`mono: ['Roboto', 'ui-monospace', 'monospace']`) and `index.css`:
     ```css
     .font-mono, .mono, .case-id, code, pre, kbd, samp {
-      font-family: 'JetBrains Mono', monospace !important;
-      font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+      font-family: 'Roboto', ui-monospace, monospace !important;
+      font-variant-numeric: tabular-nums;
     }
     ```
-  - **Mandatory Monospace Application**:
+  - **Tabular Application (semantics unchanged)**:
     1. **Case IDs**: `LAC-YYYY-MM-XXXX` (always rendered with `font-mono font-bold`).
     2. **Payment IDs**: `PMT-LAC-YYYY-MM-XXXX` (always rendered with `font-mono font-bold`).
     3. **Public Ledger & Record IDs**: `FCR-XXXX-XXXX` (always rendered with `font-mono font-bold`).
     4. **Blockchain Hashes & Addresses**: `0x...`, transaction hashes, and wallet addresses (`font-mono`).
     5. **Bank Accounts**: Masked account numbers (e.g. `•••• 1234`) and account references (`font-mono`).
     6. **Identification Numbers**: Malaysian MyKad / NRIC numbers (`font-mono`).
-    *(Note: All monetary figures/currency `RM X,XXX,XXX.XX` must use the default font Roboto, never JetBrains Mono).*
+- **Spacing consistency rule**: identical text spacing and line spacing across every portal — never re-introduce a second font family.
 Defined in `tailwind.config.js`. Standard card, input, and modal radius is **`xl` (28px)**.
 - `xs` (8px), `sm` (12px), `md` (16px)
 - **`lg` / `xl` (28px)**: Standard card, container, form input, and modal radius.
@@ -240,7 +241,7 @@ Every status in the Payment and Blockchain modules is mapped to a dedicated CSS 
 10. **Case IDs are interactive**: clicking the case ID opens its detail modal, and a copy icon sits beside every case ID.
 11. **Filters apply on selection**: no Apply button — changing the dropdown value filters immediately.
 12. **Distinct sidebar icons**: sibling nav items within a module never share an icon.
-13. **Strict Monospace for Identifiers & Hashes**: Never render Case IDs, Payment IDs, Ledger Record Keys, Hashes, Bank Account Numbers, or NRICs in generic sans-serif. Always apply `font-mono` (`JetBrains Mono`). Currency and monetary figures (`RM` amounts) must use the default font style **Roboto** (never JetBrains Mono).
+13. **Tabular Numerals for Identifiers & Hashes** (updated 2026-09-12, JetBrains Mono revoked): Case IDs, Payment IDs, Ledger Record Keys, Hashes, Bank Account Numbers, and NRICs always render through the `font-mono` slot, which is Roboto with `font-variant-numeric: tabular-nums` — column-aligned, single typeface. Currency and monetary figures (`RM` amounts) use the default **Roboto**. Never re-introduce a second font family.
 14. **Topbar & Content Vertical Spacing**: Every page view must provide at least 24px–32px (`pt-6 sm:pt-8`) of breathing space below the sticky top navbar before the first card/container to prevent elements sticking to the header.
 15. **Mobile + Desktop Responsive UI Standard (Member Portal & Core Views)**:
     - Every single page in the Member Portal must be strictly responsive across all screen sizes (Mobile: 360px–480px, Tablet: 768px, Desktop: 1024px–1440px).
@@ -252,3 +253,7 @@ Every status in the Payment and Blockchain modules is mapped to a dedicated CSS 
       - Tab navigation must provide an adaptive pattern: an adaptive dropdown or scrollable pill container on mobile (`overflow-x-auto no-scrollbar`), and segmented pill buttons on desktop.
       - Steppers and timeline cards must adapt from vertical linear steps on mobile (`sm:hidden`) to multi-column segmented progress bars on desktop (`hidden sm:block`).
       - Modals and forms must constrain maximum width with responsive margins (`max-w-lg sm:max-w-xl`, `mx-4 sm:mx-auto`, `max-h-[85vh]`).
+16. **Payment Record Modal Sections (LOCKED 2026-09-12)**: the Disbursement Case Record shows two audit sections — **From Government Admin** (every GA action: Initiate / Authorise / Execute / Reject / Resolved / Cancel, with reason + timestamp) and **From Bank / Beneficiary** (successful bank clearances incl. bank reference, bank returns, member disputes). A GA rejection never appears under From Bank / Beneficiary — it is not a transfer attempt.
+17. **Payment Timestamps (LOCKED 2026-09-12)**: every payment-related modal shows the case **Created** and **Last Updated** datetimes (`CaseTimestamps`); payment tables label their datetime column **Updated** (never the ambiguous "Date & Time").
+18. **Dispute Statement Review (LOCKED 2026-09-12)**: a member-uploaded dispute PDF is reviewed via **Open PDF in New Tab** or **Download** from the record modal — never embedded as an iframe inside the modal (the modal is too small for a PDF reader).
+19. **Fullscreen Modal Overlay (LOCKED 2026-09-12)**: every modal in every portal uses the shared `Modal` component (portal to `<body>`, `.md-modal-overlay` fixed inset-0, z-index 99999). Hand-rolled `fixed z-50` overlays are forbidden — inside GSAP-transformed containers they lose viewport anchoring and leave the topbar un-covered.

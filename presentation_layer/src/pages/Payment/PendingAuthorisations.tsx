@@ -11,6 +11,7 @@ import { CopyButton } from '../../components/ui/CopyButton';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { useAuth } from '../../context/AuthContext';
 import './payment.css';
+import { RefreshButton } from './RefreshButton';
 import {
   ViewDetailsModal,
   AuthoriseTransferModal,
@@ -114,6 +115,7 @@ export default function PendingAuthorisations() {
           <div className="sub">Initiated transfers awaiting secondary approval (multi-signature queue).</div>
         </div>
         <div className="topbar-right">
+          <RefreshButton onClick={() => loadData()} loading={loading} />
           <div className="date-badge">
             <Clock size={16} className="inline mr-1" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
           </div>

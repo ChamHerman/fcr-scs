@@ -827,16 +827,24 @@
 .valuation-report-dashboard .status-badge.rejected .dot { background: #C62828; }
 .valuation-report-dashboard .status-badge.review { background: #E0F2FE; color: #075985; }
 .valuation-report-dashboard .status-badge.review .dot { background: #0284C7; }
-@media (prefers-color-scheme: dark) {
-  .valuation-report-dashboard .status-badge.pending { background: rgba(202,138,4,0.22); color: #FEF08A; }
-  .valuation-report-dashboard .status-badge.pending .dot { background: #FACC15; }
-  .valuation-report-dashboard .status-badge.approved { background: rgba(46,125,50,0.22); color: #A5D6A7; }
-  .valuation-report-dashboard .status-badge.approved .dot { background: #81C784; }
-  .valuation-report-dashboard .status-badge.rejected { background: rgba(198,40,40,0.25); color: #FFCDD2; }
-  .valuation-report-dashboard .status-badge.rejected .dot { background: #E57373; }
-  .valuation-report-dashboard .status-badge.review { background: rgba(2,132,199,0.22); color: #7DD3FC; }
-  .valuation-report-dashboard .status-badge.review .dot { background: #38BDF8; }
-}
+
+[data-theme="dark"] .valuation-report-dashboard .status-badge.pending,
+.dark .valuation-report-dashboard .status-badge.pending { background: rgba(202,138,4,0.22); color: #FEF08A; }
+[data-theme="dark"] .valuation-report-dashboard .status-badge.pending .dot,
+.dark .valuation-report-dashboard .status-badge.pending .dot { background: #FACC15; }
+[data-theme="dark"] .valuation-report-dashboard .status-badge.approved,
+.dark .valuation-report-dashboard .status-badge.approved { background: rgba(46,125,50,0.22); color: #A5D6A7; }
+[data-theme="dark"] .valuation-report-dashboard .status-badge.approved .dot,
+.dark .valuation-report-dashboard .status-badge.approved .dot { background: #81C784; }
+[data-theme="dark"] .valuation-report-dashboard .status-badge.rejected,
+.dark .valuation-report-dashboard .status-badge.rejected { background: rgba(198,40,40,0.25); color: #FFCDD2; }
+[data-theme="dark"] .valuation-report-dashboard .status-badge.rejected .dot,
+.dark .valuation-report-dashboard .status-badge.rejected .dot { background: #E57373; }
+[data-theme="dark"] .valuation-report-dashboard .status-badge.review,
+.dark .valuation-report-dashboard .status-badge.review { background: rgba(2,132,199,0.22); color: #7DD3FC; }
+[data-theme="dark"] .valuation-report-dashboard .status-badge.review .dot,
+.dark .valuation-report-dashboard .status-badge.review .dot { background: #38BDF8; }
+
 .valuation-report-dashboard .pagination {
   display: flex;
   justify-content: space-between;

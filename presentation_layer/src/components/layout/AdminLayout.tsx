@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
@@ -41,44 +41,114 @@ export const AdminLayout: React.FC = () => {
   const navigate = useNavigate();
   const { logout, allowedPages } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [financeExpanded, setFinanceExpanded] = useState(false);
-  const [landAcquisitionExpanded, setLandAcquisitionExpanded] = useState(false);
-  const [compensationExpanded, setCompensationExpanded] = useState(false);
-  const [reportsExpanded, setReportsExpanded] = useState(false);
-  const [aiValuationExpanded, setAiValuationExpanded] = useState(false);
   const [isDark, setIsDark] = useState<boolean>(() => {
     return localStorage.getItem('admin_theme') === 'dark';
   });
 
-  useEffect(() => {
-    const path = location.pathname;
-    if (path.startsWith('/admin/case') || path.startsWith('/admin/land-acquisition')) {
-      setLandAcquisitionExpanded(true);
-      setCompensationExpanded(false);
-      setFinanceExpanded(false);
-    } else if (path.startsWith('/admin/compensation')) {
-      setLandAcquisitionExpanded(false);
-      setCompensationExpanded(true);
-      setFinanceExpanded(false);
-    } else if (path.startsWith('/admin/payment') || path.startsWith('/admin/blockchain')) {
-      setLandAcquisitionExpanded(false);
-      setCompensationExpanded(false);
-      setFinanceExpanded(true);
-      setReportsExpanded(false);
-    } else if (path.startsWith('/admin/reports')) {
-      setLandAcquisitionExpanded(false);
-      setCompensationExpanded(false);
-      setFinanceExpanded(false);
-      setReportsExpanded(true);
-      setAiValuationExpanded(false);
-    } else if (path.startsWith('/admin/prediction')) {
-      setLandAcquisitionExpanded(false);
-      setCompensationExpanded(false);
-      setFinanceExpanded(false);
-      setReportsExpanded(false);
-      setAiValuationExpanded(true);
+  // Sidebar groups: expanded = route-pinned ∪ click-pinned ∪ hover-previewed.
+  // Hover is a single source of truth, set on label-enter and cleared only when
+  // the pointer leaves the nav (with a short grace delay). Per-section
+  // mouseleave fired on every layout shift caused by the expand animation and
+  // made groups oscillate open/closed forever.
+  type GroupKey = 'landAcquisition' | 'compensation' | 'finance' | 'aiValuation' | 'reports';
+
+  const GROUP_ROUTE_PATTERNS: Record<GroupKey, RegExp[]> = {
+    landAcquisition: [/^\/admin\/case/, /^\/admin\/land-acquisition/],
+    compensation: [/^\/admin\/compensation/],
+    finance: [/^\/admin\/payment/, /^\/admin\/blockchain/],
+    reports: [/^\/admin\/reports/],
+    aiValuation: [/^\/admin\/prediction/],
+  };
+
+  const routePinnedGroup = useMemo<GroupKey | null>(() => {
+    for (const [key, patterns] of Object.entries(GROUP_ROUTE_PATTERNS) as [GroupKey, RegExp[]][]) {
+      if (patterns.some((re) => re.test(location.pathname))) return key;
     }
+    return null;
   }, [location.pathname]);
+
+  const [manualOpenGroups, setManualOpenGroups] = useState<Set<GroupKey>>(new Set());
+  const [hoveredGroup, setHoveredGroup] = useState<GroupKey | null>(null);
+  const hoverClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (isCollapsed) {
+      setHoveredGroup(null);
+      setManualOpenGroups(new Set());
+    }
+  }, [isCollapsed]);
+
+  const isGroupExpanded = (key: GroupKey) =>
+    isCollapsed || key === routePinnedGroup || manualOpenGroups.has(key) || hoveredGroup === key;
+
+  const cancelHoverClear = () => {
+    if (hoverClearTimerRef.current) {
+      clearTimeout(hoverClearTimerRef.current);
+      hoverClearTimerRef.current = null;
+    }
+  };
+
+  const handleGroupEnter = (key: GroupKey) => {
+    if (isCollapsed) return;
+    cancelHoverClear();
+    setHoveredGroup(key);
+  };
+
+  const toggleGroup = (key: GroupKey) => {
+    if (isCollapsed) return;
+    setManualOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const scheduleHoverClear = () => {
+    cancelHoverClear();
+    hoverClearTimerRef.current = setTimeout(() => {
+      hoverClearTimerRef.current = null;
+      setHoveredGroup(null);
+    }, 160);
+  };
+
+  // GSAP dropdown expand: group items reveal top-to-bottom instead of popping
+  // in instantly. First paint snaps without animation so route-pinned groups
+  // don't flash the whole menu open before settling. The route-pinned group
+  // never animates closed — the active page's group always stays shown.
+  const navGroupRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const navGroupsMountedRef = useRef(false);
+
+  useEffect(() => {
+    const animate = navGroupsMountedRef.current;
+    navGroupsMountedRef.current = true;
+    const groupKeys: GroupKey[] = ['landAcquisition', 'compensation', 'finance', 'aiValuation', 'reports'];
+
+    if (isCollapsed) {
+      // Collapsed sidebar shows every group's items inline — never clipped.
+      Object.values(navGroupRefs.current).forEach((el) => {
+        if (el) gsap.set(el, { height: 'auto', opacity: 1 });
+      });
+      return;
+    }
+
+    groupKeys.forEach((key) => {
+      const el = navGroupRefs.current[key];
+      if (!el) return;
+      if (isGroupExpanded(key)) {
+        if (animate) {
+          gsap.to(el, { height: 'auto', opacity: 1, duration: 0.38, ease: 'power3.out', overwrite: 'auto' });
+        } else {
+          gsap.set(el, { height: 'auto', opacity: 1 });
+        }
+      } else if (animate && key !== routePinnedGroup) {
+        gsap.to(el, { height: 0, opacity: 0, duration: 0.26, ease: 'power2.in', overwrite: 'auto' });
+      } else if (!animate) {
+        gsap.set(el, { height: 0, opacity: 0 });
+      }
+    });
+  }, [hoveredGroup, manualOpenGroups, routePinnedGroup, isCollapsed]);
+
 
   React.useEffect(() => {
     if (isDark) {
@@ -198,6 +268,15 @@ export const AdminLayout: React.FC = () => {
         .nav-section {
           margin-bottom: 8px;
         }
+        .nav-group-items {
+          overflow: hidden;
+        }
+        .nav-divider {
+          height: 1px;
+          background: rgba(121,116,126,0.18);
+          margin: 10px 14px;
+          border-radius: 1px;
+        }
         .nav-label {
           font-size: 11px; font-weight:600; text-transform:uppercase;
           letter-spacing:0.5px; color: var(--md-on-surface-variant);
@@ -288,6 +367,7 @@ export const AdminLayout: React.FC = () => {
           .admin-sidebar-nav { flex-direction: row; flex-wrap: wrap; gap: 4px 8px; flex: 1; }
           .nav-section { margin: 0; display: flex; gap: 4px; flex-direction: row; }
           .nav-label { display: none; }
+          .nav-divider { display: none; }
           .nav-item { padding: 6px 12px; font-size: 13px; gap: 8px; justify-content: center; }
           .admin-content { padding: 16px; }
         }
@@ -318,7 +398,11 @@ export const AdminLayout: React.FC = () => {
             </button>
           </div>
 
-          <nav className="admin-sidebar-nav">
+          <nav
+            className="admin-sidebar-nav"
+            onMouseLeave={scheduleHoverClear}
+            onMouseEnter={cancelHoverClear}
+          >
             <div className="nav-section">
               {!isCollapsed && <span className="nav-label">Main</span>}
               {(allowedPages.includes('*') || allowedPages.includes('/admin')) && (
@@ -343,14 +427,20 @@ export const AdminLayout: React.FC = () => {
 
             <div className="nav-section">
               {!isCollapsed && (
-                <div className="nav-label" onClick={() => setLandAcquisitionExpanded(!landAcquisitionExpanded)}>
+                <div
+                  className="nav-label"
+                  onClick={() => toggleGroup('landAcquisition')}
+                  onMouseEnter={() => handleGroupEnter('landAcquisition')}
+                >
                   <span>Land Acquisition</span>
-                  {landAcquisitionExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  {isGroupExpanded('landAcquisition') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </div>
               )}
-              {isCollapsed && <div style={{ height: 16 }} />}
-              {(landAcquisitionExpanded || isCollapsed) && (
-                <>
+              {isCollapsed && <div className="nav-divider" />}
+              <div
+                className="nav-group-items"
+                ref={(el) => { navGroupRefs.current.landAcquisition = el; }}
+              >
                   {(allowedPages.includes('*') || allowedPages.includes('/admin/case')) && (
                     <NavLink to="/admin/case" end className="nav-item" title={isCollapsed ? "Cases" : ""}>
                       <Map size={22} className="nav-icon" />
@@ -363,20 +453,25 @@ export const AdminLayout: React.FC = () => {
                       {!isCollapsed && <span>Valuation</span>}
                     </NavLink>
                   )}
-                </>
-              )}
+              </div>
             </div>
 
             <div className="nav-section">
               {!isCollapsed && (
-                <div className="nav-label" onClick={() => setCompensationExpanded(!compensationExpanded)}>
+                <div
+                  className="nav-label"
+                  onClick={() => toggleGroup('compensation')}
+                  onMouseEnter={() => handleGroupEnter('compensation')}
+                >
                   <span>Compensation</span>
-                  {compensationExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  {isGroupExpanded('compensation') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </div>
               )}
-              {isCollapsed && <div style={{ height: 16 }} />}
-              {(compensationExpanded || isCollapsed) && (
-                <>
+              {isCollapsed && <div className="nav-divider" />}
+              <div
+                className="nav-group-items"
+                ref={(el) => { navGroupRefs.current.compensation = el; }}
+              >
                   {(allowedPages.includes('*') || allowedPages.includes('/admin/compensation/report')) && (
                     <NavLink to="/admin/compensation/report" className="nav-item" title={isCollapsed ? "Report" : ""}>
                       <ClipboardList size={22} className="nav-icon" />
@@ -395,20 +490,25 @@ export const AdminLayout: React.FC = () => {
                       {!isCollapsed && <span>Objection</span>}
                     </NavLink>
                   )}
-                </>
-              )}
+              </div>
             </div>
 
             <div className="nav-section">
               {!isCollapsed && (
-                <div className="nav-label" onClick={() => setFinanceExpanded(!financeExpanded)}>
+                <div
+                  className="nav-label"
+                  onClick={() => toggleGroup('finance')}
+                  onMouseEnter={() => handleGroupEnter('finance')}
+                >
                   <span>Finance & Ledger</span>
-                  {financeExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  {isGroupExpanded('finance') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </div>
               )}
-              {isCollapsed && <div style={{ height: 16 }} />}
-              {(financeExpanded || isCollapsed) && (
-                <>
+              {isCollapsed && <div className="nav-divider" />}
+              <div
+                className="nav-group-items"
+                ref={(el) => { navGroupRefs.current.finance = el; }}
+              >
                   {(allowedPages.includes('*') || allowedPages.includes('/admin/payment')) && (
                     <NavLink to="/admin/payment" end className="nav-item" title={isCollapsed ? "Payments Overview" : ""}>
                       <CreditCard size={22} className="nav-icon" />
@@ -451,20 +551,26 @@ export const AdminLayout: React.FC = () => {
                       {!isCollapsed && <span>Void</span>}
                     </NavLink>
                   )}
-                </>
-              )}
+              </div>
             </div>
 
             <div className="nav-section">
               {!isCollapsed && (
-                <div className="nav-label" onClick={() => setAiValuationExpanded(!aiValuationExpanded)} style={{ cursor: 'pointer' }}>
+                <div
+                  className="nav-label"
+                  onClick={() => toggleGroup('aiValuation')}
+                  onMouseEnter={() => handleGroupEnter('aiValuation')}
+                  style={{ cursor: 'pointer' }}
+                >
                   <span>AI Valuation</span>
-                  {aiValuationExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  {isGroupExpanded('aiValuation') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </div>
               )}
-              {isCollapsed && <div style={{ height: 16 }} />}
-              {(aiValuationExpanded || isCollapsed) && (
-                <>
+              {isCollapsed && <div className="nav-divider" />}
+              <div
+                className="nav-group-items"
+                ref={(el) => { navGroupRefs.current.aiValuation = el; }}
+              >
                   {(allowedPages.includes('*') || allowedPages.includes('/admin/prediction')) && (
                     <NavLink to="/admin/prediction" end className="nav-item" title={isCollapsed ? "Generate AI Valuation" : ""}>
                       <BrainCircuit size={22} className="nav-icon" />
@@ -477,20 +583,26 @@ export const AdminLayout: React.FC = () => {
                       {!isCollapsed && <span>Retrain Model</span>}
                     </NavLink>
                   )}
-                </>
-              )}
+              </div>
             </div>
 
             <div className="nav-section">
               {!isCollapsed && (
-                <div className="nav-label" onClick={() => setReportsExpanded(!reportsExpanded)} style={{ cursor: 'pointer' }}>
+                <div
+                  className="nav-label"
+                  onClick={() => toggleGroup('reports')}
+                  onMouseEnter={() => handleGroupEnter('reports')}
+                  style={{ cursor: 'pointer' }}
+                >
                   <span>Reporting</span>
-                  {reportsExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  {isGroupExpanded('reports') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </div>
               )}
-              {isCollapsed && <div style={{ height: 16 }} />}
-              {(reportsExpanded || isCollapsed) && (
-                <>
+              {isCollapsed && <div className="nav-divider" />}
+              <div
+                className="nav-group-items"
+                ref={(el) => { navGroupRefs.current.reports = el; }}
+              >
                   {(allowedPages.includes('*') || allowedPages.includes('/admin/reports')) && (
                     <NavLink to="/admin/reports" end className="nav-item" title={isCollapsed ? "Overview" : ""}>
                       <PieChart size={22} className="nav-icon" />
@@ -515,12 +627,12 @@ export const AdminLayout: React.FC = () => {
                       {!isCollapsed && <span>Blockchain Audit</span>}
                     </NavLink>
                   )}
-                </>
-              )}
+              </div>
             </div>
 
             <div className="nav-section">
               {!isCollapsed && <span className="nav-label">System</span>}
+              {isCollapsed && <div className="nav-divider" />}
               {(allowedPages.includes('*') || allowedPages.includes('/admin/profile')) && (
                 <NavLink to="/admin/profile" className="nav-item" title={isCollapsed ? "Profile" : ""}>
                   <Users size={22} className="nav-icon" />
@@ -562,6 +674,7 @@ export const AdminLayout: React.FC = () => {
             <div style={{ flex: 1 }} />
 
             <div className="nav-section" style={{ marginTop: '16px' }}>
+              {isCollapsed && <div className="nav-divider" style={{ marginBottom: 4 }} />}
               <button
                 type="button"
                 className="nav-item"

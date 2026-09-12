@@ -35,8 +35,8 @@
 }
 
 .case-id {
-  font-family: 'JetBrains Mono', monospace !important;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  font-family: 'Roboto', ui-monospace, monospace !important;
+  font-variant-numeric: tabular-nums;
   font-size: 0.8rem;
   color: var(--md-primary);
   font-weight: 600;

@@ -1,29 +1,27 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import {
   CircleDollarSign,
   CheckCircle2,
-  Clock,
-  AlertCircle,
-  FileText,
-  Download,
-  Landmark,
-  ShieldCheck,
-  CreditCard,
-  Building2,
   AlertTriangle,
   ArrowRight,
   ArrowLeft,
   Copy,
   Check,
-  FileSpreadsheet,
+  CreditCard,
+  ShieldCheck,
+  Download,
   UploadCloud
 } from 'lucide-react';
 import { paymentApi } from '../../services/paymentApi';
-import { normalizePaymentStatus, paymentStatusClassMap, getMemberDisplayStatus } from '../Payment/statusMaps';
+import { normalizePaymentStatus, getMemberDisplayStatus } from '../Payment/statusMaps';
 import { Button } from '../../components/ui/Button';
+import { Select } from '../../components/ui/Select';
+import { Modal } from '../../components/ui/Modal';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { useAuth } from '../../context/AuthContext';
+import { ConfirmSubmitModal, ConfirmRow } from '../../components/member/ConfirmSubmitModal';
+import { BankDetailsForm } from './components/BankDetailsForm';
 
 interface CaseOption {
   caseId: string;
@@ -50,7 +48,6 @@ interface PaymentCaseDetails {
 export default function MemberPaymentStatus() {
   const { user } = useAuth();
   const { notify } = useNotification();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedCaseId = searchParams.get('caseId');
 
@@ -64,7 +61,14 @@ export default function MemberPaymentStatus() {
   // Dispute form state
   const [showDisputeModal, setShowDisputeModal] = useState<boolean>(false);
   const [disputeFile, setDisputeFile] = useState<File | null>(null);
+  const [disputeRemark, setDisputeRemark] = useState<string>('');
   const [submittingDispute, setSubmittingDispute] = useState<boolean>(false);
+
+  // FR-017 confirmation states
+  const [showDisputeConfirm, setShowDisputeConfirm] = useState<boolean>(false);
+  const [showReceiptConfirm, setShowReceiptConfirm] = useState<boolean>(false);
+  const [confirmingReceipt, setConfirmingReceipt] = useState<boolean>(false);
+  const bankFormRef = useRef<HTMLDivElement>(null);
 
   // 1. Discover Cases
   useEffect(() => {
@@ -242,6 +246,14 @@ export default function MemberPaymentStatus() {
     setTimeout(() => setCopiedId(false), 2000);
   };
 
+  const refreshPaymentCase = async () => {
+    if (!selectedCaseId) return;
+    try {
+      const res = await paymentApi.getStatus(selectedCaseId);
+      if (res.paymentCase) setPaymentCase(res.paymentCase);
+    } catch {}
+  };
+
   const handleDownloadReceipt = async () => {
     if (!selectedCaseId) return;
     try {
@@ -264,26 +276,35 @@ export default function MemberPaymentStatus() {
     }
   };
 
-  const handleDisputeSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // FR-017: first confirmation = the dispute dialog's Submit button (validates),
+  // second confirmation = the ConfirmSubmitModal that actually dispatches.
+  const handleDisputeSubmitClick = () => {
     if (!disputeFile) {
-      notify({ type: 'error', title: 'Missing Attachment', message: 'Please upload supporting bank statement or correspondence.' });
+      notify({ type: 'error', title: 'Missing Attachment', message: 'Please upload a real bank statement or transaction record (PDF).' });
       return;
     }
+    if (!disputeRemark.trim()) {
+      notify({ type: 'error', title: 'Missing Remark', message: 'Please add a remark describing the discrepancy for extra context.' });
+      return;
+    }
+    setShowDisputeConfirm(true);
+  };
+
+  const handleDisputeSubmit = async () => {
+    if (!disputeFile || !disputeRemark.trim()) return;
     setSubmittingDispute(true);
     try {
-      await paymentApi.dispute(selectedCaseId, disputeFile);
+      await paymentApi.dispute(selectedCaseId, disputeFile, disputeRemark.trim());
       notify({
         type: 'success',
         title: 'Dispute Registered',
         message: 'Payment dispute submitted to Land Administration for review.',
       });
+      setShowDisputeConfirm(false);
       setShowDisputeModal(false);
       setDisputeFile(null);
-      try {
-        const res = await paymentApi.getStatus(selectedCaseId);
-        if (res.paymentCase) setPaymentCase(res.paymentCase);
-      } catch {}
+      setDisputeRemark('');
+      await refreshPaymentCase();
     } catch (err: unknown) {
       const e = err as Error;
       notify({
@@ -294,6 +315,33 @@ export default function MemberPaymentStatus() {
     } finally {
       setSubmittingDispute(false);
     }
+  };
+
+  const handleConfirmReceipt = async () => {
+    setConfirmingReceipt(true);
+    try {
+      await paymentApi.confirmReceipt({ caseId: selectedCaseId, role: 'DISPLACED_COMMUNITY_MEMBER' });
+      notify({
+        type: 'success',
+        title: 'Receipt Confirmed',
+        message: 'Thank you for confirming receipt of payment. Your case is now marked as Paid.',
+      });
+      setShowReceiptConfirm(false);
+      await refreshPaymentCase();
+    } catch (err: unknown) {
+      const e = err as Error;
+      notify({
+        type: 'error',
+        title: 'Confirmation Failed',
+        message: e.message || 'Could not confirm receipt.',
+      });
+    } finally {
+      setConfirmingReceipt(false);
+    }
+  };
+
+  const scrollToBankForm = () => {
+    bankFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   return (
@@ -324,29 +372,26 @@ export default function MemberPaymentStatus() {
         </Link>
       </div>
 
-      {/* Case Switcher Tabs if Multiple Cases */}
-      {availableCases.length > 1 && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          <span className="text-xs font-semibold text-md-on-surface-variant shrink-0">
-            Select Case:
-          </span>
-          {availableCases.map((c) => (
-            <button
-              key={c.caseId}
-              type="button"
-              onClick={() => {
-                setSelectedCaseId(c.caseId);
-                setSearchParams({ caseId: c.caseId });
+      {/* Case Switcher Dropdown (always a dropdown; labels carry case details) */}
+      {availableCases.length > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-end gap-2">
+          <div className="sm:w-[420px]">
+            <Select
+              label="Select Case"
+              placeholder={loadingCases ? 'Loading your cases…' : 'Select a case…'}
+              options={availableCases.map((c) => ({
+                value: c.caseId,
+                label: `${c.caseId} — ${c.projectName} · ${c.lotNo} · RM ${c.amount.toLocaleString('en-MY', { minimumFractionDigits: 2 })} [${getMemberDisplayStatus(c.status).label}]`,
+              }))}
+              value={selectedCaseId}
+              onChange={(val) => {
+                setSelectedCaseId(val);
+                setSearchParams({ caseId: val });
               }}
-              className={`px-3 py-1.5 rounded-full text-xs font-mono font-semibold transition-all duration-200 ease-md-bouncy shrink-0 ${
-                c.caseId === selectedCaseId
-                  ? 'bg-md-primary text-md-on-primary shadow-sm'
-                  : 'bg-md-surface-container text-md-on-surface-variant hover:bg-md-surface-container-low'
-              }`}
-            >
-              {c.caseId}
-            </button>
-          ))}
+              wrapLabels
+              disabled={loadingCases}
+            />
+          </div>
         </div>
       )}
       {/* Empty State */}
@@ -436,26 +481,28 @@ export default function MemberPaymentStatus() {
         </div>
       </div>
 
-      {/* Action Prompt if Bank Details Missing */}
+      {/* Action Prompt if Bank Details Missing — scrolls to the inline form */}
       {isBankPending && (
         <div className="p-4 sm:p-5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
           <div className="flex items-start gap-3">
             <CreditCard size={20} className="text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
             <div>
               <h3 className="text-xs sm:text-sm font-bold text-amber-900 dark:text-amber-200">
-                Beneficiary Bank Details Required
+                {rawStatus && normalizePaymentStatus(rawStatus) === 'New Bank Details Pending'
+                  ? 'New Bank Details Required'
+                  : 'Beneficiary Bank Details Required'}
               </h3>
               <p className="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
-                Government Administrators cannot initiate your fund transfer until your bank account is registered.
+                Government Administrators cannot initiate your fund transfer until your bank account is registered. Use the submission form below the workflow.
               </p>
             </div>
           </div>
           <Button
             variant="filled"
-            onClick={() => navigate(`/member/bank-details?caseId=${encodeURIComponent(selectedCaseId)}`)}
+            onClick={scrollToBankForm}
             className="w-full sm:w-auto shrink-0"
           >
-            <span>Submit Bank Details</span>
+            <span>Go to Submission Form</span>
             <ArrowRight size={16} />
           </Button>
         </div>
@@ -479,25 +526,7 @@ export default function MemberPaymentStatus() {
             <Button
               variant="filled"
               className="!bg-emerald-600 !text-white hover:!bg-emerald-700 w-full sm:w-auto font-semibold"
-              onClick={async () => {
-                try {
-                  await paymentApi.confirmReceipt({ caseId: selectedCaseId, role: 'DISPLACED_COMMUNITY_MEMBER' });
-                  notify({
-                    type: 'success',
-                    title: 'Receipt Confirmed',
-                    message: 'Thank you for confirming receipt of payment. Your case is now marked as Paid.',
-                  });
-                  const res = await paymentApi.getStatus(selectedCaseId);
-                  if (res.paymentCase) setPaymentCase(res.paymentCase);
-                } catch (err: unknown) {
-                  const e = err as Error;
-                  notify({
-                    type: 'error',
-                    title: 'Confirmation Failed',
-                    message: e.message || 'Could not confirm receipt.',
-                  });
-                }
-              }}
+              onClick={() => setShowReceiptConfirm(true)}
             >
               <CheckCircle2 size={16} />
               <span>Confirm Payment Received</span>
@@ -576,13 +605,14 @@ export default function MemberPaymentStatus() {
                   </span>
 
                   {s.actionRequired && (
-                    <Link
-                      to={`/member/bank-details?caseId=${encodeURIComponent(selectedCaseId)}`}
-                      className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-400 underline mt-1"
+                    <button
+                      type="button"
+                      onClick={scrollToBankForm}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-400 underline mt-1 cursor-pointer"
                     >
                       <span>Submit Bank Details Now</span>
                       <ArrowRight size={12} />
-                    </Link>
+                    </button>
                   )}
                 </div>
               </div>
@@ -590,6 +620,24 @@ export default function MemberPaymentStatus() {
           })}
         </div>
       </div>
+
+      {/* Inline Bank Details Submission (migrated from /member/bank-details).
+          Shown only while the workflow sits at step 2 — after a successful
+          submit the status refreshes, the workflow advances to step 3 and the
+          form disappears unless the case returns to New Bank Details Pending. */}
+      {isBankPending && selectedCaseId && (
+        <div ref={bankFormRef} className="scroll-mt-24">
+          <BankDetailsForm
+            caseId={selectedCaseId}
+            caseInfo={{
+              projectName: activeCaseInfo?.projectName,
+              lotNo: activeCaseInfo?.lotNo,
+              amount: paymentCase?.amount || activeCaseInfo?.amount,
+            }}
+            onSubmitted={refreshPaymentCase}
+          />
+        </div>
+      )}
 
       {/* Official Receipt & Actions Card */}
       <div className="bg-md-surface-container border border-md-outline/15 rounded-xl p-5 sm:p-6 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -604,85 +652,149 @@ export default function MemberPaymentStatus() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-          <Button
-            variant="tonal"
-            onClick={handleDownloadReceipt}
-            className="flex-1 sm:flex-initial"
-          >
-            <Download size={16} />
-            <span>Download Receipt</span>
-          </Button>
+          {(isPaid || isTransferSucceed) && (
+            <Button
+              variant="tonal"
+              onClick={handleDownloadReceipt}
+              className="flex-1 sm:flex-initial"
+            >
+              <Download size={16} />
+              <span>Download Receipt</span>
+            </Button>
+          )}
 
-          <Button
-            variant="text"
-            onClick={() => setShowDisputeModal(true)}
-            className="flex-1 sm:flex-initial text-md-on-surface-variant hover:text-red-600"
-          >
-            <AlertTriangle size={16} />
-            <span>Contest / Dispute</span>
-          </Button>
+          {/* FR-013: the member choice point is Transfer Succeed only — once Paid,
+              the Download Receipt button above is the sole remaining action. */}
+          {isTransferSucceed && (
+            <Button
+              variant="text"
+              onClick={() => setShowDisputeModal(true)}
+              className="flex-1 sm:flex-initial text-md-on-surface-variant hover:text-red-600"
+            >
+              <AlertTriangle size={16} />
+              <span>Contest / Dispute</span>
+            </Button>
+          )}
         </div>
       </div>
       </>
       )}
-      {/* Dispute Modal */}
-      {showDisputeModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-md-surface-container rounded-xl p-6 max-w-md w-full border border-md-outline/20 shadow-2xl space-y-4">
-            <div className="flex items-center gap-2 text-md-on-surface">
-              <AlertTriangle size={20} className="text-amber-600" />
-              <h3 className="text-base font-bold">Lodge Payment Inquiry / Dispute</h3>
-            </div>
+      {/* Dispute Modal — shared Modal component: portal to <body> with the
+          locked fullscreen overlay (DESIGN.md), never clipped by page chrome. */}
+      <Modal
+        isOpen={showDisputeModal}
+        onClose={submittingDispute ? () => {} : () => {
+          setShowDisputeModal(false);
+          setDisputeFile(null);
+          setDisputeRemark('');
+        }}
+        title="Lodge Payment Inquiry / Dispute"
+        maxWidth="max-w-md"
+        footer={
+          <div className="flex items-center justify-end gap-3 w-full">
+            <Button
+              variant="text"
+              onClick={() => {
+                setShowDisputeModal(false);
+                setDisputeFile(null);
+                setDisputeRemark('');
+              }}
+              disabled={submittingDispute}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleDisputeSubmitClick}
+              disabled={submittingDispute || !disputeFile || !disputeRemark.trim()}
+              title={!disputeFile ? 'A bank statement PDF is required' : !disputeRemark.trim() ? 'A remark is required' : undefined}
+            >
+              Review & Submit Dispute
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-md-on-surface-variant leading-relaxed">
+            If you have not received your statutory disbursement after clearance or contest the compensation amount for Case{' '}
+            <span className="font-bold text-md-on-surface">{selectedCaseId}</span>, attach a real bank
+            statement or transaction record (PDF) and add a remark to register an official inquiry.
+          </p>
 
-            <p className="text-xs text-md-on-surface-variant leading-relaxed">
-              If you have not received your statutory disbursement after clearance or contest the compensation amount for Case{' '}
-              <span className="font-mono font-bold text-md-on-surface">{selectedCaseId}</span>, attach your bank statement (PDF) to register an official inquiry.
-            </p>
+          <div className="border-2 border-dashed border-md-outline/30 rounded-xl p-6 text-center hover:bg-md-surface-container-low transition cursor-pointer">
+            <input
+              type="file"
+              accept=".pdf,application/pdf"
+              onChange={(e) => {
+                if (e.target.files?.[0]) setDisputeFile(e.target.files[0]);
+              }}
+              className="hidden"
+              id="dispute-file-input"
+            />
+            <label htmlFor="dispute-file-input" className="cursor-pointer flex flex-col items-center">
+              <UploadCloud size={32} className="text-md-primary mb-2" />
+              <span className="text-xs font-semibold text-md-on-surface">
+                {disputeFile ? disputeFile.name : 'Bank statement / transaction record (PDF) — required'}
+              </span>
+              <span className="text-[10px] text-md-on-surface-variant mt-1">
+                PDF only · Maximum file size: 10MB
+              </span>
+            </label>
+          </div>
 
-            <div className="border-2 border-dashed border-md-outline/30 rounded-xl p-6 text-center hover:bg-md-surface-container-low transition cursor-pointer">
-              <input
-                type="file"
-                accept=".pdf"
-                onChange={(e) => {
-                  if (e.target.files?.[0]) setDisputeFile(e.target.files[0]);
-                }}
-                className="hidden"
-                id="dispute-file-input"
-              />
-              <label htmlFor="dispute-file-input" className="cursor-pointer flex flex-col items-center">
-                <UploadCloud size={32} className="text-md-primary mb-2" />
-                <span className="text-xs font-semibold text-md-on-surface">
-                  {disputeFile ? disputeFile.name : 'Click to select supporting bank statement (PDF)'}
-                </span>
-                <span className="text-[10px] text-md-on-surface-variant mt-1">
-                  Maximum file size: 10MB
-                </span>
-              </label>
-            </div>
-
-            {/* Cancel / Confirm button order */}
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-md-outline/10">
-              <Button
-                variant="text"
-                onClick={() => {
-                  setShowDisputeModal(false);
-                  setDisputeFile(null);
-                }}
-                disabled={submittingDispute}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="danger"
-                onClick={handleDisputeSubmit}
-                disabled={submittingDispute || !disputeFile}
-              >
-                {submittingDispute ? 'Submitting Dispute...' : 'Submit Official Dispute'}
-              </Button>
-            </div>
+          <div className="space-y-1.5">
+            <label htmlFor="dispute-remark" className="text-xs font-bold text-md-on-surface block">
+              Remark <span className="text-red-600">*</span>
+            </label>
+            <textarea
+              id="dispute-remark"
+              value={disputeRemark}
+              onChange={(e) => setDisputeRemark(e.target.value)}
+              placeholder="Describe the discrepancy, delayed clearance, or amount difference for extra context..."
+              rows={3}
+              required
+              className="w-full px-3 py-2.5 rounded-lg border border-md-outline/40 bg-md-surface-container-low text-xs text-md-on-surface placeholder:text-md-on-surface-variant/60 focus:outline-none focus:ring-2 focus:ring-md-primary/40 resize-none"
+            />
           </div>
         </div>
-      )}
+      </Modal>
+      {/* FR-017 second confirmations */}
+      <ConfirmSubmitModal
+        isOpen={showDisputeConfirm}
+        title="Confirm Official Dispute"
+        loading={submittingDispute}
+        confirmLabel="Submit Official Dispute"
+        onConfirm={handleDisputeSubmit}
+        onCancel={() => setShowDisputeConfirm(false)}
+        summary={
+          <>
+            <ConfirmRow label="Case" value={selectedCaseId} mono />
+            <ConfirmRow label="Attachment" value={disputeFile?.name || '—'} />
+            <ConfirmRow label="Remark" value={disputeRemark.trim()} />
+          </>
+        }
+      />
+      <ConfirmSubmitModal
+        isOpen={showReceiptConfirm}
+        title="Confirm Payment Received"
+        loading={confirmingReceipt}
+        confirmLabel="Yes, I Received the Payment"
+        onConfirm={handleConfirmReceipt}
+        onCancel={() => setShowReceiptConfirm(false)}
+        summary={
+          <>
+            <ConfirmRow label="Case" value={selectedCaseId} mono />
+            <ConfirmRow
+              label="Amount"
+              value={`RM ${(paymentCase?.amount || activeCaseInfo?.amount || 0).toLocaleString('en-MY', { minimumFractionDigits: 2 })}`}
+            />
+            <ConfirmRow
+              label="Effect"
+              value="Case is marked as Paid. This closes the confirmation window — disputes are no longer possible."
+            />
+          </>
+        }
+      />
     </div>
   );
 }

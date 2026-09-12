@@ -21,6 +21,7 @@ import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Select, type SelectOption } from '../../components/ui/Select';
 import { useNotification } from '../../components/ui/NotificationSystem';
+import { ConfirmSubmitModal, ConfirmRow } from '../../components/member/ConfirmSubmitModal';
 
 const MALAYSIAN_BANKS: SelectOption[] = [
   { value: 'Maybank', label: 'Maybank (Malayan Banking Berhad)' },
@@ -52,6 +53,7 @@ export const MemberSettings: React.FC = () => {
   const [myKadNumber, setMyKadNumber] = useState<string>(user?.identificationNumber || identificationNumber || '');
   const [phoneNumber, setPhoneNumber] = useState<string>(user?.contactNumber || '');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showSaveConfirm, setShowSaveConfirm] = useState<boolean>(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -81,6 +83,8 @@ export const MemberSettings: React.FC = () => {
     return () => { isMounted = false; };
   }, []);
 
+  // FR-017: Save validates the form and opens the confirmation dialog; the
+  // dialog's Confirm performs the actual save.
   const handleSaveBankDetails = async (e: React.FormEvent) => {
     e.preventDefault();
     const errs: Record<string, string> = {};
@@ -99,7 +103,10 @@ export const MemberSettings: React.FC = () => {
       setErrors(errs);
       return;
     }
+    setShowSaveConfirm(true);
+  };
 
+  const handleConfirmedSave = async () => {
     setSaving(true);
     setErrors({});
     try {
@@ -117,6 +124,7 @@ export const MemberSettings: React.FC = () => {
         title: 'Banking Profile Updated',
         message: 'Your default disbursement bank account has been saved and verified for all future compensation cases.',
       });
+      setShowSaveConfirm(false);
 
       // Reload saved
       const res = await paymentApi.getSavedBankDetails();
@@ -322,7 +330,7 @@ export const MemberSettings: React.FC = () => {
                 className="w-full sm:w-auto"
               >
                 <Save size={16} />
-                <span>{saving ? 'Saving...' : 'Save Default Payout Account'}</span>
+                <span>Review & Save Default Payout Account</span>
               </Button>
             </div>
           </form>
@@ -387,6 +395,31 @@ export const MemberSettings: React.FC = () => {
           </div>
         </div>
       )}
+      <ConfirmSubmitModal
+        isOpen={showSaveConfirm}
+        title="Confirm Default Payout Account"
+        loading={saving}
+        confirmLabel="Confirm & Save"
+        onConfirm={handleConfirmedSave}
+        onCancel={() => setShowSaveConfirm(false)}
+        summary={
+          <>
+            <ConfirmRow label="Bank" value={bankName} />
+            <ConfirmRow label="Account Number" value={accountNumber.trim()} mono />
+            <ConfirmRow label="Account Holder" value={accountHolderName.trim()} />
+            <ConfirmRow
+              label="MyKad"
+              value={user?.identificationNumber || identificationNumber || myKadNumber}
+              mono
+            />
+            {phoneNumber.trim() && <ConfirmRow label="Phone" value={phoneNumber.trim()} mono />}
+            <ConfirmRow
+              label="Effect"
+              value="Saved as your default payout account. Nothing is submitted to the admin portal until you submit bank details on a specific case."
+            />
+          </>
+        }
+      />
     </div>
   );
 };

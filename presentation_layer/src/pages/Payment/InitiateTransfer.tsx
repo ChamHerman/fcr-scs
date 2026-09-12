@@ -12,6 +12,7 @@ import { CopyButton } from '../../components/ui/CopyButton';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { useAuth } from '../../context/AuthContext';
 import '../LandAcquisition/case_management.css';
+import { RefreshButton } from './RefreshButton';
 import './payment.css';
 import {
   ViewDetailsModal,
@@ -110,6 +111,7 @@ export default function InitiateTransfer() {
           <div className="sub">Queue of eligible cases ready for initiation — eligible = status Offer Accepted / Bank Details Submitted with valid bank details.</div>
         </div>
         <div className="topbar-right">
+          <RefreshButton onClick={() => loadData()} loading={loading} />
           <div className="date-badge">
             <Clock size={16} className="inline mr-1" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
           </div>

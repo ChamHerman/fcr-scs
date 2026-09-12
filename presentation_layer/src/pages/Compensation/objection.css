@@ -233,36 +233,64 @@
 .status-badge.status-obj-rejected .dot,
 .status-obj-rejected .dot { background: #C62828; }
 
-@media (prefers-color-scheme: dark) {
-  .objection-dashboard .status-badge.submitted,
-  .objection-dashboard .status-badge.status-submitted,
-  .status-badge.status-objection-review,
-  .status-objection-review { background: rgba(202,138,4,0.22); color: #FEF08A; }
-  .objection-dashboard .status-badge.submitted .dot,
-  .objection-dashboard .status-badge.status-submitted .dot,
-  .status-badge.status-objection-review .dot,
-  .status-objection-review .dot { background: #FACC15; }
-  .objection-dashboard .status-badge.review,
-  .objection-dashboard .status-badge.status-review { background: rgba(202,138,4,0.22); color: #FEF08A; }
-  .objection-dashboard .status-badge.review .dot,
-  .objection-dashboard .status-badge.status-review .dot { background: #FACC15; }
-  .objection-dashboard .status-badge.approved,
-  .objection-dashboard .status-badge.status-approved,
-  .status-badge.status-obj-approved,
-  .status-obj-approved { background: rgba(46,125,50,0.22); color: #A5D6A7; }
-  .objection-dashboard .status-badge.approved .dot,
-  .objection-dashboard .status-badge.status-approved .dot,
-  .status-badge.status-obj-approved .dot,
-  .status-obj-approved .dot { background: #81C784; }
-  .objection-dashboard .status-badge.rejected,
-  .objection-dashboard .status-badge.status-rejected,
-  .status-badge.status-obj-rejected,
-  .status-obj-rejected { background: rgba(198,40,40,0.25); color: #FFCDD2; }
-  .objection-dashboard .status-badge.rejected .dot,
-  .objection-dashboard .status-badge.status-rejected .dot,
-  .status-badge.status-obj-rejected .dot,
-  .status-obj-rejected .dot { background: #E57373; }
-}
+
+[data-theme="dark"] .objection-dashboard .status-badge.submitted,
+.dark .objection-dashboard .status-badge.submitted,
+[data-theme="dark"] .objection-dashboard .status-badge.status-submitted,
+.dark .objection-dashboard .status-badge.status-submitted,
+[data-theme="dark"] .status-badge.status-objection-review,
+.dark .status-badge.status-objection-review,
+[data-theme="dark"] .status-objection-review,
+.dark .status-objection-review { background: rgba(202,138,4,0.22); color: #FEF08A; }
+[data-theme="dark"] .objection-dashboard .status-badge.submitted .dot,
+.dark .objection-dashboard .status-badge.submitted .dot,
+[data-theme="dark"] .objection-dashboard .status-badge.status-submitted .dot,
+.dark .objection-dashboard .status-badge.status-submitted .dot,
+[data-theme="dark"] .status-badge.status-objection-review .dot,
+.dark .status-badge.status-objection-review .dot,
+[data-theme="dark"] .status-objection-review .dot,
+.dark .status-objection-review .dot { background: #FACC15; }
+[data-theme="dark"] .objection-dashboard .status-badge.review,
+.dark .objection-dashboard .status-badge.review,
+[data-theme="dark"] .objection-dashboard .status-badge.status-review,
+.dark .objection-dashboard .status-badge.status-review { background: rgba(202,138,4,0.22); color: #FEF08A; }
+[data-theme="dark"] .objection-dashboard .status-badge.review .dot,
+.dark .objection-dashboard .status-badge.review .dot,
+[data-theme="dark"] .objection-dashboard .status-badge.status-review .dot,
+.dark .objection-dashboard .status-badge.status-review .dot { background: #FACC15; }
+[data-theme="dark"] .objection-dashboard .status-badge.approved,
+.dark .objection-dashboard .status-badge.approved,
+[data-theme="dark"] .objection-dashboard .status-badge.status-approved,
+.dark .objection-dashboard .status-badge.status-approved,
+[data-theme="dark"] .status-badge.status-obj-approved,
+.dark .status-badge.status-obj-approved,
+[data-theme="dark"] .status-obj-approved,
+.dark .status-obj-approved { background: rgba(46,125,50,0.22); color: #A5D6A7; }
+[data-theme="dark"] .objection-dashboard .status-badge.approved .dot,
+.dark .objection-dashboard .status-badge.approved .dot,
+[data-theme="dark"] .objection-dashboard .status-badge.status-approved .dot,
+.dark .objection-dashboard .status-badge.status-approved .dot,
+[data-theme="dark"] .status-badge.status-obj-approved .dot,
+.dark .status-badge.status-obj-approved .dot,
+[data-theme="dark"] .status-obj-approved .dot,
+.dark .status-obj-approved .dot { background: #81C784; }
+[data-theme="dark"] .objection-dashboard .status-badge.rejected,
+.dark .objection-dashboard .status-badge.rejected,
+[data-theme="dark"] .objection-dashboard .status-badge.status-rejected,
+.dark .objection-dashboard .status-badge.status-rejected,
+[data-theme="dark"] .status-badge.status-obj-rejected,
+.dark .status-badge.status-obj-rejected,
+[data-theme="dark"] .status-obj-rejected,
+.dark .status-obj-rejected { background: rgba(198,40,40,0.25); color: #FFCDD2; }
+[data-theme="dark"] .objection-dashboard .status-badge.rejected .dot,
+.dark .objection-dashboard .status-badge.rejected .dot,
+[data-theme="dark"] .objection-dashboard .status-badge.status-rejected .dot,
+.dark .objection-dashboard .status-badge.status-rejected .dot,
+[data-theme="dark"] .status-badge.status-obj-rejected .dot,
+.dark .status-badge.status-obj-rejected .dot,
+[data-theme="dark"] .status-obj-rejected .dot,
+.dark .status-obj-rejected .dot { background: #E57373; }
+
 
 [data-theme="dark"] .status-objection-review,
 .dark .status-objection-review { background: rgba(202,138,4,0.22); color: #FEF08A; }

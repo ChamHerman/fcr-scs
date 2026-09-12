@@ -4,6 +4,78 @@
  * Canonical Title Case: 'Cancelled' replaces old 'CANCELLED'.
  */
 
+/**
+ * Authorisation audit actions are stored as free-form snake_case strings by the
+ * backend (e.g. 'execute_transfer'). Map them to PAST-TENSE Title Case display
+ * labels so no raw action identifier ever surfaces and the From Government
+ * Admin audit list reads as a ledger of completed acts.
+ */
+const AUTHORISATION_ACTION_LABELS: Record<string, string> = {
+  initiate: 'Initiated',
+  authorise: 'Authorised',
+  authorize: 'Authorized',
+  execute_transfer: 'Executed Transfer',
+  reject: 'Rejected',
+  cancel: 'Cancelled',
+  mark_resolved: 'Resolved',
+  reinitiate_payment: 'Reinitiated Payment',
+  resolve_dispute: 'Resolved Dispute',
+};
+
+export function formatActionLabel(action: string | null | undefined): string {
+  if (!action) return '—';
+  const key = action.trim().toLowerCase();
+  if (AUTHORISATION_ACTION_LABELS[key]) return AUTHORISATION_ACTION_LABELS[key];
+  return action
+    .trim()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Governance actions that read as "bad" for the GA — rendered red in every
+ *  audit list; everything else renders green. */
+export function isRejectionAction(action: string | null | undefined): boolean {
+  const key = (action || '').trim().toLowerCase();
+  return key === 'reject' || key === 'cancel';
+}
+
+/**
+ * Governance approvals must never surface a raw enum key (e.g.
+ * LEGAL_DISPUTE_OR_INJUNCTION). Map the locked reason codes to proper English;
+ * human-readable sentences (stored by newer backend versions) pass through.
+ */
+const AUTHORISATION_REASON_LABELS: Record<string, string> = {
+  // GA governance rejection reasons (FR-018, replaced 2026-09-12)
+  BENEFICIARY_DETAILS_MISMATCH: 'Beneficiary name or bank details do not match the statutory land award records',
+  AWARD_VERIFICATION_FAILED: 'Award amount or supporting documents failed pre-disbursement verification',
+  DUPLICATE_DISBURSEMENT_RISK: 'Possible duplicate disbursement instruction detected for this case',
+  // Legacy bank Category-A rejection codes (pre-2026-09-12 history)
+  RECIPIENT_ACCOUNT_INVALID_OR_NOT_FOUND: 'Recipient account number not found or routing code invalid',
+  RECIPIENT_ACCOUNT_CLOSED_OR_FROZEN: 'Recipient bank account is dormant, frozen, or closed',
+  NAME_MISMATCH_OUTDATED_DETAILS: 'Beneficiary name does not match bank account records',
+  // Legacy statutory cancellation / rejection codes (FR-009 history)
+  LANDOWNER_REQUESTED_ACCOUNT_CHANGE: 'Landowner requested bank account change / account closed',
+  LEGAL_DISPUTE_OR_INJUNCTION: 'Land parcel ownership dispute or court injunction received',
+  INCORRECT_AWARD_AMOUNT: 'Statutory compensation award calculation error detected',
+  SUSPECTED_FRAUD_OR_IMPERSONATION: 'Security flag raised on beneficiary identity or banking document',
+  DUPLICATE_DISBURSEMENT_PREVENTION: 'Duplicate payment instruction detected across system records',
+};
+
+export function formatReasonLabel(reason: string | null | undefined): string {
+  if (!reason) return '';
+  const key = reason.trim();
+  if (AUTHORISATION_REASON_LABELS[key]) return AUTHORISATION_REASON_LABELS[key];
+  // Bare SCREAMING_SNAKE_KEY with no mapping — degrade gracefully instead of
+  // showing the raw identifier.
+  if (/^[A-Z0-9_]+$/.test(key) && key.includes('_')) {
+    return key
+      .replace(/[_-]+/g, ' ')
+      .toLowerCase()
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  return reason;
+}
+
 export const PAYMENT_STATUSES = [
   'All',
   'Bank Details Pending',

@@ -213,16 +213,24 @@
 .offer-dashboard .status-badge.rejected .dot { background: #C62828; }
 .offer-dashboard .status-badge.expired { background: #F1F5F9; color: #475569; }
 .offer-dashboard .status-badge.expired .dot { background: #64748B; }
-@media (prefers-color-scheme: dark) {
-  .offer-dashboard .status-badge.pending { background: rgba(202,138,4,0.22); color: #FEF08A; }
-  .offer-dashboard .status-badge.pending .dot { background: #FACC15; }
-  .offer-dashboard .status-badge.accepted { background: rgba(46,125,50,0.22); color: #A5D6A7; }
-  .offer-dashboard .status-badge.accepted .dot { background: #81C784; }
-  .offer-dashboard .status-badge.rejected { background: rgba(198,40,40,0.25); color: #FFCDD2; }
-  .offer-dashboard .status-badge.rejected .dot { background: #E57373; }
-  .offer-dashboard .status-badge.expired { background: rgba(100,116,139,0.25); color: #CBD5E1; }
-  .offer-dashboard .status-badge.expired .dot { background: #94A3B8; }
-}
+
+[data-theme="dark"] .offer-dashboard .status-badge.pending,
+.dark .offer-dashboard .status-badge.pending { background: rgba(202,138,4,0.22); color: #FEF08A; }
+[data-theme="dark"] .offer-dashboard .status-badge.pending .dot,
+.dark .offer-dashboard .status-badge.pending .dot { background: #FACC15; }
+[data-theme="dark"] .offer-dashboard .status-badge.accepted,
+.dark .offer-dashboard .status-badge.accepted { background: rgba(46,125,50,0.22); color: #A5D6A7; }
+[data-theme="dark"] .offer-dashboard .status-badge.accepted .dot,
+.dark .offer-dashboard .status-badge.accepted .dot { background: #81C784; }
+[data-theme="dark"] .offer-dashboard .status-badge.rejected,
+.dark .offer-dashboard .status-badge.rejected { background: rgba(198,40,40,0.25); color: #FFCDD2; }
+[data-theme="dark"] .offer-dashboard .status-badge.rejected .dot,
+.dark .offer-dashboard .status-badge.rejected .dot { background: #E57373; }
+[data-theme="dark"] .offer-dashboard .status-badge.expired,
+.dark .offer-dashboard .status-badge.expired { background: rgba(100,116,139,0.25); color: #CBD5E1; }
+[data-theme="dark"] .offer-dashboard .status-badge.expired .dot,
+.dark .offer-dashboard .status-badge.expired .dot { background: #94A3B8; }
+
 .offer-dashboard .pagination {
   display: flex;
   justify-content: space-between;

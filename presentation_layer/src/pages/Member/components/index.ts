@@ -12,3 +12,6 @@ export type { MemberDocumentsTabProps, DocumentItem } from './MemberDocumentsTab
 
 export { MemberOfficerTab } from './MemberOfficerTab';
 export type { MemberOfficerTabProps, AssignedOfficerInfo } from './MemberOfficerTab';
+
+export { BankDetailsForm } from './BankDetailsForm';
+export type { BankDetailsFormProps } from './BankDetailsForm';

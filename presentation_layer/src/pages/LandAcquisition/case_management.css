@@ -506,43 +506,64 @@ table tbody tr.row-clickable:hover {
 /* ============================================================
    Dark mode overrides
    ============================================================ */
-@media (prefers-color-scheme: dark) {
-  .status-badge.status-case-registered { background: rgba(2,132,199,0.22); color: #7DD3FC; }
-  .status-badge.status-case-registered .dot { background: #38BDF8; }
 
-  .status-badge.status-valuer-assigned,
-  .status-badge.status-valuation-progress,
-  .status-badge.status-payment-progress { background: rgba(255,160,0,0.20); color: #FFE082; }
-  .status-badge.status-valuer-assigned .dot,
-  .status-badge.status-valuation-progress .dot,
-  .status-badge.status-payment-progress .dot { background: #FFD54F; }
+[data-theme="dark"] .status-badge.status-case-registered,
+.dark .status-badge.status-case-registered { background: rgba(2,132,199,0.22); color: #7DD3FC; }
+[data-theme="dark"] .status-badge.status-case-registered .dot,
+.dark .status-badge.status-case-registered .dot { background: #38BDF8; }
+[data-theme="dark"] .status-badge.status-valuer-assigned,
+.dark .status-badge.status-valuer-assigned,
+[data-theme="dark"] .status-badge.status-valuation-progress,
+.dark .status-badge.status-valuation-progress,
+[data-theme="dark"] .status-badge.status-payment-progress,
+.dark .status-badge.status-payment-progress { background: rgba(255,160,0,0.20); color: #FFE082; }
+[data-theme="dark"] .status-badge.status-valuer-assigned .dot,
+.dark .status-badge.status-valuer-assigned .dot,
+[data-theme="dark"] .status-badge.status-valuation-progress .dot,
+.dark .status-badge.status-valuation-progress .dot,
+[data-theme="dark"] .status-badge.status-payment-progress .dot,
+.dark .status-badge.status-payment-progress .dot { background: #FFD54F; }
+[data-theme="dark"] .status-badge.status-pending-valuation,
+.dark .status-badge.status-pending-valuation,
+[data-theme="dark"] .status-badge.status-pending-comp,
+.dark .status-badge.status-pending-comp { background: rgba(202,138,4,0.22); color: #FEF08A; }
+[data-theme="dark"] .status-badge.status-pending-valuation .dot,
+.dark .status-badge.status-pending-valuation .dot,
+[data-theme="dark"] .status-badge.status-pending-comp .dot,
+.dark .status-badge.status-pending-comp .dot { background: #FACC15; }
+[data-theme="dark"] .status-badge.status-valuation-approved,
+.dark .status-badge.status-valuation-approved,
+[data-theme="dark"] .status-badge.status-comp-approved,
+.dark .status-badge.status-comp-approved,
+[data-theme="dark"] .status-badge.status-payment-completed,
+.dark .status-badge.status-payment-completed { background: rgba(46,125,50,0.22); color: #A5D6A7; }
+[data-theme="dark"] .status-badge.status-valuation-approved .dot,
+.dark .status-badge.status-valuation-approved .dot,
+[data-theme="dark"] .status-badge.status-comp-approved .dot,
+.dark .status-badge.status-comp-approved .dot,
+[data-theme="dark"] .status-badge.status-payment-completed .dot,
+.dark .status-badge.status-payment-completed .dot { background: #81C784; }
+[data-theme="dark"] .status-badge.status-valuation-rejected,
+.dark .status-badge.status-valuation-rejected,
+[data-theme="dark"] .status-badge.status-comp-rejected,
+.dark .status-badge.status-comp-rejected { background: rgba(198,40,40,0.25); color: #FFCDD2; }
+[data-theme="dark"] .status-badge.status-valuation-rejected .dot,
+.dark .status-badge.status-valuation-rejected .dot,
+[data-theme="dark"] .status-badge.status-comp-rejected .dot,
+.dark .status-badge.status-comp-rejected .dot { background: #E57373; }
+[data-theme="dark"] .status-badge.status-offer-issued,
+.dark .status-badge.status-offer-issued { background: rgba(103,80,164,0.25); color: #D0BCFF; }
+[data-theme="dark"] .status-badge.status-offer-issued .dot,
+.dark .status-badge.status-offer-issued .dot { background: #B39DDB; }
+[data-theme="dark"] .status-badge.status-offer-rejected,
+.dark .status-badge.status-offer-rejected { background: rgba(173,20,87,0.25); color: #F8BBD0; }
+[data-theme="dark"] .status-badge.status-offer-rejected .dot,
+.dark .status-badge.status-offer-rejected .dot { background: #F06292; }
+[data-theme="dark"] .status-badge.status-case-closed,
+.dark .status-badge.status-case-closed { background: rgba(100,116,139,0.25); color: #CBD5E1; }
+[data-theme="dark"] .status-badge.status-case-closed .dot,
+.dark .status-badge.status-case-closed .dot { background: #94A3B8; }
 
-  .status-badge.status-pending-valuation,
-  .status-badge.status-pending-comp { background: rgba(202,138,4,0.22); color: #FEF08A; }
-  .status-badge.status-pending-valuation .dot,
-  .status-badge.status-pending-comp .dot { background: #FACC15; }
-
-  .status-badge.status-valuation-approved,
-  .status-badge.status-comp-approved,
-  .status-badge.status-payment-completed { background: rgba(46,125,50,0.22); color: #A5D6A7; }
-  .status-badge.status-valuation-approved .dot,
-  .status-badge.status-comp-approved .dot,
-  .status-badge.status-payment-completed .dot { background: #81C784; }
-
-  .status-badge.status-valuation-rejected,
-  .status-badge.status-comp-rejected { background: rgba(198,40,40,0.25); color: #FFCDD2; }
-  .status-badge.status-valuation-rejected .dot,
-  .status-badge.status-comp-rejected .dot { background: #E57373; }
-
-  .status-badge.status-offer-issued { background: rgba(103,80,164,0.25); color: #D0BCFF; }
-  .status-badge.status-offer-issued .dot { background: #B39DDB; }
-
-  .status-badge.status-offer-rejected { background: rgba(173,20,87,0.25); color: #F8BBD0; }
-  .status-badge.status-offer-rejected .dot { background: #F06292; }
-
-  .status-badge.status-case-closed { background: rgba(100,116,139,0.25); color: #CBD5E1; }
-  .status-badge.status-case-closed .dot { background: #94A3B8; }
-}
 
 .meta-text {
   font-size: 13px;
@@ -1149,36 +1170,64 @@ table tbody tr.row-clickable:hover {
 .status-badge-lg.status-case-closed { background: #F1F5F9; color: #475569; }
 .status-badge-lg.status-case-closed .dot { background: #64748B; }
 
-@media (prefers-color-scheme: dark) {
-  .status-badge-lg.status-case-registered { background: rgba(2,132,199,0.22); color: #7DD3FC; }
-  .status-badge-lg.status-case-registered .dot { background: #38BDF8; }
-  .status-badge-lg.status-valuer-assigned,
-  .status-badge-lg.status-valuation-progress,
-  .status-badge-lg.status-payment-progress { background: rgba(255,160,0,0.20); color: #FFE082; }
-  .status-badge-lg.status-valuer-assigned .dot,
-  .status-badge-lg.status-valuation-progress .dot,
-  .status-badge-lg.status-payment-progress .dot { background: #FFD54F; }
-  .status-badge-lg.status-pending-valuation,
-  .status-badge-lg.status-pending-comp { background: rgba(202,138,4,0.22); color: #FEF08A; }
-  .status-badge-lg.status-pending-valuation .dot,
-  .status-badge-lg.status-pending-comp .dot { background: #FACC15; }
-  .status-badge-lg.status-valuation-approved,
-  .status-badge-lg.status-comp-approved,
-  .status-badge-lg.status-payment-completed { background: rgba(46,125,50,0.22); color: #A5D6A7; }
-  .status-badge-lg.status-valuation-approved .dot,
-  .status-badge-lg.status-comp-approved .dot,
-  .status-badge-lg.status-payment-completed .dot { background: #81C784; }
-  .status-badge-lg.status-valuation-rejected,
-  .status-badge-lg.status-comp-rejected { background: rgba(198,40,40,0.25); color: #FFCDD2; }
-  .status-badge-lg.status-valuation-rejected .dot,
-  .status-badge-lg.status-comp-rejected .dot { background: #E57373; }
-  .status-badge-lg.status-offer-issued { background: rgba(103,80,164,0.25); color: #D0BCFF; }
-  .status-badge-lg.status-offer-issued .dot { background: #B39DDB; }
-  .status-badge-lg.status-offer-rejected { background: rgba(173,20,87,0.25); color: #F8BBD0; }
-  .status-badge-lg.status-offer-rejected .dot { background: #F06292; }
-  .status-badge-lg.status-case-closed { background: rgba(100,116,139,0.25); color: #CBD5E1; }
-  .status-badge-lg.status-case-closed .dot { background: #94A3B8; }
-}
+
+[data-theme="dark"] .status-badge-lg.status-case-registered,
+.dark .status-badge-lg.status-case-registered { background: rgba(2,132,199,0.22); color: #7DD3FC; }
+[data-theme="dark"] .status-badge-lg.status-case-registered .dot,
+.dark .status-badge-lg.status-case-registered .dot { background: #38BDF8; }
+[data-theme="dark"] .status-badge-lg.status-valuer-assigned,
+.dark .status-badge-lg.status-valuer-assigned,
+[data-theme="dark"] .status-badge-lg.status-valuation-progress,
+.dark .status-badge-lg.status-valuation-progress,
+[data-theme="dark"] .status-badge-lg.status-payment-progress,
+.dark .status-badge-lg.status-payment-progress { background: rgba(255,160,0,0.20); color: #FFE082; }
+[data-theme="dark"] .status-badge-lg.status-valuer-assigned .dot,
+.dark .status-badge-lg.status-valuer-assigned .dot,
+[data-theme="dark"] .status-badge-lg.status-valuation-progress .dot,
+.dark .status-badge-lg.status-valuation-progress .dot,
+[data-theme="dark"] .status-badge-lg.status-payment-progress .dot,
+.dark .status-badge-lg.status-payment-progress .dot { background: #FFD54F; }
+[data-theme="dark"] .status-badge-lg.status-pending-valuation,
+.dark .status-badge-lg.status-pending-valuation,
+[data-theme="dark"] .status-badge-lg.status-pending-comp,
+.dark .status-badge-lg.status-pending-comp { background: rgba(202,138,4,0.22); color: #FEF08A; }
+[data-theme="dark"] .status-badge-lg.status-pending-valuation .dot,
+.dark .status-badge-lg.status-pending-valuation .dot,
+[data-theme="dark"] .status-badge-lg.status-pending-comp .dot,
+.dark .status-badge-lg.status-pending-comp .dot { background: #FACC15; }
+[data-theme="dark"] .status-badge-lg.status-valuation-approved,
+.dark .status-badge-lg.status-valuation-approved,
+[data-theme="dark"] .status-badge-lg.status-comp-approved,
+.dark .status-badge-lg.status-comp-approved,
+[data-theme="dark"] .status-badge-lg.status-payment-completed,
+.dark .status-badge-lg.status-payment-completed { background: rgba(46,125,50,0.22); color: #A5D6A7; }
+[data-theme="dark"] .status-badge-lg.status-valuation-approved .dot,
+.dark .status-badge-lg.status-valuation-approved .dot,
+[data-theme="dark"] .status-badge-lg.status-comp-approved .dot,
+.dark .status-badge-lg.status-comp-approved .dot,
+[data-theme="dark"] .status-badge-lg.status-payment-completed .dot,
+.dark .status-badge-lg.status-payment-completed .dot { background: #81C784; }
+[data-theme="dark"] .status-badge-lg.status-valuation-rejected,
+.dark .status-badge-lg.status-valuation-rejected,
+[data-theme="dark"] .status-badge-lg.status-comp-rejected,
+.dark .status-badge-lg.status-comp-rejected { background: rgba(198,40,40,0.25); color: #FFCDD2; }
+[data-theme="dark"] .status-badge-lg.status-valuation-rejected .dot,
+.dark .status-badge-lg.status-valuation-rejected .dot,
+[data-theme="dark"] .status-badge-lg.status-comp-rejected .dot,
+.dark .status-badge-lg.status-comp-rejected .dot { background: #E57373; }
+[data-theme="dark"] .status-badge-lg.status-offer-issued,
+.dark .status-badge-lg.status-offer-issued { background: rgba(103,80,164,0.25); color: #D0BCFF; }
+[data-theme="dark"] .status-badge-lg.status-offer-issued .dot,
+.dark .status-badge-lg.status-offer-issued .dot { background: #B39DDB; }
+[data-theme="dark"] .status-badge-lg.status-offer-rejected,
+.dark .status-badge-lg.status-offer-rejected { background: rgba(173,20,87,0.25); color: #F8BBD0; }
+[data-theme="dark"] .status-badge-lg.status-offer-rejected .dot,
+.dark .status-badge-lg.status-offer-rejected .dot { background: #F06292; }
+[data-theme="dark"] .status-badge-lg.status-case-closed,
+.dark .status-badge-lg.status-case-closed { background: rgba(100,116,139,0.25); color: #CBD5E1; }
+[data-theme="dark"] .status-badge-lg.status-case-closed .dot,
+.dark .status-badge-lg.status-case-closed .dot { background: #94A3B8; }
+
 
 @media (max-width: 768px) {
   .case-header {

@@ -856,7 +856,7 @@ export const MemberDashboard: React.FC = () => {
               </Button>
               {isOfferAccepted ? (
                 <Link
-                  to={`/member/bank-details?caseId=${selectedCaseId}`}
+                  to={`/member/payment-status?caseId=${selectedCaseId}`}
                   onClick={() => setShowOfferModal(false)}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition"
                 >
@@ -865,7 +865,7 @@ export const MemberDashboard: React.FC = () => {
                 </Link>
               ) : (
                 <Link
-                  to={`/member/bank-details?caseId=${selectedCaseId}`}
+                  to={`/member/payment-status?caseId=${selectedCaseId}`}
                   onClick={() => setShowOfferModal(false)}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition"
                 >

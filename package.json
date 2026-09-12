@@ -5,14 +5,14 @@
   "scripts": {
     "postinstall": "prisma generate --schema=data_layer/database/prisma/schema.prisma",
     "prisma:generate": "prisma generate --schema=data_layer/database/prisma/schema.prisma",
-    "db:seed": "cd data_layer/database && npx ts-node seed.ts",
+    "db:seed": "cd data_layer/database && npx ts-node prisma/seed.ts",
     "dev:backend": "cd business_logic_layer && npm run dev",
     "dev:frontend": "cd presentation_layer && npm run dev",
     "ai:venv": "python -m venv business_logic_layer/ai_prediction_service/.venv",
     "ai:install": "cd business_logic_layer/ai_prediction_service && pip install -r requirements.txt",
     "ai:dataset": "cd business_logic_layer/ai_prediction_service && python generate_datasets.py",
     "ai:train": "cd business_logic_layer/ai_prediction_service && python train_model.py",
-    "dev:ai": "cd business_logic_layer/ai_prediction_service && python app.py",
+    "dev:ai": "cd business_logic_layer/ai_prediction_service && python start.py",
     "dev": "concurrently -n backend,frontend,ai \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run dev:ai\"",
     "build": "npm run build --workspace=presentation_layer"
   },

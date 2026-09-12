@@ -36,6 +36,7 @@ import {
 } from '../Payment/paymentModals';
 import { CaseDetailsModal } from '../Payment/CaseDetailsModal';
 import { normalizePaymentStatus } from '../Payment/statusMaps';
+import { RefreshButton } from '../Payment/RefreshButton';
 import type { PaymentRow } from '../Payment/paymentModals';
 import '../LandAcquisition/case_management.css';
 import '../Payment/payment.css';
@@ -248,7 +249,7 @@ export default function BankPortal() {
   ];
 
   return (
-    <div className="main min-h-screen bg-md-background text-md-on-surface" ref={containerRef}>
+    <div className="main min-h-screen bg-md-background text-md-on-surface px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-10" ref={containerRef}>
       {/* Topbar adhering to DESIGN.md standard */}
       <div className="topbar bank-topbar">
         <div className="topbar-left">
@@ -271,16 +272,7 @@ export default function BankPortal() {
         </div>
 
         <div className="topbar-right flex items-center gap-2.5">
-          <Button
-            variant="tonal"
-            size="sm"
-            onClick={() => loadData()}
-            disabled={loading}
-            className="inline-flex items-center gap-1.5"
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            <span>Refresh Queue</span>
-          </Button>
+          <RefreshButton onClick={() => loadData()} loading={loading} label="Refresh Queue" />
           <Link to="/admin/payment">
             <Button variant="outlined" size="sm" className="inline-flex items-center gap-1.5">
               <span>Admin Payments</span>
@@ -654,6 +646,7 @@ export default function BankPortal() {
                 value={selectedReason}
                 onChange={setSelectedReason}
                 placeholder="Select bank rejection reason"
+                wrapLabels
               />
               {FAILURE_SOLUTIONS[selectedReason] && (
                 <div className="text-xs bg-md-surface-container-highest rounded-lg px-3 py-2 text-md-on-surface-variant flex items-center gap-1.5 font-medium">

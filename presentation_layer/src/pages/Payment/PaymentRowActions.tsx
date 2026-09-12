@@ -175,6 +175,7 @@ export const PaymentRowActions: React.FC<PaymentRowActionsProps> = ({
         </div>
       );
 
+    case 'Disputed':
     case 'Payment Disputed':
       return (
         <div className="row-actions">

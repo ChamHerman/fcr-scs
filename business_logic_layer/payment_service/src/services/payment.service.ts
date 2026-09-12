@@ -330,6 +330,28 @@ export async function submitBankDetails(data: {
       myKadNumber: data.myKadNumber,
       verified: true,
     });
+    // FR-016 flow 1: the first per-case submission also persists the member's
+    // default payout bank details for reuse on future cases.
+    try {
+      await prisma.memberPayoutDetail.upsert({
+        where: { userId: owner.ownerId },
+        update: {
+          bankName: data.bankName,
+          accountNumber: cleanAccountNumber,
+          accountHolderName: data.accountHolderName,
+          phoneNumber: data.phoneNumber,
+          myKadNumber: data.myKadNumber,
+        },
+        create: {
+          userId: owner.ownerId,
+          bankName: data.bankName,
+          accountNumber: cleanAccountNumber,
+          accountHolderName: data.accountHolderName,
+          phoneNumber: data.phoneNumber,
+          myKadNumber: data.myKadNumber,
+        },
+      });
+    } catch {}
   }
   if (cleanMyKad) {
     profileSavedAccountsStore.set(`mykad:${cleanMyKad}`, {
@@ -426,8 +448,14 @@ export async function authoriseTransfer(caseId: string, rawAdminId: string) {
 
   const adminId = await resolveAdminUuid(rawAdminId);
 
-  const existingAuth = pc.authorisations.find((a) => a.adminId === adminId);
-  if (existingAuth) {
+  // Segregation of duties: only the initiator and GAs who already APPROVED are
+  // blocked. A GA who rejected (or resolved) the case may approve it after the
+  // rejection was resolved — the resolve loop exists precisely so the approval
+  // chain can continue.
+  const priorApproval = pc.authorisations.find(
+    (a) => a.adminId === adminId && (a.action === "initiate" || a.action === "authorise")
+  );
+  if (priorApproval) {
     throw new Error("Segregation of duties: Admin cannot authorise their own initiation or double-sign");
   }
 
@@ -488,7 +516,6 @@ export async function confirmExecution(caseId: string, rawAdminId: string) {
       paymentCaseId: pc.id,
       adminId,
       action: "execute_transfer",
-      reason: "Final authoriser confirmed bank fund release",
     },
   });
 
@@ -500,6 +527,35 @@ export async function confirmExecution(caseId: string, rawAdminId: string) {
   const enriched = await enrichPaymentWithAdminNames(updated);
   return formatPaymentResponse(enriched);
 }
+
+export const CANCELLATION_REASONS = {
+  LANDOWNER_REQUESTED_ACCOUNT_CHANGE: "Landowner requested bank account change / account closed",
+  LEGAL_DISPUTE_OR_INJUNCTION: "Land parcel ownership dispute or court injunction received",
+  INCORRECT_AWARD_AMOUNT: "Statutory compensation award calculation error detected",
+  SUSPECTED_FRAUD_OR_IMPERSONATION: "Security flag raised on beneficiary identity or banking document",
+  DUPLICATE_DISBURSEMENT_PREVENTION: "Duplicate payment instruction detected across system records",
+} as const;
+
+export type CancellationReasonKey = keyof typeof CANCELLATION_REASONS;
+
+/**
+ * GA transfer-rejection reasons (FR-018, revoked & replaced 2026-09-12): these
+ * are GOVERNANCE reasons a Government Administrator rejects a not-yet-executed
+ * transfer. Bank-side codes (recipient account invalid/closed, name mismatch)
+ * belong to the bank portal's own rejection vocabulary, not the GA's. The
+ * frontend also offers "Other" — the GA must then type a compulsory free-text
+ * reason, which this service stores verbatim.
+ */
+export const REJECTION_REASONS = {
+  BENEFICIARY_DETAILS_MISMATCH:
+    "Beneficiary name or bank details do not match the statutory land award records",
+  AWARD_VERIFICATION_FAILED:
+    "Award amount or supporting documents failed pre-disbursement verification",
+  DUPLICATE_DISBURSEMENT_RISK:
+    "Possible duplicate disbursement instruction detected for this case",
+} as const;
+
+export type RejectionReasonKey = keyof typeof REJECTION_REASONS;
 
 export async function rejectTransfer(caseId: string, rawAdminId: string, reason: string) {
   const pc = await prisma.paymentCase.findUnique({
@@ -521,6 +577,10 @@ export async function rejectTransfer(caseId: string, rawAdminId: string, reason:
     throw new Error(`Transfer cannot be rejected from status '${pc.status}'. Only pending transfers can be rejected.`);
   }
 
+  if (!reason || !reason.trim()) {
+    throw new Error("A rejection reason is required");
+  }
+
   const adminId = await resolveAdminUuid(rawAdminId);
 
   const alreadyApproved = pc.authorisations.find(
@@ -530,15 +590,21 @@ export async function rejectTransfer(caseId: string, rawAdminId: string, reason:
     throw new Error("Segregation of duties: Admin cannot reject a transfer they initiated or already approved");
   }
 
+  // Store human-readable English (never the raw enum key), mirroring cancelPayment.
+  const reasonText = (REJECTION_REASONS as Record<string, string>)[reason] || reason.trim();
+
   await prisma.paymentAuthorisation.create({
     data: {
       paymentCaseId: pc.id,
       adminId,
       action: "reject",
-      reason,
+      reason: reasonText,
     },
   });
 
+  // A GA rejection is a governance decision made BEFORE any bank execution —
+  // it must NOT create a transfer attempt or a failed-transaction row. The
+  // case simply waits in Transfer Rejected for a GA "Mark as Resolved".
   const updated = await prisma.paymentCase.update({
     where: { caseId },
     data: { status: PaymentStatus.TRANSFER_REJECTED },
@@ -547,15 +613,41 @@ export async function rejectTransfer(caseId: string, rawAdminId: string, reason:
   return formatPaymentResponse(updated);
 }
 
-export const CANCELLATION_REASONS = {
-  LANDOWNER_REQUESTED_ACCOUNT_CHANGE: "Landowner requested bank account change / account closed",
-  LEGAL_DISPUTE_OR_INJUNCTION: "Land parcel ownership dispute or court injunction received",
-  INCORRECT_AWARD_AMOUNT: "Statutory compensation award calculation error detected",
-  SUSPECTED_FRAUD_OR_IMPERSONATION: "Security flag raised on beneficiary identity or banking document",
-  DUPLICATE_DISBURSEMENT_PREVENTION: "Duplicate payment instruction detected across system records",
-} as const;
+/**
+ * FR-018 (revoked & replaced): the ONLY SOP for a Transfer Rejected case.
+ * A GA confirms the rejection reason has been addressed and returns the case
+ * to Pending Approval with all previously collected signatures intact, so the
+ * remaining approvals continue until final execution.
+ */
+export async function resolveRejectedTransfer(caseId: string, rawAdminId: string) {
+  const pc = await prisma.paymentCase.findUnique({ where: { caseId } });
+  if (!pc) throw new Error("Case not found");
 
-export type CancellationReasonKey = keyof typeof CANCELLATION_REASONS;
+  const rawStatus = String(pc.status);
+  if (pc.status !== PaymentStatus.TRANSFER_REJECTED && rawStatus !== "TRANSFER_REJECTED" && rawStatus !== "Transfer Rejected") {
+    throw new Error(`Only a Transfer Rejected case can be marked as resolved (current: '${pc.status}')`);
+  }
+
+  const adminId = await resolveAdminUuid(rawAdminId);
+
+  await prisma.paymentAuthorisation.create({
+    data: {
+      paymentCaseId: pc.id,
+      adminId,
+      action: "mark_resolved",
+    },
+  });
+
+  // currentSignatures deliberately NOT reset — initiated + already approved
+  // signatures stay valid for the continuing approval chain.
+  const updated = await prisma.paymentCase.update({
+    where: { caseId },
+    data: { status: PaymentStatus.PENDING_APPROVAL },
+    include: { authorisations: true },
+  });
+  const enriched = await enrichPaymentWithAdminNames(updated);
+  return formatPaymentResponse(enriched);
+}
 
 export async function cancelPayment(caseId: string, rawAdminId: string, reasonKeyOrText: string) {
   const pc = await prisma.paymentCase.findUnique({ where: { caseId } });
@@ -872,6 +964,30 @@ export async function getSavedBankDetails(userId?: string, myKadNumber?: string,
     verified: boolean;
   }> = [];
 
+  // 0. Persisted default payout account (FR-016) — survives backend restarts.
+  if (currentUser) {
+    try {
+      const payout = await prisma.memberPayoutDetail.findUnique({
+        where: { userId: currentUser.userId },
+      });
+      if (payout) {
+        const cleanAcc = (payout.accountNumber || "").replace(/[\s-]/g, "");
+        const key = `${payout.bankName}-${cleanAcc}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          savedAccounts.push({
+            bankName: payout.bankName,
+            accountNumber: payout.accountNumber,
+            accountHolderName: payout.accountHolderName,
+            phoneNumber: payout.phoneNumber,
+            myKadNumber: payout.myKadNumber,
+            verified: true,
+          });
+        }
+      }
+    } catch {}
+  }
+
   // 1. Profile store lookup
   const profileRecords: SavedAccountRecord[] = [];
   if (userId && profileSavedAccountsStore.has(`user:${userId}`)) {
@@ -926,15 +1042,10 @@ export async function getSavedBankDetails(userId?: string, myKadNumber?: string,
     where: {
       bankName: { not: null },
       accountNumber: { not: null },
+      // status is a Prisma enum column — only enum values are valid here
+      // (legacy display-string variants never exist in the column).
       status: {
-        notIn: [
-          PaymentStatus.BANK_DETAILS_PENDING,
-          "BANK_DETAILS_PENDING" as any,
-          PaymentStatus.NEW_BANK_DETAILS_PENDING,
-          "NEW_BANK_DETAILS_PENDING" as any,
-          "Bank Details Pending" as any,
-          "New Bank Details Pending" as any,
-        ],
+        notIn: [PaymentStatus.BANK_DETAILS_PENDING, PaymentStatus.NEW_BANK_DETAILS_PENDING],
       },
     },
     orderBy: { updatedAt: "desc" },
@@ -1008,16 +1119,35 @@ export async function saveMemberBankDetails(
     profileSavedAccountsStore.set(`mykad:${cleanIc}`, record);
   }
 
+  // FR-016 flow 2: persist the default payout account so it survives restarts.
+  if (userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+    try {
+      await prisma.memberPayoutDetail.upsert({
+        where: { userId },
+        update: {
+          bankName: data.bankName,
+          accountNumber: cleanAccountNumber,
+          accountHolderName: record.accountHolderName,
+          phoneNumber: record.phoneNumber,
+          myKadNumber: record.myKadNumber,
+        },
+        create: {
+          userId,
+          bankName: data.bankName,
+          accountNumber: cleanAccountNumber,
+          accountHolderName: record.accountHolderName,
+          phoneNumber: record.phoneNumber,
+          myKadNumber: record.myKadNumber,
+        },
+      });
+    } catch {}
+  }
+
   // If the user has any ALREADY SUBMITTED payment case (not in BANK_DETAILS_PENDING), sync receiverBankDetails
   const submittedCases = await prisma.paymentCase.findMany({
     where: {
       status: {
-        notIn: [
-          PaymentStatus.BANK_DETAILS_PENDING,
-          "BANK_DETAILS_PENDING" as any,
-          PaymentStatus.NEW_BANK_DETAILS_PENDING,
-          "NEW_BANK_DETAILS_PENDING" as any,
-        ],
+        notIn: [PaymentStatus.BANK_DETAILS_PENDING, PaymentStatus.NEW_BANK_DETAILS_PENDING],
       },
       bankName: { not: null },
     },
@@ -1079,34 +1209,118 @@ export async function saveMemberBankDetails(
 }
 
 export async function getFailedTransactions() {
+  // GA-rejected transfers (FR-018) carry no failedTransaction row on purpose —
+  // they enter this register by status instead, awaiting "Mark as Resolved".
   const cases = await prisma.paymentCase.findMany({
-    where: { failedTransactions: { some: {} } },
+    where: {
+      OR: [{ failedTransactions: { some: {} } }, { status: PaymentStatus.TRANSFER_REJECTED }],
+    },
     include: { failedTransactions: true, authorisations: true },
     orderBy: { updatedAt: "desc" },
   });
   return cases.map(formatPaymentResponse);
 }
 
-export async function disputePayment(caseId: string, reason?: string) {
+export async function disputePayment(
+  caseId: string,
+  reason: string,
+  document?: { storagePath: string; fileName: string }
+) {
   const pc = await prisma.paymentCase.findUnique({ where: { caseId } });
   if (!pc) throw new Error("Case not found");
 
-  if (pc.status !== PaymentStatus.TRANSFER_SUCCEED && pc.status !== PaymentStatus.PAID) {
-    throw new Error(`Payment can only be disputed from 'TRANSFER_SUCCEED' or 'PAID' (current: '${pc.status}')`);
+  // FR-013: the member choice point is strictly TRANSFER_SUCCEED — Confirm
+  // Received (-> PAID) or Not Received (-> DISPUTED). PAID is terminal and can
+  // no longer be disputed.
+  if (pc.status !== PaymentStatus.TRANSFER_SUCCEED) {
+    throw new Error(`Payment can only be disputed from 'TRANSFER_SUCCEED' (current: '${pc.status}')`);
   }
 
-  if (reason) {
-    await prisma.failedTransaction.create({
+  await prisma.failedTransaction.create({
+    data: {
+      paymentCaseId: pc.id,
+      errorLog: `DISPUTE: ${reason}`,
+    },
+  });
+
+  const updated = await prisma.paymentCase.update({
+    where: { caseId },
+    data: {
+      status: PaymentStatus.DISPUTED,
+      // FR-015: latest statement only — a new dispute upload replaces the
+      // previous document on the case.
+      ...(document
+        ? {
+            disputeDocumentPath: document.storagePath,
+            disputeDocumentName: document.fileName,
+            disputeUploadedAt: new Date(),
+          }
+        : {}),
+    },
+    include: { authorisations: true, receipt: true, failedTransactions: true },
+  });
+  return formatPaymentResponse(updated);
+}
+
+/** FR-014 GA dispute resolutions. */
+export const DISPUTE_RESOLUTIONS = {
+  MARK_AS_RESOLVED: "MARK_AS_RESOLVED",
+  REINITIATE_PAYMENT: "REINITIATE_PAYMENT",
+} as const;
+
+export type DisputeResolution = keyof typeof DISPUTE_RESOLUTIONS;
+
+/**
+ * FR-014: A GA cross-checks with the bank whether a DISPUTED transfer actually
+ * settled, then either marks the dispute resolved (back to TRANSFER_SUCCEED so
+ * the member can confirm or dispute again) or reinitiates the transfer because
+ * the funds never arrived (re-queued to the bank gateway; multi-sig remains
+ * satisfied).
+ */
+export async function resolveDispute(caseId: string, rawAdminId: string, resolution: string) {
+  const pc = await prisma.paymentCase.findUnique({
+    where: { caseId },
+    include: { authorisations: true, failedTransactions: true },
+  });
+  if (!pc) throw new Error("Case not found");
+
+  if (pc.status !== PaymentStatus.DISPUTED) {
+    throw new Error(`Dispute can only be resolved from 'DISPUTED' (current: '${pc.status}')`);
+  }
+
+  const adminId = await resolveAdminUuid(rawAdminId);
+
+  // Close out the latest DISPUTE failure log with the chosen resolution.
+  const latestDispute = [...pc.failedTransactions]
+    .reverse()
+    .find((ft) => typeof ft.errorLog === "string" && ft.errorLog.startsWith("DISPUTE"));
+  if (latestDispute) {
+    await prisma.failedTransaction.update({
+      where: { id: latestDispute.id },
       data: {
-        paymentCaseId: pc.id,
-        errorLog: `DISPUTE: ${reason}`,
+        resolution: resolution === DISPUTE_RESOLUTIONS.MARK_AS_RESOLVED ? "mark_resolved" : "reinitiate_payment",
+        resolvedAt: new Date(),
       },
     });
   }
 
+  const nextStatus =
+    resolution === DISPUTE_RESOLUTIONS.MARK_AS_RESOLVED
+      ? PaymentStatus.TRANSFER_SUCCEED
+      : PaymentStatus.BANK_APPROVAL_PENDING;
+
+  await prisma.paymentAuthorisation.create({
+    data: {
+      paymentCaseId: pc.id,
+      adminId,
+      action:
+        resolution === DISPUTE_RESOLUTIONS.MARK_AS_RESOLVED ? "mark_resolved" : "reinitiate_payment",
+    },
+  });
+
   const updated = await prisma.paymentCase.update({
     where: { caseId },
-    data: { status: PaymentStatus.DISPUTED },
+    data: { status: nextStatus },
     include: { authorisations: true, receipt: true, failedTransactions: true },
   });
   return formatPaymentResponse(updated);
@@ -1162,10 +1376,18 @@ export async function rejectBankTransfer(caseId: string, errorReason: string, is
     throw new Error(`Transfer is not awaiting bank approval (current status '${pc.status}')`);
   }
 
+  // The bank gateway prefixes machine codes (e.g. "RECIPIENT_ACCOUNT_...").
+  // Raw identifiers must never surface in the UI — keep the human sentence only.
+  const sanitizedLog =
+    (errorReason || "Bank clearance rejected by commercial gateway").replace(
+      /^\s*[A-Z0-9_]{6,}\s*:\s*/,
+      ""
+    ) || "Bank clearance rejected by commercial gateway";
+
   await prisma.failedTransaction.create({
     data: {
       paymentCaseId: pc.id,
-      errorLog: errorReason || "Bank clearance rejected by commercial gateway",
+      errorLog: sanitizedLog,
     },
   });
 

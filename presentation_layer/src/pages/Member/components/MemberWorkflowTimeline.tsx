@@ -15,16 +15,19 @@ import {
   Download,
   ArrowRight,
   FileText,
+  UploadCloud,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { WorkflowStep } from '../hooks/useMemberWorkflow';
 import { paymentApi } from '../../../services/paymentApi';
 import { getMemberDisplayStatus } from '../../Payment/statusMaps';
+import '../../Payment/payment.css';
 import { formatCurrencyRM } from '../../../utils/currency';
 import { useNotification } from '../../../components/ui/NotificationSystem';
 import { Button } from '../../../components/ui/Button';
 import { Modal } from '../../../components/ui/Modal';
 import { Textarea } from '../../../components/ui/Textarea';
+import { ConfirmSubmitModal, ConfirmRow } from '../../../components/member/ConfirmSubmitModal';
 
 export function getEffectiveRequiredSigs(amount: number, setReq?: number): number {
   if (setReq && setReq > 0) return setReq;
@@ -62,7 +65,11 @@ export const MemberWorkflowTimeline: React.FC<MemberWorkflowTimelineProps> = ({
   const [downloadingReceipt, setDownloadingReceipt] = useState<boolean>(false);
   const [showDisputeModal, setShowDisputeModal] = useState<boolean>(false);
   const [disputeReason, setDisputeReason] = useState<string>('');
+  const [disputeFile, setDisputeFile] = useState<File | null>(null);
   const [submittingDispute, setSubmittingDispute] = useState<boolean>(false);
+  // FR-017 second-confirmation state
+  const [showDisputeConfirm, setShowDisputeConfirm] = useState<boolean>(false);
+  const [showReceiptConfirm, setShowReceiptConfirm] = useState<boolean>(false);
   useEffect(() => {
     if (!selectedCaseId) return;
     let isMounted = true;
@@ -85,6 +92,10 @@ export const MemberWorkflowTimeline: React.FC<MemberWorkflowTimelineProps> = ({
     };
   }, [selectedCaseId]);
 
+  // FR-017: the Confirm Receipt button opens the review dialog; the dialog's
+  // confirm dispatches the API call.
+  const handleConfirmReceiptClick = () => setShowReceiptConfirm(true);
+
   const handleConfirmReceipt = async () => {
     if (!selectedCaseId) return;
     setConfirmingReceipt(true);
@@ -95,6 +106,7 @@ export const MemberWorkflowTimeline: React.FC<MemberWorkflowTimelineProps> = ({
         title: 'Receipt Confirmed',
         message: 'Thank you for confirming receipt of payment. Your case is now marked as Paid.',
       });
+      setShowReceiptConfirm(false);
       const res = await paymentApi.getStatus(selectedCaseId);
       if (res?.paymentCase) setPaymentCase(res.paymentCase);
     } catch (err: unknown) {
@@ -134,19 +146,27 @@ export const MemberWorkflowTimeline: React.FC<MemberWorkflowTimelineProps> = ({
     }
   };
 
-  const handleDisputeSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedCaseId || !disputeReason.trim()) return;
+  // FR-017: the dispute dialog's Submit validates and opens the confirmation
+  // dialog; the dialog's confirm dispatches.
+  const handleDisputeSubmitClick = () => {
+    if (!selectedCaseId || !disputeReason.trim() || !disputeFile) return;
+    setShowDisputeConfirm(true);
+  };
+
+  const handleDisputeSubmit = async () => {
+    if (!selectedCaseId || !disputeReason.trim() || !disputeFile) return;
     setSubmittingDispute(true);
     try {
-      await paymentApi.dispute(selectedCaseId, disputeReason.trim());
+      await paymentApi.dispute(selectedCaseId, disputeFile, disputeReason.trim());
       notify({
         type: 'success',
         title: 'Dispute Registered',
         message: 'Payment dispute submitted to Land Administration for review.',
       });
+      setShowDisputeConfirm(false);
       setShowDisputeModal(false);
       setDisputeReason('');
+      setDisputeFile(null);
       const res = await paymentApi.getStatus(selectedCaseId);
       if (res?.paymentCase) setPaymentCase(res.paymentCase);
     } catch (err: unknown) {
@@ -279,7 +299,7 @@ export const MemberWorkflowTimeline: React.FC<MemberWorkflowTimelineProps> = ({
                     </Link>
                     {isOfferAccepted && (
                       <Link
-                        to={`/member/bank-details?caseId=${selectedCaseId}`}
+                        to={`/member/payment-status?caseId=${selectedCaseId}`}
                         className="flex-1 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm text-center transition"
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" />
@@ -386,7 +406,8 @@ export const MemberWorkflowTimeline: React.FC<MemberWorkflowTimelineProps> = ({
                             <span className="text-xs font-mono font-bold text-slate-700 bg-white px-2 py-0.5 rounded-md border border-slate-200">
                               {paymentCase?.paymentId || `PMT-${selectedCaseId}`}
                             </span>
-                            <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${memberDisplay.badgeClass}`}>
+                            <span className={`payment-badge ${memberDisplay.badgeClass}`}>
+                              <span className="dot" />
                               {memberDisplay.label}
                             </span>
                           </div>
@@ -473,7 +494,7 @@ export const MemberWorkflowTimeline: React.FC<MemberWorkflowTimelineProps> = ({
                             </div>
                           </div>
                           <Link
-                            to={`/member/bank-details?caseId=${encodeURIComponent(selectedCaseId)}`}
+                            to={`/member/payment-status?caseId=${encodeURIComponent(selectedCaseId)}`}
                             className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition w-full sm:w-auto shrink-0 justify-center"
                           >
                             <span>Submit Bank Details</span>
@@ -502,7 +523,7 @@ export const MemberWorkflowTimeline: React.FC<MemberWorkflowTimelineProps> = ({
                               size="sm"
                               className="!bg-emerald-600 !text-white hover:!bg-emerald-700 text-xs font-bold w-full sm:w-auto"
                               disabled={confirmingReceipt}
-                              onClick={handleConfirmReceipt}
+                              onClick={handleConfirmReceiptClick}
                             >
                               <CheckCircle2 size={14} />
                               <span>{confirmingReceipt ? 'Confirming...' : 'Confirm Receipt'}</span>
@@ -581,7 +602,7 @@ export const MemberWorkflowTimeline: React.FC<MemberWorkflowTimelineProps> = ({
 
                                   {s.actionRequired && (
                                     <Link
-                                      to={`/member/bank-details?caseId=${encodeURIComponent(selectedCaseId)}`}
+                                      to={`/member/payment-status?caseId=${encodeURIComponent(selectedCaseId)}`}
                                       className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-400 underline mt-1"
                                     >
                                       <span>Submit Bank Details Now</span>
@@ -610,26 +631,33 @@ export const MemberWorkflowTimeline: React.FC<MemberWorkflowTimelineProps> = ({
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto shrink-0">
-                          <Button
-                            variant="tonal"
-                            size="sm"
-                            onClick={handleDownloadReceipt}
-                            disabled={downloadingReceipt}
-                            className="flex-1 sm:flex-initial text-xs"
-                          >
-                            <Download size={14} />
-                            <span>{downloadingReceipt ? 'Downloading...' : 'Download Receipt'}</span>
-                          </Button>
+                          {(isPaid || isTransferSucceed) && (
+                            <Button
+                              variant="tonal"
+                              size="sm"
+                              onClick={handleDownloadReceipt}
+                              disabled={downloadingReceipt}
+                              className="flex-1 sm:flex-initial text-xs"
+                            >
+                              <Download size={14} />
+                              <span>{downloadingReceipt ? 'Downloading...' : 'Download Receipt'}</span>
+                            </Button>
+                          )}
 
-                          <Button
-                            variant="text"
-                            size="sm"
-                            onClick={() => setShowDisputeModal(true)}
-                            className="flex-1 sm:flex-initial text-xs text-md-on-surface-variant hover:text-red-600"
-                          >
-                            <AlertTriangle size={14} />
-                            <span>Contest / Dispute</span>
-                          </Button>
+                          {/* FR-013: the member choice point is Transfer Succeed only —
+                              once Paid, the Download Receipt button above is the sole
+                              remaining action. */}
+                          {isTransferSucceed && (
+                            <Button
+                              variant="text"
+                              size="sm"
+                              onClick={() => setShowDisputeModal(true)}
+                              className="flex-1 sm:flex-initial text-xs text-md-on-surface-variant hover:text-red-600"
+                            >
+                              <AlertTriangle size={14} />
+                              <span>Contest / Dispute</span>
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -648,15 +676,40 @@ export const MemberWorkflowTimeline: React.FC<MemberWorkflowTimelineProps> = ({
         title="Submit Payment Dispute"
         subtitle={`Case ${selectedCaseId}`}
         cancelText="Cancel"
-        confirmText={submittingDispute ? "Submitting..." : "Submit Dispute"}
+        confirmText="Review & Submit Dispute"
         confirmVariant="danger"
-        confirmLoading={submittingDispute}
-        onConfirm={handleDisputeSubmit as any}
+        confirmDisabled={!disputeFile || !disputeReason.trim()}
+        onConfirm={handleDisputeSubmitClick}
       >
-        <form onSubmit={handleDisputeSubmit} className="space-y-4 pt-2">
+        <div className="space-y-4 pt-2">
           <p className="text-xs text-md-on-surface-variant leading-relaxed">
-            If you have not received your statutory compensation, or if the credited amount differs from the official Form H award, please state the grounds of your dispute below. A Land Administrator will review the bank settlement ledger.
+            If you have not received your statutory compensation, or if the credited amount differs from the official
+            Form H award, attach a real bank statement or transaction record (PDF) and state the grounds of your
+            dispute below. A Land Administrator will review the bank settlement ledger.
           </p>
+
+          {/* FR-015: mandatory supporting bank statement upload */}
+          <div className="border-2 border-dashed border-md-outline/30 rounded-xl p-5 text-center hover:bg-md-surface-container-low transition cursor-pointer">
+            <input
+              type="file"
+              accept=".pdf,application/pdf"
+              onChange={(e) => {
+                if (e.target.files?.[0]) setDisputeFile(e.target.files[0]);
+              }}
+              className="hidden"
+              id="timeline-dispute-file-input"
+            />
+            <label htmlFor="timeline-dispute-file-input" className="cursor-pointer flex flex-col items-center">
+              <UploadCloud size={28} className="text-md-primary mb-1.5" />
+              <span className="text-xs font-semibold text-md-on-surface">
+                {disputeFile ? disputeFile.name : 'Bank statement / transaction record (PDF) — required'}
+              </span>
+              <span className="text-[10px] text-md-on-surface-variant mt-1">
+                PDF only · Maximum file size: 10MB
+              </span>
+            </label>
+          </div>
+
           <div className="space-y-1.5">
             <Textarea
               label="Dispute Explanation & Remarks"
@@ -667,8 +720,44 @@ export const MemberWorkflowTimeline: React.FC<MemberWorkflowTimelineProps> = ({
               required
             />
           </div>
-        </form>
+        </div>
       </Modal>
+
+      {/* FR-017 second confirmation for the dispute submission */}
+      <ConfirmSubmitModal
+        isOpen={showDisputeConfirm}
+        title="Confirm Official Dispute"
+        loading={submittingDispute}
+        confirmLabel="Submit Official Dispute"
+        onConfirm={handleDisputeSubmit}
+        onCancel={() => setShowDisputeConfirm(false)}
+        summary={
+          <>
+            <ConfirmRow label="Case" value={selectedCaseId} mono />
+            <ConfirmRow label="Attachment" value={disputeFile?.name || '—'} />
+            <ConfirmRow label="Remark" value={disputeReason.trim()} />
+          </>
+        }
+      />
+
+      {/* FR-017 second confirmation for confirming receipt */}
+      <ConfirmSubmitModal
+        isOpen={showReceiptConfirm}
+        title="Confirm Payment Received"
+        loading={confirmingReceipt}
+        confirmLabel="Yes, I Received the Payment"
+        onConfirm={handleConfirmReceipt}
+        onCancel={() => setShowReceiptConfirm(false)}
+        summary={
+          <>
+            <ConfirmRow label="Case" value={selectedCaseId} mono />
+            <ConfirmRow
+              label="Effect"
+              value="Case is marked as Paid. This closes the confirmation window — disputes are no longer possible."
+            />
+          </>
+        }
+      />
     </div>
   );
 };

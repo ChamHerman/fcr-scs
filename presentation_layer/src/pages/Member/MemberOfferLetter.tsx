@@ -41,6 +41,7 @@ import { Textarea } from '../../components/ui/Textarea';
 import { FileUpload } from '../../components/ui/FileUpload';
 import { CurrencyInput } from '../../components/ui/CurrencyInput';
 import { CopyButton } from '../../components/ui/CopyButton';
+import { Select } from '../../components/ui/Select';
 import { OfferResponseModals } from '../../components/OfferResponseModals';
 import { CreateObjectionModal } from '../../components/objection';
 import { useOfferResponse } from '../Compensation/hooks/useOfferResponse';
@@ -608,6 +609,34 @@ export const MemberOfferLetter: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* CASE SWITCHER — always a dropdown, labels carry case details   */}
+      {/* ------------------------------------------------------------- */}
+      {casesList.length > 0 && (
+        <div className="bg-white border-b border-slate-200 px-4 sm:px-6 lg:px-8 py-3">
+          <div className="max-w-7xl mx-auto sm:w-[460px]">
+            <Select
+              label="Select Case"
+              placeholder="Select an acquisition case…"
+              options={casesList.map((c: any) => {
+                const lot = c.landParcel?.lotNo ? `Lot ${c.landParcel.lotNo}` : c.caseTitle || c.caseId;
+                const statusLabel = c.status ? String(c.status).replace(/_/g, ' ') : '';
+                return {
+                  value: c.caseId,
+                  label: `${c.caseId} — ${lot}${statusLabel ? ` [${statusLabel}]` : ''}`,
+                };
+              })}
+              value={selectedCaseId}
+              onChange={(val) => {
+                setSelectedCaseId(val);
+                setSearchParams({ caseId: val });
+              }}
+              wrapLabels
+            />
+          </div>
+        </div>
+      )}
 
       {/* ------------------------------------------------------------- */}
       {/* MAIN CONTAINER                                                */}

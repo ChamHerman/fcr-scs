@@ -87,8 +87,9 @@ function App() {
             <Route path="/submit-bank-details" element={<PaymentSubmitBankDetails />} />
             <Route path="/verify-audit-trail" element={<SmartContractVerifyAuditTrail />} />
             <Route path="/track-payment" element={<TrackPaymentStatus />} />
-            <Route path="/bank-portal" element={<BankPortal />} />
           </Route>
+          {/* Bank operations portal: rendered bare (no public Navbar/Footer chrome). */}
+          <Route path="/bank-portal" element={<BankPortal />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/activate" element={<AccountActivation />} />

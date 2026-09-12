@@ -156,6 +156,9 @@ model PaymentCase {
   status               PaymentStatus          @default(BANK_DETAILS_PENDING)
   requiredSignatures   Int                    @default(1)
   currentSignatures     Int                    @default(0)
+  disputeDocumentPath  String?                @map("dispute_document_path")
+  disputeDocumentName  String?                @map("dispute_document_name")
+  disputeUploadedAt    DateTime?              @map("dispute_uploaded_at")
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
   deletedAt            DateTime?              @map("deleted_at")
@@ -217,6 +220,25 @@ model ReceiverBankDetails {
   deletedAt            DateTime?   @map("deleted_at")
 
   @@map("receiver_bank_details")
+}
+
+/// FR-016: the member's persisted default payout bank account. Saved either by
+/// the first per-case bank submission (flow 1) or manually in member settings
+/// (flow 2). It is a preference record only — it never submits anything to the
+/// admin portal; GA sees bank details only after a per-case submission.
+model MemberPayoutDetail {
+  id                String   @id @default(uuid())
+  userId            String   @unique @map("user_id") @db.Uuid
+  bankName          String
+  accountNumber     String
+  accountHolderName String
+  phoneNumber       String
+  myKadNumber       String
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  user              User     @relation(fields: [userId], references: [userId])
+
+  @@map("member_payout_detail")
 }
 
 enum FundingSource {
@@ -598,6 +620,7 @@ model User {
   auditLogs               AuditLog[]
   alerts                  SystemAlert[]
   createdEmailTemplates   EmailTemplate[]
+  payoutDetail            MemberPayoutDetail?
 
   createdAt               DateTime              @default(now()) @map("created_at")
   updatedAt               DateTime              @updatedAt @map("updated_at")

@@ -1,6 +1,9 @@
 import { Request, Response } from "express";
+import * as fs from "fs";
+import * as path from "path";
 import * as paymentService from "../services/payment.service";
 import * as receiptService from "../services/receipt.service";
+import { getPaymentDisputeStorageDir } from "../utils/storage.utils";
 import { prisma } from "../prisma";
 import { AuthenticatedRequest } from "../../../user_management_service/src/middleware/auth.middleware";
 
@@ -149,6 +152,28 @@ export async function reject(req: Request, res: Response): Promise<void> {
   }
   try {
     const paymentCase = await paymentService.rejectTransfer(caseId, adminId, reason);
+    res.json({ paymentCase });
+  } catch (e: unknown) {
+    const msg = (e as Error).message;
+    if (msg.toLowerCase().includes("not found")) {
+      res.status(404).json({ error: msg });
+    } else {
+      res.status(400).json({ error: msg });
+    }
+  }
+}
+
+// FR-018 (replaced): the single SOP for a GA-rejected transfer — returns the
+// case to Pending Approval with prior signatures retained.
+export async function resolveRejection(req: Request, res: Response): Promise<void> {
+  const { caseId } = req.body;
+  const adminId = (req as AuthenticatedRequest).user?.userId || req.body.adminId;
+  if (!caseId || !adminId) {
+    res.status(400).json({ error: "caseId and adminId are required" });
+    return;
+  }
+  try {
+    const paymentCase = await paymentService.resolveRejectedTransfer(caseId, adminId);
     res.json({ paymentCase });
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -345,15 +370,105 @@ export async function downloadReceipt(req: Request, res: Response): Promise<void
   }
 }
 
+// FR-013 + FR-015: lodging a dispute strictly requires a real bank
+// statement / transaction record PDF plus a typed remark for extra context.
 export async function dispute(req: Request, res: Response): Promise<void> {
   const { caseId, reason } = req.body;
   if (!caseId) {
     res.status(400).json({ error: "caseId is required" });
     return;
   }
+  if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
+    res.status(400).json({ error: "A dispute remark is required." });
+    return;
+  }
+  if (!req.file) {
+    res.status(400).json({ error: "A supporting bank statement or transaction record PDF is required." });
+    return;
+  }
+  const isPdf =
+    req.file.mimetype === "application/pdf" && req.file.originalname.toLowerCase().endsWith(".pdf");
+  if (!isPdf) {
+    res.status(400).json({ error: "Only PDF bank statements or transaction records are accepted." });
+    return;
+  }
+
   try {
-    const paymentCase = await paymentService.disputePayment(caseId, reason);
-    res.json({ paymentCase, message: "Payment dispute recorded." });
+    const storageDir = getPaymentDisputeStorageDir(caseId);
+    if (!fs.existsSync(storageDir)) {
+      fs.mkdirSync(storageDir, { recursive: true });
+    }
+    const safeName = `Dispute_Statement_${Date.now()}_${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+    fs.writeFileSync(path.join(storageDir, safeName), req.file.buffer);
+    const storagePath = `document_storage/payment_dispute/${caseId}/${safeName}`;
+
+    const paymentCase = await paymentService.disputePayment(caseId, reason.trim(), {
+      storagePath,
+      fileName: req.file.originalname,
+    });
+    res.json({ paymentCase, message: "Payment dispute recorded with supporting bank statement." });
+  } catch (e: unknown) {
+    const msg = (e as Error).message;
+    if (msg.toLowerCase().includes("not found")) {
+      res.status(404).json({ error: msg });
+    } else {
+      res.status(400).json({ error: msg });
+    }
+  }
+}
+
+// FR-015: authenticated download of the member's uploaded dispute statement.
+export async function downloadDisputeDocument(req: Request, res: Response): Promise<void> {
+  const caseId = req.params.caseId as string;
+  try {
+    const pc = await prisma.paymentCase.findUnique({ where: { caseId } });
+    if (!pc?.disputeDocumentPath || !pc.disputeDocumentName) {
+      res.status(404).json({ error: "No dispute statement uploaded for this case" });
+      return;
+    }
+    const absolutePath = path.resolve(
+      __dirname,
+      "../../../../data_layer/document_storage",
+      pc.disputeDocumentPath.replace(/^document_storage\//, "")
+    );
+    if (!fs.existsSync(absolutePath)) {
+      res.status(404).json({ error: "Dispute statement file is missing from storage" });
+      return;
+    }
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${pc.disputeDocumentName.replace(/["\\]/g, "")}"`
+    );
+    res.sendFile(absolutePath);
+  } catch (e: unknown) {
+    res.status(500).json({ error: (e as Error).message });
+  }
+}
+
+// FR-014: Government Administrator resolves a DISPUTED payment after a bank
+// cross-check — Mark as Resolved (back to TRANSFER_SUCCEED) or Reinitiate
+// Payment (re-queue the transfer to the bank gateway).
+export async function resolveDispute(req: Request, res: Response): Promise<void> {
+  const { caseId, resolution } = req.body;
+  const adminId = (req as AuthenticatedRequest).user?.userId || req.body.adminId;
+  if (!caseId) {
+    res.status(400).json({ error: "caseId is required" });
+    return;
+  }
+  if (!resolution || !["MARK_AS_RESOLVED", "REINITIATE_PAYMENT"].includes(resolution)) {
+    res.status(400).json({ error: "resolution must be 'MARK_AS_RESOLVED' or 'REINITIATE_PAYMENT'" });
+    return;
+  }
+  try {
+    const paymentCase = await paymentService.resolveDispute(caseId, adminId, resolution);
+    res.json({
+      paymentCase,
+      message:
+        resolution === "MARK_AS_RESOLVED"
+          ? "Dispute marked as resolved. Case returned to Transfer Succeed for member re-confirmation."
+          : "Payment reinitiated and re-queued to the bank gateway.",
+    });
   } catch (e: unknown) {
     const msg = (e as Error).message;
     if (msg.toLowerCase().includes("not found")) {

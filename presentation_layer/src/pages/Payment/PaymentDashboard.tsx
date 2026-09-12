@@ -23,6 +23,7 @@ import {
   InitiateTransferModal,
   AuthoriseTransferModal,
   RejectTransferModal,
+  ResolveRejectionModal,
   CancelPaymentModal,
   RetryPaymentModal,
   RequestDetailsUpdateModal,
@@ -38,11 +39,13 @@ import {
 import { CaseDetailsModal } from './CaseDetailsModal';
 import { PaymentRowActions } from './PaymentRowActions';
 import type { PaymentRow } from './paymentModals';
+import { RefreshButton } from './RefreshButton';
 type ModalState =
   | { type: 'view'; pc: PaymentRow }
   | { type: 'initiate'; pc: PaymentRow }
   | { type: 'authorise'; pc: PaymentRow }
   | { type: 'reject'; pc: PaymentRow }
+  | { type: 'resolve-rejection'; pc: PaymentRow }
   | { type: 'cancel'; pc: PaymentRow }
   | { type: 'retry'; pc: PaymentRow }
   | { type: 'request-update'; pc: PaymentRow }
@@ -51,6 +54,34 @@ type ModalState =
   | null;
 
 const ITEMS_PER_PAGE = 10;
+
+const SORT_STORAGE_KEY = 'payment_overview_sort';
+type SortKey = 'priority' | 'recent' | 'amount-desc' | 'amount-asc';
+const SORT_OPTIONS = [
+  { value: 'priority', label: 'Action Priority (ready > pending, paid near last)' },
+  { value: 'recent', label: 'Most Recent Activity' },
+  { value: 'amount-desc', label: 'Amount (High to Low)' },
+  { value: 'amount-asc', label: 'Amount (Low to High)' },
+] as const;
+
+/**
+ * Default "Action Priority" ranking (user-locked): actionable cases first —
+ * Ready to Initiate, then Pending Approval — while terminal/inactive records
+ * sink; Bank Details Pending always last and Paid second last.
+ */
+const STATUS_PRIORITY_RANK: Record<string, number> = {
+  'Ready to Initiate': 1,
+  'Pending Approval': 2,
+  'Scheduled': 3,
+  'Bank Approval Pending': 4,
+  'Transfer Rejected': 5,
+  'Transfer Failed': 6,
+  'Disputed': 7,
+  'New Bank Details Pending': 8,
+  'Cancelled': 9,
+  'Paid': 10,
+  'Bank Details Pending': 11,
+};
 
 export default function PaymentDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -63,9 +94,17 @@ export default function PaymentDashboard() {
   const [caseDetailsId, setCaseDetailsId] = useState<string | null>(null);
   const [finalConfirmCase, setFinalConfirmCase] = useState<PaymentRow | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [sortKey, setSortKey] = useState<SortKey>(() => {
+    const stored = localStorage.getItem(SORT_STORAGE_KEY) as SortKey | null;
+    return stored && SORT_OPTIONS.some((o) => o.value === stored) ? stored : 'priority';
+  });
   const { identityId } = useAdminIdentity();
   const { user } = useAuth();
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    localStorage.setItem(SORT_STORAGE_KEY, sortKey);
+  }, [sortKey]);
 
   useGSAP(() => {
     gsap.fromTo('.stat-card', { opacity: 0, y: 28, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.45, stagger: 0.1, ease: 'back.out(1.3)', delay: 0.1 });
@@ -96,12 +135,12 @@ export default function PaymentDashboard() {
         ['Transfer Initiated', 'Authorised'].includes(normalizePaymentStatus(c.status)) &&
         (c.currentSignatures ?? 0) < (c.requiredSignatures ?? 1)
     ).length;
-    const failed = allCases.filter((c) => normalizePaymentStatus(c.status) === 'Transfer Failed').length;
+    const failed = allCases.filter((c) => ['Transfer Failed', 'Transfer Rejected'].includes(normalizePaymentStatus(c.status))).length;
     const paid = allCases.filter((c) => normalizePaymentStatus(c.status) === 'Paid').length;
     return [
       { label: 'Total Payment Cases', value: allCases.length, change: 'All records', icon: DollarSign },
       { label: 'Pending Authorisations', value: pending, change: 'Requires Action', icon: Hourglass },
-      { label: 'Failed Transfers', value: failed, change: 'Requires Attention', icon: XCircle },
+      { label: 'Failed Transfers', value: failed, change: 'Failed / Rejected', icon: XCircle },
       { label: 'Paid', value: paid, change: 'Executed', icon: Clock },
     ];
   }, [allCases]);
@@ -124,10 +163,31 @@ export default function PaymentDashboard() {
     });
   }, [allCases, searchQuery, statusFilter]);
 
-  const totalCount = filteredCases.length;
+  const sortedCases = useMemo(() => {
+    const byTimeDesc = (a: PaymentRow, b: PaymentRow) =>
+      new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime();
+    const rows = [...filteredCases];
+    switch (sortKey) {
+      case 'recent':
+        return rows.sort(byTimeDesc);
+      case 'amount-desc':
+        return rows.sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0));
+      case 'amount-asc':
+        return rows.sort((a, b) => Number(a.amount || 0) - Number(b.amount || 0));
+      case 'priority':
+      default:
+        return rows.sort((a, b) => {
+          const ra = STATUS_PRIORITY_RANK[normalizePaymentStatus(a.status)] ?? 50;
+          const rb = STATUS_PRIORITY_RANK[normalizePaymentStatus(b.status)] ?? 50;
+          return ra !== rb ? ra - rb : byTimeDesc(a, b);
+        });
+    }
+  }, [filteredCases, sortKey]);
+
+  const totalCount = sortedCases.length;
   const pageCount = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
   const safePage = Math.min(currentPage, pageCount);
-  const pageRows = filteredCases.slice((safePage - 1) * ITEMS_PER_PAGE, safePage * ITEMS_PER_PAGE);
+  const pageRows = sortedCases.slice((safePage - 1) * ITEMS_PER_PAGE, safePage * ITEMS_PER_PAGE);
 
   const closeModal = () => setModal(null);
 
@@ -139,6 +199,7 @@ export default function PaymentDashboard() {
           <div className="sub">Full view of the payment lifecycle — initiate, authorise, resolve and track every case.</div>
         </div>
         <div className="topbar-right">
+          <RefreshButton onClick={() => loadData()} loading={loading} />
           <div className="date-badge">
             <Clock size={16} className="inline mr-1" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
           </div>
@@ -182,6 +243,17 @@ export default function PaymentDashboard() {
         />
         <div className="filter-group">
           <Select
+            label="Sort"
+            options={SORT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+            value={sortKey}
+            onChange={(v) => {
+              setSortKey(v as SortKey);
+              setCurrentPage(1);
+            }}
+            placeholder="Sort records"
+            wrapLabels
+          />
+          <Select
             label="Status"
             options={PAYMENT_STATUSES.map((s) => ({ value: s, label: s === 'All' ? 'All statuses' : s }))}
             value={statusFilter}
@@ -190,6 +262,7 @@ export default function PaymentDashboard() {
               setCurrentPage(1);
             }}
             placeholder="All statuses"
+            wrapLabels
           />
           <Button
             variant="outlined"
@@ -221,7 +294,7 @@ export default function PaymentDashboard() {
                 <th style={{ width: '140px' }}>Beneficiary</th>
                 <th style={{ width: '150px' }}>Bank</th>
                 <th style={{ width: '130px' }}>Amount</th>
-                <th style={{ width: '150px' }}>Date &amp; Time</th>
+                <th style={{ width: '150px' }}>Updated</th>
                 <th style={{ width: '180px' }}>Status</th>
               </tr>
             </thead>
@@ -343,6 +416,11 @@ export default function PaymentDashboard() {
       />
       <RejectTransferModal
         pc={modal?.type === 'reject' ? modal.pc : null}
+        onClose={closeModal}
+        onDone={() => { closeModal(); loadData(); }}
+      />
+      <ResolveRejectionModal
+        pc={modal?.type === 'resolve-rejection' ? modal.pc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />

@@ -17,6 +17,7 @@ export default function TrackPaymentStatus() {
   const [status, setStatus] = useState('');
   const [isDisputed, setIsDisputed] = useState(false);
   const [disputeFile, setDisputeFile] = useState<File | null>(null);
+  const [disputeRemark, setDisputeRemark] = useState('');
   const { notify } = useNotification();
   const pageRef = useRef<HTMLDivElement>(null);
 
@@ -89,9 +90,13 @@ export default function TrackPaymentStatus() {
       notify({ type: 'error', title: 'Missing file', message: 'Please attach a bank statement PDF' });
       return;
     }
+    if (!disputeRemark.trim()) {
+      notify({ type: 'error', title: 'Missing remark', message: 'Please add a remark describing the discrepancy' });
+      return;
+    }
     setLoading(true);
     try {
-      await paymentApi.dispute(caseId, disputeFile);
+      await paymentApi.dispute(caseId, disputeFile, disputeRemark.trim());
       setStatus('Payment Disputed');
       setIsDisputed(true);
       notify({ type: 'success', title: 'Dispute submitted successfully' });
@@ -176,17 +181,30 @@ export default function TrackPaymentStatus() {
                 <ShieldAlert className="w-5 h-5 text-red-600" />
                 <h3 className="font-semibold text-red-900">Report Missing Funds / Dispute</h3>
              </div>
-             <p className="text-sm text-red-700 mb-4">If you haven't received your funds, please upload your bank statement PDF to dispute the payment.</p>
-             <div className="flex gap-4 items-center">
-                <Input 
-                  label="Bank Statement (PDF)"
-                  type="file" 
-                  accept=".pdf"
+             <p className="text-sm text-red-700 mb-4">If you haven't received your funds, attach your real bank statement or transaction record (PDF) and add a remark to dispute the payment.</p>
+             <div className="flex flex-col gap-4">
+                <Input
+                  label="Bank Statement / Transaction Record (PDF)"
+                  type="file"
+                  accept=".pdf,application/pdf"
                   onChange={(e) => setDisputeFile(e.target.files?.[0] || null)}
                 />
-                <Button onClick={handleDispute} disabled={loading} variant="outlined" className="border-red-400 text-red-600 hover:bg-red-50">
-                  Submit Dispute
-                </Button>
+                <Input
+                  label="Remark (required)"
+                  value={disputeRemark}
+                  onChange={(e) => setDisputeRemark(e.target.value)}
+                  placeholder="Describe the discrepancy, delayed clearance, or amount difference..."
+                />
+                <div>
+                  <Button
+                    onClick={handleDispute}
+                    disabled={loading || !disputeFile || !disputeRemark.trim()}
+                    variant="outlined"
+                    className="border-red-400 text-red-600 hover:bg-red-50"
+                  >
+                    Submit Dispute
+                  </Button>
+                </div>
              </div>
           </div>
         </Card>

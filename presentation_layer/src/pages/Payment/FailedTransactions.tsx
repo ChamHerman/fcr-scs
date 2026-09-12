@@ -12,15 +12,18 @@ import { Modal } from '../../components/ui/Modal';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { useAuth } from '../../context/AuthContext';
 import './payment.css';
+import { RefreshButton } from './RefreshButton';
 import {
   ViewDetailsModal,
   RetryPaymentModal,
   RequestDetailsUpdateModal,
   ScheduleTomorrowModal,
   CancelPaymentModal,
+  ResolveRejectionModal,
   paymentBadge,
   fmtAmount,
   fmtDate,
+  stripRawLogPrefix,
 } from './paymentModals';
 import { CaseDetailsModal } from './CaseDetailsModal';
 import { PaymentRowActions } from './PaymentRowActions';
@@ -33,6 +36,7 @@ type ModalState =
   | { type: 'request-update'; pc: PaymentRow }
   | { type: 'schedule'; pc: PaymentRow }
   | { type: 'cancel'; pc: PaymentRow }
+  | { type: 'resolve-rejection'; pc: PaymentRow }
   | null;
 
 export default function FailedTransactions() {
@@ -71,13 +75,13 @@ export default function FailedTransactions() {
   }, [loadData]);
 
   const stats = useMemo(() => {
-    const failed = cases.filter((c) => normalizePaymentStatus(c.status) === 'Transfer Failed').length;
+    const failed = cases.filter((c) => ['Transfer Failed', 'Transfer Rejected'].includes(normalizePaymentStatus(c.status))).length;
     const unresolved = cases.filter((c) => {
       const ft = c.failedTransactions ?? [];
       return ft.length === 0 || ft[ft.length - 1].resolution == null;
     }).length;
     return [
-      { label: 'Failed', value: failed, change: 'Transfer Failed', icon: AlertOctagon },
+      { label: 'Failed / Rejected', value: failed, change: 'Transfer Failed & Rejected', icon: AlertOctagon },
       { label: 'Pending Resolution', value: unresolved, change: 'Needs SOP action', icon: FileWarning },
     ];
   }, [cases]);
@@ -99,6 +103,7 @@ export default function FailedTransactions() {
           <div className="sub">Every bank error / processing anomaly lands here with its error log — resolve via SOP actions.</div>
         </div>
         <div className="topbar-right">
+          <RefreshButton onClick={() => loadData()} loading={loading} />
           <div className="date-badge">
             <Clock size={16} className="inline mr-1" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
           </div>
@@ -152,32 +157,39 @@ export default function FailedTransactions() {
           <table>
             <thead>
               <tr>
-                <th style={{ width: '135px' }}>Payment ID</th>
-                <th style={{ width: '175px' }}>Case ID</th>
-                <th style={{ width: '140px' }}>Beneficiary</th>
-                <th style={{ width: '220px' }}>Error</th>
-                <th style={{ width: '140px' }}>Attempted At</th>
-                <th style={{ width: '150px' }}>Resolution Status</th>
-                <th style={{ width: '150px' }}>Status</th>
+                <th style={{ width: '150px' }}>Payment ID</th>
+                <th style={{ width: '185px' }}>Case ID</th>
+                <th style={{ width: '150px' }}>Beneficiary</th>
+                <th style={{ width: '280px' }}>Error</th>
+                <th style={{ width: '160px' }}>Attempted At</th>
+                <th style={{ width: '170px' }}>Status</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="text-center text-gray-500 py-8">
+                  <td colSpan={6} className="text-center text-gray-500 py-8">
                     <Loader2 size={22} className="inline animate-spin" /><span className="ml-2">Loading failed transactions…</span>
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center text-gray-500 py-8">No failed transactions requiring resolution.</td>
+                  <td colSpan={6} className="text-center text-gray-500 py-8">No failed transactions requiring resolution.</td>
                 </tr>
               ) : (
                 filtered.map((pc) => {
                   const ft = pc.failedTransactions ?? [];
                   const latest = ft[ft.length - 1];
-                  const errorLog = latest?.errorLog || 'No error log available.';
-                  const unresolved = !latest?.resolution;
+                  // GA-rejected cases (FR-018) carry no failedTransaction row —
+                  // surface the rejection reason from the governance audit list.
+                  const rejectionReason = [...(pc.authorisations ?? [])]
+                    .reverse()
+                    .find((a) => a.action === 'reject')?.reason;
+                  const errorLog = latest
+                    ? stripRawLogPrefix(latest.errorLog)
+                    : rejectionReason
+                      ? `Rejected by Government Admin: ${rejectionReason}`
+                      : 'No error log available.';
                   const paymentId = pc.paymentId || `PMT-${pc.caseId}`;
                   return (
                     <tr
@@ -201,13 +213,6 @@ export default function FailedTransactions() {
                         </span>
                       </td>
                       <td><span className="meta-text font-mono text-xs">{latest ? fmtDate(latest.createdAt) : fmtDate(pc.updatedAt)}</span></td>
-                      <td>
-                        {unresolved ? (
-                          <span className="payment-badge status-transfer-failed"><span className="dot" />Pending resolution</span>
-                        ) : (
-                          <span className="payment-badge status-paid"><span className="dot" />Resolved</span>
-                        )}
-                      </td>
                       <td>{paymentBadge(pc.status, pc.currentSignatures, pc.requiredSignatures)}</td>
                     </tr>
                   );
@@ -248,7 +253,7 @@ export default function FailedTransactions() {
                     <div className="text-xs text-md-on-surface-variant mb-1">
                       Attempt #{i + 1} · {fmtDate(f.createdAt)}
                     </div>
-                    <div className="text-sm text-md-on-surface break-words whitespace-pre-wrap">{f.errorLog}</div>
+                    <div className="text-sm text-md-on-surface break-words whitespace-pre-wrap">{stripRawLogPrefix(f.errorLog)}</div>
                     {f.resolution && (
                       <div className="text-xs text-md-on-success mt-1">
                         Resolution: {f.resolution} {f.resolvedAt ? `· ${fmtDate(f.resolvedAt)}` : ''}
@@ -285,6 +290,11 @@ export default function FailedTransactions() {
       />
       <CancelPaymentModal
         pc={modal?.type === 'cancel' ? modal.pc : null}
+        onClose={closeModal}
+        onDone={() => { closeModal(); loadData(); }}
+      />
+      <ResolveRejectionModal
+        pc={modal?.type === 'resolve-rejection' ? modal.pc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />

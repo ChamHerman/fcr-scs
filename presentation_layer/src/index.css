@@ -56,14 +56,14 @@
     --md-surface-container-low: #1D1B20;
     --md-outline: #938F99;
     --md-on-surface-variant: #CAC4D0;
-    --md-error: #F2B8B5;
-    --md-on-error: #8C1D18;
+    --md-error: #8C1D18;
+    --md-on-error: #F9DEDC;
     --md-error-text: #fce8e6;
     --md-warning: #EFB008;
     --md-on-warning: #3C2900;
     --md-warning-text: #fef7e0;
-    --md-success: #A3D9A5;
-    --md-on-success: #0D3A11;
+    --md-success: #17491F;
+    --md-on-success: #C8EFC8;
     --md-success-text: #e6f4ea;
     --md-shimmer: rgba(255, 255, 255, 0.10);
     --md-scrollbar-thumb: rgba(147, 143, 153, 0.45);
@@ -74,6 +74,9 @@
     @apply bg-md-background text-md-on-surface font-sans antialiased overflow-x-hidden transition-colors duration-300;
   }
 
+  /* NFR-002 (revoked 2026-09-12): JetBrains Mono removed — the whole system
+     uses a single typeface (Roboto). Identifiers / financial figures keep
+     column alignment via tabular numerals instead of a second font. */
   .font-mono,
   .mono,
   .case-id,
@@ -81,8 +84,8 @@
   pre,
   kbd,
   samp {
-    font-family: 'JetBrains Mono', monospace !important;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    font-family: 'Roboto', ui-monospace, monospace !important;
+    font-variant-numeric: tabular-nums;
   }
   table th,
   table td {
@@ -487,87 +490,133 @@
   }
 
   /* ── Dark Mode Overrides ── */
-  @media (prefers-color-scheme: dark) {
-    .status-case-registered,
-    .status-registered {
+  
+  [data-theme="dark"] .status-case-registered,
+  .dark .status-case-registered,
+  [data-theme="dark"] .status-registered,
+  .dark .status-registered {
       background: rgba(2, 132, 199, 0.22);
       color: #7DD3FC;
     }
-    .status-case-registered .dot,
-    .status-registered .dot {
+  [data-theme="dark"] .status-case-registered .dot,
+  .dark .status-case-registered .dot,
+  [data-theme="dark"] .status-registered .dot,
+  .dark .status-registered .dot {
       background: #38BDF8;
     }
-
-    .status-valuer-assigned,
-    .status-valuation-progress,
-    .status-pending-valuation,
-    .status-pending-comp,
-    .status-objection-review,
-    .status-offer-pending,
-    .status-payment-progress {
+  [data-theme="dark"] .status-valuer-assigned,
+  .dark .status-valuer-assigned,
+  [data-theme="dark"] .status-valuation-progress,
+  .dark .status-valuation-progress,
+  [data-theme="dark"] .status-pending-valuation,
+  .dark .status-pending-valuation,
+  [data-theme="dark"] .status-pending-comp,
+  .dark .status-pending-comp,
+  [data-theme="dark"] .status-objection-review,
+  .dark .status-objection-review,
+  [data-theme="dark"] .status-offer-pending,
+  .dark .status-offer-pending,
+  [data-theme="dark"] .status-payment-progress,
+  .dark .status-payment-progress {
       background: rgba(202, 138, 4, 0.22);
       color: #FEF08A;
     }
-    .status-valuer-assigned .dot,
-    .status-valuation-progress .dot,
-    .status-pending-valuation .dot,
-    .status-pending-comp .dot,
-    .status-objection-review .dot,
-    .status-offer-pending .dot,
-    .status-payment-progress .dot {
+  [data-theme="dark"] .status-valuer-assigned .dot,
+  .dark .status-valuer-assigned .dot,
+  [data-theme="dark"] .status-valuation-progress .dot,
+  .dark .status-valuation-progress .dot,
+  [data-theme="dark"] .status-pending-valuation .dot,
+  .dark .status-pending-valuation .dot,
+  [data-theme="dark"] .status-pending-comp .dot,
+  .dark .status-pending-comp .dot,
+  [data-theme="dark"] .status-objection-review .dot,
+  .dark .status-objection-review .dot,
+  [data-theme="dark"] .status-offer-pending .dot,
+  .dark .status-offer-pending .dot,
+  [data-theme="dark"] .status-payment-progress .dot,
+  .dark .status-payment-progress .dot {
       background: #FACC15;
     }
-
-    .status-valuation-approved,
-    .status-comp-approved,
-    .status-obj-approved,
-    .status-offer-accepted,
-    .status-offer-issued,
-    .status-payment-completed,
-    .status-approved,
-    .status-accepted {
+  [data-theme="dark"] .status-valuation-approved,
+  .dark .status-valuation-approved,
+  [data-theme="dark"] .status-comp-approved,
+  .dark .status-comp-approved,
+  [data-theme="dark"] .status-obj-approved,
+  .dark .status-obj-approved,
+  [data-theme="dark"] .status-offer-accepted,
+  .dark .status-offer-accepted,
+  [data-theme="dark"] .status-offer-issued,
+  .dark .status-offer-issued,
+  [data-theme="dark"] .status-payment-completed,
+  .dark .status-payment-completed,
+  [data-theme="dark"] .status-approved,
+  .dark .status-approved,
+  [data-theme="dark"] .status-accepted,
+  .dark .status-accepted {
       background: rgba(46, 125, 50, 0.22);
       color: #A5D6A7;
     }
-    .status-valuation-approved .dot,
-    .status-comp-approved .dot,
-    .status-obj-approved .dot,
-    .status-offer-accepted .dot,
-    .status-offer-issued .dot,
-    .status-payment-completed .dot,
-    .status-approved .dot,
-    .status-accepted .dot {
+  [data-theme="dark"] .status-valuation-approved .dot,
+  .dark .status-valuation-approved .dot,
+  [data-theme="dark"] .status-comp-approved .dot,
+  .dark .status-comp-approved .dot,
+  [data-theme="dark"] .status-obj-approved .dot,
+  .dark .status-obj-approved .dot,
+  [data-theme="dark"] .status-offer-accepted .dot,
+  .dark .status-offer-accepted .dot,
+  [data-theme="dark"] .status-offer-issued .dot,
+  .dark .status-offer-issued .dot,
+  [data-theme="dark"] .status-payment-completed .dot,
+  .dark .status-payment-completed .dot,
+  [data-theme="dark"] .status-approved .dot,
+  .dark .status-approved .dot,
+  [data-theme="dark"] .status-accepted .dot,
+  .dark .status-accepted .dot {
       background: #81C784;
     }
-
-    .status-valuation-rejected,
-    .status-comp-rejected,
-    .status-obj-rejected,
-    .status-offer-rejected,
-    .status-rejected {
+  [data-theme="dark"] .status-valuation-rejected,
+  .dark .status-valuation-rejected,
+  [data-theme="dark"] .status-comp-rejected,
+  .dark .status-comp-rejected,
+  [data-theme="dark"] .status-obj-rejected,
+  .dark .status-obj-rejected,
+  [data-theme="dark"] .status-offer-rejected,
+  .dark .status-offer-rejected,
+  [data-theme="dark"] .status-rejected,
+  .dark .status-rejected {
       background: rgba(198, 40, 40, 0.25);
       color: #FFCDD2;
     }
-    .status-valuation-rejected .dot,
-    .status-comp-rejected .dot,
-    .status-obj-rejected .dot,
-    .status-offer-rejected .dot,
-    .status-rejected .dot {
+  [data-theme="dark"] .status-valuation-rejected .dot,
+  .dark .status-valuation-rejected .dot,
+  [data-theme="dark"] .status-comp-rejected .dot,
+  .dark .status-comp-rejected .dot,
+  [data-theme="dark"] .status-obj-rejected .dot,
+  .dark .status-obj-rejected .dot,
+  [data-theme="dark"] .status-offer-rejected .dot,
+  .dark .status-offer-rejected .dot,
+  [data-theme="dark"] .status-rejected .dot,
+  .dark .status-rejected .dot {
       background: #E57373;
     }
-
-    .status-case-closed,
-    .status-expired,
-    .status-closed {
+  [data-theme="dark"] .status-case-closed,
+  .dark .status-case-closed,
+  [data-theme="dark"] .status-expired,
+  .dark .status-expired,
+  [data-theme="dark"] .status-closed,
+  .dark .status-closed {
       background: rgba(100, 116, 139, 0.25);
       color: #CBD5E1;
     }
-    .status-case-closed .dot,
-    .status-expired .dot,
-    .status-closed .dot {
+  [data-theme="dark"] .status-case-closed .dot,
+  .dark .status-case-closed .dot,
+  [data-theme="dark"] .status-expired .dot,
+  .dark .status-expired .dot,
+  [data-theme="dark"] .status-closed .dot,
+  .dark .status-closed .dot {
       background: #94A3B8;
     }
-  }
+  
 
   [data-theme="dark"] .status-case-registered,
   .dark .status-case-registered { background: rgba(2, 132, 199, 0.22); color: #7DD3FC; }
