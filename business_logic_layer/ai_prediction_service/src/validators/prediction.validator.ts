@@ -6,7 +6,7 @@ const REQUIRED_FEATURES: (keyof ValuationInput)[] = [
   "location_type",
   "tenure_type",
   "land_area_m2",
-  "built_up_area_m2",
+  "acquisition_area_m2",
   "building_age_years",
 ];
 

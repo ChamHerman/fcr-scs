@@ -35,3 +35,6 @@ venv/
 # AI valuation: copies of datasets uploaded via the Retrain page (written on every retrain)
 data_layer/ai_model_repository/datasets/uploads/
 
+# AI valuation: local calculation reference (formula notes kept out of the repo)
+_docs/AI_VALUATION_CALCULATION.md
+
