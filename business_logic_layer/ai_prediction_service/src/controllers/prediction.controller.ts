@@ -1,27 +1,17 @@
 import { Request, Response } from "express";
 import * as predictionService from "../services/pythonBridge.service";
-import { validateValuationPayload } from "../validators/prediction.validator";
 import type { ValuationInput } from "../interfaces/prediction.types";
 
 export async function valuate(req: Request, res: Response): Promise<void> {
-  const validationError = validateValuationPayload(req.body);
-  if (validationError) {
-    res.status(400).json({ error: validationError });
+  if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+    res.status(400).json({ error: "A JSON object with the property attributes is required" });
     return;
   }
 
   try {
-    const input: ValuationInput = {
-      state: String(req.body.state),
-      land_category: String(req.body.land_category),
-      location_type: String(req.body.location_type),
-      tenure_type: String(req.body.tenure_type),
-      building_condition: String(req.body.building_condition),
-      land_area_sqft: Number(req.body.land_area_sqft),
-      built_up_area_sqft: Number(req.body.built_up_area_sqft),
-      building_age_years: Number(req.body.building_age_years),
-    };
-    const breakdown = await predictionService.valuate(input);
+    // The body is forwarded as-is: the Python sidecar normalises canonical and
+    // legacy (pre-alignment) keys/aliases and returns precise validation errors.
+    const breakdown = await predictionService.valuate(req.body as unknown as ValuationInput);
     res.json({ success: true, data: breakdown });
   } catch (e: unknown) {
     handleError(res, e);
@@ -48,8 +38,7 @@ export async function retrainModel(req: Request, res: Response): Promise<void> {
   }
 
   try {
-    const splitRatio = req.body.splitRatio !== undefined ? Number(req.body.splitRatio) : undefined;
-    const comparison = await predictionService.retrainModel(req.file.buffer, req.file.originalname, splitRatio);
+    const comparison = await predictionService.retrainModel(req.file.buffer, req.file.originalname);
     res.json({ success: true, data: comparison });
   } catch (e: unknown) {
     handleError(res, e);

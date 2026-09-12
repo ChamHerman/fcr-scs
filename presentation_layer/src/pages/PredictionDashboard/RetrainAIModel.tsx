@@ -11,10 +11,11 @@ import {
   TrendingUp,
   AlertTriangle,
   X,
+  GitCompareArrows,
 } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { Select } from '../../components/ui/Select';
+import { Modal } from '../../components/ui/Modal';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import {
   activateModel,
@@ -23,7 +24,7 @@ import {
   getModelInfo,
   retrainModel,
 } from '../../services/predictionApi';
-import type { ModelInfo, RetrainComparison } from '../../services/predictionApi';
+import type { ModelInfo, ModelMetrics, RetrainComparison } from '../../services/predictionApi';
 
 const formatRM = (value: number) => `RM ${Math.round(value).toLocaleString('en-US')}`;
 const formatAccuracy = (r2: number) => `${(r2 * 100).toFixed(2)}%`;
@@ -38,10 +39,9 @@ const REQUIRED_COLUMNS = [
   'land_category',
   'location_type',
   'tenure_type',
-  'land_area_sqft',
-  'built_up_area_sqft',
+  'land_area_m2',
+  'built_up_area_m2',
   'building_age_years',
-  'building_condition',
   'market_value_myr',
 ];
 
@@ -67,6 +67,46 @@ const StatCard: React.FC<StatCardProps> = ({ icon, label, value }) => (
   </div>
 );
 
+interface MetricCellProps {
+  metricKey: keyof RetrainComparison['candidate']['metrics'];
+  label: string;
+  render: (value: number) => string;
+  model: RetrainComparison['candidate'] | null;
+}
+
+const CompareColumn: React.FC<{
+  title: string;
+  subtitle?: string;
+  metrics: ModelMetrics | null;
+  rows: number | null;
+  highlight: boolean;
+}> = ({ title, subtitle, metrics, rows, highlight }) => (
+  <div className={`rounded-xl p-4 ${highlight ? 'bg-md-primary/10 border border-md-primary/30' : 'bg-md-surface-container-low border border-md-outline/20'}`}>
+    <div className={`text-sm font-bold ${highlight ? 'text-md-primary' : 'text-md-on-surface'}`}>{title}</div>
+    {subtitle && <div className="text-[11px] text-md-on-surface-variant mt-0.5">{subtitle}</div>}
+    <div className="mt-3 space-y-2.5">
+      <div>
+        <div className="text-[11px] uppercase tracking-wide text-md-on-surface-variant font-medium">Accuracy (R²)</div>
+        <div className={`text-xl font-bold ${highlight ? 'text-md-primary' : 'text-md-on-surface'}`}>
+          {metrics ? formatAccuracy(metrics.r2) : '—'}
+        </div>
+      </div>
+      <div className="flex justify-between border-t border-md-outline/15 pt-2 text-[13px]">
+        <span className="text-md-on-surface-variant">Mean Abs. Error</span>
+        <span className="font-semibold text-md-on-surface">{metrics ? formatRM(metrics.mae) : '—'}</span>
+      </div>
+      <div className="flex justify-between text-[13px]">
+        <span className="text-md-on-surface-variant">RMSE</span>
+        <span className="font-semibold text-md-on-surface">{metrics ? formatRM(metrics.rmse) : '—'}</span>
+      </div>
+      <div className="flex justify-between text-[13px]">
+        <span className="text-md-on-surface-variant">Trained on rows</span>
+        <span className="font-semibold text-md-on-surface">{rows !== null ? rows.toLocaleString('en-US') : '—'}</span>
+      </div>
+    </div>
+  </div>
+);
+
 export const RetrainAIModel: React.FC = () => {
   const { notify } = useNotification();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -75,9 +115,9 @@ export const RetrainAIModel: React.FC = () => {
   const [dataset, setDataset] = useState<File | null>(null);
   const [rowCount, setRowCount] = useState<number | null>(null);
   const [rowWarning, setRowWarning] = useState(false);
-  const [splitRatio, setSplitRatio] = useState(0.2);
   const [training, setTraining] = useState(false);
   const [comparison, setComparison] = useState<RetrainComparison | null>(null);
+  const [compareOpen, setCompareOpen] = useState(false);
   const [acting, setActing] = useState(false);
 
   const loadModelInfo = useCallback(async () => {
@@ -124,6 +164,7 @@ export const RetrainAIModel: React.FC = () => {
     }
     setDataset(file);
     setComparison(null);
+    setCompareOpen(false);
     if (file) {
       inspectDataset(file);
     } else {
@@ -131,11 +172,11 @@ export const RetrainAIModel: React.FC = () => {
     }
   };
 
-  const handleTemplateDownload = async () => {
+  const handleDownloadCurrentDataset = async () => {
     try {
       await downloadTemplateFile();
     } catch (e: unknown) {
-      notify({ type: 'error', title: 'Could not download template', message: (e as Error).message });
+      notify({ type: 'error', title: 'Could not download the current dataset', message: (e as Error).message });
     }
   };
 
@@ -143,12 +184,13 @@ export const RetrainAIModel: React.FC = () => {
     if (!dataset) return;
     setTraining(true);
     try {
-      const result = await retrainModel(dataset, splitRatio);
+      const result = await retrainModel(dataset);
       setComparison(result);
+      setCompareOpen(true);
       notify({
         type: result.verdict === 'worse' ? 'error' : 'success',
         title: `Training complete — new model is ${result.verdict.toUpperCase()}`,
-        message: `Evaluated on ${result.rows} rows from the uploaded dataset.`,
+        message: `Both models scored on the same independent evaluation dataset (${result.evaluatedOn.testRows.toLocaleString('en-US')} rows).`,
       });
     } catch (e: unknown) {
       notify({ type: 'error', title: 'Retraining failed', message: (e as Error).message });
@@ -159,12 +201,12 @@ export const RetrainAIModel: React.FC = () => {
 
   const handleReplace = async () => {
     if (!comparison) return;
-    if (!window.confirm('Replace the current production model with the newly trained model?')) return;
     setActing(true);
     try {
       const updated = await activateModel(comparison.candidateId);
       setModelInfo(updated);
       setComparison(null);
+      setCompareOpen(false);
       clearDataset();
       notify({ type: 'success', title: `Model replaced — now running version ${updated.version}` });
     } catch (e: unknown) {
@@ -180,6 +222,7 @@ export const RetrainAIModel: React.FC = () => {
     try {
       await discardCandidate(comparison.candidateId);
       setComparison(null);
+      setCompareOpen(false);
       clearDataset();
       notify({ type: 'general', title: 'Candidate discarded — current model unchanged' });
     } catch (e: unknown) {
@@ -201,7 +244,8 @@ export const RetrainAIModel: React.FC = () => {
             </span>
           </div>
           <p className="text-md-on-surface-variant mt-1 max-w-3xl">
-            Upload a new valuation dataset, compare it against the live model, and decide whether to replace it.
+            Download the current training dataset, adjust it, and re-upload to train a candidate model.
+            A pop-up compares the old and new models so you can decide whether to replace the live one.
           </p>
         </div>
       </div>
@@ -290,15 +334,19 @@ export const RetrainAIModel: React.FC = () => {
               </li>
               <li className="flex gap-2 items-start">
                 <CheckCircle2 size={14} className="shrink-0 mt-0.5 text-green-600 dark:text-green-400" />
-                <span>Split automatically — the new model trains on one part and both models are scored on the same validation holdout</span>
+                <span>
+                  The new model trains on <strong>all</strong> rows of your file. Both models are then scored on the
+                  same independent evaluation dataset (neither was trained on it) for a fair comparison.
+                </span>
               </li>
             </ul>
-            <Button variant="outlined" size="sm" onClick={handleTemplateDownload}>
-              <Download size={15} /> Download template (format sample only)
+            <Button variant="outlined" size="sm" onClick={handleDownloadCurrentDataset}>
+              <Download size={15} /> Download Current Dataset
             </Button>
             <p className="text-xs text-md-on-surface-variant mt-3">
-              Pick any CSV from your computer in the template format. The backend saves its own copy into{' '}
-              <code className="font-mono">datasets/uploads/</code> automatically.
+              This downloads the dataset the <strong className="text-md-on-surface">current model was trained on</strong>.
+              Modify some values in it, then re-upload above to see whether a retrained model scores better or worse
+              than the current one.
             </p>
           </div>
         </div>
@@ -311,77 +359,79 @@ export const RetrainAIModel: React.FC = () => {
         )}
 
         <div className="flex flex-wrap items-center justify-end gap-4 mt-6">
-          <div className="w-44">
-            <Select
-              label="Validation split"
-              value={String(splitRatio)}
-              onChange={(v) => setSplitRatio(Number(v))}
-              options={[
-                { value: '0.1', label: '10% holdout' },
-                { value: '0.2', label: '20% holdout' },
-                { value: '0.3', label: '30% holdout' },
-              ]}
-            />
-          </div>
           <Button variant="filled" onClick={handleTrain} disabled={!dataset || training || rowWarning} isLoading={training}>
             <UploadCloud size={16} /> Train with New Dataset
           </Button>
         </div>
       </Card>
 
-      {/* Comparison */}
-      {comparison && (
-        <>
-          <div className={`flex items-center gap-3 p-4 rounded-xl border font-semibold ${VERDICT_META[comparison.verdict].classes}`}>
-            {VERDICT_META[comparison.verdict].icon}
-            <span>{VERDICT_META[comparison.verdict].text}</span>
+      {/* Pending candidate banner (shown when the pop-up is closed without a decision) */}
+      {comparison && !compareOpen && (
+        <div className={`flex flex-wrap items-center gap-3 p-4 rounded-xl border font-semibold ${VERDICT_META[comparison.verdict].classes}`}>
+          {VERDICT_META[comparison.verdict].icon}
+          <span className="text-sm">{VERDICT_META[comparison.verdict].text}</span>
+          <div className="flex gap-2 ml-auto">
+            <Button variant="outlined" size="sm" onClick={() => setCompareOpen(true)} disabled={acting}>
+              <GitCompareArrows size={14} /> Compare again
+            </Button>
+            <Button variant="danger" size="sm" onClick={handleDiscard} disabled={acting}>
+              Discard
+            </Button>
           </div>
-
-          <Card interactive={false}>
-            <h2 className="text-lg font-semibold">Performance Comparison</h2>
-            <p className="text-sm text-md-on-surface-variant mt-1 mb-4">
-              The new model was trained on {comparison.split.trainRows.toLocaleString('en-US')} rows; both models
-              scored on the same {comparison.split.holdoutRows.toLocaleString('en-US')}-row validation holdout
-              ({Math.round((comparison.split.holdoutRows / comparison.rows) * 100)}% of your upload).
-            </p>
-            <div className="overflow-x-auto md-scroll-thin">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs uppercase tracking-wide text-md-on-surface-variant">
-                    <th className="py-2.5 pr-4 font-semibold">Metric</th>
-                    <th className="py-2.5 pr-4 font-semibold">Current Model{comparison.current ? ` (${comparison.current.version})` : ''}</th>
-                    <th className="py-2.5 font-semibold">New Dataset Model</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    { label: 'Mean Absolute Error (lower is better)', render: formatRM, key: 'mae' as const },
-                    { label: 'Root Mean Squared Error (lower is better)', render: formatRM, key: 'rmse' as const },
-                    { label: 'Accuracy / R² (higher is better)', render: formatAccuracy, key: 'r2' as const },
-                  ].map((row) => (
-                    <tr key={row.key} className="border-t border-md-outline/20">
-                      <td className="py-3 pr-4 text-md-on-surface">{row.label}</td>
-                      <td className="py-3 pr-4">{comparison.current ? row.render(comparison.current.metrics[row.key]) : '—'}</td>
-                      <td className="py-3 font-semibold">{row.render(comparison.candidate.metrics[row.key])}</td>
-                    </tr>
-                  ))}
-                  <tr className="border-t border-md-outline/20">
-                    <td className="py-3 pr-4 text-md-on-surface">Training rows</td>
-                    <td className="py-3 pr-4">{modelInfo?.datasetRows.toLocaleString('en-US') ?? '—'}</td>
-                    <td className="py-3 font-semibold">{comparison.rows.toLocaleString('en-US')}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div className="flex justify-end gap-3 mt-6">
-              <Button variant="danger" onClick={handleDiscard} disabled={acting}>Discard New Dataset</Button>
-              <Button variant="filled" onClick={handleReplace} disabled={acting} isLoading={acting && !!comparison.current}>
-                {comparison.current ? 'Replace Current Model' : 'Activate as Production Model'}
-              </Button>
-            </div>
-          </Card>
-        </>
+        </div>
       )}
+
+      {/* Comparison pop-up */}
+      <Modal
+        isOpen={compareOpen}
+        onClose={() => setCompareOpen(false)}
+        title="Retraining comparison"
+        subtitle="Old model on the left, newly trained model on the right — both scored on the same independent evaluation dataset."
+        maxWidth="max-w-3xl"
+        footer={
+          <div className="flex items-center justify-end gap-3 w-full">
+            <Button variant="text" onClick={() => setCompareOpen(false)} disabled={acting}>
+              Not now
+            </Button>
+            <Button variant="danger" onClick={handleDiscard} disabled={acting}>
+              Discard New Dataset
+            </Button>
+            <Button variant="filled" onClick={handleReplace} disabled={acting} isLoading={acting}>
+              {comparison?.current ? 'Replace Current Model' : 'Activate as Production Model'}
+            </Button>
+          </div>
+        }
+      >
+        {comparison && (
+          <div className="space-y-4">
+            <div className={`flex items-center gap-3 p-4 rounded-xl border font-semibold ${VERDICT_META[comparison.verdict].classes}`}>
+              {VERDICT_META[comparison.verdict].icon}
+              <span>{VERDICT_META[comparison.verdict].text}</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <CompareColumn
+                title="Current Model"
+                subtitle={comparison.current ? `version ${comparison.current.version}` : 'no active model'}
+                metrics={comparison.current?.metrics ?? null}
+                rows={modelInfo?.datasetRows ?? null}
+                highlight={false}
+              />
+              <CompareColumn
+                title="New Dataset Model"
+                subtitle={`candidate ${comparison.candidate.candidateId}`}
+                metrics={comparison.candidate.metrics}
+                rows={comparison.rows}
+                highlight
+              />
+            </div>
+            <p className="text-xs text-md-on-surface-variant">
+              Both models were scored on the same held-out evaluation dataset (
+              {comparison.evaluatedOn.testRows.toLocaleString('en-US')} rows) that neither was trained on, so the
+              comparison is fair. Replacing makes the new model live immediately; the old one is archived in history.
+            </p>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

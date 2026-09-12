@@ -24,12 +24,17 @@ dist/
 /.playwright-mcp
 package-lock.json
 
-# Python bytecode (AI valuation sidecar)
+# Python bytecode and virtual environments (AI valuation sidecar)
 __pycache__/
 *.pyc
+.venv/
+venv/
+**/env/
+**/.venv/
 
 # AI valuation: copies of datasets uploaded via the Retrain page (written on every retrain)
 data_layer/ai_model_repository/datasets/uploads/
 # Playwright CLI output (may contain credentials)
 .playwright-cli/
 /.claude
+

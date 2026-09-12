@@ -5,15 +5,14 @@ const REQUIRED_FEATURES: (keyof ValuationInput)[] = [
   "land_category",
   "location_type",
   "tenure_type",
-  "building_condition",
-  "land_area_sqft",
-  "built_up_area_sqft",
+  "land_area_m2",
+  "built_up_area_m2",
   "building_age_years",
 ];
 
 /**
  * Returns an error message when the prediction payload is missing attributes,
- * or null when the payload carries all 8 model features.
+ * or null when the payload carries all 7 model features.
  */
 export function validateValuationPayload(body: Record<string, unknown>): string | null {
   const missing = REQUIRED_FEATURES.filter((f) => body[f] === undefined || body[f] === "");

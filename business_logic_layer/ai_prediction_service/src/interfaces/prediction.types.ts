@@ -33,7 +33,7 @@ export interface RetrainComparison {
   candidateId: string;
   verdict: "better" | "worse" | "equal";
   rows: number;
-  split: { trainRows: number; holdoutRows: number };
+  evaluatedOn: { testRows: number };
   current: { version: string; metrics: ModelMetrics } | null;
   candidate: { candidateId: string; metrics: ModelMetrics };
 }
@@ -43,8 +43,7 @@ export interface ValuationInput {
   land_category: string;
   location_type: string;
   tenure_type: string;
-  building_condition: string;
-  land_area_sqft: number;
-  built_up_area_sqft: number;
+  land_area_m2: number;
+  built_up_area_m2: number;
   building_age_years: number;
 }
