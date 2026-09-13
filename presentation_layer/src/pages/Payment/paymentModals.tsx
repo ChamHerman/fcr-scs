@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import gsap from 'gsap';
+import { useGSAP } from '@gsap/react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -17,7 +19,9 @@ import {
   FileText,
   ExternalLink,
   Eye,
+  UploadCloud,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { Textarea } from '../../components/ui/Textarea';
@@ -26,12 +30,14 @@ import { Input } from '../../components/ui/Input';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { paymentApi } from '../../services/paymentApi';
 import { landAcquisitionApi } from '../../services/landAcquisitionApi';
+import { blockchainApi } from '../../services/blockchainApi';
 import { BASE_URL } from '../../services/api';
 import { CASE_STATUS_CLASS_MAP, CASE_STATUS_LABEL_MAP } from '../../constants/landAcquisition';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { useAuth } from '../../context/AuthContext';
 import { formatActionLabel, formatReasonLabel, isRejectionAction, normalizePaymentStatus, paymentStatusClassMap } from './statusMaps';
+import { formatDateTime } from '../../utils/dateFormat';
 
 export type PaymentRowActionType =
   | 'initiate'
@@ -66,14 +72,18 @@ export interface PaymentRow {
   status: string;
   requiredSignatures: number;
   currentSignatures: number;
+  /** Active multi-sig cycle (FR-020): increments when bank details are replaced. */
+  cycle?: number;
   createdAt: string;
   updatedAt: string;
-  authorisations?: Array<{ adminId: string; action: string; reason?: string | null; createdAt: string }>;
-  receipt?: { bankReferenceNumber: string; generatedAt?: string | null } | null;
+  authorisations?: Array<{ adminId: string; action: string; reason?: string | null; createdAt: string; cycle?: number }>;
+  receipt?: { bankReferenceNumber: string; generatedAt?: string | null; documentHash?: string | null } | null;
   failedTransactions?: Array<{ errorLog: string; resolution?: string | null; resolvedAt?: string | null; createdAt: string }>;
   disputeDocumentPath?: string | null;
   disputeDocumentName?: string | null;
   disputeUploadedAt?: string | null;
+  /** Whether Milestone 1 (Statutory Award) is notarized on-chain (FR-019). */
+  isM1Published?: boolean;
 }
 
 export const PRE_TRANSFER_STATUSES = [
@@ -84,6 +94,10 @@ export const PRE_TRANSFER_STATUSES = [
   'Transfer Initiated',
   'Authorised',
   'Scheduled',
+  // FR-018 3-Way SOP: fatal-risk cancellation reaches rejected and bank-failed
+  // cases too — the backend widened PRE_TRANSFER_STATUSES to match.
+  'Transfer Rejected',
+  'Transfer Failed',
 ];
 
 export const hasBankDetails = (pc: PaymentRow) =>
@@ -92,8 +106,9 @@ export const hasBankDetails = (pc: PaymentRow) =>
 export const isReadyToInitiate = (pc: PaymentRow) => {
   const norm = normalizePaymentStatus(pc.status);
   return (
-    (norm === 'Ready to Initiate' || norm === 'Bank Details Submitted') &&
-    hasBankDetails(pc)
+    (norm === 'Ready to Initiate' || norm === 'Bank Details Submitted' || norm === 'Offer Accepted') &&
+    hasBankDetails(pc) &&
+    Boolean(pc.isM1Published)
   );
 };
 
@@ -145,11 +160,14 @@ const sameAdminIdentity = (a?: string | null, b?: string | null): boolean => {
  * Only an initiator or a GA who already APPROVED is barred from authorising —
  * a GA who rejected (or resolved) the case may approve after the rejection is
  * resolved. The backend enforces the same narrowed rule, so the frontend
- * disable-state must match exactly.
+ * disable-state must match exactly. Both are scoped to the ACTIVE cycle
+ * (FR-020): Cycle-1 signatures do not bar anyone from the Cycle-2 round.
  */
 export const hasSignedOrInitiated = (pc: PaymentRow, adminId: string) => {
+  const activeCycle = pc.cycle ?? 1;
   return (pc.authorisations ?? []).some(
     (a) =>
+      (a.cycle ?? 1) === activeCycle &&
       (a.action === 'initiate' || a.action === 'authorise') &&
       (sameAdminIdentity(a.adminId, adminId) || sameAdminIdentity((a as any).adminName, adminId))
   );
@@ -178,8 +196,7 @@ export const maskAccount = (n?: string | null) =>
 export const maskMyKad = (n?: string | null) =>
   n && n.length >= 10 ? `${n.slice(0, 2)}••••-••-••${n.slice(-2)}` : n || '—';
 
-export const fmtDate = (d?: string | null) =>
-  d ? new Date(d).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+export const fmtDate = (d?: string | null) => formatDateTime(d);
 
 /** Machine code prefixes (e.g. "RECIPIENT_ACCOUNT_INVALID_OR_NOT_FOUND: ...")
  *  must never surface in the UI — keep the human sentence only. */
@@ -260,8 +277,7 @@ export const CaseTimestamps: React.FC<{ pc: PaymentRow }> = ({ pc }) => (
   </div>
 );
 
-export const paymentBadge = (status: string, currentSigs?: number, requiredSigs?: number) => {
-  const s = normalizePaymentStatus(status);
+export const paymentBadge = (status: string, currentSigs?: number, requiredSigs?: number) => {  const s = normalizePaymentStatus(status);
   const cls = paymentStatusClassMap[s] ?? 'status-pending-approval';
   let label = s;
   if (s === 'Pending Approval') {
@@ -272,6 +288,151 @@ export const paymentBadge = (status: string, currentSigs?: number, requiredSigs?
       <span className="dot" />
       {label}
     </span>
+  );
+};
+
+/* --------------------- FR-019 Milestone 1 (Award) banner --------------------- */
+
+export const etherscanTxUrl = (txHash?: string | null, chainId?: number) => {
+  if (!txHash) return null;
+  const base = chainId === 1 ? 'https://etherscan.io' : 'https://sepolia.etherscan.io';
+  return `${base}/tx/${txHash}`;
+};
+
+const fmtHash = (h?: string | null) => (h ? `${h.slice(0, 10)}…${h.slice(-6)}` : '');
+
+/** Fetches the Milestone 1 (Statutory Award) blockchain record for a case. */
+export const useMilestone1Record = (caseId?: string) => {
+  const [record, setRecord] = useState<any | null | 'loading'>(caseId ? 'loading' : null);
+
+  useEffect(() => {
+    if (!caseId) {
+      setRecord(null);
+      return;
+    }
+    let isMounted = true;
+    setRecord('loading');
+    blockchainApi
+      .getRecords()
+      .then((res: any) => {
+        if (!isMounted) return;
+        const list: any[] = res?.records || [];
+        setRecord(list.find((r) => r.caseId === caseId && (r.milestone ?? 'AWARD') === 'AWARD') ?? null);
+      })
+      .catch(() => {
+        if (isMounted) setRecord(null);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [caseId]);
+
+  const loaded = record !== 'loading';
+  const rawStatus = String((record as any)?.status || '').toUpperCase().replace(/[\s_]+/g, '_');
+  return {
+    record: loaded ? (record as any) : null,
+    loading: !loaded,
+    isM1Published: loaded && !!record && rawStatus === 'PUBLISHED',
+    isVoidPending: loaded && !!record && rawStatus === 'VOID_PENDING',
+  };
+};
+
+/**
+ * Blockchain status banner for Milestone 1 (Statutory Award notarization).
+ * Green tonal when the award is anchored on-chain (with an Etherscan link),
+ * amber tonal while notarization is pending, red outline when the record is
+ * awaiting on-chain void after cancellation (VOID_PENDING).
+ */
+export const Milestone1Banner: React.FC<{ caseId: string }> = ({ caseId }) => {
+  const navigate = useNavigate();
+  const { record, loading, isM1Published, isVoidPending } = useMilestone1Record(caseId);
+
+  if (loading || !caseId) return null;
+
+  if (isM1Published) {
+    const url = etherscanTxUrl(record.transactionHash);
+    return (
+      <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3 flex items-start gap-2.5">
+        <CheckCircle2 size={18} className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+        <div className="min-w-0 text-xs">
+          <div className="font-bold text-emerald-700 dark:text-emerald-300">
+            Statutory Award Notarized on Blockchain (Milestone 1)
+          </div>
+          <div className="text-md-on-surface-variant mt-0.5 flex items-center gap-2 flex-wrap">
+            <span>Form H award anchored on Sepolia · {new Date(record.publishedAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+            {url && (
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono inline-flex items-center gap-1.5 text-md-primary font-semibold hover:underline"
+              >
+                {fmtHash(record.transactionHash)}
+                <ExternalLink size={12} className="shrink-0" />
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isVoidPending) {
+    return (
+      <div className="bg-red-500/10 border-2 border-red-500/30 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-start gap-2.5 min-w-0">
+          <ShieldAlert size={20} className="text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+          <div className="text-xs">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider bg-red-600 text-white">Void Required</span>
+              <span className="font-bold text-red-700 dark:text-red-300">Milestone 1 On-Chain Void Pending</span>
+            </div>
+            <div className="text-md-on-surface-variant mt-1 leading-relaxed">
+              This case was cancelled after award notarization. Must be voided on-chain before any further action.
+            </div>
+          </div>
+        </div>
+        <Button
+          size="sm"
+          variant="filled"
+          className="shrink-0 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm self-start sm:self-center cursor-pointer"
+          onClick={() => navigate(`/admin/blockchain/void?caseId=${encodeURIComponent(caseId)}`)}
+        >
+          <Ban size={14} />
+          <span>Void Milestone 1</span>
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-amber-500/15 dark:bg-amber-500/25 border-2 border-amber-500/50 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+      <div className="flex items-start gap-2.5 min-w-0">
+        <AlertTriangle size={20} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+        <div className="text-xs">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider bg-amber-500 text-white dark:bg-amber-400 dark:text-gray-900 shadow-2xs">
+              LOCKED
+            </span>
+            <span className="font-bold text-amber-900 dark:text-amber-200 text-xs sm:text-sm">
+              Milestone 1 Pending On-Chain Notarization
+            </span>
+          </div>
+          <div className="text-md-on-surface-variant mt-1 leading-relaxed">
+            Disbursement initiation is locked. The statutory award (Form H) must be notarized on the blockchain first before bank transfer can proceed.
+          </div>
+        </div>
+      </div>
+      <Button
+        size="sm"
+        variant="filled"
+        className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm self-start sm:self-center cursor-pointer"
+        onClick={() => navigate(`/admin/blockchain/publish?caseId=${encodeURIComponent(caseId)}`)}
+      >
+        <UploadCloud size={14} />
+        <span>Publish Milestone 1</span>
+      </Button>
+    </div>
   );
 };
 
@@ -286,6 +447,7 @@ export const ViewDetailsModal: React.FC<{
   const { notify } = useNotification();
   const { user } = useAuth();
   const [caseData, setCaseData] = useState<any>(null);
+  const { isM1Published } = useMilestone1Record(pc?.caseId);
 
   useEffect(() => {
     if (!pc?.caseId) {
@@ -393,15 +555,21 @@ export const ViewDetailsModal: React.FC<{
           <Button
             size="md"
             variant="filled"
-            disabled={!hasBankDetails(pc)}
-            title={!hasBankDetails(pc) ? 'Awaiting beneficiary bank details before transfer can be initiated' : undefined}
+            disabled={!hasBankDetails(pc) || !isM1Published}
+            title={
+              !hasBankDetails(pc)
+                ? 'Awaiting beneficiary bank details before transfer can be initiated'
+                : !isM1Published
+                ? 'Initiation is locked: Milestone 1 (Statutory Award) must be published on the blockchain first'
+                : undefined
+            }
             onClick={() => {
               onClose();
               onAction?.('initiate', pc);
             }}
           >
             <Send size={15} />
-            <span>Initiate Transfer</span>
+            <span>{isM1Published ? 'Initiate Transfer' : 'Initiate Transfer (Awaiting M1 Notarization)'}</span>
           </Button>
         );
 
@@ -616,6 +784,9 @@ export const ViewDetailsModal: React.FC<{
       }
     >
       <div className="space-y-5 text-sm">
+        {/* FR-019: Milestone 1 statutory-award blockchain banner */}
+        <Milestone1Banner caseId={pc.caseId} />
+
         {/* Case Details Above */}
         <div className="bg-md-surface-container-low rounded-xl p-4 border border-md-outline/10 space-y-3">
           <div className="flex items-center justify-between">
@@ -750,50 +921,77 @@ export const ViewDetailsModal: React.FC<{
           </div>
         )}
 
-        {/* Governance audit trail — every Government Admin action on this record */}
+        {/* Governance audit trail — every Government Admin action on this record,
+            grouped by multi-sig cycle (FR-020): superseded cycles render muted. */}
         <div>
           <div className="label" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--md-on-surface-variant)', marginBottom: 8 }}>
             From Government Admin{' '}
             <span className="normal-case tracking-normal">
-              ({pc.currentSignatures || 0}/{pc.requiredSignatures || 1} Signatures)
+              ({pc.currentSignatures || 0}/{pc.requiredSignatures || 1} Signatures · Cycle {pc.cycle ?? 1})
             </span>
           </div>
           <div className="space-y-2">
             {(pc.authorisations ?? []).length === 0 && (
               <p className="text-xs text-md-on-surface-variant">No approvals recorded yet.</p>
             )}
-            {(pc.authorisations ?? []).map((a, i) => {
-              const bad = isRejectionAction(a.action);
-              // Only real GA-typed reasons (reject / cancel) render here —
-              // system boilerplate (resolved / executed) stays out of the audit list.
-              const showReason =
-                ['reject', 'cancel'].includes((a.action || '').trim().toLowerCase()) && a.reason;
-              return (
-                <div key={i} className="flex items-start justify-between gap-3 text-xs bg-md-surface-container-low rounded-xl px-4 py-2.5 border border-md-outline/10">
-                  <div className="flex items-start gap-2 min-w-0">
-                    {bad ? (
-                      <XCircle size={14} className="text-md-error shrink-0 mt-0.5" />
-                    ) : (
-                      <CheckCircle2 size={14} className="text-md-success-text shrink-0 mt-0.5" />
+            {(() => {
+              const auths = pc.authorisations ?? [];
+              const activeCycle = pc.cycle ?? 1;
+              const cycles = Array.from(new Set(auths.map((a) => a.cycle ?? 1))).sort((x, y) => y - x);
+              return cycles.map((cycleNum) => {
+                const isSuperseded = cycleNum !== activeCycle;
+                const cycleAuths = auths.filter((a) => (a.cycle ?? 1) === cycleNum);
+                return (
+                  <div
+                    key={cycleNum}
+                    className={`space-y-2 rounded-xl p-2.5 border ${
+                      isSuperseded
+                        ? 'bg-md-surface-container/40 border-md-outline/10 opacity-60 grayscale-[0.35]'
+                        : 'border-transparent'
+                    }`}
+                  >
+                    {isSuperseded && (
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-md-on-surface-variant flex items-center gap-1.5 px-1">
+                        <Lock size={11} className="shrink-0" />
+                        Cycle {cycleNum} (Superseded — bank details replaced)
+                      </div>
                     )}
-                    <div className="min-w-0">
-                      <span className={`font-semibold ${bad ? 'text-md-error' : 'text-md-success-text'}`}>
-                        {formatActionLabel(a.action)}
-                      </span>
-                      <span className="text-md-on-surface-variant font-medium text-[11px]">
-                        {' '}· {formatAdminDisplay(a.adminId, (a as any).adminName)}
-                      </span>
-                      {showReason && (
-                        <div className="text-[11px] text-md-on-surface-variant italic mt-0.5 break-words">
-                          {formatReasonLabel(a.reason)}
+                    {cycleAuths.map((a, i) => {
+                      const bad = isRejectionAction(a.action);
+                      // Only real GA-typed reasons (reject / cancel) render here —
+                      // system boilerplate (resolved / executed) stays out of the audit list.
+                      const showReason =
+                        ['reject', 'cancel'].includes((a.action || '').trim().toLowerCase()) && a.reason;
+                      return (
+                        <div key={`${cycleNum}-${i}`} className="flex items-start justify-between gap-3 text-xs bg-md-surface-container-low rounded-xl px-4 py-2.5 border border-md-outline/10">
+                          <div className="flex items-start gap-2 min-w-0">
+                            {bad ? (
+                              <XCircle size={14} className="text-md-error shrink-0 mt-0.5" />
+                            ) : (
+                              <CheckCircle2 size={14} className="text-md-success-text shrink-0 mt-0.5" />
+                            )}
+                            <div className="min-w-0">
+                              <span className={`font-semibold ${bad ? 'text-md-error' : 'text-md-success-text'}`}>
+                                {formatActionLabel(a.action)}
+                              </span>
+                              <span className="text-md-on-surface-variant font-medium text-[11px]">
+                                {' '}· {formatAdminDisplay(a.adminId, (a as any).adminName)}
+                              </span>
+                              {showReason && (
+                                <div className="text-[11px] text-md-on-surface-variant italic mt-0.5 break-words">
+                                  {formatReasonLabel(a.reason)}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-xs text-md-on-surface-variant shrink-0">{fmtDate(a.createdAt)}</div>
                         </div>
-                      )}
-                    </div>
+                      );
+                    })}
                   </div>
-                  <div className="text-xs text-md-on-surface-variant shrink-0">{fmtDate(a.createdAt)}</div>
-                </div>
-              );
-            })}
+                );
+              });
+            })()}
           </div>
         </div>
 
@@ -888,9 +1086,11 @@ const useMutationState = () => {
 export const InitiateTransferModal: React.FC<MutatingModalProps> = ({ pc, onClose, onDone }) => {
   const { identityId, identityLabel } = useAdminIdentity();
   const { loading, setLoading, notify } = useMutationState();
+  const { isM1Published: hookM1Published } = useMilestone1Record(pc?.caseId);
+  const isM1Published = pc?.isM1Published ?? hookM1Published;
 
   const confirm = async () => {
-    if (!pc) return;
+    if (!pc || !isM1Published) return;
     setLoading(true);
     try {
       await paymentApi.initiate({ caseId: pc.caseId, adminId: identityId });
@@ -911,12 +1111,15 @@ export const InitiateTransferModal: React.FC<MutatingModalProps> = ({ pc, onClos
       title="Initiate Transfer"
       subtitle={pc ? `Case ${pc.caseId} · ${fmtAmount(pc.amount)}` : ''}
       cancelText="Cancel"
-      confirmText="Initiate Transfer"
+      confirmText={isM1Published ? 'Initiate Transfer' : 'Awaiting M1 Notarization'}
+      confirmDisabled={!isM1Published}
       confirmLoading={loading}
       onConfirm={confirm}
     >
       {pc && (
         <div className="space-y-4">
+          <Milestone1Banner caseId={pc.caseId} />
+
           <div className="payment-detail-grid">
             <div className="payment-detail-item">
               <div className="label">Beneficiary</div>
@@ -965,15 +1168,47 @@ export const FinalExecutionConfirmModal: React.FC<FinalExecutionConfirmModalProp
   onConfirm,
   onHold,
 }) => {
+  const { notify } = useNotification();
   const [checked, setChecked] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const successRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setChecked(false);
+      setLoading(false);
+      setIsSuccess(false);
+    }
+  }, [isOpen]);
+
+  useGSAP(() => {
+    if (isSuccess && successRef.current) {
+      gsap.fromTo(
+        successRef.current,
+        { opacity: 0, scale: 0.85, y: 12 },
+        { opacity: 1, scale: 1, y: 0, duration: 0.45, ease: 'back.out(1.6)' }
+      );
+    }
+  }, [isSuccess]);
 
   const handleConfirm = async () => {
-    if (!checked || loading) return;
+    if (!checked || loading || isSuccess || !pc) return;
     setLoading(true);
     try {
       await onConfirm();
-    } finally {
+      setIsSuccess(true);
+      notify({
+        type: 'success',
+        title: 'Payment Dispatched to Bank',
+        message: `Case ${pc.caseId} confirmed and dispatched to the commercial bank clearing queue.`,
+      });
+    } catch (err: any) {
+      notify({
+        type: 'error',
+        title: 'Bank Dispatch Failed',
+        message: err.message || 'Execution failed. Please check network and permissions.',
+      });
       setLoading(false);
     }
   };
@@ -985,75 +1220,91 @@ export const FinalExecutionConfirmModal: React.FC<FinalExecutionConfirmModalProp
       preventBackdropClose={true}
       showCloseButton={false}
       maxWidth="max-w-xl"
-      title="Final Disbursement Release Order"
+      title={isSuccess ? 'Disbursement Confirmed' : 'Final Disbursement Release Order'}
       subtitle={pc ? `Case ${pc.caseId} · ${fmtAmount(pc.amount)}` : ''}
       footer={
-        <div className="flex items-center justify-end gap-3 w-full">
-          <Button variant="text" size="md" onClick={onHold} disabled={loading}>
-            Keep on Hold in Authorised
-          </Button>
-          <Button
-            variant="filled"
-            size="md"
-            disabled={!checked}
-            isLoading={loading}
-            onClick={handleConfirm}
-            className="!bg-md-error !text-md-on-error hover:!bg-md-error/90"
-          >
-            Confirm &amp; Dispatch Bank Payment
-          </Button>
-        </div>
+        !isSuccess ? (
+          <div className="flex items-center justify-end gap-3 w-full">
+            <Button variant="text" size="md" onClick={onHold} disabled={loading}>
+              Keep on Hold in Authorised
+            </Button>
+            <Button
+              variant="filled"
+              size="md"
+              disabled={!checked}
+              isLoading={loading}
+              onClick={handleConfirm}
+              className="!bg-md-error !text-md-on-error hover:!bg-md-error/90"
+            >
+              Confirm &amp; Dispatch Bank Payment
+            </Button>
+          </div>
+        ) : null
       }
     >
       {pc && (
-        <div className="space-y-4">
-          <div className="bg-md-error/15 border-2 border-md-error/40 rounded-xl p-4 text-md-on-error-container">
-            <div className="flex items-center gap-2 text-md-error font-bold text-sm tracking-wide uppercase">
-              <ShieldAlert size={18} />
-              FINAL DISBURSEMENT RELEASE ORDER — POINT OF NO REVERSAL
+        isSuccess ? (
+          <div ref={successRef} className="py-10 flex flex-col items-center justify-center text-center space-y-4">
+            <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 size={36} className="animate-pulse" />
             </div>
-            <p className="text-xs text-md-on-surface mt-2 leading-relaxed">
-              You are issuing an irrevocable bank fund release order under the Land Acquisition Act 1960.
-              Once confirmed, interbank commercial clearing instructions will execute immediately and cannot be recalled or stopped.
-            </p>
+            <div>
+              <h3 className="text-base font-bold text-md-on-surface">Payment Order Dispatched Successfully</h3>
+              <p className="text-xs text-md-on-surface-variant max-w-sm mt-1 leading-relaxed">
+                Irrevocable clearing instruction for <strong>{pc.caseId}</strong> ({fmtAmount(pc.amount)}) has been transmitted to {pc.bankName || 'the beneficiary bank'}.
+              </p>
+            </div>
           </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="bg-md-error/15 border-2 border-md-error/40 rounded-xl p-4 text-md-on-error-container">
+              <div className="flex items-center gap-2 text-md-error font-bold text-sm tracking-wide uppercase">
+                <ShieldAlert size={18} />
+                FINAL DISBURSEMENT RELEASE ORDER — POINT OF NO REVERSAL
+              </div>
+              <p className="text-xs text-md-on-surface mt-2 leading-relaxed">
+                You are issuing an irrevocable bank fund release order under the Land Acquisition Act 1960.
+                Once confirmed, interbank commercial clearing instructions will execute immediately and cannot be recalled or stopped.
+              </p>
+            </div>
 
-          <div className="payment-detail-grid">
-            <div className="payment-detail-item">
-              <div className="label">Case Reference</div>
-              <div className="value font-mono font-bold text-md-primary">{pc.caseId}</div>
+            <div className="payment-detail-grid">
+              <div className="payment-detail-item">
+                <div className="label">Case Reference</div>
+                <div className="value font-mono font-bold text-md-primary">{pc.caseId}</div>
+              </div>
+              <div className="payment-detail-item">
+                <div className="label">Total Statutory Award</div>
+                <div className="value font-bold text-md-primary text-base">{fmtAmount(pc.amount)}</div>
+              </div>
+              <div className="payment-detail-item">
+                <div className="label">Beneficiary Name</div>
+                <div className="value">{pc.accountHolderName || '—'}</div>
+              </div>
+              <div className="payment-detail-item">
+                <div className="label">Receiving Bank &amp; Account</div>
+                <div className="value">{pc.bankName || '—'} · {maskAccount(pc.accountNumber)}</div>
+              </div>
             </div>
-            <div className="payment-detail-item">
-              <div className="label">Total Statutory Award</div>
-              <div className="value font-bold text-md-primary text-base">{fmtAmount(pc.amount)}</div>
-            </div>
-            <div className="payment-detail-item">
-              <div className="label">Beneficiary Name</div>
-              <div className="value">{pc.accountHolderName || '—'}</div>
-            </div>
-            <div className="payment-detail-item">
-              <div className="label">Receiving Bank &amp; Account</div>
-              <div className="value">{pc.bankName || '—'} · {maskAccount(pc.accountNumber)}</div>
-            </div>
-          </div>
 
-          <div className="bg-md-surface-container-low rounded-xl px-4 py-3 border border-md-outline/10 text-xs text-md-on-surface-variant flex items-center justify-between">
-            <span>Authorisation Status:</span>
-            <span className="font-semibold text-md-success-text flex items-center gap-1.5">
-              <CheckCircle2 size={14} />
-              All Approvals Complete ({pc.requiredSignatures}/{pc.requiredSignatures} Signatures)
-            </span>
-          </div>
+            <div className="bg-md-surface-container-low rounded-xl px-4 py-3 border border-md-outline/10 text-xs text-md-on-surface-variant flex items-center justify-between">
+              <span>Authorisation Status:</span>
+              <span className="font-semibold text-md-success-text flex items-center gap-1.5">
+                <CheckCircle2 size={14} />
+                All Approvals Complete ({pc.requiredSignatures}/{pc.requiredSignatures} Signatures)
+              </span>
+            </div>
 
-          <div className="pt-2 border-t border-md-outline/10">
-            <Checkbox
-              id="final-disbursement-acknowledgement"
-              label="I confirm all approvals are complete and authorise immediate interbank payment execution."
-              checked={checked}
-              onChange={(e) => setChecked(e.target.checked)}
-            />
+            <div className="pt-2 border-t border-md-outline/10">
+              <Checkbox
+                id="final-disbursement-acknowledgement"
+                label="I confirm all approvals are complete and authorise immediate interbank payment execution."
+                checked={checked}
+                onChange={(e) => setChecked(e.target.checked)}
+              />
+            </div>
           </div>
-        </div>
+        )
       )}
     </Modal>
   );
@@ -1094,19 +1345,12 @@ export const AuthoriseTransferModal: React.FC<MutatingModalProps> = ({ pc, onClo
 
   const handleFinalConfirm = async () => {
     if (!pc) return;
-    try {
-      await paymentApi.confirmExecution({ caseId: pc.caseId, adminId: identityId });
-      notify({
-        type: 'success',
-        title: 'Payment Dispatched to Bank',
-        message: `Case ${pc.caseId} confirmed and dispatched to the commercial bank clearing queue.`,
-      });
+    await paymentApi.confirmExecution({ caseId: pc.caseId, adminId: identityId });
+    setTimeout(() => {
       setShowFinalModal(false);
       onClose();
       onDone();
-    } catch (e: any) {
-      notify({ type: 'error', title: 'Bank dispatch failed', message: e.message });
-    }
+    }, 1100);
   };
 
   const handleFinalHold = () => {
@@ -1135,6 +1379,8 @@ export const AuthoriseTransferModal: React.FC<MutatingModalProps> = ({ pc, onClo
       >
         {pc && (
           <div className="space-y-4">
+            <Milestone1Banner caseId={pc.caseId} />
+
             <div className="payment-detail-item">
               <div className="label">Multi-signature progress</div>
               <div className="value">
@@ -1431,7 +1677,8 @@ export const CancelPaymentModal: React.FC<MutatingModalProps> = ({ pc, onClose, 
   const [confirmationInput, setConfirmationInput] = useState('');
 
   const selectedOption = CANCELLATION_REASONS.find((r) => r.value === selectedReason);
-  const isConfirmed = Boolean(selectedReason && confirmationInput.trim() === pc?.caseId);
+  const paymentId = pc?.paymentId || `PMT-${pc?.caseId}`;
+  const isConfirmed = Boolean(selectedReason && confirmationInput.trim() === paymentId);
 
   const confirm = async () => {
     if (!pc || !isConfirmed) return;
@@ -1513,14 +1760,22 @@ export const CancelPaymentModal: React.FC<MutatingModalProps> = ({ pc, onClose, 
 
           <div className="pt-2 border-t border-md-outline/10 space-y-1.5">
             <p className="text-xs text-md-on-surface-variant">
-              Type Case ID <strong className="font-mono text-md-on-surface">{pc.caseId}</strong> to confirm cancellation:
+              Type Payment ID <strong className="font-mono text-md-on-surface">{pc.paymentId || `PMT-${pc.caseId}`}</strong> to confirm cancellation:
             </p>
             <Input
-              label={`Confirm Case ID`}
+              label={`Confirm Payment ID`}
               value={confirmationInput}
               onChange={(e) => setConfirmationInput(e.target.value)}
-              placeholder={pc.caseId}
+              placeholder={pc.paymentId || `PMT-${pc.caseId}`}
             />
+          </div>
+
+          <div className="flex items-start gap-2 text-[11px] text-md-on-surface-variant bg-md-surface-container-low rounded-lg px-3 py-2 border border-md-outline/10">
+            <ShieldAlert size={13} className="shrink-0 mt-0.5 text-md-warning-text" />
+            <span>
+              If the statutory award was already notarized on the blockchain (Milestone 1), the on-chain record is flagged
+              and must be revoked via Publish Ledger — Void on Sepolia.
+            </span>
           </div>
 
           <CaseTimestamps pc={pc} />

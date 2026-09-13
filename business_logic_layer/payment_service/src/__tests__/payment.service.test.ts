@@ -10,6 +10,7 @@ import {
 } from "../services/payment.service";
 import { prisma } from "../prisma";
 import { CaseStatus, PaymentStatus } from "@prisma/client";
+import { generateReceipt } from "../services/receipt.service";
 
 describe("calculateRequiredSignatures — tiered multi-sig formula with GA cap", () => {
   it("returns 2 base signatures for amounts under RM 1,000,000", () => {
@@ -104,14 +105,14 @@ describe("Dynamic Payment Ingestion from OFFER_ACCEPTED", () => {
     const all = await getAllCases();
     const found = all.find((c) => c.caseId === createdCaseId);
     expect(found).toBeDefined();
-    expect(found!.status).toBe(PaymentStatus.BANK_DETAILS_PENDING);
+    expect(found!.status).toBe(PaymentStatus.BANK_DETAILS_AND_M1_PENDING);
 
     // Verify record in database
     const inDb = await prisma.paymentCase.findUnique({
       where: { caseId: createdCaseId },
     });
     expect(inDb).not.toBeNull();
-    expect(inDb!.status).toBe(PaymentStatus.BANK_DETAILS_PENDING);
+    expect(inDb!.status).toBe(PaymentStatus.BANK_DETAILS_AND_M1_PENDING);
   });
 });
 
@@ -170,7 +171,7 @@ describe("Bank Account Uniqueness & Decoupled Profile Storage", () => {
       myKadNumber: member1MyKad,
     });
     expect(res.accountNumber).toBe(uniqueAcc);
-    expect(res.status).toBe(PaymentStatus.READY_TO_INITIATE);
+    expect(res.status).toBe(PaymentStatus.AWARD_NOTARIZATION_PENDING);
   });
 
   it("rejects Member 2 when attempting to register Member 1's bank account number", async () => {
@@ -198,7 +199,7 @@ describe("Bank Account Uniqueness & Decoupled Profile Storage", () => {
       myKadNumber: member1MyKad,
     });
     expect(res.accountNumber).toBe(uniqueAcc);
-    expect(res.status).toBe(PaymentStatus.READY_TO_INITIATE);
+    expect(res.status).toBe(PaymentStatus.AWARD_NOTARIZATION_PENDING);
   });
 
   it("saveMemberBankDetails does NOT prematurely mutate unsubmitted PaymentCase records", async () => {
@@ -236,3 +237,51 @@ describe("Bank Account Uniqueness & Decoupled Profile Storage", () => {
     }
   });
 });
+
+describe("generateReceipt — 1-page guarantee and RENTAS RTGS branding", () => {
+  const receiptCaseId = `RCPT-1PAGE-${Date.now()}`;
+
+  beforeAll(async () => {
+    await prisma.paymentCase.create({
+      data: {
+        id: `PMT-${receiptCaseId}`,
+        caseId: receiptCaseId,
+        beneficiaryId: "BEN-RECEIPT-TEST",
+        accountHolderName: "Tan Ah Kow",
+        bankName: "Malayan Banking Berhad",
+        accountNumber: "1234567890",
+        amount: 850000,
+        status: PaymentStatus.TRANSFER_SUCCEED,
+        receipt: {
+          create: {
+            id: `RCP-TEST-${Date.now()}`,
+            bankReferenceNumber: "RENTAS-2026-09-0099",
+            generatedAt: new Date("2026-09-13T09:41:00.000Z"),
+          },
+        },
+      },
+    });
+  });
+
+  afterAll(async () => {
+    await prisma.paymentReceipt.deleteMany({ where: { paymentCase: { caseId: receiptCaseId } } });
+    await prisma.paymentCase.deleteMany({ where: { caseId: receiptCaseId } });
+  });
+
+  it("renders a valid PDF buffer with exactly 1 page and RENTAS branding", async () => {
+    const buffer = await generateReceipt(receiptCaseId);
+    expect(buffer).toBeInstanceOf(Buffer);
+    expect(buffer.length).toBeGreaterThan(1000);
+
+    const pdfStr = buffer.toString("latin1");
+    // Verify RENTAS author in uncompressed metadata
+    expect(pdfStr).toContain("RENTAS RTGS");
+
+    // Standard PDF page object count check (/Type /Page and /Count 1)
+    const pageMatches = pdfStr.match(/\/Type\s*\/Page\b/g);
+    expect(pageMatches).not.toBeNull();
+    expect(pageMatches!.length).toBe(1);
+    expect(pdfStr).toContain("/Count 1");
+  });
+});
+

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, Hourglass, Fingerprint, Loader2, ShieldAlert } from 'lucide-react';
+import { Clock, User, Hourglass, Fingerprint, Loader2, ShieldAlert, Activity, RefreshCw } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
@@ -8,6 +8,7 @@ import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Button } from '../../components/ui/Button';
 import { CopyButton } from '../../components/ui/CopyButton';
+import { Pagination } from '../../components/ui/Pagination';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { useAuth } from '../../context/AuthContext';
 import './payment.css';
@@ -52,7 +53,7 @@ export default function PendingAuthorisations() {
 
   useGSAP(() => {
     gsap.fromTo('.pending-header', { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.45, ease: 'power2.out' });
-    gsap.fromTo('.stats-grid, .filter-bar, .table-wrap', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.08, ease: 'back.out(1.2)', delay: 0.2 });
+    gsap.fromTo('.stats-grid, .filter-bar, .action-bar, .table-wrap', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.08, ease: 'back.out(1.2)', delay: 0.2 });
   }, { scope: pageRef });
 
   const loadData = useCallback(async (silent = false) => {
@@ -75,8 +76,8 @@ export default function PendingAuthorisations() {
   const stats = useMemo(() => {
     const outstanding = cases.reduce((sum, c) => sum + signaturesLeft(c), 0);
     return [
-      { label: 'Awaiting Approval', value: cases.length, change: 'Requires action', icon: Hourglass },
-      { label: 'Signatures Outstanding', value: outstanding, change: `Bank 1 + approvals model`, icon: Fingerprint },
+      { label: 'Awaiting Approval', value: cases.length, icon: Hourglass, iconColor: 'text-amber-500' },
+      { label: 'Signatures Outstanding', value: outstanding, icon: Fingerprint, iconColor: 'text-md-primary' },
     ];
   }, [cases]);
 
@@ -105,6 +106,17 @@ export default function PendingAuthorisations() {
     });
   }, [cases, searchQuery, identityId]);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
+  const totalCount = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const safePage = Math.max(1, Math.min(currentPage, totalPages));
+  const pageRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
   const closeModal = () => setModal(null);
 
   return (
@@ -115,7 +127,6 @@ export default function PendingAuthorisations() {
           <div className="sub">Initiated transfers awaiting secondary approval (multi-signature queue).</div>
         </div>
         <div className="topbar-right">
-          <RefreshButton onClick={() => loadData()} loading={loading} />
           <div className="date-badge">
             <Clock size={16} className="inline mr-1" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
           </div>
@@ -142,10 +153,9 @@ export default function PendingAuthorisations() {
       <div className="stats-grid">
         {stats.map((stat, idx) => (
           <div key={idx} className="stat-card">
-            <stat.icon className="stat-icon" size={32} />
+            <stat.icon className={`stat-icon ${stat.iconColor || 'text-md-primary'}`} size={32} />
             <div className="stat-label">{stat.label}</div>
             <div className="stat-number">{stat.value}</div>
-            <div className="stat-change">{stat.change}</div>
           </div>
         ))}
       </div>
@@ -159,7 +169,11 @@ export default function PendingAuthorisations() {
 
       <div className="action-bar">
         <div className="left">
-          <span className="count">{filtered.length} transfer{filtered.length === 1 ? '' : 's'} awaiting approval</span>
+          <Activity size={18} />
+          <span className="count">Authorisation queue ({filtered.length})</span>
+        </div>
+        <div className="right">
+          <RefreshButton onClick={() => loadData()} loading={loading} />
         </div>
       </div>
 
@@ -188,7 +202,7 @@ export default function PendingAuthorisations() {
                   <td colSpan={6} className="text-center text-gray-500 py-8">No pending authorisations in queue.</td>
                 </tr>
               ) : (
-                filtered.map((pc) => {
+                pageRows.map((pc) => {
                   const initiator = initiatorOf(pc);
                   const paymentId = pc.paymentId || `PMT-${pc.caseId}`;
                   return (
@@ -219,9 +233,16 @@ export default function PendingAuthorisations() {
         </div>
       </div>
 
-      <div style={{ marginTop: '24px', fontSize: '13px', color: 'var(--md-on-surface-variant)', opacity: 0.6, textAlign: 'center', borderTop: '1px solid rgba(121,116,126,0.08)', paddingTop: '18px' }}>
-        FCR-SCS · Payments · Pending Authorisations · Connected to Live Backend Data
-      </div>
+      <Pagination
+        currentPage={safePage}
+        totalPages={totalPages}
+        totalCount={totalCount}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+        itemLabel="pending authorisations"
+      />
+
+      <div style={{ height: '32px' }} />
 
       <ViewDetailsModal
         pc={modal?.type === 'view' ? modal.pc : null}
@@ -249,8 +270,10 @@ export default function PendingAuthorisations() {
         onConfirm={async () => {
           if (!finalConfirmCase) return;
           await paymentApi.confirmExecution({ caseId: finalConfirmCase.caseId, adminId: identityId });
-          setFinalConfirmCase(null);
-          loadData();
+          setTimeout(() => {
+            setFinalConfirmCase(null);
+            loadData();
+          }, 1100);
         }}
         onHold={() => {
           setFinalConfirmCase(null);

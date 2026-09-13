@@ -15,6 +15,7 @@ import {
   OwnershipType,
   UserRole,
   PaymentStatus,
+  BlockchainStatus,
 } from '@prisma/client';
 import { Pool } from 'pg';
 import * as crypto from 'crypto';
@@ -68,7 +69,7 @@ const generateContactNumber = (): string => `01${generateRandomDigits(8)}`;
 // 12-digit identification number
 const generateIdentificationNumber = (): string => `${generateRandomDigits(12)}`;
 
-function createMockPdfBuffer(title: string, caseId: string): Buffer {
+function createMockPdfBuffer(title: string, caseId: string, salt = Date.now()): Buffer {
   const content = `%PDF-1.4
 1 0 obj
 << /Type /Catalog /Pages 2 0 R >>
@@ -80,12 +81,12 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
 endobj
 4 0 obj
-<< /Length 120 >>
+<< /Length 160 >>
 stream
 BT
-/F1 18 Tf
+/F1 16 Tf
 50 700 Td
-(${title} - ${caseId}) Tj
+(${title} - ${caseId} [Salt:${salt}]) Tj
 /F1 12 Tf
 0 -30 Td
 (Official Case Document - Federal Land Acquisition System) Tj
@@ -117,6 +118,14 @@ async function main() {
   // Standard password hash for all seeded accounts: "Password$123"
   const defaultPassword = 'Password$123';
   const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+
+  // Clean up payment & blockchain records so they are strictly generated dynamically from Case Management
+  await prisma.failedTransaction.deleteMany();
+  await prisma.paymentReceipt.deleteMany();
+  await prisma.paymentAuthorisation.deleteMany();
+  await prisma.receiverBankDetails.deleteMany();
+  await prisma.paymentCase.deleteMany();
+  await prisma.blockchainRecord.deleteMany();
 
   // ===========================================================================
   // 1. Seed Users (1 Sys Admin, 5 Gov Admin, 5 Gov Officer, 5 Land Valuer, 5 Member)
@@ -212,6 +221,36 @@ async function main() {
   const m5 = seededUsers['m5@fcrscs.gov.my'];
 
   // ===========================================================================
+  // 1b. Seed Role Permissions (page-level RBAC matrix)
+  // Government Admins: full Finance & Ledger pages (actions still endpoint-enforced).
+  // Government Officers: view-only page access (backend blocks CUD).
+  // SYSTEM_ADMINISTRATOR needs no rows (code bypass, view-only in payment/blockchain).
+  // BANK_OPERATOR has no admin pages (the bank portal is a standalone route).
+  // ===========================================================================
+  console.log('\n--- 1b. Seeding Role Permissions ---');
+
+  const FINANCE_LEDGER_PAGES = [
+    '/admin/payment',
+    '/admin/payment/initiate',
+    '/admin/payment/pending',
+    '/admin/payment/failed',
+    '/admin/blockchain',
+    '/admin/blockchain/publish',
+    '/admin/blockchain/void',
+  ];
+
+  for (const role of [UserRole.GOVERNMENT_ADMINISTRATOR, UserRole.GOVERNMENT_OFFICER]) {
+    for (const pagePath of FINANCE_LEDGER_PAGES) {
+      await prisma.rolePermission.upsert({
+        where: { role_pagePath: { role, pagePath } },
+        update: { canAccess: true },
+        create: { role, pagePath, canAccess: true },
+      });
+    }
+  }
+  console.log('✅ Upserted RolePermissions (Finance & Ledger pages) for Government Admins + Officers');
+
+  // ===========================================================================
   // 2. Seed Email Templates
   // ===========================================================================
   console.log('\n--- 2. Seeding Email Templates ---');
@@ -274,7 +313,29 @@ async function main() {
   // ===========================================================================
   console.log('\n--- 3. Seeding Land Acquisition Cases & Pipeline ---');
 
+  const ACCEPTANCE_GRACE_PERIOD_MS = 24 * 60 * 60 * 1000;
+  const seedRunNow = Date.now();
+
+  /** Deterministic signed Form H PDF written to the offer-letter storage and
+   *  frozen as `blockchainHash` — the exact anchor the GA publishes as M1. */
+  const writeSignedFormH = (caseId: string, ownerName: string, amount: number) => {
+    const storageDir = path.resolve(__dirname, '../../document_storage/offer_letter', caseId);
+    if (!fs.existsSync(storageDir)) {
+      fs.mkdirSync(storageDir, { recursive: true });
+    }
+    const fileName = 'Signed_Form_H_seed.pdf';
+    const pdfBuf = createMockPdfBuffer(`Signed Form H - Award Accepted RM ${amount.toLocaleString('en-MY')} - ${ownerName}`, caseId);
+    fs.writeFileSync(path.join(storageDir, fileName), pdfBuf);
+    return {
+      signedDocument: `document_storage/offer_letter/${caseId}/${fileName}`,
+      blockchainHash: '0x' + crypto.createHash('sha256').update(pdfBuf).digest('hex'),
+    };
+  };
+
   const caseDefinitions = [
+    // -------------------------------------------------------------------------
+    // Cases 1 to 5: Siewfeng's Baseline (REMAINS UNTOUCHED)
+    // -------------------------------------------------------------------------
     {
       caseIndex: 1,
       projectName: 'Kampung Baru Urban Renewal',
@@ -451,6 +512,10 @@ async function main() {
       hasOffer: false,
       hasObjection: false,
     },
+
+    // -------------------------------------------------------------------------
+    // Cases 6 to 15: Exactly 10 Cases at OFFER_ACCEPTED (Offer Letter Uploaded & Accepted)
+    // -------------------------------------------------------------------------
     {
       caseIndex: 6,
       projectName: 'Gombak Transit Corridor',
@@ -506,7 +571,7 @@ async function main() {
       tenureType: TenureType.FREEHOLD,
       members: [
         {
-          memberUser: m1,
+          memberUser: m2,
           address: 'No. 103, Jalan Setapak, 53300 Kuala Lumpur',
           ownershipType: OwnershipType.INDIVIDUAL_CITIZEN,
           share: '100',
@@ -519,6 +584,465 @@ async function main() {
       hasCompensation: true,
       hasOffer: true,
       offerStatus: OfferStatus.ACCEPTED,
+      hasObjection: false,
+    },
+    {
+      caseIndex: 8,
+      projectName: 'Batu Caves Expressway Alignment',
+      projectType: 'Infrastructure Development',
+      purpose: 'Highway expansion and viaduct structure',
+      budget: 32000000,
+      fundingSource: FundingSource.GOVERNMENT,
+      caseTitle: 'Batu Caves Expressway Alignment - Parcel 8',
+      status: CaseStatus.OFFER_ACCEPTED,
+      landTitleNo: 'PN 12347',
+      lotNo: 'Lot 5677',
+      tempat: 'Batu Caves',
+      mukim: 'Mukim Batu',
+      district: 'Gombak',
+      state: 'Selangor',
+      area: 2600,
+      category: LandCategory.BUILDING,
+      tenureType: TenureType.FREEHOLD,
+      members: [
+        {
+          memberUser: m3,
+          address: 'No. 108, Jalan Batu Caves, 68100 Batu Caves, Selangor',
+          ownershipType: OwnershipType.INDIVIDUAL_CITIZEN,
+          share: '100',
+        },
+      ],
+      hasValuation: true,
+      valuationStatus: ReportStatus.APPROVED,
+      marketValue: 2100000,
+      recommendedCompensation: 2400000,
+      hasCompensation: true,
+      hasOffer: true,
+      offerStatus: OfferStatus.ACCEPTED,
+      hasObjection: false,
+    },
+    {
+      caseIndex: 9,
+      projectName: 'Cheras South Flood Barrier',
+      projectType: 'Public Amenities',
+      purpose: 'Retention pond and drainage retention system',
+      budget: 22000000,
+      fundingSource: FundingSource.GOVERNMENT,
+      caseTitle: 'Cheras South Flood Barrier - Parcel 9',
+      status: CaseStatus.OFFER_ACCEPTED,
+      landTitleNo: 'PN 12348',
+      lotNo: 'Lot 5678',
+      tempat: 'Cheras South',
+      mukim: 'Mukim Cheras',
+      district: 'Hulu Langat',
+      state: 'Selangor',
+      area: 2900,
+      category: LandCategory.BUILDING,
+      tenureType: TenureType.FREEHOLD,
+      members: [
+        {
+          memberUser: m4,
+          address: 'No. 209, Jalan Cheras Perdana, 43200 Cheras, Selangor',
+          ownershipType: OwnershipType.INDIVIDUAL_CITIZEN,
+          share: '100',
+        },
+      ],
+      hasValuation: true,
+      valuationStatus: ReportStatus.APPROVED,
+      marketValue: 1800000,
+      recommendedCompensation: 2100000,
+      hasCompensation: true,
+      hasOffer: true,
+      offerStatus: OfferStatus.ACCEPTED,
+      hasObjection: false,
+    },
+    {
+      caseIndex: 10,
+      projectName: 'Klang Valley Smart Transit Resettlement',
+      projectType: 'Infrastructure Development',
+      purpose: 'Dual-milestone blockchain notarization flow demonstration',
+      budget: 60000000,
+      fundingSource: FundingSource.GOVERNMENT,
+      caseTitle: 'Klang Valley Smart Transit Resettlement - Parcel 10',
+      status: CaseStatus.OFFER_ACCEPTED,
+      landTitleNo: 'PN 20101',
+      lotNo: 'Lot 6101',
+      tempat: 'Taman Keramat',
+      mukim: 'Mukim Ampang',
+      district: 'Ampang',
+      state: 'Selangor',
+      area: 2100,
+      category: LandCategory.BUILDING,
+      tenureType: TenureType.FREEHOLD,
+      members: [
+        {
+          memberUser: m5,
+          address: 'No. 11, Jalan Keramat Hujan, 54000 Kuala Lumpur',
+          ownershipType: OwnershipType.INDIVIDUAL_CITIZEN,
+          share: '100',
+        },
+      ],
+      hasValuation: true,
+      valuationStatus: ReportStatus.APPROVED,
+      marketValue: 780000,
+      recommendedCompensation: 900000,
+      hasCompensation: true,
+      hasOffer: true,
+      offerStatus: OfferStatus.ACCEPTED,
+      hasObjection: false,
+    },
+    {
+      caseIndex: 11,
+      projectName: 'Klang Valley Smart Transit Resettlement',
+      projectType: 'Infrastructure Development',
+      purpose: 'Dual-milestone blockchain notarization flow demonstration',
+      budget: 60000000,
+      fundingSource: FundingSource.GOVERNMENT,
+      caseTitle: 'Klang Valley Smart Transit Resettlement - Parcel 11',
+      status: CaseStatus.OFFER_ACCEPTED,
+      landTitleNo: 'PN 20102',
+      lotNo: 'Lot 6102',
+      tempat: 'Pandan Indah',
+      mukim: 'Mukim Ampang',
+      district: 'Ampang',
+      state: 'Selangor',
+      area: 2400,
+      category: LandCategory.BUILDING,
+      tenureType: TenureType.FREEHOLD,
+      members: [
+        {
+          memberUser: m1,
+          address: 'No. 22, Jalan Pandan Indah 4, 55100 Kuala Lumpur',
+          ownershipType: OwnershipType.INDIVIDUAL_CITIZEN,
+          share: '100',
+        },
+      ],
+      hasValuation: true,
+      valuationStatus: ReportStatus.APPROVED,
+      marketValue: 1050000,
+      recommendedCompensation: 1200000,
+      hasCompensation: true,
+      hasOffer: true,
+      offerStatus: OfferStatus.ACCEPTED,
+      hasObjection: false,
+    },
+    {
+      caseIndex: 12,
+      projectName: 'Klang Valley Smart Transit Resettlement',
+      projectType: 'Infrastructure Development',
+      purpose: 'Dual-milestone blockchain notarization flow demonstration',
+      budget: 60000000,
+      fundingSource: FundingSource.GOVERNMENT,
+      caseTitle: 'Klang Valley Smart Transit Resettlement - Parcel 12',
+      status: CaseStatus.OFFER_ACCEPTED,
+      landTitleNo: 'PN 20103',
+      lotNo: 'Lot 6103',
+      tempat: 'Salak Selatan',
+      mukim: 'Mukim Kuala Lumpur',
+      district: 'Seputeh',
+      state: 'Wilayah Persekutuan Kuala Lumpur',
+      area: 3000,
+      category: LandCategory.BUILDING,
+      tenureType: TenureType.FREEHOLD,
+      members: [
+        {
+          memberUser: m2,
+          address: 'No. 33, Jalan Satu, Salak Selatan, 57100 Kuala Lumpur',
+          ownershipType: OwnershipType.INDIVIDUAL_CITIZEN,
+          share: '100',
+        },
+      ],
+      hasValuation: true,
+      valuationStatus: ReportStatus.APPROVED,
+      marketValue: 2450000,
+      recommendedCompensation: 2800000,
+      hasCompensation: true,
+      hasOffer: true,
+      offerStatus: OfferStatus.ACCEPTED,
+      hasObjection: false,
+    },
+    {
+      caseIndex: 13,
+      projectName: 'Klang Valley Smart Transit Resettlement',
+      projectType: 'Infrastructure Development',
+      purpose: 'Dual-milestone blockchain notarization flow demonstration',
+      budget: 60000000,
+      fundingSource: FundingSource.GOVERNMENT,
+      caseTitle: 'Klang Valley Smart Transit Resettlement - Parcel 13',
+      status: CaseStatus.OFFER_ACCEPTED,
+      landTitleNo: 'PN 20104',
+      lotNo: 'Lot 6104',
+      tempat: 'Wangsa Maju',
+      mukim: 'Mukim Setapak',
+      district: 'Wangsa Maju',
+      state: 'Wilayah Persekutuan Kuala Lumpur',
+      area: 3600,
+      category: LandCategory.BUILDING,
+      tenureType: TenureType.FREEHOLD,
+      members: [
+        {
+          memberUser: m3,
+          address: 'No. 44, Jalan Wangsa Delima, 53300 Kuala Lumpur',
+          ownershipType: OwnershipType.INDIVIDUAL_CITIZEN,
+          share: '100',
+        },
+      ],
+      hasValuation: true,
+      valuationStatus: ReportStatus.APPROVED,
+      marketValue: 3900000,
+      recommendedCompensation: 4500000,
+      hasCompensation: true,
+      hasOffer: true,
+      offerStatus: OfferStatus.ACCEPTED,
+      hasObjection: false,
+    },
+    {
+      caseIndex: 14,
+      projectName: 'Klang Valley Smart Transit Resettlement',
+      projectType: 'Infrastructure Development',
+      purpose: 'Dual-milestone blockchain notarization flow demonstration',
+      budget: 60000000,
+      fundingSource: FundingSource.GOVERNMENT,
+      caseTitle: 'Klang Valley Smart Transit Resettlement - Parcel 14',
+      status: CaseStatus.OFFER_ACCEPTED,
+      landTitleNo: 'PN 20105',
+      lotNo: 'Lot 6105',
+      tempat: 'Bukit Jalil',
+      mukim: 'Mukim Kuala Lumpur',
+      district: 'Seputeh',
+      state: 'Wilayah Persekutuan Kuala Lumpur',
+      area: 4200,
+      category: LandCategory.BUILDING,
+      tenureType: TenureType.FREEHOLD,
+      members: [
+        {
+          memberUser: m4,
+          address: 'No. 55, Jalan Jalil Perkasa, 57000 Kuala Lumpur',
+          ownershipType: OwnershipType.INDIVIDUAL_CITIZEN,
+          share: '100',
+        },
+      ],
+      hasValuation: true,
+      valuationStatus: ReportStatus.APPROVED,
+      marketValue: 5400000,
+      recommendedCompensation: 6200000,
+      hasCompensation: true,
+      hasOffer: true,
+      offerStatus: OfferStatus.ACCEPTED,
+      hasObjection: false,
+    },
+    {
+      caseIndex: 15,
+      projectName: 'Klang Valley Smart Transit Resettlement',
+      projectType: 'Infrastructure Development',
+      purpose: 'Dual-milestone blockchain notarization flow demonstration',
+      budget: 60000000,
+      fundingSource: FundingSource.GOVERNMENT,
+      caseTitle: 'Klang Valley Smart Transit Resettlement - Parcel 15',
+      status: CaseStatus.OFFER_ACCEPTED,
+      landTitleNo: 'PN 20106',
+      lotNo: 'Lot 6106',
+      tempat: 'Setiawangsa',
+      mukim: 'Mukim Setapak',
+      district: 'Titiwangsa',
+      state: 'Wilayah Persekutuan Kuala Lumpur',
+      area: 3400,
+      category: LandCategory.BUILDING,
+      tenureType: TenureType.FREEHOLD,
+      members: [
+        {
+          memberUser: m5,
+          address: 'No. 66, Jalan Setiawangsa 10, 54200 Kuala Lumpur',
+          ownershipType: OwnershipType.INDIVIDUAL_CITIZEN,
+          share: '100',
+        },
+      ],
+      hasValuation: true,
+      valuationStatus: ReportStatus.APPROVED,
+      marketValue: 2900000,
+      recommendedCompensation: 3200000,
+      hasCompensation: true,
+      hasOffer: true,
+      offerStatus: OfferStatus.ACCEPTED,
+      hasObjection: false,
+    },
+
+    // -------------------------------------------------------------------------
+    // Cases 16 to 20: Exactly 5 Cases at OFFER_ISSUED (Offer Letter Generated, NOT yet accepted/rejected)
+    // -------------------------------------------------------------------------
+    {
+      caseIndex: 16,
+      projectName: 'Damansara Transit Link',
+      projectType: 'Infrastructure Development',
+      purpose: 'Elevated highway ramp and station feeder connector',
+      budget: 38000000,
+      fundingSource: FundingSource.GOVERNMENT,
+      caseTitle: 'Damansara Transit Link - Parcel 16',
+      status: CaseStatus.OFFER_ISSUED,
+      landTitleNo: 'PN 30116',
+      lotNo: 'Lot 7116',
+      tempat: 'Damansara Utama',
+      mukim: 'Mukim Sungai Buloh',
+      district: 'Petaling',
+      state: 'Selangor',
+      area: 2200,
+      category: LandCategory.BUILDING,
+      tenureType: TenureType.FREEHOLD,
+      members: [
+        {
+          memberUser: m1,
+          address: 'No. 16, Jalan SS 21/10, Damansara Utama, 47400 Petaling Jaya, Selangor',
+          ownershipType: OwnershipType.INDIVIDUAL_CITIZEN,
+          share: '100',
+        },
+      ],
+      hasValuation: true,
+      valuationStatus: ReportStatus.APPROVED,
+      marketValue: 1900000,
+      recommendedCompensation: 2200000,
+      hasCompensation: true,
+      hasOffer: true,
+      offerStatus: OfferStatus.PENDING,
+      hasObjection: false,
+    },
+    {
+      caseIndex: 17,
+      projectName: 'Subang Jaya Transit Interchange',
+      projectType: 'Transportation Development',
+      purpose: 'Intermodal commuter concourse and parking structure',
+      budget: 42000000,
+      fundingSource: FundingSource.GOVERNMENT,
+      caseTitle: 'Subang Jaya Transit Interchange - Parcel 17',
+      status: CaseStatus.OFFER_ISSUED,
+      landTitleNo: 'PN 30117',
+      lotNo: 'Lot 7117',
+      tempat: 'SS 15 Subang Jaya',
+      mukim: 'Mukim Damansara',
+      district: 'Petaling',
+      state: 'Selangor',
+      area: 2700,
+      category: LandCategory.BUILDING,
+      tenureType: TenureType.FREEHOLD,
+      members: [
+        {
+          memberUser: m2,
+          address: 'No. 17, Jalan SS 15/4, 47500 Subang Jaya, Selangor',
+          ownershipType: OwnershipType.INDIVIDUAL_CITIZEN,
+          share: '100',
+        },
+      ],
+      hasValuation: true,
+      valuationStatus: ReportStatus.APPROVED,
+      marketValue: 2300000,
+      recommendedCompensation: 2650000,
+      hasCompensation: true,
+      hasOffer: true,
+      offerStatus: OfferStatus.PENDING,
+      hasObjection: false,
+    },
+    {
+      caseIndex: 18,
+      projectName: 'Ampang River Flood Rehabilitation',
+      projectType: 'Public Amenities',
+      purpose: 'Retention weir and riparian buffer zone upgrade',
+      budget: 26000000,
+      fundingSource: FundingSource.GOVERNMENT,
+      caseTitle: 'Ampang River Flood Rehabilitation - Parcel 18',
+      status: CaseStatus.OFFER_ISSUED,
+      landTitleNo: 'PN 30118',
+      lotNo: 'Lot 7118',
+      tempat: 'Ampang Jaya',
+      mukim: 'Mukim Ampang',
+      district: 'Hulu Langat',
+      state: 'Selangor',
+      area: 3100,
+      category: LandCategory.AGRICULTURE,
+      tenureType: TenureType.LEASEHOLD,
+      members: [
+        {
+          memberUser: m3,
+          address: 'No. 18, Jalan Ampang Mewah, 68000 Ampang, Selangor',
+          ownershipType: OwnershipType.INDIVIDUAL_CITIZEN,
+          share: '100',
+        },
+      ],
+      hasValuation: true,
+      valuationStatus: ReportStatus.APPROVED,
+      marketValue: 1750000,
+      recommendedCompensation: 2050000,
+      hasCompensation: true,
+      hasOffer: true,
+      offerStatus: OfferStatus.PENDING,
+      hasObjection: false,
+    },
+    {
+      caseIndex: 19,
+      projectName: 'Petaling Jaya Urban Revitalization',
+      projectType: 'Urban Redevelopment',
+      purpose: 'Pedestrian concourse and public park realignment',
+      budget: 31000000,
+      fundingSource: FundingSource.GOVERNMENT,
+      caseTitle: 'Petaling Jaya Urban Revitalization - Parcel 19',
+      status: CaseStatus.OFFER_ISSUED,
+      landTitleNo: 'PN 30119',
+      lotNo: 'Lot 7119',
+      tempat: 'Seksyen 14',
+      mukim: 'Mukim Sungai Buloh',
+      district: 'Petaling',
+      state: 'Selangor',
+      area: 2500,
+      category: LandCategory.BUILDING,
+      tenureType: TenureType.FREEHOLD,
+      members: [
+        {
+          memberUser: m4,
+          address: 'No. 19, Jalan 14/20, Seksyen 14, 46100 Petaling Jaya, Selangor',
+          ownershipType: OwnershipType.INDIVIDUAL_CITIZEN,
+          share: '100',
+        },
+      ],
+      hasValuation: true,
+      valuationStatus: ReportStatus.APPROVED,
+      marketValue: 2600000,
+      recommendedCompensation: 3000000,
+      hasCompensation: true,
+      hasOffer: true,
+      offerStatus: OfferStatus.PENDING,
+      hasObjection: false,
+    },
+    {
+      caseIndex: 20,
+      projectName: 'Shah Alam Logistics Corridor',
+      projectType: 'Commercial Realignment',
+      purpose: 'Freight expressway interchange and access lane',
+      budget: 49000000,
+      fundingSource: FundingSource.GOVERNMENT,
+      caseTitle: 'Shah Alam Logistics Corridor - Parcel 20',
+      status: CaseStatus.OFFER_ISSUED,
+      landTitleNo: 'PN 30120',
+      lotNo: 'Lot 7120',
+      tempat: 'Bukit Jelutong',
+      mukim: 'Mukim Damansara',
+      district: 'Petaling',
+      state: 'Selangor',
+      area: 4000,
+      category: LandCategory.INDUSTRY,
+      tenureType: TenureType.FREEHOLD,
+      members: [
+        {
+          memberUser: m5,
+          address: 'No. 20, Jalan Astaka U8/84, Bukit Jelutong, 40150 Shah Alam, Selangor',
+          ownershipType: OwnershipType.INDIVIDUAL_CITIZEN,
+          share: '100',
+        },
+      ],
+      hasValuation: true,
+      valuationStatus: ReportStatus.APPROVED,
+      marketValue: 3400000,
+      recommendedCompensation: 3900000,
+      hasCompensation: true,
+      hasOffer: true,
+      offerStatus: OfferStatus.PENDING,
       hasObjection: false,
     },
   ];
@@ -542,9 +1066,81 @@ async function main() {
 
     const caseId = generateCaseId(cDef.caseIndex);
 
+    const isAccepted = cDef.status === CaseStatus.OFFER_ACCEPTED;
+    const isIssued = cDef.status === CaseStatus.OFFER_ISSUED;
+    const primaryMember = cDef.members[0].memberUser;
+    const amount = cDef.recommendedCompensation || 2500000;
+    const offerRef = `FORM-H-2026-${1000 + cDef.caseIndex}`;
+
+    let formHArtifact: { signedDocument: string; blockchainHash: string } | null = null;
+    let acceptedAt: Date | null = null;
+
+    if (isAccepted) {
+      formHArtifact = writeSignedFormH(caseId, primaryMember.name, amount);
+      acceptedAt = cDef.caseIndex === 15
+        ? new Date(seedRunNow - (ACCEPTANCE_GRACE_PERIOD_MS - 5 * 60_000))
+        : new Date(seedRunNow - 25 * 60 * 60 * 1000);
+    } else if (isIssued) {
+      const offerDir = path.resolve(__dirname, '../../document_storage/offer_letter', caseId);
+      if (!fs.existsSync(offerDir)) fs.mkdirSync(offerDir, { recursive: true });
+      const offerPdfBuf = createMockPdfBuffer(`Official Form H Award Notice - RM ${amount.toLocaleString('en-MY')} - ${primaryMember.name}`, caseId);
+      fs.writeFileSync(path.join(offerDir, 'Form_H_Official_Offer.pdf'), offerPdfBuf);
+    }
+
     let dbCase = await prisma.acquisitionCase.findFirst({
       where: { caseTitle: cDef.caseTitle },
     });
+
+    if (dbCase) {
+      await prisma.acquisitionCase.update({
+        where: { caseId: dbCase.caseId },
+        data: { status: cDef.status },
+      });
+      if (isIssued) {
+        await prisma.offerMemberResponse.deleteMany({
+          where: { offerLetter: { caseId: dbCase.caseId } },
+        });
+        if (cDef.hasOffer) {
+          await prisma.offerLetter.updateMany({
+            where: { caseId: dbCase.caseId },
+            data: {
+              status: cDef.offerStatus || OfferStatus.PENDING,
+              signedDocument: null,
+              blockchainHash: null,
+              acceptedAt: null,
+            },
+          });
+        }
+      }
+      if (isAccepted && cDef.hasOffer && formHArtifact && acceptedAt) {
+        const existingOffer = await prisma.offerLetter.findFirst({ where: { caseId: dbCase.caseId } });
+        if (existingOffer) {
+          await prisma.offerLetter.update({
+            where: { offerId: existingOffer.offerId },
+            data: {
+              status: OfferStatus.ACCEPTED,
+              signedDocument: formHArtifact.signedDocument,
+              blockchainHash: formHArtifact.blockchainHash,
+              acceptedAt,
+            },
+          });
+          const owner = await prisma.landOwner.findFirst({ where: { email: primaryMember.email } });
+          if (owner) {
+            await prisma.offerMemberResponse.upsert({
+              where: { offerId_ownerId: { offerId: existingOffer.offerId, ownerId: owner.ownerId } },
+              update: { status: OfferStatus.ACCEPTED, respondedAt: acceptedAt, signedDocument: formHArtifact.signedDocument },
+              create: {
+                offerId: existingOffer.offerId,
+                ownerId: owner.ownerId,
+                status: OfferStatus.ACCEPTED,
+                signedDocument: formHArtifact.signedDocument,
+                respondedAt: acceptedAt,
+              },
+            });
+          }
+        }
+      }
+    }
 
     if (!dbCase) {
       dbCase = await prisma.acquisitionCase.create({
@@ -658,16 +1254,36 @@ async function main() {
                 compensationReportId: compReport.compensationReportId,
                 caseId: dbCase.caseId,
                 ownershipId: createdOwnerships[0].ownershipId,
-                offerReferenceNo: `FORM-H-2026-${100 + cDef.caseIndex}`,
+                offerReferenceNo: offerRef,
                 offerType: 'Form H (Standard Award Notice)',
-                offerAmount: cDef.recommendedCompensation || 2500000,
-                offerDate: new Date(),
-                expiryDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+                offerAmount: amount,
+                offerDate: new Date(seedRunNow - 14 * 24 * 60 * 60 * 1000),
+                expiryDate: new Date(seedRunNow + 14 * 24 * 60 * 60 * 1000),
                 acceptancePeriodDays: 14,
-                status: cDef.offerStatus || OfferStatus.ACCEPTED,
+                status: isAccepted ? OfferStatus.ACCEPTED : (cDef.offerStatus || OfferStatus.PENDING),
+                acceptedAt: isAccepted ? acceptedAt : null,
+                signedDocument: isAccepted ? formHArtifact?.signedDocument : null,
+                blockchainHash: isAccepted ? formHArtifact?.blockchainHash : null,
+                remarks: isAccepted
+                  ? 'Signed Form H uploaded by the landowner; award formally accepted.'
+                  : 'Official Form H award notice dispatched to landowner.',
                 createdById: govOfficer1.userId,
               },
             });
+
+            if (isAccepted && formHArtifact && acceptedAt) {
+              await prisma.offerMemberResponse.upsert({
+                where: { offerId_ownerId: { offerId: offer.offerId, ownerId: createdOwnerships[0].ownerId } },
+                update: { status: OfferStatus.ACCEPTED, respondedAt: acceptedAt, signedDocument: formHArtifact.signedDocument },
+                create: {
+                  offerId: offer.offerId,
+                  ownerId: createdOwnerships[0].ownerId,
+                  status: OfferStatus.ACCEPTED,
+                  signedDocument: formHArtifact.signedDocument,
+                  respondedAt: acceptedAt,
+                },
+              });
+            }
 
             // Objection
             if (cDef.hasObjection && cDef.objectionReason) {
@@ -773,9 +1389,9 @@ async function main() {
   }
 
   // ===========================================================================
-  // 4. Seed Payment Cases — flow-test baseline (25 records)
+  // 4. Reset Payment & Blockchain Tables
   // ===========================================================================
-  console.log('\n--- 4. Seeding Payment Cases (Flow-Test Baseline) ---');
+  console.log('\n--- 4. Resetting Payment & Blockchain Tables ---');
 
   // Reset payment + blockchain state (children first)
   await prisma.failedTransaction.deleteMany({});
@@ -785,16 +1401,78 @@ async function main() {
   await prisma.paymentCase.deleteMany({});
   await prisma.blockchainRecord.deleteMany({});
 
-  // ===========================================================================
-  // 12. Payment Cases: Left empty by design for dynamic ingestion
-  // ===========================================================================
-  console.log('\n--- 12. Payment Module ---');
-  await prisma.paymentReceipt.deleteMany({});
-  await prisma.paymentAuthorisation.deleteMany({});
-  await prisma.failedTransaction.deleteMany({});
-  await prisma.receiverBankDetails.deleteMany({});
-  await prisma.paymentCase.deleteMany({});
-  console.log('ℹ️ Payment cases table cleared. Cases will be dynamically ingested when offers are accepted.');
+  // Purge any legacy demo cases from previous runs
+  const legacyCases = await prisma.acquisitionCase.findMany({
+    where: { caseId: { startsWith: 'LAC-2026-09-100' } },
+    select: { caseId: true },
+  });
+  for (const lc of legacyCases) {
+    await prisma.blockchainRecord.deleteMany({ where: { caseId: lc.caseId } });
+    await prisma.paymentCase.deleteMany({ where: { caseId: lc.caseId } });
+    await prisma.offerMemberResponse.deleteMany({ where: { offerLetter: { caseId: lc.caseId } } });
+    await prisma.objection.deleteMany({ where: { caseId: lc.caseId } });
+    await prisma.offerLetter.deleteMany({ where: { caseId: lc.caseId } });
+    await prisma.compensationReport.deleteMany({ where: { caseId: lc.caseId } });
+    await prisma.valuationReport.deleteMany({ where: { caseId: lc.caseId } });
+    await prisma.caseDocument.deleteMany({ where: { caseId: lc.caseId } });
+    await prisma.caseAssignment.deleteMany({ where: { caseId: lc.caseId } });
+    const pList = await prisma.landParcel.findMany({ where: { caseId: lc.caseId } });
+    for (const p of pList) {
+      await prisma.landOwnership.deleteMany({ where: { landId: p.landId } });
+    }
+    await prisma.landParcel.deleteMany({ where: { caseId: lc.caseId } });
+    await prisma.acquisitionCase.delete({ where: { caseId: lc.caseId } });
+    const legacyDir = path.resolve(__dirname, '../../document_storage/offer_letter', lc.caseId);
+    if (fs.existsSync(legacyDir)) {
+      fs.rmSync(legacyDir, { recursive: true, force: true });
+    }
+  }
+
+  // Refresh acceptance artifacts on Case 3 (siewfeng's untouched accepted offer)
+  const case3 = await prisma.acquisitionCase.findUnique({
+    where: { caseId: 'LAC-2026-08-0003' },
+    include: {
+      landParcel: { include: { ownerships: { include: { landOwner: true } } } },
+      offerLetters: { where: { status: OfferStatus.ACCEPTED }, orderBy: { createdAt: 'desc' }, take: 1 },
+    },
+  });
+  const case3Offer = case3?.offerLetters?.[0];
+  if (case3 && case3Offer) {
+    const primaryOwner = case3.landParcel?.ownerships?.[0]?.landOwner;
+    const amount = Number(case3Offer.offerAmount) || 3200000;
+    const formH = writeSignedFormH('LAC-2026-08-0003', primaryOwner?.name || 'Landowner', amount);
+    const acceptedAt = new Date(seedRunNow - 48 * 60 * 60 * 1000);
+    await prisma.offerLetter.update({
+      where: { offerId: case3Offer.offerId },
+      data: {
+        acceptedAt,
+        signedDocument: formH.signedDocument,
+        blockchainHash: formH.blockchainHash,
+      },
+    });
+    if (primaryOwner) {
+      await prisma.offerMemberResponse.upsert({
+        where: { offerId_ownerId: { offerId: case3Offer.offerId, ownerId: primaryOwner.ownerId } },
+        update: { status: OfferStatus.ACCEPTED, respondedAt: acceptedAt, signedDocument: formH.signedDocument },
+        create: {
+          offerId: case3Offer.offerId,
+          ownerId: primaryOwner.ownerId,
+          status: OfferStatus.ACCEPTED,
+          signedDocument: formH.signedDocument,
+          respondedAt: acceptedAt,
+        },
+      });
+    }
+    console.log(`⛓️ Case 3 acceptance refreshed: LAC-2026-08-0003 | hash frozen | grace elapsed`);
+  }
+
+  console.log(
+    '\nℹ️ Seeding Summary:\n' +
+    '  - LAC-2026-08-0001 to 0005: 5 Untouched baseline cases (siewfeng)\n' +
+    '  - LAC-2026-08-0006 to 0015: 10 Cases at OFFER_ACCEPTED (all 4 supporting documents + signed Form H uploaded)\n' +
+    '  - LAC-2026-08-0016 to 0020: 5 Cases at OFFER_ISSUED (all 4 supporting documents + Form H generated, awaiting response)\n' +
+    '  - Payment & Blockchain: 0 records pre-seeded — dynamically generated upon member offer acceptance & GA blockchain publication.'
+  );
 
   console.log('\n✨ Database seeding completed successfully!');
 }

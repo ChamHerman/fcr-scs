@@ -261,26 +261,30 @@ export const AdminLayout: React.FC = () => {
         .collapse-btn:hover {
           background: rgba(103,80,164,0.08);
         }
-        .admin-sidebar-nav { flex:1; display:flex; flex-direction:column; gap:4px; overflow-y: auto; overflow-x: hidden; }
+        .admin-sidebar-nav { flex:1; display:flex; flex-direction:column; gap:6px; overflow-y: auto; overflow-x: hidden; }
         .admin-sidebar-nav::-webkit-scrollbar { width: 4px; }
         .admin-sidebar-nav::-webkit-scrollbar-thumb { background: rgba(121,116,126,0.3); border-radius: 4px; }
         
         .nav-section {
-          margin-bottom: 8px;
+          margin-bottom: 12px;
         }
         .nav-group-items {
           overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          padding-top: 2px;
         }
         .nav-divider {
           height: 1px;
           background: rgba(121,116,126,0.18);
-          margin: 10px 14px;
+          margin: 12px 14px;
           border-radius: 1px;
         }
         .nav-label {
-          font-size: 11px; font-weight:600; text-transform:uppercase;
-          letter-spacing:0.5px; color: var(--md-on-surface-variant);
-          padding:16px 12px 8px 12px; opacity:0.6;
+          font-size: 11px; font-weight:700; text-transform:uppercase;
+          letter-spacing:0.6px; color: var(--md-on-surface-variant);
+          padding:10px 12px 6px 12px; opacity:0.65;
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -291,7 +295,7 @@ export const AdminLayout: React.FC = () => {
           opacity: 1;
         }
         .nav-item {
-          display:flex; align-items:center; gap:14px; padding:10px 14px;
+          display:flex; align-items:center; gap:14px; padding:9px 14px;
           border-radius: 12px; text-decoration:none;
           color: var(--md-on-surface-variant); font-weight:500; font-size:14px;
           transition: background 0.2s cubic-bezier(0.2, 0, 0, 1), color 0.2s;
@@ -409,18 +413,6 @@ export const AdminLayout: React.FC = () => {
                 <NavLink to="/admin" end className="nav-item" title={isCollapsed ? "Dashboard" : ""}>
                   <LayoutDashboard size={22} className="nav-icon" />
                   {!isCollapsed && <span>Dashboard</span>}
-                </NavLink>
-              )}
-              {(allowedPages.includes('*') || allowedPages.includes('/admin/valuers')) && (
-                <NavLink to="/admin/valuers" className="nav-item" title={isCollapsed ? "Valuers" : ""}>
-                  <Users size={22} className="nav-icon" />
-                  {!isCollapsed && <span>Valuers</span>}
-                </NavLink>
-              )}
-              {(allowedPages.includes('*') || allowedPages.includes('/admin/forms')) && (
-                <NavLink to="/admin/forms" className="nav-item" title={isCollapsed ? "Forms" : ""}>
-                  <FileText size={22} className="nav-icon" />
-                  {!isCollapsed && <span>Forms</span>}
                 </NavLink>
               )}
             </div>

@@ -20,13 +20,13 @@ export const CaseIdCell: React.FC<CaseIdCellProps> = ({ caseId, onClick }) => (
           e.stopPropagation();
           onClick(caseId);
         }}
-        className="case-id text-md-primary hover:underline font-mono cursor-pointer bg-transparent border-none p-0 inline-flex items-center text-left"
+        className="case-id text-xs font-bold font-mono text-md-primary hover:underline cursor-pointer bg-transparent border-none p-0 inline-flex items-center text-left"
         title="View Case Details"
       >
         {caseId}
       </button>
     ) : (
-      <span className="case-id">{caseId}</span>
+      <span className="case-id text-xs font-bold font-mono">{caseId}</span>
     )}
     <CopyButton value={caseId} />
   </span>

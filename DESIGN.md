@@ -79,8 +79,8 @@ Defined in `tailwind.config.js` and `index.css`.
     ```
   - **Tabular Application (semantics unchanged)**:
     1. **Case IDs**: `LAC-YYYY-MM-XXXX` (always rendered with `font-mono font-bold`).
-    2. **Payment IDs**: `PMT-LAC-YYYY-MM-XXXX` (always rendered with `font-mono font-bold`).
-    3. **Public Ledger & Record IDs**: `FCR-XXXX-XXXX` (always rendered with `font-mono font-bold`).
+    2. **Payment IDs**: `PMT-YYYY-MM-####` (canonical Doc 5 §1.4 format, always rendered with `font-mono font-bold`; updated 2026-09-13 from the legacy `PMT-LAC-...` composite display).
+    3. **Blockchain Notarization Record IDs**: `BCN-YYYY-MM-####` (canonical Doc 5 §1.4 format, always rendered with `font-mono font-bold`; updated 2026-09-13 from the legacy `FCR-XXXXXXXX`).
     4. **Blockchain Hashes & Addresses**: `0x...`, transaction hashes, and wallet addresses (`font-mono`).
     5. **Bank Accounts**: Masked account numbers (e.g. `•••• 1234`) and account references (`font-mono`).
     6. **Identification Numbers**: Malaysian MyKad / NRIC numbers (`font-mono`).
@@ -90,6 +90,20 @@ Defined in `tailwind.config.js`. Standard card, input, and modal radius is **`xl
 - **`lg` / `xl` (28px)**: Standard card, container, form input, and modal radius.
 - `2xl` (32px), `3xl` (48px)
 - `full` (9999px): Pill-shaped buttons and chips.
+
+### Date & Time Formatting Standard (LOCKED 2026-09-13)
+- **Universal Date-Time Display**: `DD MMM YYYY, HH:mm PM/AM` (12-hour display with capitalized AM/PM).
+  - Example: `13 Sep 2026, 05:41 PM`.
+  - Prohibited: 24-hour time or raw slash-separated timestamps (e.g. `13/09/2026, 17:41` or `2026-09-13 17:41`).
+  - Implementation: Exported centralized helper `formatDateTime(date)` from `presentation_layer/src/utils/dateFormat.ts`.
+  - Application: All tables, status badges, verification proof cards, modal timestamps, and official PDF receipts across Admin, Bank, and Member portals.
+
+### High-Value Settlement Network — RENTAS (LOCKED 2026-09-13)
+- **Clearing House & Bank System**: **RENTAS (Real-time Electronic Transfer of Funds and Securities)**.
+  - Operated by **Bank Negara Malaysia (BNM)** / Payments Network Malaysia (PayNet).
+  - Used for large-value government statutory land acquisition compensation disbursements.
+  - The Bank Portal is officially styled as the **RENTAS Host Gateway / BNM RTGS Terminal**.
+  - All payment channel displays and official settlement receipts explicitly identify RENTAS RTGS as the clearing authority.
 
 ### Motion and Easing
 - **`md-bouncy`** (`cubic-bezier(0.34, 1.56, 0.64, 1)`): The sole global motion standard applied across hover, press, modal pop-in, and loading transitions.
@@ -189,12 +203,12 @@ Admin list pages (Payments Overview, Initiate, Pending Authorisations, Failed Tr
 - Canonical action icons: Eye = view details, Send = initiate, PenLine = authorise/sign, XCircle = reject, Ban = cancel/void, RotateCcw = retry, PencilLine = request details update, CalendarClock = schedule, Download = receipt, BadgeCheck = resolve, Upload = publish to blockchain, FilePlus2 = create corrected certificate, Undo2 = reopen payment, Lock = self-signed / SoD restricted.
 
 ### Payment & Blockchain Identifier Columns
-- **Dedicated PAYMENT ID Column**: Every payment module table (`/admin/payment`, `/admin/payment/initiate`, `/admin/payment/pending`, `/admin/payment/failed`, `/bank-portal`) renders a dedicated `PAYMENT ID` column displaying `PMT-${caseId}` (e.g. `PMT-LAC-2026-08-0001`) with monospace bold styling alongside the `CASE ID` column.
+- **Dedicated PAYMENT ID Column**: Every payment module table (`/admin/payment`, `/admin/payment/initiate`, `/admin/payment/pending`, `/admin/payment/failed`, `/bank-portal`) renders a dedicated `PAYMENT ID` column displaying the canonical `PMT-YYYY-MM-####` id assigned by the payment service (e.g. `PMT-2026-09-0042`) with monospace bold styling alongside the `CASE ID` column. The `PMT-${caseId}` string is only a last-resort display fallback and is never the stored id.
 - **Case ID cells are clickable and copyable**:
   - The case ID renders as a link-styled span (`cursor: pointer`, underline on hover) that opens the row's detail modal directly — no separate menu step.
   - A copy icon sits beside every case ID (`CaseIdCell`), writing the ID to the clipboard with a success toast.
 
-### 15 Unique Status Color Matrix (11 Payment + 4 Blockchain)
+### 16 Unique Status Color Matrix (11 Payment + 5 Blockchain)
 Every status in the Payment and Blockchain modules is mapped to a dedicated CSS badge class (`.payment-badge .status-*`) with unique light and dark mode colors:
 
 | # | Status | Domain | CSS Class | Light Mode (Bg / Text / Dot) | Dark Mode (Bg / Text / Dot) |
@@ -212,8 +226,9 @@ Every status in the Payment and Blockchain modules is mapped to a dedicated CSS 
 | 11 | **Pending New Bank Details** | Payment | `.status-pending-details` | `#FEF9C3` / `#854D0E` / `#CA8A04` (Warm Honey) | `rgba(202,138,4,0.22)` / `#FEF08A` / `#FACC15` |
 | 12 | **Ready to Publish** | Blockchain | `.status-ready-publish` | `#E0F2FE` / `#075985` / `#0284C7` (Electric Sky) | `rgba(2,132,199,0.22)` / `#7DD3FC` / `#38BDF8` |
 | 13 | **Published** | Blockchain | `.status-published` | `#DCFCE7` / `#166534` / `#16A34A` (Mint Green) | `rgba(22,163,74,0.22)` / `#86EFAC` / `#4ADE80` |
-| 14 | **Voided** | Blockchain | `.status-voided` | `#FFE4E6` / `#9F1239` / `#E11D48` (Deep Crimson) | `rgba(225,29,72,0.25)` / `#FECDD3` / `#FB7185` |
-| 15 | **Replacement** | Blockchain | `.status-replacement` | `#F3E8FF` / `#6B21A8` / `#9333EA` (Purple Lilac) | `rgba(147,51,234,0.25)` / `#E9D5FF` / `#C084FC` |
+| 14 | **Void Pending** | Blockchain | `.status-void-pending` | `#FFF1E7` / `#9A3412` / `#EA580C` (Burnt Sienna) | `rgba(234,88,12,0.25)` / `#FED7AA` / `#FB923C` |
+| 15 | **Voided** | Blockchain | `.status-voided` | `#FFE4E6` / `#9F1239` / `#E11D48` (Deep Crimson) | `rgba(225,29,72,0.25)` / `#FECDD3` / `#FB7185` |
+| 16 | **Replacement** | Blockchain | `.status-replacement` | `#F3E8FF` / `#6B21A8` / `#9333EA` (Purple Lilac) | `rgba(147,51,234,0.25)` / `#E9D5FF` / `#C084FC` |
 
 *Note: All statuses use canonical Title Case strings (e.g. `Cancelled`, `Paid`, `Offer Accepted`).*
 
@@ -227,6 +242,14 @@ Every status in the Payment and Blockchain modules is mapped to a dedicated CSS 
 - Lists show signatures as `current/required` (e.g. `1/3`); action modals show how many remain ("2 left").
 - Model: the bank initiator always contributes 1 signature; admin approvals add the rest. `required = 1 + approvals` where `approvals = 1 + floor(amount / 1,000,000)`.
 - Authorise/sign actions are offered only while signatures are outstanding (`current < required`); once the total is met the transfer is already in process.
+
+### Dual-Milestone Blockchain UX (LOCKED 2026-09-13, FR-019 / NFR-011)
+- **Milestone 1 banner**: `ViewDetailsModal`, `InitiateTransferModal` and `AuthoriseModal` open with a full-width tonal banner above the particulars — success (`bg-md-success/10 border-md-success/30`, `CheckCircle2`) when the award is notarized, with a clickable Etherscan tx link in `font-mono`; warning (`bg-md-warning/10 border-md-warning/30`, `AlertTriangle`) while pending; error (`bg-md-error/10 border-md-error/30`, `ShieldAlert`) when an on-chain void is required after cancellation.
+- **Initiation gate**: with M1 unpublished, the Initiate button renders in the drained disabled state labelled `Initiate Transfer (Awaiting M1 Notarization)` — never a grey replacement box (guideline 5).
+- **Publish Ledger tabs**: three segmented pill tabs (scrollable pill row on mobile) — `Milestone 1 — Statutory Award (Form H)`, `Milestone 2 — Disbursement Settlement (Receipt)`, `Void Required`. M1 rows carry the `Form H Hash` column with a `Form H Hash missing` warning chip and a disabled Publish button when the accepted offer has no frozen fingerprint; M2 rows carry the `Receipt Hash` (the frozen canonical receipt binary SHA-256). Within the 24-hour acceptance grace window the M1 row renders a `Grace Period (Locked)` status chip plus an `unlocks in Xm` countdown beside a drained disabled `[ <Lock> Locked (Grace Period) ]` button (FR-019 rule 9); the tab polls once per minute so the unlock appears live.
+- **Superseded multi-sig cycles**: the governance audit groups authorisations by cycle; the active cycle renders in full color, superseded cycles sit in a muted container (`opacity-60 grayscale-[0.35]`) headed `Cycle N (Superseded — bank details replaced)`. The section header shows `(x/y Signatures · Cycle N)`.
+- **Member on-chain badges**: the 5-step member stepper and the Track timeline keep their length and gain pill badge chips only — emerald clickable `Notarized on Sepolia` (with `ShieldCheck` + `ExternalLink`) when the milestone is published, muted `notarization pending` otherwise. Never expand the stepper to expose blockchain internals.
+- **Danger Zone cancel**: `CancelPaymentModal` requires selecting a statutory reason AND retyping the Payment ID (`PMT-...`); a static advisory beneath the input reminds the GA of the M1 void obligation when the award was already notarized.
 
 ## Usage Guidelines
 1. **Never use pure white or pure black backgrounds**: Always utilize `md-background` or `md-surface-container`.

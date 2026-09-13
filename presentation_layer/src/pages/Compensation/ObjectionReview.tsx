@@ -599,22 +599,9 @@ export const ObjectionReview: React.FC = () => {
             )}
           </div>
 
-          <div
-            style={{
-              marginTop: "24px",
-              fontSize: "13px",
-              color: "var(--md-on-surface-variant)",
-              opacity: 0.6,
-              textAlign: "center",
-              borderTop: "1px solid rgba(121,116,126,0.08)",
-              paddingTop: "18px",
-            }}
-          >
-            FCR-SCS · Compensation Objection Assessment · Connected to Backend Service
-          </div>
+            <div style={{ height: '32px' }} />
         </div>
       </div>
     </>
   );
 };
-

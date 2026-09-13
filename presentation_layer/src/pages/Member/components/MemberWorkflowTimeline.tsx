@@ -28,6 +28,9 @@ import { Button } from '../../../components/ui/Button';
 import { Modal } from '../../../components/ui/Modal';
 import { Textarea } from '../../../components/ui/Textarea';
 import { ConfirmSubmitModal, ConfirmRow } from '../../../components/member/ConfirmSubmitModal';
+import { blockchainApi } from '../../../services/blockchainApi';
+import { CopyButton } from '../../../components/ui/CopyButton';
+import { formatDateTime } from '../../../utils/dateFormat';
 
 export function getEffectiveRequiredSigs(amount: number, setReq?: number): number {
   if (setReq && setReq > 0) return setReq;
@@ -87,6 +90,39 @@ export const MemberWorkflowTimeline: React.FC<MemberWorkflowTimelineProps> = ({
       }
     }
     fetchPayment();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedCaseId]);
+
+  const [m1Record, setM1Record] = useState<any | null>(null);
+  const [m2Record, setM2Record] = useState<any | null>(null);
+  useEffect(() => {
+    if (!selectedCaseId) {
+      setM1Record(null);
+      setM2Record(null);
+      return;
+    }
+    let isMounted = true;
+    blockchainApi
+      .getRecords()
+      .then((res: any) => {
+        if (!isMounted) return;
+        const list: any[] = res?.records || [];
+        const mine = list.filter((r) => r.caseId === selectedCaseId);
+        const isPublished = (s?: string | null) =>
+          String(s || '').toUpperCase().replace(/[\s_]+/g, '_') === 'PUBLISHED';
+        const m1 = mine.find((r) => (r.milestone ?? 'AWARD') === 'AWARD');
+        const m2 = mine.find((r) => r.milestone === 'SETTLEMENT');
+        setM1Record(m1 && isPublished(m1.status) ? m1 : null);
+        setM2Record(m2 && isPublished(m2.status) ? m2 : null);
+      })
+      .catch(() => {
+        if (isMounted) {
+          setM1Record(null);
+          setM2Record(null);
+        }
+      });
     return () => {
       isMounted = false;
     };
@@ -317,18 +353,10 @@ export const MemberWorkflowTimeline: React.FC<MemberWorkflowTimelineProps> = ({
                   const rawStatus = paymentCase?.status || 'BANK_DETAILS_PENDING';
                   const memberDisplay = getMemberDisplayStatus(rawStatus);
 
-                  const isBankPending =
-                    memberDisplay.label === 'Bank Details Pending' ||
-                    memberDisplay.label === 'New Bank Details Pending' ||
-                    rawStatus === 'BANK_DETAILS_PENDING' ||
-                    rawStatus === 'NEW_BANK_DETAILS_PENDING';
-
-                  const isBankVerified = !isBankPending && Boolean(paymentCase?.bankName && paymentCase?.accountNumber);
                   const isPaid = rawStatus === 'PAID' || memberDisplay.label === 'Paid';
                   const isTransferSucceed = rawStatus === 'TRANSFER_SUCCEED' || memberDisplay.label === 'Payment Completed';
 
                   const isInitiated = Boolean(
-                    !isBankPending &&
                     rawStatus !== 'READY_TO_INITIATE' &&
                     rawStatus !== 'Ready to Initiate' &&
                     (curSigs > 0 || (paymentCase?.authorisations && paymentCase.authorisations.length > 0))
@@ -341,6 +369,17 @@ export const MemberWorkflowTimeline: React.FC<MemberWorkflowTimelineProps> = ({
                     rawStatus === 'SCHEDULED' ||
                     (isInitiated && curSigs >= reqSigs && reqSigs > 0)
                   );
+
+                  const isBankPending =
+                    memberDisplay.label === 'Bank Details Pending' ||
+                    memberDisplay.label === 'New Bank Details Pending' ||
+                    memberDisplay.label === 'Bank Details & M1 Pending' ||
+                    rawStatus === 'BANK_DETAILS_PENDING' ||
+                    rawStatus === 'NEW_BANK_DETAILS_PENDING' ||
+                    rawStatus === 'BANK_DETAILS_AND_M1_PENDING' ||
+                    (!paymentCase?.bankName && !isPaid && !isTransferSucceed && !isInitiated && !isFullyApproved);
+
+                  const isBankVerified = !isBankPending && Boolean(paymentCase?.bankName && paymentCase?.accountNumber);
 
                   const currentWorkflowStep = (() => {
                     if (isPaid) return 5;
@@ -658,6 +697,183 @@ export const MemberWorkflowTimeline: React.FC<MemberWorkflowTimelineProps> = ({
                               <span>Contest / Dispute</span>
                             </Button>
                           )}
+                        </div>
+                      </div>
+
+                      {/* ------------------------------------------------------------- */}
+                      {/* IMAGE #3 SECTION 3: CRYPTOGRAPHIC BLOCKCHAIN PROOF CARD       */}
+                      {/* ------------------------------------------------------------- */}
+                      <div className="bg-md-surface-container/70 border border-md-outline/15 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-md-outline/10">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+                              <ShieldCheck size={20} />
+                            </div>
+                            <div>
+                              <h3 className="text-sm font-bold text-md-on-surface">
+                                Cryptographic Blockchain Proof &amp; Transparency
+                              </h3>
+                              <p className="text-xs text-md-on-surface-variant">
+                                Dual-milestone immutable verification on Ethereum Sepolia ledger.
+                              </p>
+                            </div>
+                          </div>
+
+                          <Link
+                            to="/member/verify-audit"
+                            className="inline-flex items-center gap-1.5 text-xs font-bold text-md-primary hover:underline shrink-0"
+                          >
+                            <span>Verify Document File</span>
+                            <ArrowRight size={14} />
+                          </Link>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Milestone 1 Card */}
+                          <div className="p-4 rounded-xl bg-md-surface-container-low border border-md-outline/15 space-y-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-md-primary/10 text-md-primary">
+                                Milestone 1 · Statutory Award
+                              </span>
+                              {m1Record ? (
+                                <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                                  <CheckCircle2 size={13} />
+                                  <span>On-Chain Notarized</span>
+                                </span>
+                              ) : (
+                                <span className="text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                                  Pending Notarization
+                                </span>
+                              )}
+                            </div>
+
+                            <div>
+                              <h4 className="text-sm font-bold text-md-on-surface">
+                                Form H Award Acceptance
+                              </h4>
+                              <p className="text-xs text-md-on-surface-variant leading-relaxed mt-0.5">
+                                Compensation award permanently anchored on-chain, securing your payout entitlement.
+                              </p>
+                            </div>
+
+                            {m1Record ? (
+                              <div className="space-y-1.5 text-xs pt-2.5 border-t border-md-outline/10">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-md-on-surface-variant font-medium">Ledger Key</span>
+                                  <span className="font-mono text-md-on-surface font-bold">
+                                    {m1Record.onChainKey || `${selectedCaseId}#M1`}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-md-on-surface-variant font-medium">Tx Hash</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <a
+                                      href={`https://sepolia.etherscan.io/tx/${m1Record.transactionHash}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="font-mono text-xs font-semibold text-md-primary hover:underline inline-flex items-center gap-1"
+                                    >
+                                      <span>{m1Record.transactionHash.slice(0, 8)}…{m1Record.transactionHash.slice(-6)}</span>
+                                      <ExternalLink size={11} />
+                                    </a>
+                                    <CopyButton value={m1Record.transactionHash} size="sm" title="Copy tx hash" />
+                                  </div>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-md-on-surface-variant font-medium">Form H SHA-256</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-mono text-xs truncate max-w-[160px] sm:max-w-[200px]">
+                                      {m1Record.documentHash}
+                                    </span>
+                                    <CopyButton value={m1Record.documentHash} size="sm" title="Copy hash" />
+                                  </div>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-md-on-surface-variant font-medium">Notarised At</span>
+                                  <span className="font-mono text-xs text-md-on-surface font-medium">
+                                    {formatDateTime(m1Record.createdAt)}
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 font-medium">
+                                Awaiting publication after the statutory review window.
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Milestone 2 Card */}
+                          <div className="p-4 rounded-xl bg-md-surface-container-low border border-md-outline/15 space-y-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+                                Milestone 2 · Settlement &amp; Payout
+                              </span>
+                              {m2Record ? (
+                                <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                                  <CheckCircle2 size={13} />
+                                  <span>On-Chain Notarized</span>
+                                </span>
+                              ) : (
+                                <span className="text-xs font-semibold text-slate-500 bg-slate-500/10 px-2.5 py-0.5 rounded-full border border-slate-500/20">
+                                  Awaiting Settlement
+                                </span>
+                              )}
+                            </div>
+
+                            <div>
+                              <h4 className="text-sm font-bold text-md-on-surface">
+                                Official Payment Receipt
+                              </h4>
+                              <p className="text-xs text-md-on-surface-variant leading-relaxed mt-0.5">
+                                Electronic funds transfer clearance and settlement receipt anchored on-chain.
+                              </p>
+                            </div>
+
+                            {m2Record ? (
+                              <div className="space-y-1.5 text-xs pt-2.5 border-t border-md-outline/10">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-md-on-surface-variant font-medium">Ledger Key</span>
+                                  <span className="font-mono text-md-on-surface font-bold">
+                                    {m2Record.onChainKey || `${selectedCaseId}#M2`}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-md-on-surface-variant font-medium">Tx Hash</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <a
+                                      href={`https://sepolia.etherscan.io/tx/${m2Record.transactionHash}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="font-mono text-xs font-semibold text-md-primary hover:underline inline-flex items-center gap-1"
+                                    >
+                                      <span>{m2Record.transactionHash.slice(0, 8)}…{m2Record.transactionHash.slice(-6)}</span>
+                                      <ExternalLink size={11} />
+                                    </a>
+                                    <CopyButton value={m2Record.transactionHash} size="sm" title="Copy tx hash" />
+                                  </div>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-md-on-surface-variant font-medium">Receipt SHA-256</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-mono text-xs truncate max-w-[160px] sm:max-w-[200px]">
+                                      {m2Record.documentHash}
+                                    </span>
+                                    <CopyButton value={m2Record.documentHash} size="sm" title="Copy hash" />
+                                  </div>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-md-on-surface-variant font-medium">Notarised At</span>
+                                  <span className="font-mono text-xs text-md-on-surface font-medium">
+                                    {formatDateTime(m2Record.createdAt)}
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="p-3 rounded-lg bg-slate-500/5 border border-slate-500/15 text-xs text-slate-500 dark:text-slate-400 font-medium">
+                                Scheduled for notarization upon interbank fund settlement.
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>

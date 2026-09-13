@@ -1,17 +1,22 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, Wallet, Loader2, Ban, RefreshCw } from 'lucide-react';
+import { Clock, User, Wallet, Loader2, Ban, RefreshCw, Folder } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { blockchainApi } from '../../services/blockchainApi';
+import { paymentApi } from '../../services/paymentApi';
+import { compensationApi } from '../../services/compensationApi';
 import { useWallet } from '../../hooks/useWallet';
 import { CaseIdCell } from '../../components/admin/CaseIdCell';
+import { CaseDetailsModal } from '../Payment/CaseDetailsModal';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Button } from '../../components/ui/Button';
 import { CopyButton } from '../../components/ui/CopyButton';
+import { Pagination } from '../../components/ui/Pagination';
 import { WalletButton } from '../../components/ui/WalletButton';
-import { NetworkSelector } from './NetworkSelector';
+import { NetworkStatusBadge } from './NetworkSelector';
 import type { NetworkInfo } from './NetworkSelector';
+import { RefreshButton } from '../Payment/RefreshButton';
 import '../LandAcquisition/case_management.css';
 import '../Payment/payment.css';
 import {
@@ -33,6 +38,7 @@ export const VoidLedger: React.FC = () => {
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState(deepLink || '');
   const [modal, setModal] = useState<ModalState>(null);
+  const [caseDetailsId, setCaseDetailsId] = useState<string | null>(null);
   const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
   const pageRef = useRef<HTMLDivElement>(null);
 
@@ -47,15 +53,38 @@ export const VoidLedger: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const [netData, recData] = await Promise.all([
+      const [netData, recData, paidRes, offersRes] = await Promise.all([
         blockchainApi.getNetworkInfo().catch(() => null),
         blockchainApi.getRecords(),
+        paymentApi.getAllCases().catch(() => ({ cases: [] })),
+        compensationApi
+          .getAllOfferLetters({ status: 'ACCEPTED', limit: 200 } as any)
+          .catch(() => ({ offers: [], offerLetters: [] })),
       ]);
       setNetworkInfo(netData);
-      // The stored record id is the short FCR-XXXXXXXX ledger id
+
+      const paidMap = new Map((paidRes.cases || []).map((c: any) => [c.caseId, c]));
+      const offersList: any[] = offersRes.offers || offersRes.offerLetters || [];
+      const offerMap = new Map(offersList.map((o: any) => [o.caseId, o]));
+
       const list: LedgerRow[] = (recData.records || [])
         .filter((r: any) => r.status === 'Published' || r.status === 'PUBLISHED')
-        .map((r: any) => ({ ...r, publicId: r.id }));
+        .map((r: any) => {
+          const pmt: any = paidMap.get(r.caseId);
+          const off: any = offerMap.get(r.caseId);
+          const ben = r.beneficiary || pmt?.beneficiary || pmt?.accountHolderName || off?.landOwnership?.landOwner?.name;
+          const amt = r.amount || pmt?.amount || off?.offerAmount;
+          return {
+            ...r,
+            publicId: r.id,
+            beneficiary: ben,
+            amount: amt,
+            milestone: (r.milestone ?? 'AWARD') === 'AWARD' ? ('M1' as const) : ('M2' as const),
+            onChainKey: r.onChainKey || `${r.caseId}#${(r.milestone ?? 'AWARD') === 'AWARD' ? 'M1' : 'M2'}`,
+          };
+        })
+        .sort((a: any, b: any) => (a.caseId || '').localeCompare(b.caseId || ''));
+
       setRecords(list);
     } catch (err: any) {
       setError(err.message || 'Failed to load records');
@@ -75,6 +104,17 @@ export const VoidLedger: React.FC = () => {
     );
   }, [records, searchQuery]);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
+  const totalCount = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const safePage = Math.max(1, Math.min(currentPage, totalPages));
+  const pageRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
   const closeModal = () => setModal(null);
 
   return (
@@ -87,7 +127,6 @@ export const VoidLedger: React.FC = () => {
           </div>
         </div>
         <div className="topbar-right flex items-center gap-3">
-          <NetworkSelector networkInfo={networkInfo} onNetworkChange={(net) => setNetworkInfo(net)} />
           {walletConnected ? (
             <WalletButton walletAddress={walletAddress || undefined} label="Government Wallet" />
           ) : (
@@ -114,9 +153,6 @@ export const VoidLedger: React.FC = () => {
           <SearchInput placeholder="Search case or tx hash..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
         </div>
         <div className="filter-group">
-          <Button variant="tonal" size="sm" onClick={loadData}>
-            <RefreshCw size={14} className="mr-1" /> Refresh
-          </Button>
           <Button variant="outlined" size="sm" onClick={() => setSearchQuery('')}>Clear</Button>
         </div>
       </div>
@@ -126,6 +162,10 @@ export const VoidLedger: React.FC = () => {
           <Ban size={18} />
           <span className="count">{filtered.length} published {filtered.length === 1 ? 'record' : 'records'}</span>
         </div>
+        <div className="right flex items-center gap-2">
+          <NetworkStatusBadge networkInfo={networkInfo} />
+          <RefreshButton onClick={loadData} loading={loading} />
+        </div>
       </div>
 
       <div className="table-wrap">
@@ -133,79 +173,134 @@ export const VoidLedger: React.FC = () => {
           <table>
             <thead>
               <tr>
-                <th>Record ID</th>
-                <th>Case</th>
-                <th>Tx Hash</th>
-                <th>Published Date</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th style={{ width: '135px' }}>Blockchain ID</th>
+                <th style={{ width: '140px' }}>Case ID</th>
+                <th style={{ width: '110px' }}>Milestone</th>
+                <th style={{ width: '110px' }}>Document Hash</th>
+                <th style={{ width: '110px' }}>Transaction Hash</th>
+                <th style={{ width: '140px' }}>Published Date</th>
+                <th style={{ width: '125px' }}>Status</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="text-center text-gray-500 py-8">
+                  <td colSpan={7} className="text-center text-gray-500 py-8">
                     <Loader2 size={22} className="inline animate-spin" /><span className="ml-2">Loading published records…</span>
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center text-gray-500 py-8">No published records available to void.</td>
+                  <td colSpan={7} className="text-center text-gray-500 py-8">No published records available to void.</td>
                 </tr>
               ) : (
-                filtered.map((row) => (
-                  <tr
-                    key={row.id}
-                    className={`row-clickable${deepLink === row.caseId ? ' bg-md-secondary-container/40' : ''}`}
-                    onClick={() => setModal({ type: 'view', row })}
-                  >
-                    <td>
-                      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                        <span className="font-mono font-bold text-xs text-md-primary">
-                          {row.publicId ?? row.caseId}
-                        </span>
-                        <CopyButton value={row.publicId ?? row.caseId} title="Copy Record ID" />
-                      </div>
-                    </td>
-                    <td><CaseIdCell caseId={row.caseId} /></td>
-                    <td className="font-mono text-xs text-md-on-surface-variant">
-                      {row.transactionHash ? (
-                        <div className="flex items-center gap-1.5">
-                          <span>{fmtTx(row.transactionHash)}</span>
-                          <CopyButton value={row.transactionHash} title="Copy Transaction Hash" />
-                        </div>
-                      ) : (
-                        '—'
+                pageRows.map((row, idx, arr) => {
+                  const blockchainId = row.publicId?.startsWith('BCN-')
+                    ? row.publicId
+                    : row.id?.startsWith('BCN-')
+                    ? row.id
+                    : (row.publicId || row.id);
+                  const isFirstInGroup = idx === 0 || row.caseId !== arr[idx - 1].caseId;
+                  const isLastInGroup = idx === arr.length - 1 || row.caseId !== arr[idx + 1].caseId;
+                  const sameCaseRecords = records.filter((r) => r.caseId === row.caseId);
+
+                  return (
+                    <React.Fragment key={row.id}>
+                      {isFirstInGroup && (
+                        <tr className="bg-md-primary/[0.06] dark:bg-md-primary/[0.12] text-xs">
+                          <td colSpan={7} className="py-2.5 px-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Folder size={15} className="text-md-primary/70 dark:text-md-primary/80" />
+                                <span className="font-mono font-bold text-xs text-md-primary">{row.caseId}</span>
+                                <span className="text-md-outline/40 font-bold">·</span>
+                                <span className="text-md-on-surface font-semibold text-xs">{row.beneficiary || 'Landowner / Beneficiary'}</span>
+                              </div>
+                              <span className="text-[11px] font-bold text-md-primary bg-md-primary/10 dark:bg-md-primary/20 px-2.5 py-0.5 rounded-full border border-md-primary/20 font-mono">
+                                {sameCaseRecords.length} {sameCaseRecords.length === 1 ? 'Milestone' : 'Milestones'} ({sameCaseRecords.map((r) => r.milestone || 'M1').join(' · ')})
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                    <td>{ledgerBadge(row.status)}</td>
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <div className="row-actions">
-                        <Button
-                          size="sm"
-                          variant="filled"
-                          className="h-8 px-3.5 text-xs inline-flex items-center gap-2 rounded-full font-medium bg-red-600 hover:bg-red-700 text-white shadow-sm"
-                          onClick={() => setModal({ type: 'void', row })}
-                        >
-                          <Ban size={13} className="shrink-0" />
-                          <span>Void</span>
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      <tr
+                        className={`row-clickable bg-white dark:bg-slate-900/80 ${
+                          isLastInGroup
+                            ? 'border-b border-md-outline/25 dark:border-md-outline/30'
+                            : 'border-b border-md-outline/10 dark:border-md-outline/10'
+                        }${deepLink === row.caseId ? ' bg-md-secondary-container/40' : ''}`}
+                        onClick={() => setModal({ type: 'view', row })}
+                      >
+                        <td>
+                          <div className="flex items-center gap-1.5 cursor-pointer">
+                            <span className="font-mono font-bold text-xs text-md-primary" title="View Ledger Details">
+                              {blockchainId}
+                            </span>
+                            <CopyButton value={blockchainId} title="Copy Record ID" />
+                          </div>
+                        </td>
+                        <td><CaseIdCell caseId={row.caseId} onClick={(cid) => setCaseDetailsId(cid)} /></td>
+                        <td>
+                          <span className="meta-text font-medium">
+                            {row.milestone === 'M1'
+                              ? 'Award (M1)'
+                              : row.milestone === 'M2'
+                              ? 'Settlement (M2)'
+                              : row.recordType ?? 'Original'}
+                          </span>
+                        </td>
+                        <td className="font-mono text-xs text-md-on-surface-variant">
+                          {row.documentHash ? (
+                            <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                              <span title={row.documentHash}>{fmtTx(row.documentHash)}</span>
+                              <CopyButton value={row.documentHash} title="Copy Document Hash" />
+                            </div>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                        <td className="font-mono text-xs text-md-on-surface-variant">
+                          {row.transactionHash ? (
+                            <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                              <span>{fmtTx(row.transactionHash)}</span>
+                              <CopyButton value={row.transactionHash} title="Copy Transaction Hash" />
+                            </div>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                        <td>{fmtDate(row.publishedAt)}</td>
+                        <td>{ledgerBadge(row.status)}</td>
+                      </tr>
+                    </React.Fragment>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      <div style={{ marginTop: '24px', fontSize: '13px', color: 'var(--md-on-surface-variant)', opacity: 0.6, textAlign: 'center', borderTop: '1px solid rgba(121,116,126,0.08)', paddingTop: '18px' }}>
-        FCR-SCS · Blockchain · Void · Connected to Live Backend Data
-      </div>
+      <Pagination
+        currentPage={safePage}
+        totalPages={totalPages}
+        totalCount={totalCount}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+        itemLabel="records"
+      />
 
-      <ViewLedgerModal row={modal?.type === 'view' ? modal.row : null} onClose={closeModal} />
+      <div style={{ height: '32px' }} />
+
+      <ViewLedgerModal
+        row={modal?.type === 'view' ? modal.row : null}
+        onClose={closeModal}
+        onAction={(act, target) => {
+          if (act === 'void') setModal({ type: 'void', row: target });
+        }}
+      />
       <VoidModal row={modal?.type === 'void' ? modal.row : null} onClose={closeModal} onDone={() => { closeModal(); loadData(); }} />
+      <CaseDetailsModal caseId={caseDetailsId} onClose={() => setCaseDetailsId(null)} />
     </div>
   );
 };

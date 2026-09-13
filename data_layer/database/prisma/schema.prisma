@@ -114,19 +114,26 @@ enum PaymentStatus {
   CANCELLED
   SCHEDULED
   NEW_BANK_DETAILS_PENDING
+  AWARD_NOTARIZATION_PENDING
+  BANK_DETAILS_AND_M1_PENDING
 }
 
 enum BlockchainStatus {
   READY_TO_PUBLISH
   PUBLISHED
+  VOID_PENDING
   VOIDED
   REPLACEMENT
 }
 
 // id is a short human-readable record id (FCR-XXXXXXXX), assigned by the application
+// Dual-milestone notarization (FR-019): one case carries up to two records —
+// Milestone 1 (AWARD, Form H hash) and Milestone 2 (SETTLEMENT, receipt hash).
 model BlockchainRecord {
   id                  String           @id
-  caseId              String           @unique
+  caseId              String
+  milestone           String           @default("AWARD")
+  onChainKey          String?          @unique
   transactionHash     String?
   documentHash        String
   status              BlockchainStatus @default(PUBLISHED)
@@ -138,6 +145,7 @@ model BlockchainRecord {
   updatedAt           DateTime         @updatedAt
   deletedAt           DateTime?        @map("deleted_at")
 
+  @@unique([caseId, milestone])
   @@map("blockchain_record")
 }
 
@@ -156,6 +164,9 @@ model PaymentCase {
   status               PaymentStatus          @default(BANK_DETAILS_PENDING)
   requiredSignatures   Int                    @default(1)
   currentSignatures     Int                    @default(0)
+  // Multi-sig cycle (FR-020): incremented when bank details are replaced after
+  // a rejection — prior-cycle signatures stay in history but authorize nothing.
+  cycle                 Int                    @default(1)
   disputeDocumentPath  String?                @map("dispute_document_path")
   disputeDocumentName  String?                @map("dispute_document_name")
   disputeUploadedAt    DateTime?              @map("dispute_uploaded_at")
@@ -177,6 +188,8 @@ model PaymentAuthorisation {
   adminId       String
   action        String
   reason        String?
+  // Cycle this signature belongs to (FR-020): SoD checks scope to the active cycle.
+  cycle         Int         @default(1)
   createdAt     DateTime    @default(now())
   deletedAt     DateTime?   @map("deleted_at")
 
@@ -188,6 +201,10 @@ model PaymentReceipt {
   paymentCase         PaymentCase @relation(fields: [paymentCaseId], references: [id])
   paymentCaseId       String      @unique
   bankReferenceNumber String
+  // Binary SHA-256 of the canonical receipt PDF generated once at
+  // TRANSFER_SUCCEED (FR-019): matches the downloaded file byte-for-byte.
+  documentHash        String?
+  documentPath        String?
   generatedAt         DateTime    @default(now())
   deletedAt           DateTime?   @map("deleted_at")
 

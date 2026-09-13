@@ -101,62 +101,64 @@ Ensure your local environment matches the versions below to avoid compatibility 
 
 ## Setup and installation
 
-### 1. Clone the repository
+All workflows are enforced from the **project root directory** using `npm run dev` and `package.json` shortcut commands.
+
+### Root Shortcut Commands
+
+| Command | Description |
+|---|---|
+| `npm run dev` | Concurrently launches backend (`http://localhost:3030`), frontend (`http://localhost:5173`), and AI service. |
+| `npm run db:reset` | Resets the PostgreSQL database (drops tables, runs all migrations, and seeds canonical test data). |
+| `npm run db:seed` | Runs the seed script (`seed.ts`) to populate users, email templates, cases, and payment baselines. |
+| `npm run db:migrate` | Deploys pending Prisma schema migrations to the database. |
+| `npm run db:fresh` | Alias for `npm run db:reset`. |
+| `npm run build` | Builds the production bundle for the presentation layer. |
+
+---
+
+### Quick Start: 3 Common Scenarios
+
+#### Scenario 1: `.env` set + Fresh clone / Fresh start + Database has no data
+If you have just cloned the repository, set up your `.env` file, and have a fresh database without any tables/data:
 
 ```bash
-git clone https://github.com/ChamHerman/fcr-scs.git
-cd fcr-scs
-```
-
-### 2. Install presentation layer dependencies
-
-```bash
-cd presentation_layer
+# 1. Install dependencies across all workspaces (also generates Prisma client)
 npm install
-```
 
-### 3. Start the development server
+# 2. Initialize database schema migrations and seed realistic test data
+npm run db:reset
 
-```bash
+# 3. Start all services concurrently
 npm run dev
 ```
 
-The application will launch at `http://localhost:5173` by default.
+The frontend will be available at `http://localhost:5173` and backend API at `http://localhost:3030`.
 
-### 4. Build for production
-
-```bash
-npm run build
-npm run preview
-```
-
-### 5. Setup and run Business Logic Layer Server
+#### Scenario 2: `.env` set + Dependencies already installed, able to `npm run dev` + Database has no data
+If your project is already set up and can run `npm run dev`, but your database is currently empty:
 
 ```bash
-cd ../business_logic_layer
-npm install
-npm test
+# 1. Create database schema and populate canonical dummy data
+npm run db:reset
+
+# 2. Launch all services concurrently
 npm run dev
 ```
 
-The unified API server will listen on `http://localhost:3030`. To build and run compiled distribution output:
+#### Scenario 3: `.env` set + Tester with existing database data + `npm run dev` is already running
+If you are actively testing, `npm run dev` is already running in your main terminal, and you want to reset the whole system state back to a clean fresh start with canonical dummy test data:
+
+Open a **separate terminal window** in the project root and run:
 
 ```bash
-npm run build
-npm start
+npm run db:reset
 ```
 
-### 6. Concurrent Development Mode (Recommended)
-
-To run both the frontend and backend simultaneously with a single command from the project root:
-
-```bash
-# In the root fcr-scs directory
-npm install
-npm run dev
-```
-
-This uses `concurrently` to launch the frontend at `http://localhost:5173` and the backend at `http://localhost:3030` automatically.
+> **Note:** `npm run db:reset` will wipe all transactional changes, rerun migrations, and reseed the exact canonical testing state:
+> - **5 Baseline Cases (`LAC-2026-08-0001` to `LAC-2026-08-0005`)**: Preserved untouched.
+> - **10 Cases at `Offer Accepted` (`LAC-2026-08-0006` to `LAC-2026-08-0015`)**: Generated with all 4 mandatory supporting documents, approved valuations, approved compensations, and signed Form H uploaded with frozen blockchain hashes.
+> - **5 Cases at `Offer Issued` (`LAC-2026-08-0016` to `LAC-2026-08-0020`)**: Generated with all 4 mandatory supporting documents and official Form H offer letters awaiting member response (`m1` through `m5`).
+> - **Zero Pre-seeded Payment/Blockchain Data**: No hardcoded payment or blockchain records are seeded. Everything starts cleanly from Case Management — payment cases and blockchain notarization queues are dynamically generated upon member offer acceptance and GA blockchain publication.
 
 ## Design system
 

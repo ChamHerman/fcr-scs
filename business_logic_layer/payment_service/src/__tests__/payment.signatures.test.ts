@@ -5,7 +5,7 @@ import request from "supertest";
 import { app } from "../index";
 import { prisma } from "../prisma";
 import { newPaymentId } from "../services/payment.service";
-import { PaymentStatus, UserRole } from "@prisma/client";
+import { PaymentStatus, UserRole, BlockchainStatus } from "@prisma/client";
 import { getTestSessionToken, cleanupTestSessions } from "./testAuthHelper";
 
 describe("Signature model & Final Execution Confirmation", () => {
@@ -27,7 +27,7 @@ describe("Signature model & Final Execution Confirmation", () => {
   const makeCase = async (amount: number) => {
     const pc = await prisma.paymentCase.create({
       data: {
-        id: newPaymentId(),
+        id: await newPaymentId(),
         caseId: `SIG-TEST-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         beneficiaryId: "BEN-TEST",
         amount,
@@ -39,11 +39,26 @@ describe("Signature model & Final Execution Confirmation", () => {
       },
     });
     createdCaseId = pc.caseId;
+    // FR-019: initiation is hard-gated on a published Milestone 1 award —
+    // seed one so these tests exercise the signature model, not the gate.
+    await prisma.blockchainRecord.create({
+      data: {
+        id: `FCR-${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+        caseId: pc.caseId,
+        milestone: "AWARD",
+        onChainKey: `${pc.caseId}#M1`,
+        documentHash: `0x${"a".repeat(64)}`,
+        status: BlockchainStatus.PUBLISHED,
+      },
+    });
     return pc;
   };
 
   afterEach(async () => {
     if (createdCaseId) {
+      await prisma.blockchainRecord.deleteMany({
+        where: { caseId: createdCaseId },
+      });
       await prisma.paymentReceipt.deleteMany({
         where: { paymentCase: { caseId: createdCaseId } },
       });
@@ -70,7 +85,7 @@ describe("Signature model & Final Execution Confirmation", () => {
     expect(r.body.paymentCase.status).toBe(PaymentStatus.PENDING_APPROVAL);
     expect(r.body.paymentCase.requiredSignatures).toBe(3);
     expect(r.body.paymentCase.currentSignatures).toBe(1);
-    expect(r.body.paymentCase.paymentId).toMatch(/^PMT-[A-Z0-9]{8}$/);
+    expect(r.body.paymentCase.paymentId).toMatch(/^PMT-\d{4}-\d{2}-\d{4}$/);
     expect(r.body.paymentCase.paymentId).toBe(r.body.paymentCase.id);
   });
 
@@ -149,18 +164,10 @@ describe("Signature model & Final Execution Confirmation", () => {
     const bankPendingBefore = await request(app).get("/api/payments/bank/pending");
     expect(bankPendingBefore.body.cases.find((c: { caseId: string }) => c.caseId === createdCaseId)).toBeUndefined();
 
-    // Initiator (GA1) cannot confirm execution (must be an authoriser)
-    const badConfirm = await request(app)
-      .post("/api/payments/confirm-execution")
-      .set("Authorization", `Bearer ${ga1Token}`)
-      .send({ caseId: createdCaseId });
-    expect(badConfirm.status).toBe(400);
-    expect(badConfirm.body.error).toMatch(/authorising/i);
-
-    // Final authoriser (GA3) confirms execution
+    // Initiator (GA1) is permitted to confirm execution once multi-sig threshold is met
     const goodConfirm = await request(app)
       .post("/api/payments/confirm-execution")
-      .set("Authorization", `Bearer ${ga3Token}`)
+      .set("Authorization", `Bearer ${ga1Token}`)
       .send({ caseId: createdCaseId });
     expect(goodConfirm.status).toBe(200);
 

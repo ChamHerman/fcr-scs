@@ -1,9 +1,13 @@
 import { prisma } from "../prisma";
-import { CaseStatus, OfferStatus, ObjectionStatus, Prisma, PaymentStatus } from "@prisma/client";
+import * as crypto from "crypto";
+import * as fs from "fs";
+import * as path from "path";
+import { CaseStatus, OfferStatus, ObjectionStatus, Prisma, PaymentStatus, BlockchainStatus } from "@prisma/client";
 import { buildNricConditions } from "../utils/nric.utils";
 import { newPaymentId } from "../../../payment_service/src/services/payment.service";
 
 export interface OfferLetterFilters {
+  caseId?: string;
   status?: string;
   search?: string;
   ownerNric?: string;
@@ -29,6 +33,10 @@ export async function getAllOfferLetters(filters: OfferLetterFilters) {
   const page = filters.page || 1;
   const limit = filters.limit || 10;
   const andConditions: Prisma.OfferLetterWhereInput[] = [];
+
+  if (filters.caseId) {
+    andConditions.push({ caseId: filters.caseId });
+  }
 
   if (filters.status) {
     andConditions.push({ status: filters.status as OfferStatus });
@@ -291,6 +299,29 @@ export interface RespondOfferOptions {
   ownerId?: string;
   userId?: string;
   remarks?: string;
+  /** Server-computed binary SHA-256 of the signed Form H (FR-019). */
+  documentHash?: string;
+}
+
+function hashStoredFormH(signedDocument?: string | null): string | null {
+  if (!signedDocument) return null;
+  try {
+    const rawRel = signedDocument.replace(/^document_storage\//, "");
+    const candidates = [
+      path.resolve(__dirname, "../../../../data_layer", signedDocument),
+      path.resolve(__dirname, "../../../../data_layer/document_storage", rawRel),
+      path.resolve(process.cwd(), "data_layer", signedDocument),
+      path.resolve(process.cwd(), "data_layer/document_storage", rawRel),
+      path.resolve(process.cwd(), "../data_layer", signedDocument),
+      path.resolve(process.cwd(), "../data_layer/document_storage", rawRel),
+    ];
+    for (const candidate of candidates) {
+      if (fs.existsSync(candidate)) {
+        return "0x" + crypto.createHash("sha256").update(fs.readFileSync(candidate)).digest("hex");
+      }
+    }
+  } catch {}
+  return null;
 }
 
 function findMatchingOwner(owners: any[], options?: RespondOfferOptions) {
@@ -406,13 +437,21 @@ export async function acceptOffer(
 
     let updatedOffer;
     if (isAllAccepted) {
+      // FR-019: at the moment of full acceptance the signed Form H becomes the
+      // statutory award anchor. Freeze its binary SHA-256 (client-attested and
+      // server-verified, or computed from the stored file) so the GA can
+      // notarize Milestone 1 against this exact fingerprint.
+      const finalSignedDocument = signedDocument || offer.signedDocument;
+      const formHHash = options?.documentHash || hashStoredFormH(finalSignedDocument);
+
       // All owners have accepted! Update offer to ACCEPTED and case to OFFER_ACCEPTED
       updatedOffer = await tx.offerLetter.update({
         where: { offerId },
         data: {
           status: OfferStatus.ACCEPTED,
           acceptedAt: new Date(),
-          signedDocument: signedDocument || offer.signedDocument,
+          signedDocument: finalSignedDocument,
+          ...(formHHash ? { blockchainHash: formHHash } : {}),
         },
         include: {
           acquisitionCase: true,
@@ -430,14 +469,19 @@ export async function acceptOffer(
         where: { caseId: offer.caseId },
       });
       if (!existingPmt) {
+        const m1 = await tx.blockchainRecord.findFirst({
+          where: { caseId: offer.caseId, milestone: "AWARD", status: BlockchainStatus.PUBLISHED },
+        });
         await tx.paymentCase.create({
           data: {
-            id: newPaymentId(),
+            id: await newPaymentId(),
             caseId: offer.caseId,
             beneficiaryId: primaryOwner?.ownerId || `BEN-${offer.caseId}`,
             amount: Number(offer.offerAmount),
             accountHolderName: primaryOwner?.name || null,
-            status: PaymentStatus.BANK_DETAILS_PENDING,
+            phoneNumber: primaryOwner?.contact || null,
+            myKadNumber: primaryOwner?.nric || null,
+            status: m1 ? PaymentStatus.BANK_DETAILS_PENDING : PaymentStatus.BANK_DETAILS_AND_M1_PENDING,
             requiredSignatures: 0,
             currentSignatures: 0,
           },

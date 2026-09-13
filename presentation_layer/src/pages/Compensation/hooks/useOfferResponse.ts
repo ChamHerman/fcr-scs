@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { compensationApi } from '../../../services/compensationApi';
 import { useNotification } from '../../../components/ui/NotificationSystem';
+import { computeFileSha256 } from '../../../utils/crypto';
 
 export interface UseOfferResponseParams {
   offer: { id: string; caseId?: string; totalCompensation?: number } | null;
@@ -84,9 +85,13 @@ export const useOfferResponse = ({
 
       setSubmitting(true);
       try {
+        // FR-019: fingerprint the signed Form H on-device before it leaves the
+        // browser; the backend verifies its own hash against this value.
+        const clientHash = signedFile ? await computeFileSha256(signedFile) : undefined;
         await compensationApi.acceptOffer(offer.id, signedFile, force, {
           ownerNric: user?.identificationNumber,
           userId: user?.userId,
+          clientHash,
         });
 
         setShowObjectionPrompt(false);

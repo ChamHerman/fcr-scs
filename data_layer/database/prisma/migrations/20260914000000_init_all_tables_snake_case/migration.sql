@@ -1,5 +1,8 @@
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
 -- CreateEnum
-CREATE TYPE "CaseStatus" AS ENUM ('CASE_REGISTERED', 'VALUER_ASSIGNED', 'VALUATION_IN_PROGRESS', 'PENDING_VALUATION_APPROVAL', 'VALUATION_APPROVED', 'VALUATION_REJECTED', 'PENDING_COMPENSATION_APPROVAL', 'COMPENSATION_APPROVED', 'COMPENSATION_REJECTED', 'OFFER_ISSUED', 'OFFER_REJECTED', 'PAYMENT_IN_PROGRESS', 'PAYMENT_COMPLETED', 'CASE_CLOSED');
+CREATE TYPE "CaseStatus" AS ENUM ('CASE_REGISTERED', 'VALUER_ASSIGNED', 'VALUATION_IN_PROGRESS', 'PENDING_VALUATION_APPROVAL', 'VALUATION_APPROVED', 'VALUATION_REJECTED', 'PENDING_COMPENSATION_APPROVAL', 'COMPENSATION_APPROVED', 'COMPENSATION_REJECTED', 'OFFER_ISSUED', 'OFFER_REJECTED', 'OFFER_ACCEPTED', 'PAYMENT_IN_PROGRESS', 'PAYMENT_COMPLETED', 'CASE_CLOSED');
 
 -- CreateEnum
 CREATE TYPE "OfferStatus" AS ENUM ('EXPIRED', 'PENDING', 'ACCEPTED', 'REJECTED');
@@ -8,7 +11,7 @@ CREATE TYPE "OfferStatus" AS ENUM ('EXPIRED', 'PENDING', 'ACCEPTED', 'REJECTED')
 CREATE TYPE "ReportStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
 
 -- CreateEnum
-CREATE TYPE "ObjectionStatus" AS ENUM ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED');
+CREATE TYPE "ObjectionStatus" AS ENUM ('APPROVED', 'PENDING', 'REJECTED');
 
 -- CreateEnum
 CREATE TYPE "Decision" AS ENUM ('ACCEPTED', 'REJECTED', 'REVISED');
@@ -18,9 +21,6 @@ CREATE TYPE "UserRole" AS ENUM ('SYSTEM_ADMINISTRATOR', 'GOVERNMENT_ADMINISTRATO
 
 -- CreateEnum
 CREATE TYPE "AreaUnit" AS ENUM ('SQUARE_METER', 'ACRE', 'HECTARE');
-
--- CreateEnum
-CREATE TYPE "PaymentStatus" AS ENUM ('PENDING', 'APPROVED', 'SUCCESSFUL', 'FAILED', 'CANCELLED');
 
 -- CreateEnum
 CREATE TYPE "AlertChannel" AS ENUM ('IN_APP', 'EMAIL', 'DASHBOARD');
@@ -34,13 +34,45 @@ CREATE TYPE "DeadlineStatus" AS ENUM ('PENDING', 'APPROACHING', 'EXCEEDED', 'COM
 -- CreateEnum
 CREATE TYPE "LogType" AS ENUM ('COMPLIANCE', 'BACKUP');
 
+-- CreateEnum
+CREATE TYPE "PaymentStatus" AS ENUM ('BANK_DETAILS_PENDING', 'READY_TO_INITIATE', 'PENDING_APPROVAL', 'BANK_APPROVAL_PENDING', 'TRANSFER_SUCCEED', 'TRANSFER_REJECTED', 'TRANSFER_FAILED', 'DISPUTED', 'PAID', 'CANCELLED', 'SCHEDULED', 'NEW_BANK_DETAILS_PENDING', 'AWARD_NOTARIZATION_PENDING', 'BANK_DETAILS_AND_M1_PENDING');
+
+-- CreateEnum
+CREATE TYPE "BlockchainStatus" AS ENUM ('READY_TO_PUBLISH', 'PUBLISHED', 'VOID_PENDING', 'VOIDED', 'REPLACEMENT');
+
+-- CreateEnum
+CREATE TYPE "FundingSource" AS ENUM ('GOVERNMENT', 'PRIVATE', 'OTHERS');
+
+-- CreateEnum
+CREATE TYPE "LandCategory" AS ENUM ('AGRICULTURE', 'BUILDING', 'INDUSTRY');
+
+-- CreateEnum
+CREATE TYPE "TenureType" AS ENUM ('FREEHOLD', 'LEASEHOLD', 'MALAY_RESERVE');
+
+-- CreateEnum
+CREATE TYPE "OwnershipType" AS ENUM ('INDIVIDUAL_CITIZEN', 'JOINT_OWNERSHIP', 'CORPORATE_ENTITY', 'ESTATE_OF_DECEASED', 'TRUSTEE');
+
+-- CreateTable
+CREATE TABLE "role_permission" (
+    "id" TEXT NOT NULL,
+    "role" "UserRole" NOT NULL,
+    "page_path" TEXT NOT NULL,
+    "can_access" BOOLEAN NOT NULL DEFAULT true,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "role_permission_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateTable
 CREATE TABLE "blockchain_record" (
     "id" TEXT NOT NULL,
     "caseId" TEXT NOT NULL,
+    "milestone" TEXT NOT NULL DEFAULT 'AWARD',
+    "onChainKey" TEXT,
     "transactionHash" TEXT,
     "documentHash" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'Published',
+    "status" "BlockchainStatus" NOT NULL DEFAULT 'PUBLISHED',
     "voidReason" TEXT,
     "voidTransactionHash" TEXT,
     "publishedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -64,9 +96,13 @@ CREATE TABLE "payment_case" (
     "phoneNumber" TEXT,
     "encryptedBankDetails" TEXT,
     "myKadNumber" TEXT,
-    "status" TEXT NOT NULL DEFAULT 'Approved',
+    "status" "PaymentStatus" NOT NULL DEFAULT 'BANK_DETAILS_PENDING',
     "requiredSignatures" INTEGER NOT NULL DEFAULT 1,
     "currentSignatures" INTEGER NOT NULL DEFAULT 0,
+    "cycle" INTEGER NOT NULL DEFAULT 1,
+    "dispute_document_path" TEXT,
+    "dispute_document_name" TEXT,
+    "dispute_uploaded_at" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
@@ -81,6 +117,7 @@ CREATE TABLE "payment_authorisation" (
     "adminId" TEXT NOT NULL,
     "action" TEXT NOT NULL,
     "reason" TEXT,
+    "cycle" INTEGER NOT NULL DEFAULT 1,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "deleted_at" TIMESTAMP(3),
 
@@ -92,6 +129,8 @@ CREATE TABLE "payment_receipt" (
     "id" TEXT NOT NULL,
     "paymentCaseId" TEXT NOT NULL,
     "bankReferenceNumber" TEXT NOT NULL,
+    "documentHash" TEXT,
+    "documentPath" TEXT,
     "generatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "deleted_at" TIMESTAMP(3),
 
@@ -127,13 +166,28 @@ CREATE TABLE "receiver_bank_details" (
 );
 
 -- CreateTable
+CREATE TABLE "member_payout_detail" (
+    "id" TEXT NOT NULL,
+    "user_id" UUID NOT NULL,
+    "bankName" TEXT NOT NULL,
+    "accountNumber" TEXT NOT NULL,
+    "accountHolderName" TEXT NOT NULL,
+    "phoneNumber" TEXT NOT NULL,
+    "myKadNumber" TEXT NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "member_payout_detail_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "project" (
     "project_id" UUID NOT NULL,
     "project_name" VARCHAR(255) NOT NULL,
     "project_type" VARCHAR(100) NOT NULL,
     "purpose" TEXT NOT NULL,
     "budget" DECIMAL(20,2) NOT NULL,
-    "funding_source" VARCHAR(255) NOT NULL,
+    "funding_source" "FundingSource" NOT NULL DEFAULT 'GOVERNMENT',
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
@@ -164,14 +218,14 @@ CREATE TABLE "land_parcel" (
     "case_id" VARCHAR(255) NOT NULL,
     "land_title_no" VARCHAR(255) NOT NULL,
     "lot_no" VARCHAR(100) NOT NULL,
+    "tempat" VARCHAR(255),
     "mukim" VARCHAR(255) NOT NULL,
     "district" VARCHAR(255) NOT NULL,
     "state" VARCHAR(100) NOT NULL,
     "area" DECIMAL(12,2) NOT NULL,
     "area_unit" "AreaUnit" NOT NULL,
-    "category" VARCHAR(100) NOT NULL,
-    "longitude" DECIMAL(10,7) NOT NULL,
-    "latitude" DECIMAL(10,7) NOT NULL,
+    "category" "LandCategory" NOT NULL DEFAULT 'AGRICULTURE',
+    "tenure_type" "TenureType" NOT NULL DEFAULT 'FREEHOLD',
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
@@ -187,6 +241,7 @@ CREATE TABLE "land_owner" (
     "nric" VARCHAR(100) NOT NULL,
     "address" TEXT NOT NULL,
     "contact" VARCHAR(100) NOT NULL,
+    "email" VARCHAR(255),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
@@ -200,7 +255,8 @@ CREATE TABLE "land_ownership" (
     "ownership_id" UUID NOT NULL,
     "land_id" UUID NOT NULL,
     "owner_id" UUID NOT NULL,
-    "ownership_type" VARCHAR(100) NOT NULL,
+    "ownership_type" "OwnershipType" NOT NULL DEFAULT 'INDIVIDUAL_CITIZEN',
+    "share" VARCHAR(50),
     "ownership_start" TIMESTAMP(3),
     "ownership_end" TIMESTAMP(3),
     "is_current" BOOLEAN NOT NULL DEFAULT true,
@@ -237,6 +293,14 @@ CREATE TABLE "valuation_report" (
     "valuer_id" UUID NOT NULL,
     "valuation_date" TIMESTAMP(3),
     "valuation_method" VARCHAR(100),
+    "location_type" VARCHAR(100),
+    "building_age" INTEGER,
+    "land_area" DECIMAL(12,2),
+    "acquisition_area" DECIMAL(12,2),
+    "built_up_area" DECIMAL(12,2),
+    "market_rate_per_sqm" DECIMAL(20,2),
+    "compensation_rate_per_sqm" DECIMAL(20,2),
+    "ai_valuation_price" DECIMAL(20,2),
     "market_value" DECIMAL(20,2),
     "recommended_compensation" DECIMAL(20,2),
     "remarks" TEXT,
@@ -274,6 +338,13 @@ CREATE TABLE "compensation_report" (
     "reviewed_by_id" UUID,
     "approved_by_id" UUID,
     "approved_at" TIMESTAMP(3),
+    "land_value" DECIMAL(20,2),
+    "building_value" DECIMAL(20,2),
+    "crop_value" DECIMAL(20,2),
+    "business_disruption" DECIMAL(20,2),
+    "disturbance_compensation" DECIMAL(20,2),
+    "relocation_allowance" DECIMAL(20,2),
+    "other_eligible" DECIMAL(20,2),
     "total_compensation" DECIMAL(20,2),
     "remarks" TEXT,
     "status" "ReportStatus" NOT NULL,
@@ -309,6 +380,21 @@ CREATE TABLE "offer_letter" (
     "created_by_id" UUID NOT NULL,
 
     CONSTRAINT "offer_letter_pkey" PRIMARY KEY ("offer_id")
+);
+
+-- CreateTable
+CREATE TABLE "offer_member_response" (
+    "response_id" UUID NOT NULL,
+    "offer_id" UUID NOT NULL,
+    "owner_id" UUID NOT NULL,
+    "status" "OfferStatus" NOT NULL,
+    "remarks" TEXT,
+    "signed_document" TEXT,
+    "responded_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "offer_member_response_pkey" PRIMARY KEY ("response_id")
 );
 
 -- CreateTable
@@ -394,6 +480,18 @@ CREATE TABLE "password_reset" (
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "password_reset_pkey" PRIMARY KEY ("reset_id")
+);
+
+-- CreateTable
+CREATE TABLE "account_activation" (
+    "activation_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "token" VARCHAR(255) NOT NULL,
+    "expires_at" TIMESTAMP(3) NOT NULL,
+    "is_used" BOOLEAN NOT NULL DEFAULT false,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "account_activation_pkey" PRIMARY KEY ("activation_id")
 );
 
 -- CreateTable
@@ -483,7 +581,13 @@ CREATE TABLE "compliance_backup_log" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "blockchain_record_caseId_key" ON "blockchain_record"("caseId");
+CREATE UNIQUE INDEX "role_permission_role_page_path_key" ON "role_permission"("role", "page_path");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "blockchain_record_onChainKey_key" ON "blockchain_record"("onChainKey");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "blockchain_record_caseId_milestone_key" ON "blockchain_record"("caseId", "milestone");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "payment_case_caseId_key" ON "payment_case"("caseId");
@@ -493,6 +597,9 @@ CREATE UNIQUE INDEX "payment_receipt_paymentCaseId_key" ON "payment_receipt"("pa
 
 -- CreateIndex
 CREATE UNIQUE INDEX "receiver_bank_details_paymentCaseId_key" ON "receiver_bank_details"("paymentCaseId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "member_payout_detail_user_id_key" ON "member_payout_detail"("user_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "project_project_name_key" ON "project"("project_name");
@@ -537,9 +644,6 @@ CREATE INDEX "valuation_report_valuer_id_idx" ON "valuation_report"("valuer_id")
 CREATE INDEX "valuation_report_report_status_idx" ON "valuation_report"("report_status");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "case_assignment_valuation_report_id_key" ON "case_assignment"("valuation_report_id");
-
--- CreateIndex
 CREATE INDEX "compensation_report_case_id_idx" ON "compensation_report"("case_id");
 
 -- CreateIndex
@@ -558,6 +662,9 @@ CREATE INDEX "offer_letter_ownership_id_idx" ON "offer_letter"("ownership_id");
 CREATE INDEX "offer_letter_status_idx" ON "offer_letter"("status");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "offer_member_response_offer_id_owner_id_key" ON "offer_member_response"("offer_id", "owner_id");
+
+-- CreateIndex
 CREATE INDEX "objection_case_id_idx" ON "objection"("case_id");
 
 -- CreateIndex
@@ -567,10 +674,10 @@ CREATE INDEX "objection_status_idx" ON "objection"("status");
 CREATE UNIQUE INDEX "user_email_key" ON "user"("email");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "user_contact_number_key" ON "user"("contact_number");
+CREATE UNIQUE INDEX "user_contact_number_role_key" ON "user"("contact_number", "role");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "user_identification_number_key" ON "user"("identification_number");
+CREATE UNIQUE INDEX "user_identification_number_role_key" ON "user"("identification_number", "role");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "user_session_session_token_key" ON "user_session"("session_token");
@@ -583,6 +690,12 @@ CREATE UNIQUE INDEX "password_reset_reset_token_key" ON "password_reset"("reset_
 
 -- CreateIndex
 CREATE INDEX "password_reset_user_id_idx" ON "password_reset"("user_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "account_activation_token_key" ON "account_activation"("token");
+
+-- CreateIndex
+CREATE INDEX "account_activation_user_id_idx" ON "account_activation"("user_id");
 
 -- CreateIndex
 CREATE INDEX "audit_log_user_id_idx" ON "audit_log"("user_id");
@@ -631,6 +744,9 @@ ALTER TABLE "failed_transaction" ADD CONSTRAINT "failed_transaction_paymentCaseI
 
 -- AddForeignKey
 ALTER TABLE "receiver_bank_details" ADD CONSTRAINT "receiver_bank_details_paymentCaseId_fkey" FOREIGN KEY ("paymentCaseId") REFERENCES "payment_case"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "member_payout_detail" ADD CONSTRAINT "member_payout_detail_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "user"("user_id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "project" ADD CONSTRAINT "project_created_by_id_fkey" FOREIGN KEY ("created_by_id") REFERENCES "user"("user_id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -714,6 +830,12 @@ ALTER TABLE "offer_letter" ADD CONSTRAINT "offer_letter_ownership_id_fkey" FOREI
 ALTER TABLE "offer_letter" ADD CONSTRAINT "offer_letter_created_by_id_fkey" FOREIGN KEY ("created_by_id") REFERENCES "user"("user_id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "offer_member_response" ADD CONSTRAINT "offer_member_response_offer_id_fkey" FOREIGN KEY ("offer_id") REFERENCES "offer_letter"("offer_id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "offer_member_response" ADD CONSTRAINT "offer_member_response_owner_id_fkey" FOREIGN KEY ("owner_id") REFERENCES "land_owner"("owner_id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "objection" ADD CONSTRAINT "objection_offer_id_fkey" FOREIGN KEY ("offer_id") REFERENCES "offer_letter"("offer_id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -738,6 +860,9 @@ ALTER TABLE "user_session" ADD CONSTRAINT "user_session_user_id_fkey" FOREIGN KE
 ALTER TABLE "password_reset" ADD CONSTRAINT "password_reset_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "user"("user_id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "account_activation" ADD CONSTRAINT "account_activation_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "user"("user_id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "audit_log" ADD CONSTRAINT "audit_log_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "user"("user_id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -745,3 +870,4 @@ ALTER TABLE "system_alert" ADD CONSTRAINT "system_alert_recipient_id_fkey" FOREI
 
 -- AddForeignKey
 ALTER TABLE "email_template" ADD CONSTRAINT "email_template_created_by_id_fkey" FOREIGN KEY ("created_by_id") REFERENCES "user"("user_id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
