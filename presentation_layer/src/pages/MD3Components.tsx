@@ -8,15 +8,15 @@ export interface MD3ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonEle
   icon?: React.ReactNode;
 }
 
-export const MD3Button: React.FC<MD3ButtonProps> = ({ 
-  variant = 'filled', 
-  children, 
-  icon, 
+export const MD3Button: React.FC<MD3ButtonProps> = ({
+  variant = 'filled',
+  children,
+  icon,
   className,
-  ...props 
+  ...props
 }) => {
   const baseClasses = "relative overflow-hidden inline-flex items-center justify-center font-medium transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] active:scale-95 group focus-visible:ring-2 focus-visible:ring-md-primary focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100";
-  
+
   let variantClasses = "";
   switch (variant) {
     case 'filled':
@@ -56,7 +56,7 @@ export const MD3Input: React.FC<MD3InputProps> = ({ label, error, className, id,
   const [showPassword, setShowPassword] = useState(false);
   const isPasswordType = type === 'password';
   const currentType = isPasswordType ? (showPassword ? 'text' : 'password') : type;
-  
+
   return (
     <div className={classNames("relative flex flex-col", className)}>
       <div className="relative group">
@@ -64,8 +64,8 @@ export const MD3Input: React.FC<MD3InputProps> = ({ label, error, className, id,
           id={inputId}
           type={currentType}
           className={classNames(
-            "peer w-full h-14 px-4 pt-4 pb-1 text-md-on-surface bg-md-surface-container-low rounded-t-xl rounded-b-none border-b-2 outline-none transition-colors duration-200 focus:border-md-primary placeholder-transparent",
-            error ? "border-md-error focus:border-md-error" : "border-md-outline",
+            "peer w-full h-14 px-4 pt-4 pb-1 text-md-on-surface bg-md-surface-container-low rounded-xl outline-none transition-shadow duration-200 placeholder-transparent",
+            error ? "ring-1 ring-md-error focus:ring-md-error focus:ring-2" : "focus:ring-2 focus:ring-md-primary",
             isPasswordType ? "pr-12" : ""
           )}
           placeholder={label}
@@ -96,15 +96,15 @@ export const MD3Input: React.FC<MD3InputProps> = ({ label, error, className, id,
 };
 
 // --- MD3 Card ---
-export const MD3Card: React.FC<React.HTMLAttributes<HTMLDivElement> & { elevation?: number, interactive?: boolean }> = ({ 
-  children, 
-  className, 
+export const MD3Card: React.FC<React.HTMLAttributes<HTMLDivElement> & { elevation?: number, interactive?: boolean }> = ({
+  children,
+  className,
   elevation = 1,
   interactive = false,
-  ...props 
+  ...props
 }) => {
   const baseClasses = "bg-md-surface-container rounded-3xl p-6 transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] text-md-on-surface";
-  
+
   const shadowClasses = {
     0: "shadow-none",
     1: "shadow-sm",

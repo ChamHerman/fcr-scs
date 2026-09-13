@@ -21,6 +21,7 @@ import { Unauthorized } from './pages/Login/Unauthorized';
 import { DashboardOverview } from './pages/Dashboard/DashboardOverview';
 import { UserProfile } from './pages/Dashboard/UserProfile';
 import { UserAdministration } from './pages/Dashboard/UserAdministration';
+import { UserDetails } from './pages/Dashboard/UserDetails';
 import { RoleManagement } from './pages/Dashboard/RoleManagement';
 
 import { AuditLogs } from './pages/Audit/AuditLogs';
@@ -132,6 +133,7 @@ function App() {
               {/* Dashboard & User Management */}
               <Route path="profile" element={<UserProfile />} />
               <Route path="users" element={<UserAdministration />} />
+              <Route path="users/details/:id" element={<UserDetails />} />
               <Route path="role-management" element={<RoleManagement />} />
 
               {/* System Audit & Monitoring */}

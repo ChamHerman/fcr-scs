@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { login, forgotPassword, resetPassword, register, activateAccount, adminCreateUser, getAllUsers, getUserById } from '../controllers/user.controller';
+import { login, forgotPassword, resetPassword, register, activateAccount, adminCreateUser, getAllUsers, getUserById, toggleUserStatus } from '../controllers/user.controller';
 import { getRolePermissions, updateRolePermissions } from '../controllers/permission.controller';
 
 const router = Router();
@@ -17,5 +17,6 @@ router.get('/permissions/:role', getRolePermissions);
 router.post('/permissions/:role', updateRolePermissions);
 
 router.get('/:id', getUserById);
+router.post('/:id/toggle-status', toggleUserStatus);
 
 export default router;

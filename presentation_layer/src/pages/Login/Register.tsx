@@ -93,10 +93,10 @@ export const Register: React.FC = () => {
             </div>
           )}
 
-          <MD3Input type="text" label="Full Name" name="name" required value={formData.name} onChange={handleChange} disabled={isLoading} />
-          <MD3Input type="email" label="Email Address" name="email" required value={formData.email} onChange={handleChange} disabled={isLoading} />
+          <MD3Input type="text" label="Full Name *" name="name" required value={formData.name} onChange={handleChange} disabled={isLoading} />
+          <MD3Input type="email" label="Email Address *" name="email" required value={formData.email} onChange={handleChange} disabled={isLoading} />
           <div className="grid grid-cols-2 gap-4">
-            <MD3Input type="tel" label="Contact Number" name="contactNumber" required value={formData.contactNumber} onChange={handleChange} disabled={isLoading} />
+            <MD3Input type="tel" label="Contact Number *" name="contactNumber" required value={formData.contactNumber} onChange={handleChange} disabled={isLoading} />
             <IdentificationInput 
               label="Identification Number *" 
               name="identificationNumber" 
@@ -111,7 +111,7 @@ export const Register: React.FC = () => {
             <MD3Input 
               type="password" 
               name="password"
-              label="Password" 
+              label="Password *" 
               required 
               value={formData.password}
               onChange={handleChange}

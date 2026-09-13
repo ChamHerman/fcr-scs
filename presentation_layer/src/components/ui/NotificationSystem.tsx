@@ -87,7 +87,7 @@ const Toast: React.FC<{
       <div className="flex-shrink-0 mt-0.5">
         {config.icon}
       </div>
-      <div className="flex-grow">
+      <div className="flex-grow min-w-0 break-words">
         <h4 className="font-bold text-sm mb-1">{notification.title}</h4>
         {notification.message && <p className="text-xs opacity-90">{notification.message}</p>}
       </div>

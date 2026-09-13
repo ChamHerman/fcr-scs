@@ -82,6 +82,8 @@ export async function getUserById(req: Request, res: Response): Promise<void> {
         identificationNumber: true,
         role: true,
         isActive: true,
+        createdAt: true,
+        updatedAt: true,
       },
     });
 
@@ -346,6 +348,8 @@ export async function getAllUsers(req: Request, res: Response): Promise<void> {
         email: true,
         role: true,
         isActive: true,
+        identificationNumber: true,
+        contactNumber: true,
       },
     });
 
@@ -356,6 +360,8 @@ export async function getAllUsers(req: Request, res: Response): Promise<void> {
       role: u.role,
       status: u.isActive ? 'Active' : 'Inactive',
       sensitive: u.email,
+      identificationNumber: u.identificationNumber,
+      contactNumber: u.contactNumber,
     }));
 
     res.json({ success: true, data: formattedUsers });
@@ -399,6 +405,40 @@ export async function activateAccount(req: Request, res: Response): Promise<void
   } catch (error) {
     console.error('[Account Activation Error]', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function toggleUserStatus(req: Request, res: Response): Promise<void> {
+  try {
+    const id = req.params.id as string;
+    const { isActive } = req.body;
+
+    if (typeof isActive !== 'boolean') {
+      res.status(400).json({ success: false, error: 'isActive must be a boolean' });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({ where: { userId: id } });
+    if (!user) {
+      res.status(404).json({ success: false, error: 'User not found' });
+      return;
+    }
+
+    if (user.role === 'SYSTEM_ADMINISTRATOR' && !isActive) {
+      res.status(403).json({ success: false, error: 'Cannot deactivate a System Administrator account.' });
+      return;
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { userId: id },
+      data: { isActive },
+      select: { userId: true, isActive: true }
+    });
+
+    res.json({ success: true, data: updatedUser, message: `User successfully ${isActive ? 'activated' : 'deactivated'}` });
+  } catch (error) {
+    console.error('[toggleUserStatus Error]', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 }
 

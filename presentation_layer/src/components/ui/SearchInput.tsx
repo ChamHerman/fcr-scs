@@ -75,7 +75,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
           "w-full py-[10px] pr-[16px] pl-[42px] rounded-full text-[14px]",
           "bg-md-surface-container-low text-md-on-surface placeholder:text-md-on-surface-variant/70",
           "border-[1.5px] border-md-outline/25 outline-none",
-          "focus:border-md-primary focus:ring-[3px] focus:ring-md-primary/15",
+          "focus:border-md-primary focus:ring-1 focus:ring-md-primary",
           "transition-colors duration-200",
           className
         )}

@@ -12,6 +12,23 @@ const ROLES = [
   'DISPLACED_COMMUNITY_MEMBER'
 ];
 
+const getDefaultPermissions = (role: string): string[] => {
+  switch (role) {
+    case 'SYSTEM_ADMINISTRATOR':
+      return ADMIN_PAGES.map(p => p.path);
+    case 'GOVERNMENT_ADMINISTRATOR':
+      return ADMIN_PAGES.filter(p => !p.path.startsWith('/member')).map(p => p.path);
+    case 'GOVERNMENT_OFFICER':
+      return ADMIN_PAGES.filter(p => ['Main', 'Land Acquisition', 'Compensation', 'Reporting'].includes(p.category) && !p.path.startsWith('/member')).map(p => p.path);
+    case 'LAND_VALUER':
+      return ADMIN_PAGES.filter(p => ['Main', 'Land Acquisition', 'AI Valuation'].includes(p.category)).map(p => p.path);
+    case 'DISPLACED_COMMUNITY_MEMBER':
+      return ADMIN_PAGES.filter(p => p.path.startsWith('/member')).map(p => p.path);
+    default:
+      return [];
+  }
+};
+
 export const RoleManagement: React.FC = () => {
   const [selectedRole, setSelectedRole] = useState<string>(ROLES[1]); // Default to first non-sysadmin role
   const [permissions, setPermissions] = useState<Record<string, boolean>>({});
@@ -34,9 +51,17 @@ export const RoleManagement: React.FC = () => {
           permMap[page.path] = false;
         });
 
-        if (json.success && json.data) {
+        if (json.success && json.data && json.data.length > 0) {
           json.data.forEach((p: any) => {
             permMap[p.pagePath] = p.canAccess;
+          });
+        } else {
+          // Initialize with default permissions if no saved permissions exist
+          const defaultPaths = getDefaultPermissions(role);
+          defaultPaths.forEach(path => {
+            if (permMap[path] !== undefined) {
+              permMap[path] = true;
+            }
           });
         }
         setPermissions(permMap);

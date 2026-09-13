@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
 import { MD3Card, MD3Button, MD3Input } from '../MD3Components';
 import { Search, Download, Filter, FileText } from 'lucide-react';
+import { SearchInput } from '../../components/ui/SearchInput';
+import { Pagination } from '../../components/ui/Pagination';
 
 export const AuditLogs: React.FC = () => {
   const [logs, setLogs] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
@@ -24,7 +28,13 @@ export const AuditLogs: React.FC = () => {
 
       <MD3Card elevation={1} className="mb-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-          <MD3Input label="Search user or reference..." />
+          <div className="search-wrap min-w-[240px] w-full">
+            <SearchInput 
+              placeholder="Search user or reference..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
           <MD3Input label="Date Range" type="date" />
           <MD3Input label="Activity Type" />
           <div className="flex gap-4">
@@ -70,6 +80,16 @@ export const AuditLogs: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+        <div style={{ padding: '0 16px 16px' }}>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={Math.max(1, Math.ceil(logs.length / 10))}
+            totalCount={logs.length}
+            pageSize={10}
+            onPageChange={setCurrentPage}
+            itemLabel="logs"
+          />
         </div>
       </MD3Card>
     </div>
