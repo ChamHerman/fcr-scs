@@ -22,6 +22,33 @@ import ml_core as core
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB upload cap
 
+
+def _load_local_env():
+    """Loads KEY=VALUE pairs into the process environment without overriding
+    variables that are already set. Reads, in order of precedence:
+      1. this folder's .env (sidecar-specific overrides, optional)
+      2. the repository root .env (the shared monorepo configuration that
+         server.ts and Vite also use)
+    Dependency-free so the sidecar needs no extra packages."""
+    sidecar_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.abspath(os.path.join(sidecar_dir, '..', '..'))
+    for env_path in [os.path.join(sidecar_dir, '.env'), os.path.join(repo_root, '.env')]:
+        if not os.path.exists(env_path):
+            continue
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+                key, _, value = line.partition('=')
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = value
+
+
+_load_local_env()
+
 # Training and activation mutate shared files; serialize them.
 model_lock = threading.Lock()
 
@@ -82,7 +109,11 @@ def predict():
     market_value = float(predictions[0])
     spread = float(stds[0]) * 1.96
 
-    breakdown = core.derive_compensation(market_value, cleaned.get('built_up_area_m2'))
+    breakdown = core.derive_compensation(
+        market_value,
+        cleaned.get('land_category'),
+        cleaned.get('acquisition_area_m2'),
+    )
     breakdown['estimateRangeLowMyr'] = max(0, int(round((market_value - spread) / 100) * 100))
     breakdown['estimateRangeHighMyr'] = int(round((market_value + spread) / 100) * 100)
     breakdown['modelVersion'] = _state['version']

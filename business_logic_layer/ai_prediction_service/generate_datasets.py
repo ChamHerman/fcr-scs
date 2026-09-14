@@ -7,16 +7,17 @@ import pandas as pd
 # module (presentation_layer/src/constants): state = Malaysian state name,
 # land_category = title category (Agriculture/Building/Industry), tenure =
 # Freehold/Leasehold/Malay Reserve, location = Urban/Suburban/Rural, areas in
-# square metres. Everything else that drove price in older versions (use-class,
-# building condition, material, distances, crops) is folded in internally so
-# the market value stays explainable by these 7 attributes.
+# square metres. The second area attribute is the ACQUISITION area (the portion
+# the government acquires), not a built-up area. Everything else that drives
+# price (structures, crops, distance premiums) is derived internally from these
+# 7 attributes so the market value stays fully explainable.
 FEATURE_COLUMNS = [
     'state',
     'land_category',
     'location_type',
     'tenure_type',
     'land_area_m2',
-    'built_up_area_m2',
+    'acquisition_area_m2',
     'building_age_years',
 ]
 
@@ -68,28 +69,60 @@ STATE_PROBS = [
 ]
 assert abs(sum(STATE_PROBS) - 1.0) < 1e-9
 
+# Land value per m2 (title-category basis) and improvement cost per m2.
+CAT_CONFIG = {
+    'Agriculture': {'land_rate': 450, 'structure_cost': 1100},
+    'Building': {'land_rate': 2000, 'structure_cost': 1800},
+    'Industry': {'land_rate': 1500, 'structure_cost': 1700},
+}
+
+# Land area ranges per category (m2).
+LAND_AREA_RANGES = {
+    'Agriculture': (2000, 20000),
+    'Building': (150, 3000),
+    'Industry': (1000, 25000),
+}
+
+# Proportion of the parcel being acquired, and the share of the acquired area
+# covered by structures, per category.
+ACQUISITION_RATIO = {
+    'Agriculture': (0.20, 0.90),
+    'Building': (0.25, 0.95),
+    'Industry': (0.25, 0.95),
+}
+STRUCTURE_RATIO = {
+    'Agriculture': (0.05, 0.15),
+    'Building': (0.50, 0.90),
+    'Industry': (0.40, 0.70),
+}
+
+# A structure is assumed on the acquired land for Building/Industry, and for
+# Agriculture only when a sizeable farm building/homestead is acquired. This
+# rule is deterministic so the same relocation allowance can be recomputed at
+# prediction time (see ml_core.derive_compensation).
+AGRICULTURE_STRUCTURE_THRESHOLD_M2 = 400
+
+
+def location_multipliers():
+    return {'Urban': 1.20, 'Suburban': 1.00, 'Rural': 0.78}
+
+
 def generate_unified_valuation_dataset(n_samples=6000, random_seed=42, case_prefix="TR"):
     """
     Generates a tabular valuation dataset for FCR-SCS aligned with the manual
-    Valuation module vocabulary (title land categories, m2 areas, no building
-    condition). Used to train the baseline model and to produce templates.
+    Valuation module vocabulary. The compensated value is based on the
+    ACQUISITION area (the part acquired), plus improvements and crops standing
+    on it, with a per-m2 uplift when only a small share of the parcel is taken.
     """
     np.random.seed(random_seed)
 
     land_categories = ['Agriculture', 'Building', 'Industry']
     cat_probs = [0.40, 0.50, 0.10]
 
-    # Land value per m2 (title-category basis) and structure cost per m2.
-    cat_config = {
-        'Agriculture': {'land_rate': 450, 'structure_cost': 1100},
-        'Building': {'land_rate': 2000, 'structure_cost': 1800},
-        'Industry': {'land_rate': 1500, 'structure_cost': 1700},
-    }
-
     tenures = ['Freehold', 'Leasehold', 'Malay Reserve']
     tenure_mult = {'Freehold': 1.05, 'Leasehold': 0.98, 'Malay Reserve': 0.92}
 
-    loc_mult = {'Urban': 1.20, 'Suburban': 1.00, 'Rural': 0.78}
+    loc_mult = location_multipliers()
 
     data = []
 
@@ -100,38 +133,51 @@ def generate_unified_valuation_dataset(n_samples=6000, random_seed=42, case_pref
         loc_type = np.random.choice(list(loc_mult.keys()), p=[0.40, 0.40, 0.20])
         cat = np.random.choice(land_categories, p=cat_probs)
 
+        low, high = LAND_AREA_RANGES[cat]
+        land_area = np.random.randint(low, high)
+
+        ratio_low, ratio_high = ACQUISITION_RATIO[cat]
+        acquisition_ratio = np.random.uniform(ratio_low, ratio_high)
+        acquisition_area = max(1, min(land_area - 1, int(land_area * acquisition_ratio)))
+
         if cat == 'Agriculture':
-            land_area = np.random.randint(2000, 20000)
-            built_up = np.random.choice([0, np.random.randint(30, 250)], p=[0.60, 0.40])
             age = np.random.randint(0, 40)
         elif cat == 'Building':
-            land_area = np.random.randint(150, 3000)
-            built_up = int(land_area * np.random.uniform(0.50, 1.30))
             age = np.random.randint(1, 40)
         else:  # Industry
-            land_area = np.random.randint(1000, 25000)
-            built_up = int(land_area * np.random.uniform(0.35, 0.80))
             age = np.random.randint(1, 35)
 
         tenure = np.random.choice(tenures, p=[0.55, 0.35, 0.10])
 
-        # VALUATION CALCULATION (MYR)
-        land_rate = (cat_config[cat]['land_rate']
-                     * STATES_MULTIPLIER[state] * loc_mult[loc_type] * tenure_mult[tenure])
-        land_value = land_area * land_rate
+        structure_present = (
+            cat in ('Building', 'Industry')
+            or acquisition_area >= AGRICULTURE_STRUCTURE_THRESHOLD_M2
+        )
+        if structure_present:
+            s_low, s_high = STRUCTURE_RATIO[cat]
+            structure_area = max(1, int(acquisition_area * np.random.uniform(s_low, s_high)))
+        else:
+            structure_area = 0
 
-        structure_base = built_up * cat_config[cat]['structure_cost']
-        # Depreciation (approx 1.5% per year up to max 60%)
+        # VALUATION CALCULATION (MYR)
+        # Taking only a slice of a parcel costs a little more per m2 than
+        # acquiring the whole parcel, so the acquired share adjusts the rate.
+        share_uplift = 1.15 - 0.30 * acquisition_ratio
+        land_rate = (CAT_CONFIG[cat]['land_rate']
+                     * STATES_MULTIPLIER[state] * loc_mult[loc_type] * tenure_mult[tenure]
+                     * share_uplift)
+        land_value = acquisition_area * land_rate
+
+        structure_base = structure_area * CAT_CONFIG[cat]['structure_cost']
         depreciation_rate = min(0.60, age * 0.015)
         structure_depreciated = structure_base * (1.0 - depreciation_rate)
 
-        # Crops contribute to farmland value; derived internally from size.
+        # Standing crops on the acquired farmland (derived from acquired area).
         if cat == 'Agriculture':
-            crop_value = min(250, int(land_area / 800)) * 420
+            crop_value = min(250, int(acquisition_area / 800)) * 420
         else:
             crop_value = 0
 
-        # Small residual variance replaces the old continuous distance penalty.
         location_variance = 1.0 + np.random.normal(0, 0.02)
         total_market_val = (land_value + structure_depreciated + crop_value) * location_variance
 
@@ -141,7 +187,7 @@ def generate_unified_valuation_dataset(n_samples=6000, random_seed=42, case_pref
 
         # Land Acquisition Act 1960 statutory compensations
         statutory_disturbance = int(round((market_val_final * 0.15) / 100) * 100)
-        relocation_allowance = 8000 if built_up > 0 else 2000
+        relocation_allowance = 8000 if structure_present else 2000
         recommended_compensation = market_val_final + statutory_disturbance + relocation_allowance
 
         data.append({
@@ -151,7 +197,7 @@ def generate_unified_valuation_dataset(n_samples=6000, random_seed=42, case_pref
             'location_type': loc_type,
             'tenure_type': tenure,
             'land_area_m2': int(land_area),
-            'built_up_area_m2': int(built_up),
+            'acquisition_area_m2': int(acquisition_area),
             'building_age_years': int(age),
             'market_value_myr': market_val_final,
             'statutory_disturbance_myr': statutory_disturbance,
@@ -180,6 +226,6 @@ if __name__ == '__main__':
     df_test.to_csv(test_path, index=False)
     print(f"Saved datasets to: {datasets_dir}")
 
-    print("\nDataset Generation Complete (7 Valuation Attributes, module vocabulary)!")
+    print("\nDataset Generation Complete (7 attributes, acquisition-area based compensation)!")
     print(f"Set 1 (Training Dataset): {len(df_train)} rows, {len(df_train.columns)} columns.")
     print(f"Set 2 (Testing Dataset): {len(df_test)} rows, {len(df_test.columns)} columns.")
