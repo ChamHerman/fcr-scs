@@ -6,6 +6,7 @@ import { IdentificationInput } from '../../components/ui/IdentificationInput';
 import { Modal } from '../../components/ui/Modal';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Pagination } from '../../components/ui/Pagination';
+import { PageHeader } from '../../components/ui/PageHeader';
 import { Search, Shield, MoreVertical, CheckCircle, Users, UserCheck, UserX, UserCog, ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react';
 import '../LandAcquisition/case_management.css';
 
@@ -152,15 +153,10 @@ export const UserAdministration: React.FC = () => {
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
-        <div>
-          <h1 className="text-3xl font-medium text-md-on-surface mb-2">User Administration</h1>
-          <p className="text-md-on-surface-variant">Search, filter, and manage system user accounts.</p>
-        </div>
-        <MD3Button icon={<Shield size={18} />} onClick={() => setIsModalOpen(true)}>
-          Add New User
-        </MD3Button>
-      </div>
+      <PageHeader
+        title="User Administration"
+        subtitle="Search, filter, and manage system user accounts."
+      />
 
       {/* Statistics */}
       <div className="stats-grid">
@@ -221,6 +217,24 @@ export const UserAdministration: React.FC = () => {
             }}
           >
             Clear
+          </MD3Button>
+        </div>
+      </div>
+
+      {/* Action Bar */}
+      <div className="action-bar">
+        <div className="left">
+          <span className="count">{filteredAndSortedUsers.length}</span> users found
+          <span style={{ opacity: 0.4, margin: "0 4px" }}>·</span>
+          <span style={{ fontSize: "13px" }}>
+            Showing {filteredAndSortedUsers.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}–
+            {Math.min(currentPage * itemsPerPage, filteredAndSortedUsers.length)} of {filteredAndSortedUsers.length}
+          </span>
+        </div>
+
+        <div className="right">
+          <MD3Button icon={<Shield size={18} />} onClick={() => setIsModalOpen(true)}>
+            Add New User
           </MD3Button>
         </div>
       </div>

@@ -4,6 +4,27 @@ import crypto from 'crypto';
 import { prisma } from '../prisma';
 import { sendTemplatedEmail } from '../utils/email.service';
 
+interface OtpSession {
+  userId: string;
+  email: string;
+  user: any;
+  otp: string;
+  expiresAt: Date;
+  lastSentAt: Date;
+}
+
+const otpStore = new Map<string, OtpSession>();
+
+// Periodically clean expired OTP sessions
+setInterval(() => {
+  const now = new Date();
+  for (const [key, entry] of otpStore.entries()) {
+    if (entry.expiresAt < now) {
+      otpStore.delete(key);
+    }
+  }
+}, 5 * 60 * 1000);
+
 export async function login(req: Request, res: Response): Promise<void> {
   try {
     const { email, password } = req.body;
@@ -27,6 +48,50 @@ export async function login(req: Request, res: Response): Promise<void> {
 
     if (!user.isActive) {
       res.status(401).json({ error: 'Account not activated. Please check your email to activate.' });
+      return;
+    }
+
+    // System Administrators require 2FA OTP verification
+    if (user.role === 'SYSTEM_ADMINISTRATOR') {
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const tempToken = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+      otpStore.set(tempToken, {
+        userId: user.userId,
+        email: user.email,
+        user,
+        otp,
+        expiresAt,
+        lastSentAt: new Date(),
+      });
+
+      // Dispatch OTP email
+      try {
+        await sendTemplatedEmail(user.email, 'SYSTEM_ADMIN_OTP', {
+          name: user.name,
+          otp,
+          expiresMinutes: '5',
+        });
+      } catch (mailErr) {
+        console.error('[MFA Error] Failed to send OTP email:', mailErr);
+      }
+
+      console.log(`\n========================================`);
+      console.log(`[MFA] System Admin OTP for ${user.email}: ${otp}`);
+      console.log(`========================================\n`);
+
+      const atIdx = user.email.indexOf('@');
+      const maskedEmail = atIdx > 2
+        ? user.email.substring(0, 2) + '*'.repeat(atIdx - 2) + user.email.substring(atIdx)
+        : user.email;
+
+      res.json({
+        requiresOtp: true,
+        tempToken,
+        email: maskedEmail,
+        message: 'System Administrator login requires 6-digit OTP verification.',
+      });
       return;
     }
 
@@ -65,6 +130,134 @@ export async function login(req: Request, res: Response): Promise<void> {
     });
   } catch (error) {
     console.error('[Login Error]', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function verifyOtp(req: Request, res: Response): Promise<void> {
+  try {
+    const { tempToken, otp } = req.body;
+
+    if (!tempToken || !otp) {
+      res.status(400).json({ error: 'Temporary token and OTP are required' });
+      return;
+    }
+
+    const sessionData = otpStore.get(tempToken);
+    if (!sessionData) {
+      res.status(400).json({ error: 'Invalid or expired OTP session. Please sign in again.' });
+      return;
+    }
+
+    if (sessionData.expiresAt < new Date()) {
+      otpStore.delete(tempToken);
+      res.status(400).json({ error: 'OTP has expired. Please request a new code.' });
+      return;
+    }
+
+    if (sessionData.otp !== String(otp).trim()) {
+      res.status(401).json({ error: 'Invalid verification code. Please try again.' });
+      return;
+    }
+
+    // OTP is valid - consume it
+    otpStore.delete(tempToken);
+    const user = sessionData.user;
+
+    // Create session
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 1); // 1 day expiration
+
+    await prisma.userSession.create({
+      data: {
+        userId: user.userId,
+        sessionToken,
+        ipAddress: req.ip || '0.0.0.0',
+        deviceInfo: req.headers['user-agent'] || 'Unknown',
+        expiresAt,
+      },
+    });
+
+    // Update last login
+    await prisma.user.update({
+      where: { userId: user.userId },
+      data: { lastLoginAt: new Date() },
+    });
+
+    res.json({
+      message: 'Login successful',
+      token: sessionToken,
+      user: {
+        userId: user.userId,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        identificationNumber: user.identificationNumber,
+        contactNumber: user.contactNumber,
+      },
+    });
+  } catch (error) {
+    console.error('[Verify OTP Error]', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function resendOtp(req: Request, res: Response): Promise<void> {
+  try {
+    const { tempToken } = req.body;
+
+    if (!tempToken) {
+      res.status(400).json({ error: 'Temporary token is required' });
+      return;
+    }
+
+    const sessionData = otpStore.get(tempToken);
+    if (!sessionData) {
+      res.status(400).json({ error: 'Session not found or expired. Please sign in again.' });
+      return;
+    }
+
+    const now = new Date();
+    const elapsedSeconds = Math.floor((now.getTime() - sessionData.lastSentAt.getTime()) / 1000);
+    const cooldownSeconds = 60;
+
+    if (elapsedSeconds < cooldownSeconds) {
+      const remaining = cooldownSeconds - elapsedSeconds;
+      res.status(429).json({
+        error: `Please wait ${remaining} seconds before requesting a new OTP.`,
+        remainingSeconds: remaining,
+      });
+      return;
+    }
+
+    // Generate new OTP
+    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    sessionData.otp = newOtp;
+    sessionData.lastSentAt = now;
+    sessionData.expiresAt = new Date(now.getTime() + 5 * 60 * 1000); // 5 mins fresh
+
+    // Dispatch OTP email
+    try {
+      await sendTemplatedEmail(sessionData.email, 'SYSTEM_ADMIN_OTP', {
+        name: sessionData.user.name,
+        otp: newOtp,
+        expiresMinutes: '5',
+      });
+    } catch (mailErr) {
+      console.error('[MFA Error] Failed to resend OTP email:', mailErr);
+    }
+
+    console.log(`\n========================================`);
+    console.log(`[MFA RESEND] New OTP for ${sessionData.email}: ${newOtp}`);
+    console.log(`========================================\n`);
+
+    res.json({
+      message: 'A new 6-digit OTP has been sent to your email.',
+      resendCooldownSeconds: 60,
+    });
+  } catch (error) {
+    console.error('[Resend OTP Error]', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 }

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { MD3Card, MD3Button } from '../MD3Components';
 import { ADMIN_PAGES, type AdminPageInfo } from '../../constants/pages';
 import { Select } from '../../components/ui/Select';
+import { PageHeader } from '../../components/ui/PageHeader';
+import '../LandAcquisition/case_management.css';
 import { Check, Save } from 'lucide-react';
 
 const ROLES = [
@@ -17,7 +19,7 @@ const getDefaultPermissions = (role: string): string[] => {
     case 'SYSTEM_ADMINISTRATOR':
       return ADMIN_PAGES.map(p => p.path);
     case 'GOVERNMENT_ADMINISTRATOR':
-      return ADMIN_PAGES.filter(p => !p.path.startsWith('/member')).map(p => p.path);
+      return ADMIN_PAGES.filter(p => !p.path.startsWith('/member') && p.category !== 'User Management').map(p => p.path);
     case 'GOVERNMENT_OFFICER':
       return ADMIN_PAGES.filter(p => ['Main', 'Land Acquisition', 'Compensation', 'Reporting'].includes(p.category) && !p.path.startsWith('/member')).map(p => p.path);
     case 'LAND_VALUER':
@@ -131,10 +133,10 @@ export const RoleManagement: React.FC = () => {
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-medium text-md-on-surface mb-2">Role Management</h1>
-        <p className="text-md-on-surface-variant">Configure access control for different system roles.</p>
-      </div>
+      <PageHeader
+        title="Role Management"
+        subtitle="Configure access control for different system roles."
+      />
 
       <MD3Card elevation={1}>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">

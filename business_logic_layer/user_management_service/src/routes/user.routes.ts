@@ -1,10 +1,12 @@
 import { Router } from 'express';
-import { login, forgotPassword, resetPassword, register, activateAccount, adminCreateUser, getAllUsers, getUserById, toggleUserStatus } from '../controllers/user.controller';
+import { login, verifyOtp, resendOtp, forgotPassword, resetPassword, register, activateAccount, adminCreateUser, getAllUsers, getUserById, toggleUserStatus } from '../controllers/user.controller';
 import { getRolePermissions, updateRolePermissions } from '../controllers/permission.controller';
 
 const router = Router();
 
 router.post('/login', login);
+router.post('/verify-otp', verifyOtp);
+router.post('/resend-otp', resendOtp);
 router.post('/register', register);
 router.get('/', getAllUsers);
 router.post('/activate', activateAccount);

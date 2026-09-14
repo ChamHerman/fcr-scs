@@ -299,6 +299,121 @@ async function main() {
   });
   console.log(`✅ Upserted Email Template: ${activationTemplate.templateName}`);
 
+  const offerLetterTemplate = await prisma.emailTemplate.upsert({
+    where: { templateName: 'OFFER_LETTER_NOTIFICATION' },
+    update: {},
+    create: {
+      templateName: 'OFFER_LETTER_NOTIFICATION',
+      subject: 'FCR-SCS: Compensation Offer Notice - Case {{caseId}}',
+      bodyContent: `
+        <div style="font-family: sans-serif; padding: 20px;">
+          <h2>Official Compensation Offer Notice</h2>
+          <p>Dear {{name}},</p>
+          <p>An official compensation offer has been published for Land Acquisition Case <strong>{{caseId}}</strong>.</p>
+          <p>Total awarded amount: <strong>{{amount}}</strong></p>
+          <p>Please log in to your Member Portal to review the formal offer letter and select your response (Accept / Dispute) within the statutory window:</p>
+          <a href="{{portalLink}}" style="background-color: #2e7d32; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0;">View Offer Letter</a>
+          <br>
+          <p>Regards,<br>Land Acquisition & Compensation Department</p>
+        </div>
+      `,
+      createdById: defaultAdmin.userId,
+    },
+  });
+  console.log(`✅ Upserted Email Template: ${offerLetterTemplate.templateName}`);
+
+  const paymentDisbursedTemplate = await prisma.emailTemplate.upsert({
+    where: { templateName: 'PAYMENT_DISBURSED' },
+    update: {},
+    create: {
+      templateName: 'PAYMENT_DISBURSED',
+      subject: 'FCR-SCS: Payment Disbursed for Case {{caseId}}',
+      bodyContent: `
+        <div style="font-family: sans-serif; padding: 20px;">
+          <h2>Compensation Payment Disbursed</h2>
+          <p>Dear {{name}},</p>
+          <p>Your compensation payment of <strong>{{amount}}</strong> for Case <strong>{{caseId}}</strong> has been approved and processed.</p>
+          <p>Reference Transaction ID: <code>{{transactionId}}</code></p>
+          <p>Payment Method: Direct Bank Transfer (EFT)</p>
+          <p>Please allow 1-3 business days for the funds to reflect in your designated bank account.</p>
+          <br>
+          <p>Regards,<br>Finance & Disbursement Division</p>
+        </div>
+      `,
+      createdById: defaultAdmin.userId,
+    },
+  });
+  console.log(`✅ Upserted Email Template: ${paymentDisbursedTemplate.templateName}`);
+
+  const objectionUpdateTemplate = await prisma.emailTemplate.upsert({
+    where: { templateName: 'OBJECTION_UPDATE' },
+    update: {},
+    create: {
+      templateName: 'OBJECTION_UPDATE',
+      subject: 'FCR-SCS: Status Update on Objection - Case {{caseId}}',
+      bodyContent: `
+        <div style="font-family: sans-serif; padding: 20px;">
+          <h2>Objection Status Update</h2>
+          <p>Dear {{name}},</p>
+          <p>We are writing to update you on your formal objection regarding Land Acquisition Case <strong>{{caseId}}</strong>.</p>
+          <p>Current Status: <strong>{{status}}</strong></p>
+          <p>Remarks: {{remarks}}</p>
+          <a href="{{portalLink}}" style="background-color: #6750a4; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0;">Check Details in Portal</a>
+          <br>
+          <p>Regards,<br>Land Acquisition Hearing Committee</p>
+        </div>
+      `,
+      createdById: defaultAdmin.userId,
+    },
+  });
+  console.log(`✅ Upserted Email Template: ${objectionUpdateTemplate.templateName}`);
+
+  const systemAlertTemplate = await prisma.emailTemplate.upsert({
+    where: { templateName: 'SYSTEM_ALERT' },
+    update: {},
+    create: {
+      templateName: 'SYSTEM_ALERT',
+      subject: 'FCR-SCS: System Notification - {{alertType}}',
+      bodyContent: `
+        <div style="font-family: sans-serif; padding: 20px;">
+          <h2>System Notification</h2>
+          <p>Hello {{name}},</p>
+          <p>This is an automated system notice: <strong>{{message}}</strong></p>
+          <p>Timestamp: {{timestamp}}</p>
+          <p>If you require assistance, please reach out to the System Administrator.</p>
+          <br>
+          <p>FCR-SCS Administrative Services</p>
+        </div>
+      `,
+      createdById: defaultAdmin.userId,
+    },
+  });
+  console.log(`✅ Upserted Email Template: ${systemAlertTemplate.templateName}`);
+
+  const adminOtpTemplate = await prisma.emailTemplate.upsert({
+    where: { templateName: 'SYSTEM_ADMIN_OTP' },
+    update: {},
+    create: {
+      templateName: 'SYSTEM_ADMIN_OTP',
+      subject: 'FCR-SCS Security: Your Administrator Verification Code is {{otp}}',
+      bodyContent: `
+        <div style="font-family: sans-serif; padding: 20px; max-width: 540px; margin: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <h2 style="color: #6750a4; margin-top: 0;">System Administrator Authentication</h2>
+          <p>Dear {{name}},</p>
+          <p>A login request to the FCR-SCS Administrative Console was initiated for your account. Please use the following One-Time Password (OTP) to complete your two-factor verification:</p>
+          <div style="text-align: center; margin: 25px 0;">
+            <span style="display: inline-block; font-family: monospace; font-size: 32px; font-weight: bold; letter-spacing: 6px; padding: 12px 28px; background-color: #f3edf7; color: #21005d; border-radius: 8px; border: 1px dashed #6750a4;">{{otp}}</span>
+          </div>
+          <p style="color: #49454f; font-size: 14px;">This code is valid for <strong>{{expiresMinutes}} minutes</strong>. If you did not initiate this login, please immediately notify the security operations team.</p>
+          <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 20px 0;" />
+          <p style="font-size: 12px; color: #79747e;">Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)</p>
+        </div>
+      `,
+      createdById: defaultAdmin.userId,
+    },
+  });
+  console.log(`✅ Upserted Email Template: ${adminOtpTemplate.templateName}`);
+
   // ===========================================================================
   // 3. Seed Land Acquisition Cases & Compensation Pipeline (5 Cases)
   //

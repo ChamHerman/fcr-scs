@@ -23,6 +23,8 @@ import { UserProfile } from './pages/Dashboard/UserProfile';
 import { UserAdministration } from './pages/Dashboard/UserAdministration';
 import { UserDetails } from './pages/Dashboard/UserDetails';
 import { RoleManagement } from './pages/Dashboard/RoleManagement';
+import { EmailTemplates } from './pages/Dashboard/EmailTemplates';
+import { EmailTemplateCreate } from './pages/Dashboard/EmailTemplateCreate';
 
 import { AuditLogs } from './pages/Audit/AuditLogs';
 import { AlertMonitoring } from './pages/Audit/AlertMonitoring';
@@ -137,6 +139,8 @@ function App() {
               <Route path="role-management" element={<RoleManagement />} />
 
               {/* System Audit & Monitoring */}
+              <Route path="email-templates" element={<EmailTemplates />} />
+              <Route path="email-templates/new" element={<EmailTemplateCreate />} />
               <Route path="audit-logs" element={<AuditLogs />} />
               <Route path="alerts" element={<AlertMonitoring />} />
               <Route path="system-reports" element={<SystemReports />} />
