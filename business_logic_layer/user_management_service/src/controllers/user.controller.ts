@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { prisma } from '../prisma';
 import { sendTemplatedEmail } from '../utils/email.service';
+import { logAudit } from '../services/audit.service';
 
 interface OtpSession {
   userId: string;
@@ -36,12 +37,34 @@ export async function login(req: Request, res: Response): Promise<void> {
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user || !user.isActive) {
+      logAudit({
+        activityType: 'USER_LOGIN_FAILED',
+        moduleName: 'USER_MANAGEMENT',
+        severity: 'WARNING',
+        ipAddress: req.ip || '127.0.0.1',
+        deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+        activityDetails: { email, reason: 'Invalid credentials or inactive account' },
+        systemResponse: 'FAILED (401)',
+      });
       res.status(401).json({ error: 'Invalid credentials or inactive account' });
       return;
     }
 
     const isValid = await bcrypt.compare(password, user.passwordHash);
     if (!isValid) {
+      logAudit({
+        userId: user.userId,
+        userRole: user.role,
+        actorName: user.name,
+        actorEmail: user.email,
+        activityType: 'USER_LOGIN_FAILED',
+        moduleName: 'USER_MANAGEMENT',
+        severity: 'WARNING',
+        ipAddress: req.ip || '127.0.0.1',
+        deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+        activityDetails: { email, reason: 'Incorrect password' },
+        systemResponse: 'FAILED (401)',
+      });
       res.status(401).json({ error: 'Invalid credentials' });
       return;
     }
@@ -81,6 +104,20 @@ export async function login(req: Request, res: Response): Promise<void> {
       console.log(`[MFA] System Admin OTP for ${user.email}: ${otp}`);
       console.log(`========================================\n`);
 
+      logAudit({
+        userId: user.userId,
+        userRole: user.role,
+        actorName: user.name,
+        actorEmail: user.email,
+        activityType: 'SYSTEM_ADMIN_OTP_SENT',
+        moduleName: 'USER_MANAGEMENT',
+        severity: 'INFO',
+        ipAddress: req.ip || '127.0.0.1',
+        deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+        activityDetails: { email: user.email, method: 'EMAIL_OTP' },
+        systemResponse: 'SUCCESS (200)',
+      });
+
       const atIdx = user.email.indexOf('@');
       const maskedEmail = atIdx > 2
         ? user.email.substring(0, 2) + '*'.repeat(atIdx - 2) + user.email.substring(atIdx)
@@ -114,6 +151,20 @@ export async function login(req: Request, res: Response): Promise<void> {
     await prisma.user.update({
       where: { userId: user.userId },
       data: { lastLoginAt: new Date() },
+    });
+
+    logAudit({
+      userId: user.userId,
+      userRole: user.role,
+      actorName: user.name,
+      actorEmail: user.email,
+      activityType: 'USER_LOGIN_SUCCESS',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { email: user.email, role: user.role },
+      systemResponse: 'SUCCESS (200)',
     });
 
     res.json({
@@ -156,6 +207,19 @@ export async function verifyOtp(req: Request, res: Response): Promise<void> {
     }
 
     if (sessionData.otp !== String(otp).trim()) {
+      logAudit({
+        userId: sessionData.userId,
+        userRole: sessionData.user.role,
+        actorName: sessionData.user.name,
+        actorEmail: sessionData.email,
+        activityType: 'SYSTEM_ADMIN_OTP_FAILED',
+        moduleName: 'USER_MANAGEMENT',
+        severity: 'SECURITY',
+        ipAddress: req.ip || '127.0.0.1',
+        deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+        activityDetails: { email: sessionData.email, reason: 'Invalid OTP code entered' },
+        systemResponse: 'FAILED (401)',
+      });
       res.status(401).json({ error: 'Invalid verification code. Please try again.' });
       return;
     }
@@ -183,6 +247,20 @@ export async function verifyOtp(req: Request, res: Response): Promise<void> {
     await prisma.user.update({
       where: { userId: user.userId },
       data: { lastLoginAt: new Date() },
+    });
+
+    logAudit({
+      userId: user.userId,
+      userRole: user.role,
+      actorName: user.name,
+      actorEmail: user.email,
+      activityType: 'SYSTEM_ADMIN_OTP_VERIFIED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { email: user.email, role: user.role, authMethod: '2FA_OTP' },
+      systemResponse: 'SUCCESS (200)',
     });
 
     res.json({
@@ -458,6 +536,20 @@ export async function register(req: Request, res: Response): Promise<void> {
     }
 
     res.status(201).json({ message: 'Registration successful. Please check your email (or server console) to activate your account.' });
+
+    logAudit({
+      userId: user.userId,
+      userRole: user.role,
+      actorName: user.name,
+      actorEmail: user.email,
+      activityType: 'CITIZEN_REGISTRATION_SUBMITTED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { name, email, contactNumber, role: 'DISPLACED_COMMUNITY_MEMBER' },
+      systemResponse: 'CREATED (201)',
+    });
   } catch (error) {
     console.error('[Registration Error]', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -526,6 +618,20 @@ export async function adminCreateUser(req: Request, res: Response): Promise<void
     });
 
     res.status(201).json({ success: true, message: 'User created successfully', data: { id: user.userId, email: user.email } });
+
+    logAudit({
+      userId: user.userId,
+      userRole: user.role,
+      actorName: user.name,
+      actorEmail: user.email,
+      activityType: 'ADMIN_USER_PROVISIONED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { createdUser: user.name, targetEmail: user.email, targetRole: user.role },
+      systemResponse: 'CREATED (201)',
+    });
   } catch (error) {
     console.error('[Admin Create User Error]', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -594,6 +700,20 @@ export async function activateAccount(req: Request, res: Response): Promise<void
       }),
     ]);
 
+    logAudit({
+      userId: activation.userId,
+      userRole: activation.user.role,
+      actorName: activation.user.name,
+      actorEmail: activation.user.email,
+      activityType: 'ACCOUNT_ACTIVATED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { email: activation.user.email },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     res.json({ message: 'Account successfully activated' });
   } catch (error) {
     console.error('[Account Activation Error]', error);
@@ -626,6 +746,20 @@ export async function toggleUserStatus(req: Request, res: Response): Promise<voi
       where: { userId: id },
       data: { isActive },
       select: { userId: true, isActive: true }
+    });
+
+    logAudit({
+      userId: user.userId,
+      userRole: user.role,
+      actorName: user.name,
+      actorEmail: user.email,
+      activityType: isActive ? 'USER_STATUS_ACTIVATED' : 'USER_STATUS_DEACTIVATED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'CRITICAL',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { targetUser: user.name, targetEmail: user.email, status: isActive ? 'Active' : 'Inactive' },
+      systemResponse: 'SUCCESS (200)',
     });
 
     res.json({ success: true, data: updatedUser, message: `User successfully ${isActive ? 'activated' : 'deactivated'}` });

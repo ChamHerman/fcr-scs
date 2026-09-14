@@ -69,7 +69,7 @@ const generateContactNumber = (): string => `01${generateRandomDigits(8)}`;
 // 12-digit identification number
 const generateIdentificationNumber = (): string => `${generateRandomDigits(12)}`;
 
-function createMockPdfBuffer(title: string, caseId: string, salt = Date.now()): Buffer {
+function createMockPdfBuffer(title: string, caseId: string, salt: string | number = 'STATIC_SEED_SALT'): Buffer {
   const content = `%PDF-1.4
 1 0 obj
 << /Type /Catalog /Pages 2 0 R >>
@@ -1588,6 +1588,291 @@ async function main() {
     '  - LAC-2026-08-0016 to 0020: 5 Cases at OFFER_ISSUED (all 4 supporting documents + Form H generated, awaiting response)\n' +
     '  - Payment & Blockchain: 0 records pre-seeded — dynamically generated upon member offer acceptance & GA blockchain publication.'
   );
+
+  // ===========================================================================
+  // 5. Seed Compliance Audit Logs
+  // ===========================================================================
+  console.log('\n--- 5. Seeding Compliance Audit Logs ---');
+  await prisma.auditLog.deleteMany({});
+
+  const now = new Date();
+  const hoursAgo = (h: number) => new Date(now.getTime() - h * 3600 * 1000);
+  const daysAgo = (d: number) => new Date(now.getTime() - d * 24 * 3600 * 1000);
+
+  const minutesAgo = (m: number) => new Date(now.getTime() - m * 60 * 1000);
+
+  const initialAuditLogs = [
+    // 1. Sys Admin Login & 2FA OTP
+    {
+      userId: defaultAdmin.userId,
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'USER_LOGIN_SUCCESS',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({ actorName: defaultAdmin.name, actorEmail: defaultAdmin.email, loginMethod: 'PASSWORD_AUTHENTICATION', sessionRole: 'SYSTEM_ADMINISTRATOR' }),
+      systemResponse: 'SUCCESS (200)',
+      isArchived: false,
+      createdAt: minutesAgo(12),
+    },
+    {
+      userId: defaultAdmin.userId,
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'SYSTEM_ADMIN_OTP_VERIFIED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'SECURITY',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({ actorName: defaultAdmin.name, actorEmail: defaultAdmin.email, authMethod: '2FA_EMAIL_OTP', accessScope: 'FULL_SUPERUSER_ADMIN', status: 'VERIFIED' }),
+      systemResponse: 'SUCCESS (200)',
+      isArchived: false,
+      createdAt: minutesAgo(10),
+    },
+    // 2. Email Templates Provisioning & Updates
+    {
+      userId: defaultAdmin.userId,
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'EMAIL_TEMPLATE_UPDATED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({ actorName: defaultAdmin.name, actorEmail: defaultAdmin.email, templateName: 'SYSTEM_ADMIN_OTP', subject: 'FCR-SCS Security: Your Administrator Verification Code is {{otp}}' }),
+      systemResponse: 'SUCCESS (200)',
+      isArchived: false,
+      createdAt: hoursAgo(1),
+    },
+    {
+      userId: defaultAdmin.userId,
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'EMAIL_TEMPLATE_UPDATED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({ actorName: defaultAdmin.name, actorEmail: defaultAdmin.email, templateName: 'ACCOUNT_ACTIVATION', subject: 'FCR-SCS: Activate Your Account' }),
+      systemResponse: 'SUCCESS (200)',
+      isArchived: false,
+      createdAt: hoursAgo(2),
+    },
+    {
+      userId: defaultAdmin.userId,
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'EMAIL_TEMPLATE_UPDATED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({ actorName: defaultAdmin.name, actorEmail: defaultAdmin.email, templateName: 'PASSWORD_RESET', subject: 'FCR-SCS: Password Reset Request' }),
+      systemResponse: 'SUCCESS (200)',
+      isArchived: false,
+      createdAt: hoursAgo(3),
+    },
+    // 3. Staff Users Provisioning by Admin
+    ...[1, 2, 3, 4, 5].map((i) => ({
+      userId: defaultAdmin.userId,
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'ADMIN_USER_PROVISIONED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({
+        actorName: defaultAdmin.name,
+        actorEmail: defaultAdmin.email,
+        provisionedUserId: seededUsers[`ga${i}@fcrscs.gov.my`]?.userId,
+        provisionedUserEmail: `ga${i}@fcrscs.gov.my`,
+        provisionedUserName: `Gov Admin ${i}`,
+        roleAssigned: 'GOVERNMENT_ADMINISTRATOR',
+        department: 'Federal Land Governance Authority',
+      }),
+      systemResponse: 'CREATED (201)',
+      isArchived: false,
+      createdAt: hoursAgo(4 + i),
+    })),
+    ...[1, 2, 3, 4, 5].map((i) => ({
+      userId: defaultAdmin.userId,
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'ADMIN_USER_PROVISIONED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({
+        actorName: defaultAdmin.name,
+        actorEmail: defaultAdmin.email,
+        provisionedUserId: seededUsers[`go${i}@fcrscs.gov.my`]?.userId,
+        provisionedUserEmail: `go${i}@fcrscs.gov.my`,
+        provisionedUserName: `Gov Officer ${i}`,
+        roleAssigned: 'GOVERNMENT_OFFICER',
+      }),
+      systemResponse: 'CREATED (201)',
+      isArchived: false,
+      createdAt: daysAgo(1 + i * 0.2),
+    })),
+    ...[1, 2, 3, 4, 5].map((i) => ({
+      userId: defaultAdmin.userId,
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'ADMIN_USER_PROVISIONED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({
+        actorName: defaultAdmin.name,
+        actorEmail: defaultAdmin.email,
+        provisionedUserId: seededUsers[`lv${i}@fcrscs.gov.my`]?.userId,
+        provisionedUserEmail: `lv${i}@fcrscs.gov.my`,
+        provisionedUserName: `Land Valuer ${i}`,
+        roleAssigned: 'LAND_VALUER',
+        licenseNo: `VAL-MY-${1000 + i * 24}`,
+      }),
+      systemResponse: 'CREATED (201)',
+      isArchived: false,
+      createdAt: daysAgo(2 + i * 0.2),
+    })),
+    // 4. Community Member Registrations & Activations
+    ...[1, 2, 3, 4, 5].flatMap((i) => [
+      {
+        userId: seededUsers[`m${i}@fcrscs.gov.my`]?.userId,
+        userRole: 'DISPLACED_COMMUNITY_MEMBER',
+        activityType: 'USER_REGISTERED',
+        moduleName: 'USER_MANAGEMENT',
+        severity: 'INFO',
+        ipAddress: '127.0.0.1',
+        deviceInfo: i % 2 === 0 ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X)' : 'Mozilla/5.0 (Linux; Android 14)',
+        activityDetails: JSON.stringify({
+          actorName: `Member ${i}`,
+          actorEmail: `m${i}@fcrscs.gov.my`,
+          registrationChannel: 'PORTAL_PUBLIC_FORM',
+          icMasked: '******-**-****',
+        }),
+        systemResponse: 'CREATED (201)',
+        isArchived: false,
+        createdAt: daysAgo(3 + i * 0.5),
+      },
+      {
+        userId: seededUsers[`m${i}@fcrscs.gov.my`]?.userId,
+        userRole: 'DISPLACED_COMMUNITY_MEMBER',
+        activityType: 'ACCOUNT_ACTIVATED',
+        moduleName: 'USER_MANAGEMENT',
+        severity: 'INFO',
+        ipAddress: '127.0.0.1',
+        deviceInfo: i % 2 === 0 ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X)' : 'Mozilla/5.0 (Linux; Android 14)',
+        activityDetails: JSON.stringify({
+          actorName: `Member ${i}`,
+          actorEmail: `m${i}@fcrscs.gov.my`,
+          tokenType: 'EMAIL_VERIFICATION_TOKEN',
+          verifiedAt: new Date(now.getTime() - (3 + i * 0.5) * 24 * 3600 * 1000 + 15 * 60 * 1000).toISOString(),
+        }),
+        systemResponse: 'SUCCESS (200)',
+        isArchived: false,
+        createdAt: daysAgo(3 + i * 0.5 - 0.01),
+      },
+    ]),
+    // 5. Staff Successful Logins
+    {
+      userId: seededUsers['ga1@fcrscs.gov.my']?.userId,
+      userRole: 'GOVERNMENT_ADMINISTRATOR',
+      activityType: 'USER_LOGIN_SUCCESS',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({ actorName: 'Gov Admin 1', actorEmail: 'ga1@fcrscs.gov.my', userRole: 'GOVERNMENT_ADMINISTRATOR', authType: 'CREDENTIALS' }),
+      systemResponse: 'SUCCESS (200)',
+      isArchived: false,
+      createdAt: hoursAgo(3),
+    },
+    {
+      userId: seededUsers['go1@fcrscs.gov.my']?.userId,
+      userRole: 'GOVERNMENT_OFFICER',
+      activityType: 'USER_LOGIN_SUCCESS',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({ actorName: 'Gov Officer 1', actorEmail: 'go1@fcrscs.gov.my', userRole: 'GOVERNMENT_OFFICER', authType: 'CREDENTIALS' }),
+      systemResponse: 'SUCCESS (200)',
+      isArchived: false,
+      createdAt: hoursAgo(2),
+    },
+    {
+      userId: seededUsers['lv1@fcrscs.gov.my']?.userId,
+      userRole: 'LAND_VALUER',
+      activityType: 'USER_LOGIN_SUCCESS',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+      activityDetails: JSON.stringify({ actorName: 'Land Valuer 1', actorEmail: 'lv1@fcrscs.gov.my', userRole: 'LAND_VALUER', authType: 'CREDENTIALS' }),
+      systemResponse: 'SUCCESS (200)',
+      isArchived: false,
+      createdAt: hoursAgo(1),
+    },
+    // 6. Role Permission Matrix Update
+    {
+      userId: defaultAdmin.userId,
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'ROLE_PERMISSIONS_UPDATED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'CRITICAL',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({ actorName: defaultAdmin.name, actorEmail: defaultAdmin.email, targetRole: 'GOVERNMENT_ADMINISTRATOR', updatedByRole: defaultAdmin.role, permissionCount: 14 }),
+      systemResponse: 'SUCCESS (200)',
+      isArchived: false,
+      createdAt: hoursAgo(5),
+    },
+    // 7. User Status Toggle
+    {
+      userId: defaultAdmin.userId,
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'USER_STATUS_TOGGLED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'WARNING',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({ actorName: defaultAdmin.name, actorEmail: defaultAdmin.email, targetUserId: seededUsers['m5@fcrscs.gov.my']?.userId, targetEmail: 'm5@fcrscs.gov.my', targetName: 'Member 5', newStatus: 'Active', reason: 'Periodic statutory identity document re-verification cleared' }),
+      systemResponse: 'SUCCESS (200)',
+      isArchived: false,
+      createdAt: daysAgo(1),
+    },
+    // 8. Security Throttling Alert
+    {
+      userId: null,
+      userRole: null,
+      activityType: 'SECURITY_ALERT_BRUTE_FORCE_THROTTLED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'SECURITY',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      activityDetails: JSON.stringify({ attemptedEmail: defaultAdmin.email, reason: '3 consecutive invalid password entries detected', actionTaken: 'TEMPORARY_RATE_LIMIT_APPLIED', gateway: 'Local development gateway' }),
+      systemResponse: 'FAILED (429)',
+      isArchived: false,
+      createdAt: hoursAgo(10),
+    },
+    // 9. Annual Compliance Archive
+    {
+      userId: defaultAdmin.userId,
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'ANNUAL_COMPLIANCE_ARCHIVE',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'WARNING',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({ actorName: defaultAdmin.name, actorEmail: defaultAdmin.email, archivedBatchCount: 1420, policy: 'STATUTORY_DATA_RETENTION_7_YEARS', retentionNotice: 'Prior annual records archived to cold audit vault' }),
+      systemResponse: 'SUCCESS (200)',
+      isArchived: true,
+      createdAt: daysAgo(210),
+    },
+  ];
+
+  for (const log of initialAuditLogs) {
+    await prisma.auditLog.create({ data: log });
+  }
+  console.log(`📋 Seeded ${initialAuditLogs.length} Compliance Audit Logs`);
 
   console.log('\n✨ Database seeding completed successfully!');
 }

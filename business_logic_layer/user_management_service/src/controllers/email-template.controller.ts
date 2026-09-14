@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../prisma';
+import { logAudit } from '../services/audit.service';
 
 export const DEFAULT_TEMPLATES: Record<string, { subject: string; bodyContent: string }> = {
   PASSWORD_RESET: {
@@ -173,6 +174,17 @@ export const updateTemplate = async (req: Request, res: Response): Promise<any> 
       },
     });
 
+    logAudit({
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'EMAIL_TEMPLATE_UPDATED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { templateName, subject },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     res.json({
       message: 'Email template updated successfully',
       template: updatedTemplate,
@@ -222,6 +234,17 @@ export const createTemplate = async (req: Request, res: Response): Promise<any> 
       },
     });
 
+    logAudit({
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'EMAIL_TEMPLATE_CREATED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { templateName: normalizedName, subject },
+      systemResponse: 'CREATED (201)',
+    });
+
     return res.status(201).json({
       message: 'Email template created successfully',
       template,
@@ -258,6 +281,17 @@ export const resetTemplate = async (req: Request, res: Response): Promise<any> =
           },
         },
       },
+    });
+
+    logAudit({
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'EMAIL_TEMPLATE_RESET',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'WARNING',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { templateName, action: 'Reset to stock default content' },
+      systemResponse: 'SUCCESS (200)',
     });
 
     return res.json({

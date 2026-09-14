@@ -6,6 +6,7 @@ import * as receiptService from "../services/receipt.service";
 import { getPaymentDisputeStorageDir } from "../utils/storage.utils";
 import { prisma } from "../prisma";
 import { AuthenticatedRequest } from "../../../user_management_service/src/middleware/auth.middleware";
+import { logAudit } from "../../../user_management_service/src/services/audit.service";
 
 export async function submitBankDetails(req: Request, res: Response): Promise<void> {
   const { caseId: rawCaseId, paymentCaseId, bankName, accountNumber, accountHolderName, phoneNumber, myKadNumber } = req.body;
@@ -54,6 +55,22 @@ export async function submitBankDetails(req: Request, res: Response): Promise<vo
     } catch {
       // Non-blocking fallback
     }
+
+    logAudit({
+      caseReference: caseId,
+      activityType: 'CITIZEN_BANK_DETAILS_SUBMITTED',
+      moduleName: 'PAYMENT',
+      severity: 'SECURITY',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: {
+        caseId,
+        bankName,
+        accountHolderName,
+        accountNumberMasked: accountNumber ? accountNumber.slice(-4).padStart(accountNumber.length, '*') : '',
+      },
+      systemResponse: 'SUCCESS (200)',
+    });
 
     res.json({ success: true, paymentCase });
   } catch (e: unknown) {
@@ -104,6 +121,19 @@ export async function authorise(req: Request, res: Response): Promise<void> {
   }
   try {
     const paymentCase = await paymentService.authoriseTransfer(caseId, adminId);
+
+    logAudit({
+      userId: adminId,
+      caseReference: caseId,
+      activityType: 'PAYMENT_AUTHORISATION_SIGNED',
+      moduleName: 'PAYMENT',
+      severity: 'CRITICAL',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { caseId, adminId, stage: 'MULTI_SIG_AUTHORISATION' },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     res.json({ paymentCase });
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -128,6 +158,19 @@ export async function confirmExecution(req: Request, res: Response): Promise<voi
   }
   try {
     const paymentCase = await paymentService.confirmExecution(caseId, adminId);
+
+    logAudit({
+      userId: adminId,
+      caseReference: caseId,
+      activityType: 'PAYMENT_DISBURSEMENT_EXECUTED',
+      moduleName: 'PAYMENT',
+      severity: 'CRITICAL',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { caseId, adminId, status: 'PAYMENT_COMPLETED' },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     res.json({ paymentCase, message: "Disbursement execution confirmed and sent to bank clearance." });
   } catch (e: unknown) {
     const msg = (e as Error).message;

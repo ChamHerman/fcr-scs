@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MD3Card, MD3Button, MD3Input } from '../MD3Components';
+import { MD3Button, MD3Input } from '../MD3Components';
 import { Select, type SelectOption } from '../../components/ui/Select';
 import { IdentificationInput } from '../../components/ui/IdentificationInput';
 import { Modal } from '../../components/ui/Modal';
@@ -152,7 +152,7 @@ export const UserAdministration: React.FC = () => {
   };
 
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto">
+    <div className="main blur-shape-bg">
       <PageHeader
         title="User Administration"
         subtitle="Search, filter, and manage system user accounts."
@@ -240,61 +240,64 @@ export const UserAdministration: React.FC = () => {
       </div>
 
       {/* Table */}
-      <MD3Card elevation={2} className="overflow-hidden p-0">
-        <div className="table-wrap" style={{ margin: 0 }}>
-          <div className="table-scroll md-scroll-thin">
-            <table className="w-full table-fixed text-left border-collapse">
-              <thead>
-                <tr>
-                  <th 
-                    style={{ width: "20%" }} 
-                    className="p-4 pl-6 text-sm font-medium text-md-on-surface-variant border-b border-md-outline/30 cursor-pointer select-none hover:bg-md-surface-variant/20 transition-colors"
-                    onClick={toggleSort}
-                  >
-                    <div className="flex items-center gap-1">
-                      User Name
-                      <ArrowUpDown size={14} className="opacity-50" />
-                    </div>
-                  </th>
-                  <th style={{ width: "26%" }} className="p-4 text-sm font-medium text-md-on-surface-variant border-b border-md-outline/30">Role</th>
-                  <th style={{ width: "14%" }} className="p-4 text-sm font-medium text-md-on-surface-variant border-b border-md-outline/30">IC Number</th>
-                  <th style={{ width: "14%" }} className="p-4 text-sm font-medium text-md-on-surface-variant border-b border-md-outline/30">Contact No</th>
-                  <th style={{ width: "16%" }} className="p-4 text-sm font-medium text-md-on-surface-variant border-b border-md-outline/30">Email Address</th>
-                  <th style={{ width: "10%" }} className="p-4 text-sm font-medium text-md-on-surface-variant border-b border-md-outline/30">Status</th>
-                </tr>
-              </thead>
+      <div className="table-wrap">
+        <div className="table-scroll md-scroll-thin">
+          <table className="w-full table-fixed">
+            <thead>
+              <tr>
+                <th 
+                  style={{ width: "20%" }} 
+                  className="cursor-pointer select-none"
+                  onClick={toggleSort}
+                >
+                  <div className="flex items-center gap-1">
+                    User Name
+                    <ArrowUpDown size={14} className="opacity-50" />
+                  </div>
+                </th>
+                <th style={{ width: "26%" }}>Role</th>
+                <th style={{ width: "14%" }}>IC Number</th>
+                <th style={{ width: "14%" }}>Contact No</th>
+                <th style={{ width: "16%" }}>Email Address</th>
+                <th style={{ width: "10%" }}>Status</th>
+              </tr>
+            </thead>
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-md-on-surface-variant">Loading...</td>
+                  <td colSpan={6} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)" }}>
+                    Loading...
+                  </td>
                 </tr>
               ) : paginatedUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-md-on-surface-variant">No users found.</td>
+                  <td colSpan={6} style={{ textAlign: "center", padding: "36px", color: "var(--md-on-surface-variant)", opacity: 0.7 }}>
+                    No users found.
+                  </td>
                 </tr>
               ) : (
                 paginatedUsers.map((user) => (
                   <tr 
                     key={user.id} 
-                    className="border-b border-md-outline/10 hover:bg-md-surface-variant/10 transition-colors cursor-pointer"
+                    className="case-row row-clickable"
                     onClick={() => navigate(`/admin/users/details/${user.id}`)}
                   >
-                    <td className="p-4 pl-6 font-medium text-md-on-surface truncate">{user.name}</td>
-                    <td className="p-4 text-md-on-surface-variant">
+                    <td className="truncate font-medium">{user.name}</td>
+                    <td>
                       <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-md-secondary-container text-md-on-secondary-container whitespace-nowrap">
                         {formatRole(user.role)}
                       </span>
                     </td>
-                    <td className="p-4 text-md-on-surface-variant truncate">
+                    <td className="truncate">
                       {user.identificationNumber || '-'}
                     </td>
-                    <td className="p-4 text-md-on-surface-variant truncate">
+                    <td className="truncate">
                       {user.contactNumber || '-'}
                     </td>
-                    <td className="p-4 text-md-on-surface-variant truncate min-w-0" title={user.email}>
+                    <td className="truncate min-w-0" title={user.email}>
                       {user.email}
                     </td>
-                    <td className="p-4">
+                    <td>
                       <div className="flex items-center">
                         <span className={`status-badge ${user.status === 'Active' ? 'status-valuation-approved' : 'status-valuation-rejected'}`}>
                           <span className="dot"></span> {user.status}
@@ -318,9 +321,7 @@ export const UserAdministration: React.FC = () => {
             itemLabel="entries"
           />
         </div>
-        
-        </div>
-      </MD3Card>
+      </div>
 
       <Modal
         isOpen={isModalOpen}
