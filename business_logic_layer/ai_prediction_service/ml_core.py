@@ -37,9 +37,15 @@ TRAIN_DATASET_PATH = os.path.join(DATASETS_DIR, 'fcr_scs_valuation_train_dataset
 TEST_DATASET_PATH = os.path.join(DATASETS_DIR, 'fcr_scs_valuation_test_dataset.csv')
 
 CATEGORICAL_FEATURES = ['state', 'land_category', 'location_type', 'tenure_type']
-NUMERIC_FEATURES = ['land_area_m2', 'built_up_area_m2', 'building_age_years']
+NUMERIC_FEATURES = ['land_area_m2', 'acquisition_area_m2', 'building_age_years']
 FEATURE_COLUMNS = CATEGORICAL_FEATURES + NUMERIC_FEATURES
 TARGET_COLUMN = 'market_value_myr'
+
+# A structure is assumed on the acquired land for Building/Industry, and for
+# Agriculture only above this acquired-area threshold. Mirrors
+# generate_datasets.AGRICULTURE_STRUCTURE_THRESHOLD_M2 so relocation allowance
+# can be recomputed consistently at prediction time.
+AGRICULTURE_STRUCTURE_THRESHOLD_M2 = 400
 
 # Canonical allowed values (mirrors the shared frontend constants).
 VALID_VALUES = {
@@ -87,7 +93,7 @@ _VALUE_ALIASES = {
 # Old numeric payload key names accepted as aliases for the m2 features.
 _NUMERIC_ALIASES = {
     'land_area_m2': ['land_area_sqft'],
-    'built_up_area_m2': ['built_up_area_sqft'],
+    'acquisition_area_m2': ['acquisition_area_sqft', 'built_up_area_m2', 'built_up_area_sqft'],
 }
 
 
@@ -150,9 +156,16 @@ def load_active_model():
 
 # --- Compensation derivation (Land Acquisition Act 1960 style) ---
 
-def derive_compensation(market_value_myr: float, built_up_area_value) -> dict:
+def derive_compensation(market_value_myr: float, land_category: str, acquisition_area_m2: float) -> dict:
+    """Statutory compensation under the Land Acquisition Act 1960 style rules:
+    a 15% solatium (disturbance) plus a relocation allowance that applies when a
+    structure is assumed on the acquired land."""
     statutory_disturbance = int(round((market_value_myr * 0.15) / 100) * 100)
-    relocation_allowance = 8000 if built_up_area_value and built_up_area_value > 0 else 2000
+    structure_present = (
+        land_category in ('Building', 'Industry')
+        or (acquisition_area_m2 or 0) >= AGRICULTURE_STRUCTURE_THRESHOLD_M2
+    )
+    relocation_allowance = 8000 if structure_present else 2000
     recommended = int(round(market_value_myr)) + statutory_disturbance + relocation_allowance
     return {
         'marketValueMyr': int(round(market_value_myr)),
@@ -294,10 +307,18 @@ def normalise_payload(payload: dict) -> tuple:
             continue
         if value < 0:
             errors.append(f"'{col}' cannot be negative")
-        elif col == 'land_area_m2' and value == 0:
-            errors.append("'land_area_m2' must be greater than 0")
+        elif col in ('land_area_m2', 'acquisition_area_m2') and value == 0:
+            errors.append(f"'{col}' must be greater than 0")
         else:
             cleaned[col] = value
+
+    # The acquisition area is the part being acquired, so it must be strictly
+    # smaller than the whole parcel.
+    land_area = cleaned.get('land_area_m2')
+    acquisition_area = cleaned.get('acquisition_area_m2')
+    if land_area is not None and acquisition_area is not None and acquisition_area >= land_area:
+        errors.append("'acquisition_area_m2' must be less than 'land_area_m2'")
+
     if not errors and cleaned.get('building_age_years', 0) > 120:
         errors.append("'building_age_years' must be 120 or below")
     return cleaned, errors

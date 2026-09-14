@@ -66,6 +66,38 @@
   background: #4DD0E1;
 }
 
+/* 2b. Award Notarization Pending (Indigo / Violet) */
+.payment-badge.status-award-notarization-pending {
+  background: #EDE7F6;
+  color: #4527A0;
+}
+.payment-badge.status-award-notarization-pending .dot {
+  background: #7E57C2;
+}
+.dark .payment-badge.status-award-notarization-pending {
+  background: rgba(126, 87, 194, 0.22);
+  color: #D1C4E9;
+}
+.dark .payment-badge.status-award-notarization-pending .dot {
+  background: #B39DDB;
+}
+
+/* 2c. Bank Details & M1 Pending (Slate / Blue-Grey) */
+.payment-badge.status-bank-details-and-m1-pending {
+  background: #ECEFF1;
+  color: #37474F;
+}
+.payment-badge.status-bank-details-and-m1-pending .dot {
+  background: #78909C;
+}
+.dark .payment-badge.status-bank-details-and-m1-pending {
+  background: rgba(120, 144, 156, 0.22);
+  color: #CFD8DC;
+}
+.dark .payment-badge.status-bank-details-and-m1-pending .dot {
+  background: #B0BEC5;
+}
+
 /* 3. Pending Approval (Amber) */
 .payment-badge.status-pending-approval,
 .payment-badge.status-transfer-initiated,
@@ -313,6 +345,52 @@
   background: #C084FC;
 }
 
+/* 16. Void Pending (Awaiting On-Chain Revocation - Burnt Sienna) */
+.payment-badge.status-void-pending {
+  background: #FFF1E7;
+  color: #9A3412;
+}
+.payment-badge.status-void-pending .dot {
+  background: #EA580C;
+}
+.dark .payment-badge.status-void-pending {
+  background: rgba(234, 88, 12, 0.25);
+  color: #FED7AA;
+}
+.dark .payment-badge.status-void-pending .dot {
+  background: #FB923C;
+}
+
+/* 17. Grace Period Locked (Amber Warm Warning - DESIGN.md §4) */
+.payment-badge.status-locked,
+.payment-badge.status-grace-locked,
+.payment-badge.status-grace-period,
+.payment-badge.warning {
+  background: #FEF3C7;
+  color: #92400E;
+  border: 1px solid rgba(217, 119, 6, 0.25);
+}
+.payment-badge.status-locked .dot,
+.payment-badge.status-grace-locked .dot,
+.payment-badge.status-grace-period .dot,
+.payment-badge.warning .dot {
+  background: #D97706;
+}
+.dark .payment-badge.status-locked,
+.dark .payment-badge.status-grace-locked,
+.dark .payment-badge.status-grace-period,
+.dark .payment-badge.warning {
+  background: rgba(217, 119, 6, 0.22);
+  color: #FDE68A;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+.dark .payment-badge.status-locked .dot,
+.dark .payment-badge.status-grace-locked .dot,
+.dark .payment-badge.status-grace-period .dot,
+.dark .payment-badge.warning .dot {
+  background: #F59E0B;
+}
+
 /* Backward-compatible aliases */
 .payment-badge.approved { background: #E8F5E9; color: #1B5E20; }
 .payment-badge.approved .dot { background: #2E7D32; }
@@ -375,6 +453,10 @@
 }
 .case-id-wrap .case-id {
   cursor: pointer;
+  font-size: 12px;
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  line-height: inherit;
 }
 .case-id-wrap .case-id:hover {
   text-decoration: underline;
@@ -434,4 +516,27 @@
   .payment-detail-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* ---- Action Bar ---- */
+.action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+.action-bar .left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: var(--md-on-surface);
+}
+.action-bar .left .count {
+  font-size: 0.875rem;
+}
+.action-bar .right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }

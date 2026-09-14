@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, AlertOctagon, Loader2, FileWarning, ShieldAlert } from 'lucide-react';
+import { Clock, User, AlertOctagon, Loader2, FileWarning, ShieldAlert, Activity, RefreshCw } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
@@ -8,6 +8,7 @@ import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Button } from '../../components/ui/Button';
 import { CopyButton } from '../../components/ui/CopyButton';
+import { Pagination } from '../../components/ui/Pagination';
 import { Modal } from '../../components/ui/Modal';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { useAuth } from '../../context/AuthContext';
@@ -54,7 +55,7 @@ export default function FailedTransactions() {
   const pageRef = useRef<HTMLDivElement>(null);
   useGSAP(() => {
     gsap.fromTo('.failed-header', { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.45, ease: 'power2.out' });
-    gsap.fromTo('.stats-grid, .filter-bar, .table-wrap', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.08, ease: 'back.out(1.2)', delay: 0.2 });
+    gsap.fromTo('.stats-grid, .filter-bar, .action-bar, .table-wrap', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.08, ease: 'back.out(1.2)', delay: 0.2 });
   }, { scope: pageRef });
 
   const loadData = useCallback(async () => {
@@ -81,8 +82,8 @@ export default function FailedTransactions() {
       return ft.length === 0 || ft[ft.length - 1].resolution == null;
     }).length;
     return [
-      { label: 'Failed / Rejected', value: failed, change: 'Transfer Failed & Rejected', icon: AlertOctagon },
-      { label: 'Pending Resolution', value: unresolved, change: 'Needs SOP action', icon: FileWarning },
+      { label: 'Failed / Rejected', value: failed, icon: AlertOctagon, iconColor: 'text-red-500' },
+      { label: 'Pending Resolution', value: unresolved, icon: FileWarning, iconColor: 'text-amber-500' },
     ];
   }, [cases]);
 
@@ -90,6 +91,17 @@ export default function FailedTransactions() {
     const q = searchQuery.trim().toLowerCase();
     return cases.filter((c) => !q || c.caseId.toLowerCase().includes(q) || (c.accountHolderName ?? '').toLowerCase().includes(q));
   }, [cases, searchQuery]);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
+  const totalCount = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const safePage = Math.max(1, Math.min(currentPage, totalPages));
+  const pageRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
 
   const closeModal = () => setModal(null);
 
@@ -103,7 +115,6 @@ export default function FailedTransactions() {
           <div className="sub">Every bank error / processing anomaly lands here with its error log — resolve via SOP actions.</div>
         </div>
         <div className="topbar-right">
-          <RefreshButton onClick={() => loadData()} loading={loading} />
           <div className="date-badge">
             <Clock size={16} className="inline mr-1" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
           </div>
@@ -131,10 +142,9 @@ export default function FailedTransactions() {
       <div className="stats-grid">
         {stats.map((stat, idx) => (
           <div key={idx} className="stat-card">
-            <stat.icon className="stat-icon" size={32} />
+            <stat.icon className={`stat-icon ${stat.iconColor || 'text-md-primary'}`} size={32} />
             <div className="stat-label">{stat.label}</div>
             <div className="stat-number">{stat.value}</div>
-            <div className="stat-change">{stat.change}</div>
           </div>
         ))}
       </div>
@@ -148,7 +158,11 @@ export default function FailedTransactions() {
 
       <div className="action-bar">
         <div className="left">
-          <span className="count">{filtered.length} failed {filtered.length === 1 ? 'transaction' : 'transactions'}</span>
+          <Activity size={18} />
+          <span className="count">Failed transactions ({filtered.length})</span>
+        </div>
+        <div className="right">
+          <RefreshButton onClick={() => loadData()} loading={loading} />
         </div>
       </div>
 
@@ -177,7 +191,7 @@ export default function FailedTransactions() {
                   <td colSpan={6} className="text-center text-gray-500 py-8">No failed transactions requiring resolution.</td>
                 </tr>
               ) : (
-                filtered.map((pc) => {
+                pageRows.map((pc) => {
                   const ft = pc.failedTransactions ?? [];
                   const latest = ft[ft.length - 1];
                   // GA-rejected cases (FR-018) carry no failedTransaction row —
@@ -223,9 +237,16 @@ export default function FailedTransactions() {
         </div>
       </div>
 
-      <div style={{ marginTop: '24px', fontSize: '13px', color: 'var(--md-on-surface-variant)', opacity: 0.6, textAlign: 'center', borderTop: '1px solid rgba(121,116,126,0.08)', paddingTop: '18px' }}>
-        FCR-SCS · Payments · Failed Transactions · Connected to Live Backend Data
-      </div>
+      <Pagination
+        currentPage={safePage}
+        totalPages={totalPages}
+        totalCount={totalCount}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+        itemLabel="failed transactions"
+      />
+
+      <div style={{ height: '32px' }} />
 
       <CaseDetailsModal
         caseId={caseDetailsId}

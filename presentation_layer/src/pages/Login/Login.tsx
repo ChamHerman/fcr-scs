@@ -23,8 +23,12 @@ export const Login: React.FC = () => {
       const response = await authService.login(email, password);
       login(response.token, response.user);
       
-      // Navigate to admin dashboard after successful login
-      navigate('/admin');
+      const role = (response.user?.role || '').toUpperCase();
+      if (role === 'DISPLACED_COMMUNITY_MEMBER' || role.includes('MEMBER')) {
+        navigate('/member');
+      } else {
+        navigate('/admin');
+      }
     } catch (err: any) {
       if (err.response && err.response.data && err.response.data.error) {
         setError(err.response.data.error);

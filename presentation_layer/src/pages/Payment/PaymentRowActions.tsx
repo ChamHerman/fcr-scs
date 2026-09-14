@@ -1,5 +1,5 @@
 import React from 'react';
-import { Send, PenLine, XCircle, RotateCcw, Download, Ban, BadgeCheck, Lock } from 'lucide-react';
+import { Send, PenLine, XCircle, RotateCcw, Download, BadgeCheck, Lock } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { IconButton } from '../../components/ui/IconButton';
 import { ActionMenuPortal } from '../../components/ui/ActionMenuPortal';
@@ -82,9 +82,22 @@ export const PaymentRowActions: React.FC<PaymentRowActionsProps> = ({
               <Send size={13} className="shrink-0" />
               <span>Initiate</span>
             </Button>
-            <IconButton title="Cancel Payment" variant="danger" onClick={() => onAction('cancel', pc)}>
-              <Ban size={16} />
-            </IconButton>
+          </div>
+        );
+      }
+      if (!pc.isM1Published) {
+        return (
+          <div className="row-actions">
+            <Button
+              size="sm"
+              variant="tonal"
+              disabled
+              title="Initiation is locked: Milestone 1 (Statutory Award) must be published on the blockchain first"
+              className={`${pillBtn} opacity-60 cursor-not-allowed`}
+            >
+              <Lock size={12} className="shrink-0 text-amber-500" />
+              <span>Awaiting M1 Notarization</span>
+            </Button>
           </div>
         );
       }
@@ -94,9 +107,6 @@ export const PaymentRowActions: React.FC<PaymentRowActionsProps> = ({
             <Send size={13} className="shrink-0" />
             <span>Initiate</span>
           </Button>
-          <IconButton title="Cancel Payment" variant="danger" onClick={() => onAction('cancel', pc)}>
-            <Ban size={16} />
-          </IconButton>
         </div>
       );
     case 'Transfer Initiated':
@@ -111,7 +121,6 @@ export const PaymentRowActions: React.FC<PaymentRowActionsProps> = ({
             <IconButton title="Reject Transfer" variant="danger" onClick={() => onAction('reject', pc)}>
               <XCircle size={16} />
             </IconButton>
-            {menu([{ label: 'Cancel Payment (Destructive)', onClick: () => onAction('cancel', pc) }])}
           </div>
         );
       }
@@ -128,7 +137,6 @@ export const PaymentRowActions: React.FC<PaymentRowActionsProps> = ({
               <Send size={13} className="shrink-0" />
               <span>Confirm Release</span>
             </Button>
-            {menu([{ label: 'Cancel Payment (Destructive)', onClick: () => onAction('cancel', pc) }])}
           </div>
         );
       }
@@ -145,7 +153,6 @@ export const PaymentRowActions: React.FC<PaymentRowActionsProps> = ({
             <Lock size={12} className="shrink-0 text-amber-500" />
             <span>Signed ({left} left)</span>
           </Button>
-          {menu([{ label: 'Cancel Payment (Destructive)', onClick: () => onAction('cancel', pc) }])}
         </div>
       );
     }
@@ -187,14 +194,8 @@ export const PaymentRowActions: React.FC<PaymentRowActionsProps> = ({
       );
 
     case 'Scheduled':
-      // Scheduled for the next clearing window — still cancellable beforehand.
-      return (
-        <div className="row-actions">
-          <IconButton title="Cancel Payment" variant="danger" onClick={() => onAction('cancel', pc)}>
-            <Ban size={16} />
-          </IconButton>
-        </div>
-      );
+      // Scheduled for the next clearing window — cancellation handled via View Details Danger Zone.
+      return <div className="row-actions" />;
 
     default:
       // Waiting Bank Approval, Cancelled, Transfer Rejected, Pending New Bank

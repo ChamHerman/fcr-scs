@@ -112,11 +112,15 @@ export const MemberOfferLetter: React.FC = () => {
         if (!isMounted) return;
         setCasesList(memberCases);
 
-        if (!selectedCaseId && memberCases.length > 0) {
-          // Default to first case that has an offer letter, or first case
-          const caseWithOffer = memberCases.find((c: any) => c.offerLetters && c.offerLetters.length > 0);
-          const defaultCase = caseWithOffer || memberCases[0];
-          setSelectedCaseId(defaultCase.caseId);
+        if (queryCaseId) {
+          setSelectedCaseId(queryCaseId);
+        } else {
+          setSelectedCaseId((prev) => {
+            if (prev) return prev;
+            const caseWithOffer = memberCases.find((c: any) => c.status === 'OFFER_ISSUED' || c.status === 'OFFER_ACCEPTED');
+            const defaultCase = caseWithOffer || memberCases[0];
+            return defaultCase?.caseId || '';
+          });
         }
       } catch (err) {
         console.error('Failed to load member cases:', err);
@@ -124,25 +128,57 @@ export const MemberOfferLetter: React.FC = () => {
     }
     loadCases();
     return () => { isMounted = false; };
-  }, [identificationNumber, user, userName, selectedCaseId]);
+  }, [identificationNumber, user, userName, queryCaseId]);
+
+  useEffect(() => {
+    if (queryCaseId && queryCaseId !== selectedCaseId) {
+      setSelectedCaseId(queryCaseId);
+    }
+  }, [queryCaseId, selectedCaseId]);
 
   // 2. Fetch Offer Letter Data
   const loadOfferData = useCallback(async () => {
     setLoading(true);
     try {
-      let resolvedOfferId = routeOfferId || queryOfferId;
+      let resolvedOfferId = '';
 
-      // If no offerId specified directly, search via selectedCaseId
-      if (!resolvedOfferId && selectedCaseId) {
-        const caseData = await landAcquisitionApi.getCaseById(selectedCaseId);
-        const c = caseData.acquisitionCase || caseData;
-        if (c?.offerLetters && c.offerLetters.length > 0) {
-          resolvedOfferId = c.offerLetters[0].offerId;
+      // Priority 1: If user selected a case or queryCaseId is present, find offer for THIS case
+      if (selectedCaseId) {
+        try {
+          const caseData = await landAcquisitionApi.getCaseById(selectedCaseId);
+          const c = caseData.case || caseData.acquisitionCase || caseData;
+          if (c?.offerLetters && c.offerLetters.length > 0) {
+            // Pick pending offer if available, otherwise first offer
+            const pending = c.offerLetters.find((ol: any) => ol.status === 'PENDING');
+            resolvedOfferId = (pending || c.offerLetters[0]).offerId;
+          }
+        } catch (e) {
+          console.warn('Could not load case data for offer resolution:', e);
+        }
+
+        if (!resolvedOfferId) {
+          try {
+            const allOffersRes = await compensationApi.getAllOfferLetters({
+              caseId: selectedCaseId,
+              limit: 5,
+            });
+            const list = allOffersRes.offerLetters || allOffersRes || [];
+            if (list.length > 0) {
+              resolvedOfferId = list[0].offerId;
+            }
+          } catch (e) {
+            console.warn('Could not query offer letters by caseId:', e);
+          }
         }
       }
 
+      // Priority 2: If no offer found via selectedCaseId, check routeOfferId or queryOfferId
+      if (!resolvedOfferId && (routeOfferId || queryOfferId)) {
+        resolvedOfferId = routeOfferId || queryOfferId;
+      }
+
+      // Priority 3: Fall back to all offer letters for this landowner
       if (!resolvedOfferId) {
-        // Try to query all offer letters for the current user/landowner
         const allOffersRes = await compensationApi.getAllOfferLetters({
           ownerNric: identificationNumber || user?.identificationNumber,
           limit: 10
@@ -261,7 +297,7 @@ export const MemberOfferLetter: React.FC = () => {
       const currentUserStatus = currentUserOwner ? currentUserOwner.status : null;
 
       // 1-day grace period computation:
-      const acceptedDate = isMultiOwner && currentUserOwner?.respondedAtDate
+      const acceptedDate = currentUserOwner?.respondedAtDate
         ? currentUserOwner.respondedAtDate
         : o.acceptedAt
         ? new Date(o.acceptedAt)
@@ -409,7 +445,7 @@ export const MemberOfferLetter: React.FC = () => {
       };
 
       setOffer(formatted);
-      if (c?.caseId && c.caseId !== selectedCaseId) {
+      if (c?.caseId && !selectedCaseId) {
         setSelectedCaseId(c.caseId);
       }
     } catch (err: any) {
@@ -431,7 +467,7 @@ export const MemberOfferLetter: React.FC = () => {
   // Handle Case Switching
   const handleCaseChange = (newCaseId: string) => {
     setSelectedCaseId(newCaseId);
-    setSearchParams({ caseId: newCaseId }, { replace: true });
+    navigate(`/member/offer-letter?caseId=${encodeURIComponent(newCaseId)}`, { replace: true });
   };
 
   // ---------------------------------------------------------------------------
@@ -628,10 +664,7 @@ export const MemberOfferLetter: React.FC = () => {
                 };
               })}
               value={selectedCaseId}
-              onChange={(val) => {
-                setSelectedCaseId(val);
-                setSearchParams({ caseId: val });
-              }}
+              onChange={handleCaseChange}
               wrapLabels
             />
           </div>
@@ -956,13 +989,23 @@ export const MemberOfferLetter: React.FC = () => {
                   {/* Actions Row */}
                   <div className="flex items-center justify-end gap-3 flex-wrap pt-2">
                     <Button
-                      variant="danger"
+                      variant="outlined"
                       size="md"
                       onClick={handleOpenCreateObjection}
                       className="w-full sm:w-auto"
                     >
+                      <AlertTriangle size={16} className="text-amber-600" />
+                      <span>Submit Objection (Form N)</span>
+                    </Button>
+
+                    <Button
+                      variant="danger"
+                      size="md"
+                      onClick={() => setShowRejectModal(true)}
+                      className="w-full sm:w-auto"
+                    >
                       <XCircle size={16} />
-                      <span>Reject and Submit Objection</span>
+                      <span>Reject Offer</span>
                     </Button>
 
                     <Button

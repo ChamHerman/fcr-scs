@@ -63,4 +63,26 @@ describe("GET /api/smart-contract/records/:caseId", () => {
     const r = await request(app).get("/api/smart-contract/records/NONEXISTENT-999");
     expect(r.status).toBe(404);
   });
+  it("404 for unknown caseId with milestone M2 query", async () => {
+    const r = await request(app).get("/api/smart-contract/records/NONEXISTENT-999?milestone=M2");
+    expect(r.status).toBe(404);
+  });
+});
+
+describe("POST /api/smart-contract/publish — dual milestone handling", () => {
+  it("accepts milestone M2 in payload and enforces wallet auth", async () => {
+    const r = await request(app).post("/api/smart-contract/publish")
+      .send({ caseId: "CASE-002", milestone: "M2", documentHash: "0xabc", transactionHash: "0xtx", walletAddress: "0xWRONG" });
+    expect(r.status).toBe(403);
+    expect(r.body.error).toMatch(/unauthorised/i);
+  });
+});
+
+describe("POST /api/smart-contract/void — dual milestone handling", () => {
+  it("400 when caseId is missing", async () => {
+    const r = await request(app).post("/api/smart-contract/void")
+      .send({ milestone: "M1", voidReason: "duplicate", transactionHash: "0xtx", walletAddress: "0xAdminWallet123" });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/caseId/i);
+  });
 });

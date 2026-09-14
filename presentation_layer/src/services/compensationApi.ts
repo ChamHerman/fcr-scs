@@ -3,6 +3,7 @@ import { fetchJSON, BASE_URL } from "./api";
 export const COMPENSATION_BASE = BASE_URL;
 
 export interface CompensationFilterParams {
+  caseId?: string;
   search?: string;
   status?: string;
   ownerNric?: string;
@@ -72,6 +73,7 @@ export const compensationApi = {
   // ─── Offer Letters (Phase 6) ────────────────────────────────────────────────
   getAllOfferLetters: async (params?: CompensationFilterParams) => {
     const query = new URLSearchParams();
+    if (params?.caseId) query.append("caseId", params.caseId);
     if (params?.search) query.append("search", params.search);
     if (params?.status) query.append("status", params.status);
     if (params?.ownerNric) query.append("ownerNric", params.ownerNric);
@@ -109,7 +111,7 @@ export const compensationApi = {
     offerId: string,
     signedDocument?: string | File | null,
     forceAccept?: boolean,
-    options?: { ownerNric?: string; ownerId?: string; userId?: string }
+    options?: { ownerNric?: string; ownerId?: string; userId?: string; clientHash?: string }
   ) => {
     if (signedDocument instanceof File) {
       const formData = new FormData();
@@ -118,6 +120,8 @@ export const compensationApi = {
       if (options?.ownerNric) formData.append("ownerNric", options.ownerNric);
       if (options?.ownerId) formData.append("ownerId", options.ownerId);
       if (options?.userId) formData.append("userId", options.userId);
+      // FR-019: browser-computed fingerprint verified server-side on arrival.
+      if (options?.clientHash) formData.append("clientHash", options.clientHash);
 
       const url = COMPENSATION_BASE + `/api/compensation/offer-letters/${encodeURIComponent(offerId)}/accept`;
       const res = await fetch(url, {

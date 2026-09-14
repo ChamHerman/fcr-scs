@@ -45,7 +45,7 @@ export interface ValuationInput {
   location_type: string;
   tenure_type: string;
   land_area_m2: number;
-  built_up_area_m2: number;
+  acquisition_area_m2: number;
   building_age_years: number;
 }
 
@@ -58,7 +58,8 @@ export interface LegacyValuationCall {
   tenure_type: string;
   building_condition?: string;
   land_area_sqft: number;
-  built_up_area_sqft: number;
+  acquisition_area_sqft?: number;
+  built_up_area_sqft?: number;
   building_age_years: number;
 }
 

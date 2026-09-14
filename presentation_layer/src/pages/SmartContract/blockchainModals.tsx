@@ -1,15 +1,20 @@
-import React, { useState } from 'react';
-import { AlertTriangle, Loader2, Lock, ShieldCheck, Wallet, Copy, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { AlertTriangle, Loader2, Lock, ShieldCheck, Wallet, Copy, CheckCircle2, ExternalLink, Ban, Upload } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
+import { Select } from '../../components/ui/Select';
 import { Textarea } from '../../components/ui/Textarea';
+import { CopyButton } from '../../components/ui/CopyButton';
 import { blockchainApi } from '../../services/blockchainApi';
+import { landAcquisitionApi } from '../../services/landAcquisitionApi';
 import { useWallet } from '../../hooks/useWallet';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { blockchainStatusClassMap } from '../Payment/statusMaps';
 import { copyToClipboard } from '../../utils/clipboard';
 import { sendLedgerTransaction, waitForLedgerReceipt } from './walletTx';
+import { formatDateTime } from '../../utils/dateFormat';
 
 /**
  * Shared modals for the blockchain module (PLAN_HM_1308 §5.5, §5.6, §5.7).
@@ -20,6 +25,9 @@ import { sendLedgerTransaction, waitForLedgerReceipt } from './walletTx';
 export interface LedgerRow {
   id: string;
   caseId: string;
+  /** FR-019: on-chain anchor key `${caseId}#M1` / `${caseId}#M2`. */
+  milestone?: 'M1' | 'M2';
+  onChainKey?: string;
   publicId?: string;
   transactionHash?: string | null;
   documentHash?: string | null;
@@ -29,16 +37,26 @@ export interface LedgerRow {
   publishedAt?: string | null;
   voidedAt?: string | null;
   createdAt?: string;
+  /** FR-012 grace policy: instant the 24-hour acceptance window ends. */
+  graceEndsAt?: string | number | null;
   // Derived / display-only (from the payment side)
   beneficiary?: string;
   amount?: string | number;
   recordType?: 'Original' | 'Replacement';
   certificateVersion?: number;
   followUp?: string | null;
+  bankName?: string | null;
+  accountNumber?: string | null;
+  bankReferenceNumber?: string | null;
+  paidAt?: string | null;
+  acceptedAt?: string | null;
 }
 
+export const maskAccount = (n?: string | null) =>
+  n && n.length > 4 ? `•••• ${n.slice(-4)}` : n || '—';
+
 export const fmtTx = (h?: string | null) =>
-  h ? `${h.slice(0, 10)}…${h.slice(-6)}` : '—';
+  h ? `${h.slice(0, 6)}…${h.slice(-4)}` : '—';
 
 export const ledgerBadge = (status: string, extra?: string) => {
   const cls = blockchainStatusClassMap[status] ?? 'info';
@@ -52,64 +70,287 @@ export const ledgerBadge = (status: string, extra?: string) => {
 
 export const fmtAmount = (v?: string | number) => `RM ${Number(v || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export const fmtDate = (d?: string | null) =>
-  d ? new Date(d).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+export const fmtDate = (d?: string | null) => formatDateTime(d);
+
+export const formatGraceCountdown = (msRemaining: number): string => {
+  if (msRemaining <= 0) return '0m';
+  const totalMinutes = Math.floor(msRemaining / (60 * 1000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+};
 
 /* ------------------------------ View Details ------------------------------ */
 
-export const ViewLedgerModal: React.FC<{ row: LedgerRow | null; onClose: () => void }> = ({ row, onClose }) => (
-  <Modal isOpen={Boolean(row)} onClose={onClose} title="Ledger Record Details" subtitle={row ? `Record ${row.publicId ?? row.caseId}` : ''} cancelText="Close">
-    {row && (
-      <div className="space-y-5">
-        <div className="payment-detail-grid">
-          <div className="payment-detail-item">
-            <div className="label">Record ID</div>
-            <div className="value mono text-md-primary font-bold">{row.publicId ?? row.caseId}</div>
+export const ViewLedgerModal: React.FC<{
+  row: LedgerRow | null;
+  onClose: () => void;
+  onAction?: (action: 'publish' | 'void', row: LedgerRow) => void;
+}> = ({ row, onClose, onAction }) => {
+  const [caseData, setCaseData] = useState<any>(null);
+
+  useEffect(() => {
+    if (!row?.caseId) {
+      setCaseData(null);
+      return;
+    }
+    let isMounted = true;
+    landAcquisitionApi
+      .getCaseById(row.caseId)
+      .then((res: any) => {
+        if (isMounted) setCaseData(res?.data || res?.case || res);
+      })
+      .catch(() => {
+        if (isMounted) setCaseData(null);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [row?.caseId]);
+
+  if (!row) return null;
+
+  const blockchainId = row.publicId?.startsWith('BCN-')
+    ? row.publicId
+    : row.id?.startsWith('BCN-')
+    ? row.id
+    : (row.publicId || row.id);
+  const txUrl = row.transactionHash ? `https://sepolia.etherscan.io/tx/${row.transactionHash}` : null;
+  const isPublished = row.status === 'Published' || row.status === 'PUBLISHED' || row.status === 'CONFIRMED';
+  const isVoidPending = row.status === 'Void Pending' || row.status === 'VOID_PENDING' || row.status === 'AWAITING_VOID';
+  const graceLocked =
+    row.milestone === 'M1' &&
+    !!row.graceEndsAt &&
+    Date.now() < new Date(row.graceEndsAt).getTime();
+  const countdown = graceLocked
+    ? formatGraceCountdown(new Date(row.graceEndsAt as string | number).getTime() - Date.now())
+    : '';
+  const hashMissing = row.milestone === 'M1' && !row.documentHash;
+  const isReady =
+    !isPublished &&
+    !isVoidPending &&
+    (row.status === 'Ready to Publish' ||
+      row.status === 'READY_TO_PUBLISH' ||
+      row.status === 'PENDING' ||
+      row.status === 'OFFER_ACCEPTED' ||
+      row.status === 'COMPLETED' ||
+      row.status === 'READY' ||
+      graceLocked ||
+      row.status === 'Grace Period (Locked)');
+
+  return (
+    <Modal
+      isOpen={Boolean(row)}
+      onClose={onClose}
+      title="Blockchain Notarization Details"
+      subtitle={`Blockchain ID: ${blockchainId} · Case ${row.caseId}`}
+      maxWidth="max-w-2xl"
+      footer={
+        <div className="flex items-center justify-between w-full">
+          <Button variant="text" size="md" onClick={onClose}>
+            Close
+          </Button>
+          {(isReady || isVoidPending) && onAction && (
+            <div className="flex items-center gap-3">
+              {isReady && (
+                <Button
+                  variant="animated-primary"
+                  size="md"
+                  disabled={hashMissing || graceLocked}
+                  title={
+                    hashMissing
+                      ? 'The accepted offer has no frozen Form H fingerprint yet — publishing is blocked'
+                      : graceLocked
+                      ? `Milestone 1 unlocks when the 24-hour acceptance grace period ends (${countdown} left)`
+                      : undefined
+                  }
+                  onClick={() => {
+                    onClose();
+                    onAction('publish', row);
+                  }}
+                >
+                  {graceLocked ? <Lock size={15} className="mr-1.5" /> : <Upload size={15} className="mr-1.5" />}
+                  <span>
+                    {graceLocked
+                      ? `Locked (${countdown} Left)`
+                      : hashMissing
+                      ? 'Form H Hash Missing'
+                      : row.milestone === 'M2'
+                      ? 'Publish Settlement (M2)'
+                      : 'Publish Award (M1)'}
+                  </span>
+                </Button>
+              )}
+              {isVoidPending && (
+                <Button
+                  variant="danger"
+                  size="md"
+                  onClick={() => {
+                    onClose();
+                    onAction('void', row);
+                  }}
+                >
+                  <Ban size={15} className="mr-1.5" />
+                  <span>Complete On-Chain Revocation</span>
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      }
+    >
+      <div className="space-y-6">
+        {/* Top Priority: Statutory Land Acquisition & Financial Particulars */}
+        <div className="bg-md-surface-container-low rounded-xl p-4 border border-md-outline/10 space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-md-primary">
+              Statutory Land Acquisition Particulars
+            </h4>
+            <span className="font-mono text-xs font-bold text-md-primary">{row.caseId}</span>
           </div>
-          <div className="payment-detail-item">
-            <div className="label">Case</div>
-            <div className="value mono">{row.caseId}</div>
+          <div className="payment-detail-grid">
+            <div className="payment-detail-item">
+              <div className="label">Case Title</div>
+              <div className="value font-medium">{caseData?.caseTitle || caseData?.title || '—'}</div>
+            </div>
+            <div className="payment-detail-item">
+              <div className="label">Project</div>
+              <div className="value font-medium">{caseData?.project?.projectName || '—'}</div>
+            </div>
+            <div className="payment-detail-item">
+              <div className="label">Parcel / Title No</div>
+              <div className="value">
+                {caseData?.landParcel
+                  ? `${caseData.landParcel.lotNo || '—'} (${caseData.landParcel.landTitleNo || '—'})`
+                  : '—'}
+              </div>
+            </div>
+            <div className="payment-detail-item">
+              <div className="label">Beneficiary Landowner</div>
+              <div className="value font-semibold">
+                {row.beneficiary ||
+                  caseData?.landParcel?.ownerships?.[0]?.landOwner?.name ||
+                  caseData?.landOwners?.[0]?.name ||
+                  '—'}
+              </div>
+            </div>
+            <div className="payment-detail-item">
+              <div className="label">Compensation Amount</div>
+              <div className="value font-bold text-md-primary">
+                {fmtAmount(
+                  row.amount ||
+                    caseData?.compensationReports?.[0]?.totalCompensation ||
+                    caseData?.offerLetters?.[0]?.offerAmount ||
+                    caseData?.valuationReports?.[0]?.recommendedCompensation ||
+                    0
+                )}
+              </div>
+            </div>
+            <div className="payment-detail-item">
+              <div className="label">Milestone Target</div>
+              <div className="value font-semibold">
+                {row.milestone === 'M1'
+                  ? 'Milestone 1 — Statutory Award (Form H)'
+                  : 'Milestone 2 — Settlement Clearance (Receipt)'}
+              </div>
+            </div>
           </div>
-          <div className="payment-detail-item">
-            <div className="label">Type</div>
-            <div className="value">{row.recordType ?? 'Original'}</div>
-          </div>
-          <div className="payment-detail-item">
-            <div className="label">Status</div>
-            <div className="value">{ledgerBadge(row.status, row.recordType === 'Replacement' ? 'Replacement' : undefined)}</div>
-          </div>
-          <div className="payment-detail-item">
-            <div className="label">Document Hash (SHA-256)</div>
-            <div className="value mono" style={{ fontSize: 12 }}>{row.documentHash || '—'}</div>
-          </div>
-          <div className="payment-detail-item">
-            <div className="label">Transaction Hash</div>
-            <div className="value mono" style={{ fontSize: 12 }}>{row.transactionHash || '—'}</div>
-          </div>
-          <div className="payment-detail-item">
-            <div className="label">Published</div>
-            <div className="value">{fmtDate(row.publishedAt)}</div>
-          </div>
-          <div className="payment-detail-item">
-            <div className="label">Voided</div>
-            <div className="value">{fmtDate(row.voidedAt)}</div>
+        </div>
+
+        {/* Cryptographic Proofs & On-Chain Notarization Status */}
+        <div>
+          <h4 className="text-xs font-bold uppercase tracking-wider text-md-on-surface-variant mb-3">
+            On-Chain Notarization & Cryptographic Proof
+          </h4>
+          <div className="payment-detail-grid">
+            <div className="payment-detail-item">
+              <div className="label">Blockchain Record ID</div>
+              <div className="value mono text-md-primary font-bold">{blockchainId}</div>
+            </div>
+            <div className="payment-detail-item">
+              <div className="label">On-Chain Key</div>
+              <div className="value mono">{row.onChainKey || `${row.caseId}#${row.milestone || 'M1'}`}</div>
+            </div>
+            <div className="payment-detail-item">
+              <div className="label">Status</div>
+              <div className="value">{ledgerBadge(row.status)}</div>
+            </div>
+            <div className="payment-detail-item">
+              <div className="label">Published Timestamp</div>
+              <div className="value">{fmtDate(row.publishedAt)}</div>
+            </div>
+            <div className="payment-detail-item col-span-2">
+              <div className="label">Document Hash (SHA-256 Byte Fingerprint)</div>
+              <div className="value mono flex items-center justify-between text-xs break-all">
+                <span>{row.documentHash || '—'}</span>
+                {row.documentHash && <CopyButton value={row.documentHash} title="Copy Hash" />}
+              </div>
+            </div>
+            <div className="payment-detail-item col-span-2">
+              <div className="label">Transaction Hash (Sepolia Etherscan)</div>
+              <div className="value mono flex items-center justify-between text-xs break-all">
+                {txUrl ? (
+                  <a
+                    href={txUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-md-primary font-semibold hover:underline inline-flex items-center gap-1.5"
+                  >
+                    <span>{row.transactionHash}</span>
+                    <ExternalLink size={12} className="shrink-0" />
+                  </a>
+                ) : (
+                  <span>{row.transactionHash || '—'}</span>
+                )}
+                {row.transactionHash && <CopyButton value={row.transactionHash} title="Copy Tx Hash" />}
+              </div>
+            </div>
+            <div className="payment-detail-item col-span-2">
+              <div className="label">Revocation Timestamp</div>
+              <div className="value">{row.voidedAt ? fmtDate(row.voidedAt) : '—'}</div>
+            </div>
           </div>
         </div>
 
         {row.voidReason && (
           <div className="text-sm bg-md-error/10 border border-md-error/30 rounded-xl px-4 py-3 text-md-on-error">
-            <span className="font-semibold">Void reason:</span> {row.voidReason}
+            <span className="font-semibold">Revocation / Void Reason:</span> {row.voidReason}
           </div>
         )}
-        {row.followUp && (
-          <div className="text-sm bg-md-warning/10 border border-md-warning/30 rounded-xl px-4 py-3 text-md-on-warning">
-            <span className="font-semibold">Follow-up recorded:</span> {row.followUp}
+
+        {isPublished && onAction && (
+          <div className="mt-8 pt-6 border-t border-md-error/30">
+            <div className="p-4 rounded-xl border border-md-error/40 bg-md-error/5 space-y-3">
+              <div className="flex items-center gap-2 text-md-error font-bold text-sm">
+                <AlertTriangle size={18} />
+                <span>Danger Zone · Statutory Record Revocation</span>
+              </div>
+              <p className="text-xs text-md-on-surface-variant leading-relaxed">
+                On-chain notarization is legally immutable under statutory land acquisition rules. Revoking or voiding a published record is restricted to exceptional circumstances such as judicial injunctions, fraudulent claims, or material administrative errors.
+              </p>
+              <div className="pt-2 flex justify-end">
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => {
+                    onClose();
+                    onAction('void', row);
+                  }}
+                >
+                  <Ban size={14} className="mr-1.5" />
+                  <span>Revoke / Void Record</span>
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </div>
-    )}
-  </Modal>
-);
+    </Modal>
+  );
+};
 
 /* ------------------------------ Publish modal ------------------------------ */
 
@@ -132,10 +373,31 @@ export const PublishModal: React.FC<{ row: LedgerRow | null; onClose: () => void
       }
 
       // 1. Prompt the admin's MetaMask to sign + send the publish transaction
+      // FR-019: the contract maps by on-chain key `${caseId}#M1` / `${caseId}#M2`.
+      let publishKey = row.onChainKey || `${row.caseId}#${row.milestone || 'M1'}`;
+      try {
+        const ethereum = (window as any).ethereum;
+        if (ethereum) {
+          const { ethers } = await import('ethers');
+          const provider = new ethers.BrowserProvider(ethereum);
+          const contract = new ethers.Contract(
+            net.contractAddress,
+            ['function getRecord(string) view returns (bytes32, uint256, bool, string, uint256)'],
+            provider
+          );
+          const rec = await contract.getRecord(publishKey);
+          if (rec && Number(rec[1]) > 0) {
+            publishKey = `${publishKey}-v${Date.now().toString().slice(-4)}`;
+          }
+        }
+      } catch {
+        // Non-blocking pre-check
+      }
+
       const txHash = await sendLedgerTransaction({
         from: walletAddress,
         functionName: 'publishRecord',
-        args: [row.caseId, row.documentHash || ''],
+        args: [publishKey, row.documentHash || ''],
         network: { chainId: net.chainId, contractAddress: net.contractAddress },
       });
       setResultTx(txHash);
@@ -148,12 +410,14 @@ export const PublishModal: React.FC<{ row: LedgerRow | null; onClose: () => void
       setStage('recording');
       await blockchainApi.publish({
         caseId: row.caseId,
+        milestone: row.milestone === 'M2' ? 'SETTLEMENT' : 'AWARD',
         documentHash: row.documentHash || '',
         walletAddress,
         transactionHash: txHash,
+        onChainKey: publishKey,
       });
 
-      notify({ type: 'success', title: 'Published on-chain', message: `Record for ${row.caseId} published · Tx ${fmtTx(txHash)}` });
+      notify({ type: 'success', title: 'Published on-chain', message: `${row.milestone === 'M2' ? 'Settlement (M2)' : 'Statutory award (M1)'} record for ${row.caseId} published · Tx ${fmtTx(txHash)}` });
       onClose();
       onDone();
     } catch (e: any) {
@@ -176,11 +440,15 @@ export const PublishModal: React.FC<{ row: LedgerRow | null; onClose: () => void
       onConfirm={confirm}
     >
       {row && (
-        <div className="space-y-4">
+        <div className="space-y-4 pb-5">
           <div className="payment-detail-grid">
             <div className="payment-detail-item">
               <div className="label">Case</div>
               <div className="value mono">{row.caseId}</div>
+            </div>
+            <div className="payment-detail-item">
+              <div className="label">On-Chain Key</div>
+              <div className="value mono">{row.onChainKey || row.caseId}</div>
             </div>
             <div className="payment-detail-item">
               <div className="label">Beneficiary</div>
@@ -190,10 +458,33 @@ export const PublishModal: React.FC<{ row: LedgerRow | null; onClose: () => void
               <div className="label">Amount</div>
               <div className="value">{fmtAmount(row.amount)}</div>
             </div>
-            <div className="payment-detail-item">
-              <div className="label">Certificate Version</div>
-              <div className="value">{row.certificateVersion ?? 1}</div>
-            </div>
+            {row.milestone === 'M1' ? (
+              <div className="payment-detail-item">
+                <div className="label">Form H Acceptance Date</div>
+                <div className="value">{fmtDate(row.acceptedAt)}</div>
+              </div>
+            ) : (
+              <>
+                <div className="payment-detail-item">
+                  <div className="label">Destination Bank</div>
+                  <div className="value">
+                    {row.bankName ? `${row.bankName} · ${maskAccount(row.accountNumber)}` : '—'}
+                  </div>
+                </div>
+                <div className="payment-detail-item">
+                  <div className="label">RENTAS / Bank Ref</div>
+                  <div className="value mono">{row.bankReferenceNumber || '—'}</div>
+                </div>
+                <div className="payment-detail-item">
+                  <div className="label">Settlement Paid Date</div>
+                  <div className="value">{fmtDate(row.paidAt)}</div>
+                </div>
+                <div className="payment-detail-item">
+                  <div className="label">Certificate Version</div>
+                  <div className="value">{row.certificateVersion ?? 1}</div>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="payment-detail-item">
@@ -201,13 +492,18 @@ export const PublishModal: React.FC<{ row: LedgerRow | null; onClose: () => void
             <div className="value mono" style={{ fontSize: 12 }}>{row.documentHash || '—'}</div>
           </div>
 
-          <div className="flex items-start gap-2 text-sm bg-md-warning/10 border border-md-warning/30 rounded-xl px-4 py-3 text-md-on-warning">
-            <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-            Publishing is immutable and cannot be undone. The certificate is released for download only after on-chain confirmation.
+          <div className="flex items-start gap-3 text-xs bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4 text-amber-800 dark:text-amber-200">
+            <AlertTriangle size={18} className="shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+            <div className="space-y-1">
+              <div className="font-bold text-xs uppercase tracking-wider">Statutory Immutability Warning</div>
+              <p className="text-xs leading-relaxed text-amber-900/80 dark:text-amber-200/80">
+                Publishing is legally immutable and cannot be undone. The cryptographic certificate is released for download only after on-chain block confirmation.
+              </p>
+            </div>
           </div>
 
           {!walletConnected ? (
-            <div className="text-center bg-md-surface-container-low rounded-xl px-4 py-5 border border-md-outline/10">
+            <div className="text-center bg-md-surface-container-low rounded-2xl px-4 py-5 border border-md-outline/10">
               <p className="text-sm text-md-on-surface-variant mb-3">Connect your authorised MetaMask wallet to publish.</p>
               <Button variant="animated-primary" onClick={connectWallet}>
                 <Wallet size={16} className="mr-2" /> Connect Wallet
@@ -215,9 +511,14 @@ export const PublishModal: React.FC<{ row: LedgerRow | null; onClose: () => void
               {walletError && <p className="text-xs text-md-on-error mt-2">{walletError}</p>}
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-sm bg-md-success/10 border border-md-success/30 rounded-xl px-4 py-3 text-md-on-success">
-              <ShieldCheck size={16} />
-              Wallet authorised · {walletAddress.slice(0, 6)}…{walletAddress.slice(-4)} — MetaMask will ask you to approve the publish transaction.
+            <div className="flex items-start gap-3 text-xs bg-emerald-500/10 border border-emerald-500/25 rounded-2xl p-4 text-emerald-800 dark:text-emerald-200 mb-2">
+              <ShieldCheck size={18} className="shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
+              <div className="space-y-1">
+                <div className="font-bold text-xs uppercase tracking-wider">Authorised Government Administrator Wallet</div>
+                <p className="text-xs leading-relaxed text-emerald-900/80 dark:text-emerald-200/80">
+                  Connected as <span className="font-mono font-semibold">{walletAddress.slice(0, 6)}…{walletAddress.slice(-4)}</span>. MetaMask will prompt for statutory multi-sig transaction signature.
+                </p>
+              </div>
             </div>
           )}
 
@@ -244,19 +545,48 @@ export const PublishModal: React.FC<{ row: LedgerRow | null; onClose: () => void
 
 /* -------------------------------- Void modal -------------------------------- */
 
+export const STATUTORY_VOID_REASONS = [
+  { value: 'Court Order / Judicial Injunction Received', label: 'Court Order / Judicial Injunction Received' },
+  { value: 'Material Error in Land Parcel / Area Valuation', label: 'Material Error in Land Parcel / Area Valuation' },
+  { value: 'Fraudulent or Invalid Power of Attorney / Identity Flag', label: 'Fraudulent or Invalid Power of Attorney / Identity Flag' },
+  { value: 'Duplicate Record Published on Smart Contract', label: 'Duplicate Record Published on Smart Contract' },
+  { value: 'Landowner Requested Banking Details Replacement / Revocation', label: 'Landowner Requested Banking Details Replacement / Revocation' },
+  { value: 'OTHER', label: 'Other (Specify Statutory Reason Below)' },
+];
+
 export const VoidModal: React.FC<{ row: LedgerRow | null; onClose: () => void; onDone: () => void }> = ({ row, onClose, onDone }) => {
   const { walletAddress, walletConnected, connectWallet, error: walletError } = useWallet();
   const { notify } = useNotification();
   const [loading, setLoading] = useState(false);
   const [stage, setStage] = useState<'wallet' | 'mining' | 'recording'>('wallet');
   const [resultTx, setResultTx] = useState('');
-  const [reason, setReason] = useState('');
+  const [retypedId, setRetypedId] = useState('');
+  const [selectedReason, setSelectedReason] = useState('');
+  const [customReason, setCustomReason] = useState('');
   const [followUp, setFollowUp] = useState('');
+
+  useEffect(() => {
+    setRetypedId('');
+    setSelectedReason('');
+    setCustomReason('');
+    setFollowUp('');
+  }, [row]);
+
+  const blockchainId = row?.publicId?.startsWith('BCN-')
+    ? row.publicId
+    : row?.id?.startsWith('BCN-')
+    ? row.id
+    : (row?.publicId || row?.id || '');
+
+  const isIdMatched = retypedId.trim().toUpperCase() === blockchainId.toUpperCase();
+  const effectiveReason = selectedReason === 'OTHER' ? customReason.trim() : selectedReason;
+  const isReasonValid = Boolean(selectedReason) && (selectedReason !== 'OTHER' || customReason.trim().length > 0);
+  const canConfirm = Boolean(walletConnected && walletAddress && isIdMatched && isReasonValid && !loading);
 
   const confirm = async () => {
     if (!row) return;
     if (!walletConnected || !walletAddress) return;
-    if (!reason.trim()) return;
+    if (!canConfirm || !effectiveReason) return;
     setLoading(true);
     setStage('wallet');
     try {
@@ -266,10 +596,11 @@ export const VoidModal: React.FC<{ row: LedgerRow | null; onClose: () => void; o
       }
 
       // 1. Prompt the admin's MetaMask to sign + send the void transaction
+      // FR-019: the void targets the on-chain key `${caseId}#M1` / `${caseId}#M2`.
       const txHash = await sendLedgerTransaction({
         from: walletAddress,
         functionName: 'voidRecord',
-        args: [row.caseId, reason.trim()],
+        args: [row.onChainKey || row.caseId, effectiveReason],
         network: { chainId: net.chainId, contractAddress: net.contractAddress },
       });
       setResultTx(txHash);
@@ -282,13 +613,16 @@ export const VoidModal: React.FC<{ row: LedgerRow | null; onClose: () => void; o
       setStage('recording');
       await blockchainApi.voidRecord({
         caseId: row.caseId,
-        voidReason: reason.trim(),
+        milestone: row.milestone === 'M2' ? 'SETTLEMENT' : 'AWARD',
+        voidReason: effectiveReason,
         walletAddress,
         transactionHash: txHash,
       });
 
       notify({ type: 'success', title: 'Record voided on-chain', message: `Record ${row.caseId} voided · Tx ${fmtTx(txHash)}` });
-      setReason('');
+      setRetypedId('');
+      setSelectedReason('');
+      setCustomReason('');
       setFollowUp('');
       onClose();
       onDone();
@@ -305,19 +639,28 @@ export const VoidModal: React.FC<{ row: LedgerRow | null; onClose: () => void; o
       isOpen={Boolean(row)}
       onClose={onClose}
       title="Void Ledger Record"
-      subtitle={row ? `Record ${row.publicId ?? row.caseId}` : ''}
+      subtitle={row ? `Blockchain ID: ${blockchainId} · Case ${row.caseId}` : ''}
       cancelText="Cancel"
       confirmText="Confirm Void"
       confirmVariant="danger"
       confirmLoading={loading}
+      confirmDisabled={!canConfirm}
       onConfirm={confirm}
     >
       {row && (
         <div className="space-y-4">
           <div className="payment-detail-grid">
             <div className="payment-detail-item">
-              <div className="label">Case</div>
+              <div className="label">Blockchain ID</div>
+              <div className="value mono font-bold text-md-primary">{blockchainId}</div>
+            </div>
+            <div className="payment-detail-item">
+              <div className="label">Case ID</div>
               <div className="value mono">{row.caseId}</div>
+            </div>
+            <div className="payment-detail-item">
+              <div className="label">Milestone</div>
+              <div className="value font-semibold">{row.milestone === 'M2' ? 'Settlement (M2)' : 'Award (M1)'}</div>
             </div>
             <div className="payment-detail-item">
               <div className="label">Tx Hash</div>
@@ -325,21 +668,59 @@ export const VoidModal: React.FC<{ row: LedgerRow | null; onClose: () => void; o
             </div>
           </div>
 
-          <div className="flex items-start gap-2 text-sm bg-md-warning/10 border border-md-warning/30 rounded-xl px-4 py-3 text-md-on-warning">
+          <div className="flex items-start gap-2 text-sm bg-md-error/10 border border-md-error/30 rounded-xl px-4 py-3 text-md-on-error">
             <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-            Published records are immutable by design. Void exists only for genuine errors — a payment-affecting mistake or a wrong case detail that blocks the receiver.
+            <span>
+              <strong>Warning:</strong> Published on-chain records are immutable legal evidence. Voiding permanently marks this record as revoked on the Sepolia smart contract. This action requires strict statutory authorization and an authorized MetaMask wallet signature.
+            </span>
           </div>
 
-          <Textarea
-            label="Void reason (required)"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Mandatory legal or technical reason for voiding this record…"
-          />
+          <div>
+            <div className="label text-xs uppercase tracking-wider text-md-on-surface-variant mb-2 font-bold">
+              Retype Blockchain ID to Confirm <span className="text-md-error">*</span>
+            </div>
+            <p className="text-xs text-md-on-surface-variant/80 mb-2">
+              Type <strong className="font-mono text-md-primary">{blockchainId}</strong> below to confirm you intend to revoke this specific record:
+            </p>
+            <Input
+              label="Retype Blockchain ID"
+              value={retypedId}
+              onChange={(e) => setRetypedId(e.target.value)}
+              placeholder={blockchainId}
+              className="font-mono"
+            />
+            {retypedId && !isIdMatched && (
+              <p className="text-xs text-md-error mt-1 font-medium">Entered ID does not match {blockchainId}.</p>
+            )}
+          </div>
 
           <div>
-            <div className="label" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--md-on-surface-variant)', marginBottom: 8 }}>
-              Follow-up (optional — may also be chosen later)
+            <div className="label text-xs uppercase tracking-wider text-md-on-surface-variant mb-2 font-bold">
+              Statutory Void Reason <span className="text-md-error">*</span>
+            </div>
+            <Select
+              label="Statutory Reason"
+              options={STATUTORY_VOID_REASONS}
+              value={selectedReason}
+              onChange={setSelectedReason}
+              placeholder="Select statutory reason from approved list…"
+              wrapLabels
+            />
+            {selectedReason === 'OTHER' && (
+              <div className="mt-3">
+                <Textarea
+                  label="Custom Statutory Reason (Required)"
+                  value={customReason}
+                  onChange={(e) => setCustomReason(e.target.value)}
+                  placeholder="State the mandatory legal, judicial, or technical justification for this revocation…"
+                />
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div className="label text-xs uppercase tracking-wider text-md-on-surface-variant mb-2 font-bold">
+              Follow-up Action (Optional)
             </div>
             <div className="space-y-2">
               {[
@@ -366,7 +747,7 @@ export const VoidModal: React.FC<{ row: LedgerRow | null; onClose: () => void; o
 
           {!walletConnected ? (
             <div className="text-center bg-md-surface-container-low rounded-xl px-4 py-5 border border-md-outline/10">
-              <p className="text-sm text-md-on-surface-variant mb-3">Connect your authorised MetaMask wallet to void.</p>
+              <p className="text-sm text-md-on-surface-variant mb-3">Connect your authorised MetaMask wallet to sign the void transaction.</p>
               <Button variant="animated-primary" onClick={connectWallet}>
                 <Wallet size={16} className="mr-2" /> Connect Wallet
               </Button>
@@ -375,7 +756,7 @@ export const VoidModal: React.FC<{ row: LedgerRow | null; onClose: () => void; o
           ) : (
             <div className="flex items-center gap-2 text-sm bg-md-success/10 border border-md-success/30 rounded-xl px-4 py-3 text-md-on-success">
               <Lock size={14} />
-              Wallet authorised · {walletAddress.slice(0, 6)}…{walletAddress.slice(-4)} — MetaMask will ask you to approve the void transaction.
+              Wallet authorised · {walletAddress.slice(0, 6)}…{walletAddress.slice(-4)} — MetaMask will prompt you to sign.
             </div>
           )}
 

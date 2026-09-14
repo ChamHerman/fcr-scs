@@ -26,10 +26,12 @@ export async function setNetwork(req: Request, res: Response): Promise<void> {
 }
 
 export async function publish(req: Request, res: Response): Promise<void> {
-  const { caseId, documentHash, transactionHash } = req.body as {
+  const { caseId, milestone, documentHash, transactionHash, onChainKey } = req.body as {
     caseId?: string;
+    milestone?: string;
     documentHash?: string;
     transactionHash?: string;
+    onChainKey?: string;
   };
   if (!caseId || !documentHash) {
     res.status(400).json({ error: "caseId and documentHash are required" });
@@ -40,7 +42,7 @@ export async function publish(req: Request, res: Response): Promise<void> {
     return;
   }
   try {
-    const r = await svc.publishRecord({ caseId, documentHash, transactionHash });
+    const r = await svc.publishRecord({ caseId, milestone, documentHash, transactionHash, onChainKey });
     res.status(201).json({ transactionHash: r.transactionHash, record: r });
   } catch (e: unknown) {
     res.status(400).json({ error: (e as Error).message });
@@ -48,8 +50,9 @@ export async function publish(req: Request, res: Response): Promise<void> {
 }
 
 export async function voidLedger(req: Request, res: Response): Promise<void> {
-  const { caseId, voidReason, transactionHash } = req.body as {
+  const { caseId, milestone, voidReason, transactionHash } = req.body as {
     caseId?: string;
+    milestone?: string;
     voidReason?: string;
     transactionHash?: string;
   };
@@ -66,7 +69,7 @@ export async function voidLedger(req: Request, res: Response): Promise<void> {
     return;
   }
   try {
-    const r = await svc.voidRecord({ caseId, voidReason, transactionHash });
+    const r = await svc.voidRecord({ caseId, milestone, voidReason, transactionHash });
     res.json({ transactionHash: r.voidTransactionHash, record: r });
   } catch (e: unknown) {
     res.status(400).json({ error: (e as Error).message });
@@ -84,7 +87,7 @@ export async function getRecords(req: Request, res: Response): Promise<void> {
 export async function getRecord(req: Request, res: Response): Promise<void> {
   try {
     const caseId = req.params.caseId as string;
-    const record = await svc.getRecord(caseId);
+    const record = await svc.getRecord(caseId, req.query.milestone as string | undefined);
     if (!record) {
       res.status(404).json({ error: "Record not found" });
       return;

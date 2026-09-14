@@ -11,9 +11,11 @@ import {
   CreditCard,
   ShieldCheck,
   Download,
-  UploadCloud
+  UploadCloud,
+  ExternalLink
 } from 'lucide-react';
 import { paymentApi } from '../../services/paymentApi';
+import { blockchainApi } from '../../services/blockchainApi';
 import { normalizePaymentStatus, getMemberDisplayStatus } from '../Payment/statusMaps';
 import { Button } from '../../components/ui/Button';
 import { Select } from '../../components/ui/Select';
@@ -22,6 +24,8 @@ import { useNotification } from '../../components/ui/NotificationSystem';
 import { useAuth } from '../../context/AuthContext';
 import { ConfirmSubmitModal, ConfirmRow } from '../../components/member/ConfirmSubmitModal';
 import { BankDetailsForm } from './components/BankDetailsForm';
+import { formatDateTime } from '../../utils/dateFormat';
+import { CopyButton } from '../../components/ui/CopyButton';
 
 interface CaseOption {
   caseId: string;
@@ -175,15 +179,58 @@ export default function MemberPaymentStatus() {
     return availableCases.find((c) => c.caseId === selectedCaseId) || availableCases[0];
   }, [availableCases, selectedCaseId]);
 
+  // FR-019: dual-milestone on-chain verification — the member sees exactly
+  // where the statutory award (M1) and the settlement (M2) are anchored.
+  const [m1Record, setM1Record] = useState<any | null>(null);
+  const [m2Record, setM2Record] = useState<any | null>(null);
+  useEffect(() => {
+    if (!selectedCaseId) {
+      setM1Record(null);
+      setM2Record(null);
+      return;
+    }
+    let isMounted = true;
+    blockchainApi
+      .getRecords()
+      .then((res: any) => {
+        if (!isMounted) return;
+        const list: any[] = res?.records || [];
+        const mine = list.filter((r) => r.caseId === selectedCaseId);
+        const isPublished = (s?: string | null) =>
+          String(s || '').toUpperCase().replace(/[\s_]+/g, '_') === 'PUBLISHED';
+        const m1 = mine.find((r) => (r.milestone ?? 'AWARD') === 'AWARD');
+        const m2 = mine.find((r) => r.milestone === 'SETTLEMENT');
+        setM1Record(m1 && isPublished(m1.status) ? m1 : null);
+        setM2Record(m2 && isPublished(m2.status) ? m2 : null);
+      })
+      .catch(() => {
+        if (isMounted) {
+          setM1Record(null);
+          setM2Record(null);
+        }
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedCaseId]);
+
   const rawStatus = paymentCase?.status || activeCaseInfo?.status || 'BANK_DETAILS_PENDING';
   const memberDisplay = getMemberDisplayStatus(rawStatus);
   const memberStatusLabel = memberDisplay.label;
   const memberBadgeClass = memberDisplay.badgeClass;
 
-  const isBankPending = memberStatusLabel === 'Bank Details Pending' || memberStatusLabel === 'New Bank Details Pending';
+  const isPaid = memberStatusLabel === 'Paid' || rawStatus === 'PAID';
+  const isTransferSucceed = memberStatusLabel === 'Payment Completed' || rawStatus === 'TRANSFER_SUCCEED';
   const isPaymentInProgress = memberStatusLabel === 'Payment In Progress';
-  const isTransferSucceed = memberStatusLabel === 'Payment Completed';
-  const isPaid = memberStatusLabel === 'Paid';
+
+  const isBankPending =
+    memberStatusLabel === 'Bank Details Pending' ||
+    memberStatusLabel === 'New Bank Details Pending' ||
+    memberStatusLabel === 'Bank Details & M1 Pending' ||
+    rawStatus === 'BANK_DETAILS_PENDING' ||
+    rawStatus === 'NEW_BANK_DETAILS_PENDING' ||
+    rawStatus === 'BANK_DETAILS_AND_M1_PENDING' ||
+    (!paymentCase?.bankName && !isPaid && !isTransferSucceed && !isPaymentInProgress);
 
   // Step 2 is completed ONLY when bank details have been submitted and the case is in an operational disbursement status
   const isBankVerified = !isBankPending && Boolean(paymentCase?.bankName && paymentCase?.accountNumber);
@@ -196,12 +243,41 @@ export default function MemberPaymentStatus() {
     return 1; // Bank details pending -> Step 2 is active, requiring action
   }, [isPaid, isTransferSucceed, isPaymentInProgress, isBankVerified]);
 
+  const etherscanUrlFor = (txHash?: string | null) =>
+    txHash ? `https://sepolia.etherscan.io/tx/${txHash}` : null;
+
+  const onChainBadge = (record: any | null, pendingLabel: string) => {
+    if (record?.transactionHash) {
+      const url = etherscanUrlFor(record.transactionHash);
+      return (
+        <a
+          href={url ?? '#'}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-2 py-0.5 mt-1 hover:bg-emerald-500/20 transition-colors"
+        >
+          <ShieldCheck size={11} className="shrink-0" />
+          <span>Notarized on Sepolia</span>
+          <ExternalLink size={10} className="shrink-0" />
+        </a>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-md-on-surface-variant bg-md-surface-container-low border border-md-outline/20 rounded-full px-2 py-0.5 mt-1">
+        <AlertTriangle size={10} className="shrink-0" />
+        <span>{pendingLabel}</span>
+      </span>
+    );
+  };
+
   const steps = [
     {
       step: 1,
       title: 'Offer Accepted',
       subtitle: 'Statutory Form H award accepted by landowner',
       completed: true,
+      badge: onChainBadge(m1Record, 'Award notarization pending'),
     },
     {
       step: 2,
@@ -227,8 +303,8 @@ export default function MemberPaymentStatus() {
     },
     {
       step: 4,
-      title: 'Bank Clearing House',
-      subtitle: 'Electronic Fund Transfer clearance by commercial bank network',
+      title: 'RENTAS Clearing House',
+      subtitle: 'Real-Time Gross Settlement (RTGS) clearance by Bank Negara Malaysia',
       completed: currentStep >= 5 || isPaid,
     },
     {
@@ -236,6 +312,7 @@ export default function MemberPaymentStatus() {
       title: 'Disbursement Confirmed',
       subtitle: 'Statutory funds verified and confirmed received by landowner beneficiary',
       completed: isPaid,
+      badge: isPaid || isTransferSucceed ? onChainBadge(m2Record, 'Settlement notarization pending') : undefined,
     },
   ];
 
@@ -451,7 +528,7 @@ export default function MemberPaymentStatus() {
         </div>
 
         {/* Payment Record Key Details */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-4 text-xs">
           <div>
             <span className="text-md-on-surface-variant block">Payment ID</span>
             <span className="font-mono font-semibold text-md-on-surface">
@@ -471,10 +548,16 @@ export default function MemberPaymentStatus() {
             </span>
           </div>
           <div>
+            <span className="text-md-on-surface-variant block">Clearing Channel</span>
+            <span className="font-semibold text-emerald-700 dark:text-emerald-400 block truncate" title="RENTAS Real-Time Gross Settlement">
+              RENTAS RTGS
+            </span>
+          </div>
+          <div>
             <span className="text-md-on-surface-variant block">Multi-Sig Status</span>
             <span className="font-semibold text-md-on-surface">
               {paymentCase?.requiredSignatures
-                ? `${paymentCase.currentSignatures || 0} of ${paymentCase.requiredSignatures} Signatures`
+                ? `${paymentCase.currentSignatures || 0} of ${paymentCase.requiredSignatures} Sigs`
                 : isPaid ? 'Fully Approved' : 'In Governance'}
             </span>
           </div>
@@ -604,6 +687,8 @@ export default function MemberPaymentStatus() {
                     {s.subtitle}
                   </span>
 
+                  {s.badge && <div>{s.badge}</div>}
+
                   {s.actionRequired && (
                     <button
                       type="button"
@@ -618,6 +703,181 @@ export default function MemberPaymentStatus() {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* Cryptographic Blockchain Proof & Transparency Card (M1 & M2) */}
+      <div className="bg-md-surface-container border border-md-outline/15 rounded-xl p-5 sm:p-6 shadow-sm space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-md-outline/10">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+              <ShieldCheck size={18} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-md-on-surface">
+                Cryptographic Blockchain Proof &amp; Transparency
+              </h3>
+              <p className="text-xs text-md-on-surface-variant">
+                Immutable proof on Ethereum Sepolia ledger. Zero possibility of hidden changes or falsified records.
+              </p>
+            </div>
+          </div>
+
+          <Link
+            to="/member/verify-audit"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-md-primary hover:underline shrink-0"
+          >
+            <span>Verify Document File</span>
+            <ArrowRight size={13} />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Milestone 1 Card */}
+          <div className="p-4 rounded-xl bg-md-surface-container-low border border-md-outline/15 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-md-primary/10 text-md-primary">
+                Milestone 1 · Statutory Award
+              </span>
+              {m1Record ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  <CheckCircle2 size={11} />
+                  <span>On-Chain Notarized</span>
+                </span>
+              ) : (
+                <span className="text-[10px] font-medium text-amber-700 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/30">
+                  Pending Notarization
+                </span>
+              )}
+            </div>
+
+            <div>
+              <h4 className="text-xs font-bold text-md-on-surface">
+                Form H Award Offer Acceptance
+              </h4>
+              <p className="text-[11px] text-md-on-surface-variant leading-relaxed mt-0.5">
+                The government compensation award accepted by you is anchored on the blockchain. This locks the payout entitlement so it can never be revoked or altered.
+              </p>
+            </div>
+
+            {m1Record ? (
+              <div className="space-y-1.5 text-xs pt-2 border-t border-md-outline/10">
+                <div className="flex justify-between items-center">
+                  <span className="text-md-on-surface-variant text-[11px]">Ledger Key</span>
+                  <span className="font-mono text-[11px] text-md-on-surface font-semibold">
+                    {m1Record.onChainKey || `${selectedCaseId}#M1`}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-md-on-surface-variant text-[11px]">Tx Hash</span>
+                  <div className="flex items-center gap-1">
+                    <a
+                      href={`https://sepolia.etherscan.io/tx/${m1Record.transactionHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono text-[11px] text-md-primary hover:underline inline-flex items-center gap-0.5"
+                    >
+                      <span>{m1Record.transactionHash.slice(0, 8)}…{m1Record.transactionHash.slice(-6)}</span>
+                      <ExternalLink size={10} />
+                    </a>
+                    <CopyButton value={m1Record.transactionHash} size="sm" title="Copy transaction hash" />
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-md-on-surface-variant text-[11px]">Form H SHA-256</span>
+                  <div className="flex items-center gap-1">
+                    <span className="font-mono text-[10px] text-md-on-surface truncate max-w-[130px]">
+                      {m1Record.documentHash}
+                    </span>
+                    <CopyButton value={m1Record.documentHash} size="sm" title="Copy document hash" />
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-md-on-surface-variant text-[11px]">Notarised At</span>
+                  <span className="font-mono text-[11px] text-md-on-surface">
+                    {formatDateTime(m1Record.createdAt)}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/20 text-[11px] text-amber-800 dark:text-amber-300">
+                Awaiting administrative publication after the statutory 24-hour landowner review window elapses.
+              </div>
+            )}
+          </div>
+
+          {/* Milestone 2 Card */}
+          <div className="p-4 rounded-xl bg-md-surface-container-low border border-md-outline/15 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+                Milestone 2 · Settlement &amp; Payout
+              </span>
+              {m2Record ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  <CheckCircle2 size={11} />
+                  <span>On-Chain Notarized</span>
+                </span>
+              ) : (
+                <span className="text-[10px] font-medium text-slate-500 bg-slate-500/10 px-2 py-0.5 rounded-full border border-slate-500/20">
+                  Awaiting Settlement
+                </span>
+              )}
+            </div>
+
+            <div>
+              <h4 className="text-xs font-bold text-md-on-surface">
+                RENTAS Payment Receipt &amp; Clearance
+              </h4>
+              <p className="text-[11px] text-md-on-surface-variant leading-relaxed mt-0.5">
+                Upon transfer clearance by Bank Negara Malaysia's RENTAS RTGS system, your official payment receipt is sealed on the blockchain as permanent legal proof of payment.
+              </p>
+            </div>
+
+            {m2Record ? (
+              <div className="space-y-1.5 text-xs pt-2 border-t border-md-outline/10">
+                <div className="flex justify-between items-center">
+                  <span className="text-md-on-surface-variant text-[11px]">Ledger Key</span>
+                  <span className="font-mono text-[11px] text-md-on-surface font-semibold">
+                    {m2Record.onChainKey || `${selectedCaseId}#M2`}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-md-on-surface-variant text-[11px]">Tx Hash</span>
+                  <div className="flex items-center gap-1">
+                    <a
+                      href={`https://sepolia.etherscan.io/tx/${m2Record.transactionHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono text-[11px] text-md-primary hover:underline inline-flex items-center gap-0.5"
+                    >
+                      <span>{m2Record.transactionHash.slice(0, 8)}…{m2Record.transactionHash.slice(-6)}</span>
+                      <ExternalLink size={10} />
+                    </a>
+                    <CopyButton value={m2Record.transactionHash} size="sm" title="Copy transaction hash" />
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-md-on-surface-variant text-[11px]">Receipt SHA-256</span>
+                  <div className="flex items-center gap-1">
+                    <span className="font-mono text-[10px] text-md-on-surface truncate max-w-[130px]">
+                      {m2Record.documentHash}
+                    </span>
+                    <CopyButton value={m2Record.documentHash} size="sm" title="Copy document hash" />
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-md-on-surface-variant text-[11px]">Notarised At</span>
+                  <span className="font-mono text-[11px] text-md-on-surface">
+                    {formatDateTime(m2Record.createdAt)}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="p-2.5 rounded-lg bg-slate-500/5 border border-slate-500/15 text-[11px] text-md-on-surface-variant">
+                Will be published on-chain immediately after bank transfer clearance and payment receipt generation.
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

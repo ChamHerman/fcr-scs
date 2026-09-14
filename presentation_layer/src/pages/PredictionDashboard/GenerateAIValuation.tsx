@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   BrainCircuit,
   TrendingUp,
@@ -8,15 +7,13 @@ import {
   Link2,
   X,
   CheckCircle2,
-  PencilLine,
-  Send,
   Loader2,
+  Lock,
 } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
-import { Textarea } from '../../components/ui/Textarea';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { CaseSelectionModal } from '../LandAcquisition/CaseSelectionModal';
 import { landAcquisitionApi } from '../../services/landAcquisitionApi';
@@ -32,13 +29,16 @@ import {
 } from '../../constants';
 import type { SelectOption } from '../../components/ui/Select';
 
-const EMPTY_FORM: Record<keyof ValuationInput, string> = {
+type FormShape = Record<keyof ValuationInput, string>;
+type LockedShape = Partial<Record<keyof ValuationInput, boolean>>;
+
+const EMPTY_FORM: FormShape = {
   state: '',
   land_category: '',
   location_type: '',
   tenure_type: '',
   land_area_m2: '',
-  built_up_area_m2: '',
+  acquisition_area_m2: '',
   building_age_years: '',
 };
 
@@ -65,23 +65,18 @@ const AREA_TO_M2: Record<string, number> = {
 
 export const GenerateAIValuation: React.FC = () => {
   const { notify } = useNotification();
-  const navigate = useNavigate();
-  const [form, setForm] = useState<Record<keyof ValuationInput, string>>({ ...EMPTY_FORM });
+  const [form, setForm] = useState<FormShape>({ ...EMPTY_FORM });
+  const [locked, setLocked] = useState<LockedShape>({});
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ValuationBreakdown | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Case linkage + submission into the existing Valuation module flow
+  // Case linkage: selecting a case auto-fills and locks the attributes that the
+  // case already knows; the rest stay editable for the officer to complete.
   const [caseModalOpen, setCaseModalOpen] = useState(false);
   const [caseLoading, setCaseLoading] = useState(false);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [autoFillNote, setAutoFillNote] = useState<string | null>(null);
-  const [overrideMode, setOverrideMode] = useState(false);
-  const [overrideMarketValue, setOverrideMarketValue] = useState('');
-  const [overrideCompensation, setOverrideCompensation] = useState('');
-  const [overrideRemarks, setOverrideRemarks] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [submittedReportId, setSubmittedReportId] = useState<string | null>(null);
 
   const updateField = (field: keyof ValuationInput, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -89,9 +84,6 @@ export const GenerateAIValuation: React.FC = () => {
 
   const roundM2 = (value: number) => Math.max(0, Math.round(value * 100) / 100);
 
-  // Auto-fill the attribute form from the selected case: state / land category /
-  // tenure / land area come from the case's land parcel; location type, built-up
-  // area and building age come from the latest valuation report if one exists.
   const applyCaseToForm = async (caseId: string) => {
     setCaseLoading(true);
     try {
@@ -103,49 +95,57 @@ export const GenerateAIValuation: React.FC = () => {
         new Date(b.valuationDate || b.updatedAt).getTime() - new Date(a.valuationDate || a.updatedAt).getTime()
       )[0];
 
-      const next: Record<keyof ValuationInput, string> = { ...EMPTY_FORM };
+      const next: FormShape = { ...EMPTY_FORM };
+      const nextLocked: LockedShape = {};
       const filled: string[] = [];
 
       if (parcel?.state) {
         next.state = parcel.state;
+        nextLocked.state = true;
         filled.push('State');
       }
       const categoryLabel = parcel?.category ? PARCEL_CATEGORY_LABEL[parcel.category] : undefined;
       if (categoryLabel) {
         next.land_category = categoryLabel;
+        nextLocked.land_category = true;
         filled.push('Land category');
       }
       const tenureLabel = parcel?.tenureType ? TENURE_LABEL[parcel.tenureType] : undefined;
       if (tenureLabel) {
         next.tenure_type = tenureLabel;
+        nextLocked.tenure_type = true;
         filled.push('Tenure');
       }
       if (parcel?.area != null) {
         next.land_area_m2 = String(roundM2(Number(parcel.area) * (AREA_TO_M2[parcel.areaUnit] ?? 1)));
+        nextLocked.land_area_m2 = true;
         filled.push('Land area (m²)');
       }
       if (latest) {
         if (latest.locationType) {
           next.location_type = latest.locationType;
+          nextLocked.location_type = true;
           filled.push('Location type');
         }
-        if (latest.builtUpArea != null && Number(latest.builtUpArea) > 0) {
-          next.built_up_area_m2 = String(roundM2(Number(latest.builtUpArea)));
-          filled.push('Built-up area (m²)');
+        if (latest.acquisitionArea != null && Number(latest.acquisitionArea) > 0) {
+          next.acquisition_area_m2 = String(roundM2(Number(latest.acquisitionArea)));
+          nextLocked.acquisition_area_m2 = true;
+          filled.push('Acquisition area (m²)');
         }
         if (latest.buildingAge != null) {
           next.building_age_years = String(Number(latest.buildingAge));
+          nextLocked.building_age_years = true;
           filled.push('Building age');
         }
       }
 
       setForm(next);
+      setLocked(nextLocked);
       setAutoFillNote(
         filled.length > 0
-          ? `Auto-filled from case ${caseId}: ${filled.join(', ')}. Review and adjust, then fill in any remaining fields.`
+          ? `Auto-filled from case ${caseId} (locked): ${filled.join(', ')}. Please fill in the remaining fields.`
           : `No property data found for case ${caseId} yet - please fill in all attributes.`
       );
-      notify({ type: 'general', title: 'Case attributes loaded', message: filled.length > 0 ? filled.join(', ') : 'Nothing to auto-fill' });
     } catch (e: unknown) {
       notify({ type: 'error', title: 'Could not load case details', message: (e as Error).message });
     } finally {
@@ -155,16 +155,16 @@ export const GenerateAIValuation: React.FC = () => {
 
   const handleSelectCase = (caseId: string) => {
     setSelectedCaseId(caseId);
-    setSubmittedReportId(null);
     setCaseModalOpen(false);
     applyCaseToForm(caseId);
   };
 
   const handleClearCase = () => {
     setSelectedCaseId(null);
-    setSubmittedReportId(null);
     setAutoFillNote(null);
-    setOverrideMode(false);
+    setLocked({});
+    setForm({ ...EMPTY_FORM });
+    setResult(null);
   };
 
   const validate = (): string | null => {
@@ -172,28 +172,21 @@ export const GenerateAIValuation: React.FC = () => {
       return 'Please complete all dropdown selections.';
     }
     const landArea = Number(form.land_area_m2);
-    const builtUp = Number(form.built_up_area_m2);
+    const acquisitionArea = Number(form.acquisition_area_m2);
     const age = Number(form.building_age_years);
     if (!form.land_area_m2 || Number.isNaN(landArea) || landArea <= 0) {
       return 'Land area must be a number greater than 0.';
     }
-    if (form.built_up_area_m2 === '' || Number.isNaN(builtUp) || builtUp < 0) {
-      return 'Built-up area must be 0 or more (0 for vacant land).';
+    if (!form.acquisition_area_m2 || Number.isNaN(acquisitionArea) || acquisitionArea <= 0) {
+      return 'Acquisition area must be a number greater than 0.';
+    }
+    if (acquisitionArea >= landArea) {
+      return 'Acquisition area must be smaller than the land area.';
     }
     if (form.building_age_years === '' || Number.isNaN(age) || age < 0 || age > 120) {
       return 'Building age must be between 0 and 120 years.';
     }
     return null;
-  };
-
-  const aiRemarks = (breakdown: ValuationBreakdown, adjusted: boolean) => {
-    const base =
-      `AI-assisted valuation (model ${breakdown.modelVersion ?? 'n/a'}). ` +
-      `Predicted market value ${formatRM(breakdown.marketValueMyr)} ` +
-      `(likely range ${formatRM(breakdown.estimateRangeLowMyr)} - ${formatRM(breakdown.estimateRangeHighMyr)}); ` +
-      `statutory solatium 15% = ${formatRM(breakdown.statutoryDisturbanceMyr)}; ` +
-      `relocation allowance = ${formatRM(breakdown.relocationAllowanceMyr)}.`;
-    return adjusted ? `${base} Market value manually adjusted by the officer.` : `${base} Accepted by the officer without changes.`;
   };
 
   const handleSubmit = async () => {
@@ -205,8 +198,6 @@ export const GenerateAIValuation: React.FC = () => {
 
     setLoading(true);
     setSubmitError(null);
-    setOverrideMode(false);
-    setSubmittedReportId(null);
     try {
       const breakdown = await valuateProperty({
         state: form.state,
@@ -214,7 +205,7 @@ export const GenerateAIValuation: React.FC = () => {
         location_type: form.location_type,
         tenure_type: form.tenure_type,
         land_area_m2: Number(form.land_area_m2),
-        built_up_area_m2: Number(form.built_up_area_m2),
+        acquisition_area_m2: Number(form.acquisition_area_m2),
         building_age_years: Number(form.building_age_years),
       });
       setResult(breakdown);
@@ -228,87 +219,27 @@ export const GenerateAIValuation: React.FC = () => {
   };
 
   const handleReset = () => {
-    setForm({ ...EMPTY_FORM });
+    setForm(selectedCaseId ? { ...form } : { ...EMPTY_FORM });
     setResult(null);
     setSubmitError(null);
-    setOverrideMode(false);
-    setSubmittedReportId(null);
   };
 
-  const startOverride = () => {
-    if (!result) return;
-    setOverrideMarketValue(String(result.marketValueMyr));
-    setOverrideCompensation(String(result.recommendedCompensationMyr));
-    setOverrideRemarks(aiRemarks(result, true));
-    setOverrideMode(true);
-  };
-
-  const submitToValuationFlow = async (adjusted: boolean) => {
-    if (!result || !selectedCaseId) return;
-
-    const marketValue = adjusted ? Number(overrideMarketValue) : result.marketValueMyr;
-    const compensation = adjusted ? Number(overrideCompensation) : result.recommendedCompensationMyr;
-    const remarks = adjusted ? overrideRemarks : aiRemarks(result, false);
-
-    if (adjusted) {
-      if (!overrideMarketValue || Number.isNaN(marketValue) || marketValue <= 0) {
-        notify({ type: 'error', title: 'Invalid market value', message: 'Market value must be greater than 0.' });
-        return;
-      }
-      if (!overrideCompensation || Number.isNaN(compensation) || compensation <= 0) {
-        notify({ type: 'error', title: 'Invalid compensation', message: 'Recommended compensation must be greater than 0.' });
-        return;
-      }
-    }
-
-    const landAreaM2 = Number(form.land_area_m2);
-    const builtUpM2 = Number(form.built_up_area_m2);
-    setSubmitting(true);
-    try {
-      const res = await landAcquisitionApi.createValuationReport({
-        caseId: selectedCaseId,
-        valuationMethod: 'AI Prediction',
-        locationType: form.location_type || undefined,
-        buildingAge: form.building_age_years ? Number(form.building_age_years) : undefined,
-        landArea: landAreaM2 || undefined,
-        builtUpArea: builtUpM2 || undefined,
-        aiValuationPrice: marketValue,
-        marketRatePerSqMeter: landAreaM2 > 0 ? Math.round(marketValue / landAreaM2) : undefined,
-        marketValue,
-        recommendedCompensation: compensation,
-        remarks,
-      });
-      const reportId: string | undefined = res?.report?.reportId ?? res?.reportId;
-      setSubmittedReportId(reportId ?? null);
-      setOverrideMode(false);
-      notify({
-        type: 'success',
-        title: 'Valuation submitted',
-        message: `Report sent for approval under case ${selectedCaseId}. Track it in the Valuation module.`,
-      });
-    } catch (e: unknown) {
-      notify({ type: 'error', title: 'Submission failed', message: (e as Error).message });
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const lockedHint = (field: keyof ValuationInput) =>
+    locked[field] ? (
+      <span className="inline-flex items-center gap-1 text-[11px] text-md-on-surface-variant">
+        <Lock size={11} /> from case
+      </span>
+    ) : null;
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl md:text-3xl font-bold">Generate AI Valuation</h1>
-            <span className="px-2 py-1 rounded-lg bg-md-primary/15 text-md-primary font-bold text-xs whitespace-nowrap">
-              Admin console
-            </span>
-          </div>
-          <p className="text-md-on-surface-variant mt-1 max-w-3xl">
-            The AI model estimates the market value and recommended compensation for a property. Link an
-            acquisition case and its known attributes auto-fill — you only fill in what is missing — then
-            accept the price, adjust it manually, and submit it into the standard valuation approval flow.
-          </p>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl md:text-3xl font-bold">Generate AI Valuation</h1>
+          <span className="px-2 py-1 rounded-lg bg-md-primary/15 text-md-primary font-bold text-xs whitespace-nowrap">
+            Admin console
+          </span>
         </div>
       </div>
 
@@ -319,19 +250,14 @@ export const GenerateAIValuation: React.FC = () => {
           <div className="text-sm font-semibold text-md-on-surface">Acquisition case</div>
           <div className="text-xs text-md-on-surface-variant mt-0.5">
             {selectedCaseId
-              ? <>Auto-fills the property attributes from this case. Report (if accepted) is submitted under <code className="font-mono font-semibold text-md-primary">{selectedCaseId}</code>.</>
-              : 'Optional — but picking a case auto-fills the attributes below.'}
+              ? 'Known attributes were auto-filled from this case and locked. Fill in the remaining fields.'
+              : 'Optional — select a case to auto-fill its known attributes, or fill in every attribute manually.'}
           </div>
         </div>
         {selectedCaseId && (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-md-secondary-container text-md-on-secondary-container font-mono text-xs font-bold">
             {selectedCaseId}
-            <button
-              type="button"
-              aria-label="Clear case"
-              className="hover:opacity-70"
-              onClick={handleClearCase}
-            >
+            <button type="button" aria-label="Clear case" className="hover:opacity-70" onClick={handleClearCase}>
               <X size={13} />
             </button>
           </span>
@@ -352,17 +278,38 @@ export const GenerateAIValuation: React.FC = () => {
       <Card interactive={false}>
         <h2 className="text-lg font-semibold mb-1">Property Attributes</h2>
         <p className="text-sm text-md-on-surface-variant mb-5">
-          The 7 valuation attributes used by the trained model — values come from the same options as the
-          case registration and valuation report forms.
+          The 7 valuation attributes used by the trained model. Fields auto-filled from the case are locked;
+          the rest are yours to complete.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Select label="State" options={optionList(MALAYSIA_STATE_OPTIONS)} value={form.state} onChange={(v) => updateField('state', v)} placeholder="Select state" />
-          <Select label="Land Category" options={optionList(LAND_CATEGORY_OPTIONS)} value={form.land_category} onChange={(v) => updateField('land_category', v)} placeholder="Select category" />
-          <Select label="Location Type" options={optionList(LOCATION_TYPE_OPTIONS)} value={form.location_type} onChange={(v) => updateField('location_type', v)} placeholder="Select location type" />
-          <Select label="Tenure Type" options={optionList(TENURE_TYPE_OPTIONS)} value={form.tenure_type} onChange={(v) => updateField('tenure_type', v)} placeholder="Select tenure" />
-          <Input label="Building Age (years)" type="number" min={0} max={120} placeholder="e.g. 12" value={form.building_age_years} onChange={(e) => updateField('building_age_years', e.target.value)} />
-          <Input label="Land Area (m²)" type="number" min={1} placeholder="e.g. 500" value={form.land_area_m2} onChange={(e) => updateField('land_area_m2', e.target.value)} />
-          <Input label="Built-up Area (m²)" type="number" min={0} placeholder="e.g. 350 (0 for vacant land)" value={form.built_up_area_m2} onChange={(e) => updateField('built_up_area_m2', e.target.value)} />
+          <div>
+            <Select label="State" options={optionList(MALAYSIA_STATE_OPTIONS)} value={form.state} onChange={(v) => updateField('state', v)} placeholder="Select state" disabled={!!locked.state} />
+            {lockedHint('state')}
+          </div>
+          <div>
+            <Select label="Land Category" options={optionList(LAND_CATEGORY_OPTIONS)} value={form.land_category} onChange={(v) => updateField('land_category', v)} placeholder="Select category" disabled={!!locked.land_category} />
+            {lockedHint('land_category')}
+          </div>
+          <div>
+            <Select label="Location Type" options={optionList(LOCATION_TYPE_OPTIONS)} value={form.location_type} onChange={(v) => updateField('location_type', v)} placeholder="Select location type" disabled={!!locked.location_type} />
+            {lockedHint('location_type')}
+          </div>
+          <div>
+            <Select label="Tenure Type" options={optionList(TENURE_TYPE_OPTIONS)} value={form.tenure_type} onChange={(v) => updateField('tenure_type', v)} placeholder="Select tenure" disabled={!!locked.tenure_type} />
+            {lockedHint('tenure_type')}
+          </div>
+          <div>
+            <Input label="Land Area (m²)" type="number" min={1} placeholder="e.g. 1200" value={form.land_area_m2} onChange={(e) => updateField('land_area_m2', e.target.value)} disabled={!!locked.land_area_m2} />
+            {lockedHint('land_area_m2')}
+          </div>
+          <div>
+            <Input label="Acquisition Area (m²)" type="number" min={1} placeholder="e.g. 800 (must be less than land area)" value={form.acquisition_area_m2} onChange={(e) => updateField('acquisition_area_m2', e.target.value)} disabled={!!locked.acquisition_area_m2} />
+            {lockedHint('acquisition_area_m2')}
+          </div>
+          <div>
+            <Input label="Building Age (years)" type="number" min={0} max={120} placeholder="e.g. 12" value={form.building_age_years} onChange={(e) => updateField('building_age_years', e.target.value)} disabled={!!locked.building_age_years} />
+            {lockedHint('building_age_years')}
+          </div>
         </div>
         <div className="flex justify-end gap-3 mt-6">
           <Button variant="outlined" onClick={handleReset} disabled={loading}>
@@ -391,7 +338,9 @@ export const GenerateAIValuation: React.FC = () => {
           <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
             <div>
               <h2 className="text-lg font-semibold">Valuation Result</h2>
-              <p className="text-sm text-md-on-surface-variant">AI estimate based on the current trained model.</p>
+              <p className="text-sm text-md-on-surface-variant">
+                AI estimate based on the current trained model{selectedCaseId ? ` for case ${selectedCaseId}` : ''}.
+              </p>
             </div>
             <span className="px-2 py-1 rounded-lg bg-md-primary/15 text-md-primary font-bold text-xs whitespace-nowrap">
               Model {result.modelVersion ?? 'n/a'}
@@ -427,88 +376,17 @@ export const GenerateAIValuation: React.FC = () => {
               <div>
                 <div className="text-sm font-semibold text-md-on-surface">Relocation Allowance</div>
                 <div className="text-xs text-md-on-surface-variant mt-0.5">
-                  Fixed allowance{result.relocationAllowanceMyr >= 8000 ? ' (built-up structure present)' : ' (vacant land)'}
+                  {result.relocationAllowanceMyr >= 8000 ? 'Structure present on the acquired land' : 'Vacant acquired land'}
                 </div>
               </div>
               <div className="font-bold whitespace-nowrap">{formatRM(result.relocationAllowanceMyr)}</div>
             </div>
           </div>
 
-          {submittedReportId ? (
-            <div className="flex flex-wrap items-center gap-3 mt-5 p-4 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-300">
-              <CheckCircle2 size={18} className="shrink-0" />
-              <span className="text-sm font-medium">
-                Valuation report <code className="font-mono font-bold">{submittedReportId}</code> submitted for case{' '}
-                {selectedCaseId} and is pending approval in the Valuation module.
-              </span>
-              <Button
-                variant="outlined"
-                size="sm"
-                className="ml-auto"
-                onClick={() => navigate('/admin/case/valuation/review', { state: { reportId: submittedReportId } })}
-              >
-                Open in Valuation Module
-              </Button>
-            </div>
-          ) : (
-            <>
-              <p className="text-xs text-md-on-surface-variant mt-4">
-                This is an AI-generated estimate for reference only. Final compensation is subject to verification
-                by a licensed valuer and approval by the relevant authority.
-              </p>
-
-              <div className="mt-4 p-4 rounded-xl bg-md-surface-container-low">
-                {!selectedCaseId ? (
-                  <p className="text-sm text-md-on-surface-variant">
-                    Link an acquisition case above to <strong className="text-md-on-surface">accept</strong> this
-                    valuation or <strong className="text-md-on-surface">set the price manually</strong> and submit
-                    it into the standard approval flow.
-                  </p>
-                ) : overrideMode ? (
-                  <div className="space-y-4">
-                    <div className="text-sm font-semibold text-md-on-surface">Manual price adjustment</div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <Input
-                        label="Market Value (RM)"
-                        type="number"
-                        min={1}
-                        value={overrideMarketValue}
-                        onChange={(e) => setOverrideMarketValue(e.target.value)}
-                      />
-                      <Input
-                        label="Recommended Compensation (RM)"
-                        type="number"
-                        min={1}
-                        value={overrideCompensation}
-                        onChange={(e) => setOverrideCompensation(e.target.value)}
-                      />
-                    </div>
-                    <Textarea
-                      label="Remarks"
-                      className="min-h-[80px]"
-                      value={overrideRemarks}
-                      onChange={(e) => setOverrideRemarks(e.target.value)}
-                    />
-                    <div className="flex justify-end gap-3">
-                      <Button variant="text" onClick={() => setOverrideMode(false)} disabled={submitting}>Cancel</Button>
-                      <Button variant="filled" onClick={() => submitToValuationFlow(true)} isLoading={submitting}>
-                        <Send size={15} /> Submit for Approval
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap gap-3">
-                    <Button variant="filled" onClick={() => submitToValuationFlow(false)} isLoading={submitting}>
-                      <CheckCircle2 size={16} /> Accept AI Valuation
-                    </Button>
-                    <Button variant="tonal" onClick={startOverride} disabled={submitting}>
-                      <PencilLine size={15} /> Set Price Manually
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
+          <p className="text-xs text-md-on-surface-variant mt-4">
+            This is an AI-generated estimate for reference only. Final compensation is subject to verification
+            by a licensed valuer and approval by the relevant authority.
+          </p>
         </Card>
       )}
 
@@ -517,7 +395,7 @@ export const GenerateAIValuation: React.FC = () => {
         onClose={() => setCaseModalOpen(false)}
         onSelectCase={handleSelectCase}
         title="Link Case to AI Valuation"
-        subtitle="Select the acquisition case - its registered land details will auto-fill the attributes below. Only cases awaiting valuation are listed."
+        subtitle="Select the acquisition case - its registered land details will auto-fill and lock the matching attributes below."
       />
     </div>
   );

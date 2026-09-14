@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, DollarSign, User, XCircle, Hourglass, Loader2, Eye, ShieldAlert } from 'lucide-react';
+import { Clock, DollarSign, User, XCircle, Hourglass, Loader2, Eye, ShieldAlert, Activity, RefreshCw } from 'lucide-react';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { paymentApi } from '../../services/paymentApi';
@@ -38,8 +38,8 @@ import {
 } from './paymentModals';
 import { CaseDetailsModal } from './CaseDetailsModal';
 import { PaymentRowActions } from './PaymentRowActions';
-import type { PaymentRow } from './paymentModals';
 import { RefreshButton } from './RefreshButton';
+import type { PaymentRow } from './paymentModals';
 type ModalState =
   | { type: 'view'; pc: PaymentRow }
   | { type: 'initiate'; pc: PaymentRow }
@@ -58,7 +58,7 @@ const ITEMS_PER_PAGE = 10;
 const SORT_STORAGE_KEY = 'payment_overview_sort';
 type SortKey = 'priority' | 'recent' | 'amount-desc' | 'amount-asc';
 const SORT_OPTIONS = [
-  { value: 'priority', label: 'Action Priority (ready > pending, paid near last)' },
+  { value: 'priority', label: 'Default (Action Priority)' },
   { value: 'recent', label: 'Most Recent Activity' },
   { value: 'amount-desc', label: 'Amount (High to Low)' },
   { value: 'amount-asc', label: 'Amount (Low to High)' },
@@ -72,15 +72,17 @@ const SORT_OPTIONS = [
 const STATUS_PRIORITY_RANK: Record<string, number> = {
   'Ready to Initiate': 1,
   'Pending Approval': 2,
-  'Scheduled': 3,
-  'Bank Approval Pending': 4,
-  'Transfer Rejected': 5,
-  'Transfer Failed': 6,
-  'Disputed': 7,
-  'New Bank Details Pending': 8,
-  'Cancelled': 9,
-  'Paid': 10,
-  'Bank Details Pending': 11,
+  'Bank Details & M1 Pending': 3,
+  'Award Notarization Pending': 4,
+  'Bank Details Pending': 5,
+  'Scheduled': 6,
+  'Bank Approval Pending': 7,
+  'Transfer Rejected': 8,
+  'Transfer Failed': 9,
+  'Disputed': 10,
+  'New Bank Details Pending': 11,
+  'Paid': 12,
+  'Cancelled': 13,
 };
 
 export default function PaymentDashboard() {
@@ -138,12 +140,28 @@ export default function PaymentDashboard() {
     const failed = allCases.filter((c) => ['Transfer Failed', 'Transfer Rejected'].includes(normalizePaymentStatus(c.status))).length;
     const paid = allCases.filter((c) => normalizePaymentStatus(c.status) === 'Paid').length;
     return [
-      { label: 'Total Payment Cases', value: allCases.length, change: 'All records', icon: DollarSign },
-      { label: 'Pending Authorisations', value: pending, change: 'Requires Action', icon: Hourglass },
-      { label: 'Failed Transfers', value: failed, change: 'Failed / Rejected', icon: XCircle },
-      { label: 'Paid', value: paid, change: 'Executed', icon: Clock },
+      { label: 'Total Payment Cases', value: allCases.length, icon: DollarSign, iconColor: 'text-md-primary' },
+      { label: 'Pending Authorisations', value: pending, icon: Hourglass, iconColor: 'text-amber-500' },
+      { label: 'Failed Transfers', value: failed, icon: XCircle, iconColor: 'text-red-500' },
+      { label: 'Paid', value: paid, icon: Clock, iconColor: 'text-emerald-500' },
     ];
   }, [allCases]);
+
+  // Dynamically derive available statuses strictly from loaded payment records
+  const availableStatuses = useMemo(() => {
+    const set = new Set<string>();
+    allCases.forEach((c) => {
+      const detailed = getDetailedPaymentStatus(c);
+      if (detailed.paymentStatus) set.add(detailed.paymentStatus);
+    });
+    return ['All', ...Array.from(set).sort()];
+  }, [allCases]);
+
+  useEffect(() => {
+    if (statusFilter !== 'All' && !availableStatuses.includes(statusFilter)) {
+      setStatusFilter('All');
+    }
+  }, [availableStatuses, statusFilter]);
 
   const filteredCases = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -177,9 +195,18 @@ export default function PaymentDashboard() {
       case 'priority':
       default:
         return rows.sort((a, b) => {
-          const ra = STATUS_PRIORITY_RANK[normalizePaymentStatus(a.status)] ?? 50;
-          const rb = STATUS_PRIORITY_RANK[normalizePaymentStatus(b.status)] ?? 50;
-          return ra !== rb ? ra - rb : byTimeDesc(a, b);
+          const detA = getDetailedPaymentStatus(a);
+          const detB = getDetailedPaymentStatus(b);
+          const ra = STATUS_PRIORITY_RANK[detA.paymentStatus] ?? 50;
+          const rb = STATUS_PRIORITY_RANK[detB.paymentStatus] ?? 50;
+          if (ra !== rb) return ra - rb;
+          if (ra === 1) {
+            return (
+              new Date(a.updatedAt || a.createdAt || 0).getTime() -
+              new Date(b.updatedAt || b.createdAt || 0).getTime()
+            );
+          }
+          return byTimeDesc(a, b);
         });
     }
   }, [filteredCases, sortKey]);
@@ -199,7 +226,6 @@ export default function PaymentDashboard() {
           <div className="sub">Full view of the payment lifecycle — initiate, authorise, resolve and track every case.</div>
         </div>
         <div className="topbar-right">
-          <RefreshButton onClick={() => loadData()} loading={loading} />
           <div className="date-badge">
             <Clock size={16} className="inline mr-1" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
           </div>
@@ -227,10 +253,9 @@ export default function PaymentDashboard() {
       <div className="stats-grid">
         {stats.map((stat, idx) => (
           <div key={idx} className="stat-card">
-            <stat.icon className="stat-icon" size={32} />
+            <stat.icon className={`stat-icon ${stat.iconColor || 'text-md-primary'}`} size={32} />
             <div className="stat-label">{stat.label}</div>
             <div className="stat-number">{stat.value}</div>
-            <div className="stat-change">{stat.change}</div>
           </div>
         ))}
       </div>
@@ -255,7 +280,7 @@ export default function PaymentDashboard() {
           />
           <Select
             label="Status"
-            options={PAYMENT_STATUSES.map((s) => ({ value: s, label: s === 'All' ? 'All statuses' : s }))}
+            options={availableStatuses.map((s) => ({ value: s, label: s === 'All' ? 'All statuses' : s }))}
             value={statusFilter}
             onChange={(v) => {
               setStatusFilter(v);
@@ -280,7 +305,11 @@ export default function PaymentDashboard() {
 
       <div className="action-bar">
         <div className="left">
-          <span className="count">Showing {totalCount} payment records</span>
+          <Activity size={18} />
+          <span className="count">Disbursement activity ({totalCount})</span>
+        </div>
+        <div className="right">
+          <RefreshButton onClick={() => loadData()} loading={loading} />
         </div>
       </div>
 
@@ -366,9 +395,7 @@ export default function PaymentDashboard() {
         )}
       </div>
 
-      <div style={{ marginTop: '24px', fontSize: '13px', color: 'var(--md-on-surface-variant)', opacity: 0.6, textAlign: 'center', borderTop: '1px solid rgba(121,116,126,0.08)', paddingTop: '18px' }}>
-        FCR-SCS · Payments · Connected to Live Backend Data
-      </div>
+      <div style={{ height: '32px' }} />
 
       {/* Modals */}
       <ViewDetailsModal
@@ -402,8 +429,10 @@ export default function PaymentDashboard() {
         onConfirm={async () => {
           if (!finalConfirmCase) return;
           await paymentApi.confirmExecution({ caseId: finalConfirmCase.caseId, adminId: identityId });
-          setFinalConfirmCase(null);
-          loadData();
+          setTimeout(() => {
+            setFinalConfirmCase(null);
+            loadData();
+          }, 1100);
         }}
         onHold={() => {
           setFinalConfirmCase(null);

@@ -356,7 +356,9 @@ export async function getFailedTransactions(_req: Request, res: Response): Promi
 export async function downloadReceipt(req: Request, res: Response): Promise<void> {
   const caseId = req.params.caseId as string;
   try {
-    const pdfBuffer = await receiptService.generateReceipt(caseId);
+    // FR-019: serve the frozen canonical receipt bytes so the downloaded
+    // file always matches the stored (and Etherscan-anchored) SHA-256.
+    const pdfBuffer = await receiptService.getCanonicalReceiptBuffer(caseId);
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename=receipt-${caseId}.pdf`);
     res.send(pdfBuffer);

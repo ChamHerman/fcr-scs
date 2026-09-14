@@ -25,7 +25,7 @@ describe("POST /api/payments/cancel (RBAC & SOP Hardening)", () => {
   const makeCase = async (status: PaymentStatus) => {
     const pc = await prisma.paymentCase.create({
       data: {
-        id: newPaymentId(),
+        id: await newPaymentId(),
         caseId: `CANCEL-TEST-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         beneficiaryId: "BEN-TEST",
         amount: 500000,

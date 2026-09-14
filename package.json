@@ -5,7 +5,10 @@
   "scripts": {
     "postinstall": "prisma generate --schema=data_layer/database/prisma/schema.prisma",
     "prisma:generate": "prisma generate --schema=data_layer/database/prisma/schema.prisma",
+    "db:migrate": "cd data_layer/database && npx prisma migrate deploy",
+    "db:reset": "cd data_layer/database && npx prisma migrate reset --force",
     "db:seed": "cd data_layer/database && npx ts-node prisma/seed.ts",
+    "db:fresh": "cd data_layer/database && npx prisma migrate reset --force",
     "dev:backend": "cd business_logic_layer && npm run dev",
     "dev:frontend": "cd presentation_layer && npm run dev",
     "ai:venv": "python -m venv business_logic_layer/ai_prediction_service/.venv",

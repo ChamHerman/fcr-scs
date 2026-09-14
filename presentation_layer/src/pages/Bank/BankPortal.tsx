@@ -226,21 +226,21 @@ export default function BankPortal() {
 
   const stats = [
     {
-      label: 'Awaiting Bank Approval',
+      label: 'RENTAS Queue (Pending Clearing)',
       value: pendingCases.length,
-      change: 'Submitted for bank approval',
+      change: 'Awaiting gross RTGS settlement',
       icon: Clock,
       colorClass: 'text-amber-500',
     },
     {
-      label: 'Settled Payouts (Paid)',
+      label: 'Settled Gross RTGS (Paid)',
       value: historyCases.filter((c) => normalizePaymentStatus(c.status) === 'Paid').length,
-      change: 'Disbursed with bank receipt',
+      change: 'Settled with RENTAS receipt',
       icon: FileCheck,
       colorClass: 'text-emerald-500',
     },
     {
-      label: 'Failed / Rejected Logs',
+      label: 'RENTAS Clearing Exceptions',
       value: historyCases.filter((c) => normalizePaymentStatus(c.status) === 'Transfer Failed').length,
       change: 'Logged for retry & resolution',
       icon: FileX,
@@ -254,18 +254,21 @@ export default function BankPortal() {
       <div className="topbar bank-topbar">
         <div className="topbar-left">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-md-primary/10 border border-md-primary/20 flex items-center justify-center text-md-primary font-bold shadow-sm">
-              <Landmark size={22} />
+            <div className="w-11 h-11 rounded-2xl bg-[#0f172a] text-[#fbbf24] border border-[#fbbf24]/30 flex items-center justify-center font-bold shadow-md">
+              <Landmark size={24} />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold tracking-tight">Interbank Clearing Gateway</h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-2xl font-bold tracking-tight">RENTAS Host Gateway</h1>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider bg-[#0f172a] text-[#fbbf24] border border-[#fbbf24]/40 uppercase">
+                  Bank Negara Malaysia RTGS
+                </span>
                 <span className="payment-badge status-paid" style={{ fontSize: '11px', padding: '2px 10px' }}>
-                  <span className="dot" /> LIVE SIMULATION
+                  <span className="dot" /> LIVE TERMINAL
                 </span>
               </div>
               <div className="sub mt-0.5">
-                External commercial banking network settlement engine · Simulates bank gateway payout approvals &amp; failure handling.
+                Real-time Electronic Transfer of Funds and Securities · High-Value Interbank Settlement Network.
               </div>
             </div>
           </div>
@@ -313,7 +316,7 @@ export default function BankPortal() {
             }`}
           >
             <ShieldCheck size={16} />
-            <span>Pending Clearing Queue</span>
+            <span>RENTAS Clearing Queue</span>
             <span
               className={`px-2 py-0.5 text-xs rounded-full ${
                 activeTab === 'pending'
@@ -335,7 +338,7 @@ export default function BankPortal() {
             }`}
           >
             <Clock size={16} />
-            <span>Clearance History &amp; Audit Logs</span>
+            <span>RENTAS Settlement History &amp; Logs</span>
             <span
               className={`px-2 py-0.5 text-xs rounded-full ${
                 activeTab === 'history'
@@ -377,7 +380,7 @@ export default function BankPortal() {
             <div className="action-bar">
               <div className="left">
                 <span className="count">
-                  {filteredPending.length} transfer{filteredPending.length === 1 ? '' : 's'} awaiting commercial clearance
+                  {filteredPending.length} transfer{filteredPending.length === 1 ? '' : 's'} awaiting RENTAS gross clearance
                 </span>
               </div>
             </div>
@@ -402,7 +405,7 @@ export default function BankPortal() {
                       <tr>
                         <td colSpan={8} className="text-center text-md-on-surface-variant py-8">
                           <RefreshCw size={22} className="inline animate-spin mr-2 text-md-primary" />
-                          <span>Connecting to commercial bank gateway…</span>
+                          <span>Connecting to Bank Negara Malaysia RENTAS Gateway…</span>
                         </td>
                       </tr>
                     ) : pagedPendingRows.length === 0 ? (
@@ -528,7 +531,7 @@ export default function BankPortal() {
             <div className="action-bar">
               <div className="left">
                 <span className="count">
-                  {filteredHistory.length} cleared or rejected bank gateway record{filteredHistory.length === 1 ? '' : 's'}
+                  {filteredHistory.length} cleared or rejected RENTAS RTGS record{filteredHistory.length === 1 ? '' : 's'}
                 </span>
               </div>
             </div>
@@ -611,9 +614,7 @@ export default function BankPortal() {
         )}
       </div>
 
-      <div style={{ marginTop: '32px', fontSize: '13px', color: 'var(--md-on-surface-variant)', opacity: 0.6, textAlign: 'center', borderTop: '1px solid rgba(121,116,126,0.08)', paddingTop: '18px' }}>
-        FCR-SCS · Interbank Commercial Clearance Gateway · Simulation Mode · Connected to Live Backend
-      </div>
+      <div style={{ height: '32px' }} />
 
       {/* Reject Simulation Modal adhering to DESIGN.md §4 */}
       <Modal

@@ -1,7 +1,8 @@
 import { randomBytes, randomUUID } from "crypto";
 import { prisma } from "../prisma";
-import { PaymentStatus, UserRole, CaseStatus } from "@prisma/client";
+import { PaymentStatus, UserRole, CaseStatus, BlockchainStatus } from "@prisma/client";
 import * as bankService from "./bank.service";
+import { persistCanonicalReceipt } from "./receipt.service";
 
 export function calculateRequiredSignatures(amount: number, totalActiveGAs = 5): number {
   let signatures = 2; // base (1 initiator + 1 approver)
@@ -49,9 +50,35 @@ export function shortId(length = 8): string {
   return out;
 }
 
-/** Short human-readable payment record id, stored as the PaymentCase primary key. */
-export function newPaymentId(): string {
-  return `PMT-${shortId()}`;
+/**
+ * Short human-readable payment record id in the canonical format
+ * PMT-YYYY-MM-#### (Doc 5 §1.4 / Bug Logs), assigned by the application and stored as the
+ * PaymentCase primary key. Strictly sequential starting from 0001 per month without random numbers.
+ */
+export async function newPaymentId(): Promise<string> {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const prefix = `PMT-${year}-${month}-`;
+
+  const cases = await prisma.paymentCase.findMany({
+    where: { id: { startsWith: prefix } },
+    select: { id: true },
+  });
+
+  let maxSeq = 0;
+  for (const c of cases) {
+    const seqStr = c.id.slice(prefix.length);
+    if (/^\d{4}$/.test(seqStr)) {
+      const num = parseInt(seqStr, 10);
+      if (!isNaN(num) && num > maxSeq) {
+        maxSeq = num;
+      }
+    }
+  }
+
+  const nextSeq = maxSeq + 1;
+  return `${prefix}${String(nextSeq).padStart(4, "0")}`;
 }
 
 /**
@@ -66,6 +93,31 @@ export function formatPaymentResponse<T extends { id: string; caseId: string }>(
     ...pc,
     paymentId: pc.id,
   };
+}
+
+export async function attachM1Status<T extends { caseId: string }>(cases: T[]): Promise<(T & { isM1Published: boolean })[]> {
+  if (!cases || cases.length === 0) return [];
+  try {
+    const m1Records = await prisma.blockchainRecord.findMany({
+      where: {
+        caseId: { in: cases.map((c) => c.caseId) },
+        milestone: "AWARD",
+        status: BlockchainStatus.PUBLISHED,
+      },
+      select: { caseId: true },
+    });
+    const publishedSet = new Set(m1Records.map((r) => r.caseId));
+    return cases.map((c) => ({
+      ...c,
+      isM1Published: publishedSet.has(c.caseId),
+    }));
+  } catch (err) {
+    console.error("[payment_service] Error querying M1 status for cases:", err);
+    return cases.map((c) => ({
+      ...c,
+      isM1Published: false,
+    }));
+  }
 }
 export async function enrichPaymentWithAdminNames<T extends { authorisations?: any[] }>(pc: T): Promise<T> {
   if (!pc || !pc.authorisations || !Array.isArray(pc.authorisations) || pc.authorisations.length === 0) {
@@ -286,15 +338,33 @@ export async function submitBankDetails(data: {
           },
         },
       },
+      compensationReports: true,
+      offerLetters: true,
     },
   });
   const owner = ac?.landParcel?.ownerships?.[0]?.landOwner;
+  const amount = ac?.compensationReports?.[0]?.totalCompensation
+    ? Number(ac.compensationReports[0].totalCompensation)
+    : ac?.offerLetters?.[0]?.offerAmount
+    ? Number(ac.offerLetters[0].offerAmount)
+    : 0;
 
   await validateAccountNumberUniqueness(cleanAccountNumber, cleanMyKad, {
     currentCaseId: data.caseId,
     userId: owner?.ownerId,
     userName: data.accountHolderName || owner?.name,
   });
+
+  const m1Record = await prisma.blockchainRecord.findFirst({
+    where: {
+      caseId: data.caseId,
+      milestone: "AWARD",
+      status: BlockchainStatus.PUBLISHED,
+    },
+  });
+  const targetInitialStatus = m1Record
+    ? PaymentStatus.READY_TO_INITIATE
+    : PaymentStatus.AWARD_NOTARIZATION_PENDING;
 
   const pc = await prisma.paymentCase.upsert({
     where: { caseId: data.caseId },
@@ -304,19 +374,19 @@ export async function submitBankDetails(data: {
       accountHolderName: data.accountHolderName,
       phoneNumber: data.phoneNumber,
       myKadNumber: data.myKadNumber,
-      status: PaymentStatus.READY_TO_INITIATE,
+      status: targetInitialStatus,
     },
     create: {
-      id: newPaymentId(),
+      id: await newPaymentId(),
       caseId: data.caseId,
       beneficiaryId: owner?.ownerId || "BEN-" + data.caseId,
-      amount: 0,
+      amount,
       bankName: data.bankName,
       accountNumber: cleanAccountNumber,
       accountHolderName: data.accountHolderName,
       phoneNumber: data.phoneNumber,
       myKadNumber: data.myKadNumber,
-      status: PaymentStatus.READY_TO_INITIATE,
+      status: targetInitialStatus,
     },
   });
 
@@ -388,6 +458,11 @@ const PRE_TRANSFER_STATUSES: (PaymentStatus | string)[] = [
   PaymentStatus.READY_TO_INITIATE,
   PaymentStatus.PENDING_APPROVAL,
   PaymentStatus.SCHEDULED,
+  // FR-018 3-Way SOP: fatal-risk cancellation must also reach rejected and
+  // bank-failed cases — a court injunction or fraud flag cannot wait for a
+  // re-approval round before the disbursement is halted.
+  PaymentStatus.TRANSFER_REJECTED,
+  PaymentStatus.TRANSFER_FAILED,
   "Bank Details Pending",
   "Ready to Initiate",
   "Pending Approval",
@@ -398,6 +473,8 @@ const PRE_TRANSFER_STATUSES: (PaymentStatus | string)[] = [
   "Bank Details Submitted",
   "Transfer Initiated",
   "Authorised",
+  "Transfer Rejected",
+  "Transfer Failed",
 ];
 
 export async function initiateTransfer(caseId: string, rawAdminId: string) {
@@ -410,6 +487,18 @@ export async function initiateTransfer(caseId: string, rawAdminId: string) {
   if (!pc.bankName) {
     throw new Error(`Cannot initiate transfer without submitted bank details.`);
   }
+
+  // FR-019 hard gate: disbursement can never outrun the statutory award —
+  // Milestone 1 must be notarized on the blockchain before initiation.
+  const m1 = await prisma.blockchainRecord.findUnique({
+    where: { caseId_milestone: { caseId, milestone: "AWARD" } },
+  });
+  if (!m1 || m1.status !== BlockchainStatus.PUBLISHED) {
+    throw new Error(
+      "Initiation is locked: Milestone 1 (Statutory Award) must be published on the blockchain first."
+    );
+  }
+
   const adminId = await resolveAdminUuid(rawAdminId);
 
   const totalActiveGAs = await prisma.user.count({
@@ -423,6 +512,7 @@ export async function initiateTransfer(caseId: string, rawAdminId: string) {
       paymentCaseId: pc.id,
       adminId,
       action: "initiate",
+      cycle: pc.cycle,
     },
   });
 
@@ -435,6 +525,16 @@ export async function initiateTransfer(caseId: string, rawAdminId: string) {
     },
     include: { authorisations: true, receipt: true },
   });
+
+  try {
+    await prisma.acquisitionCase.updateMany({
+      where: { caseId },
+      data: { status: CaseStatus.PAYMENT_IN_PROGRESS },
+    });
+  } catch (err) {
+    console.error("[payment_service] Error updating AcquisitionCase to PAYMENT_IN_PROGRESS:", err);
+  }
+
   const enriched = await enrichPaymentWithAdminNames(updated);
   return formatPaymentResponse(enriched);
 }
@@ -451,9 +551,14 @@ export async function authoriseTransfer(caseId: string, rawAdminId: string) {
   // Segregation of duties: only the initiator and GAs who already APPROVED are
   // blocked. A GA who rejected (or resolved) the case may approve it after the
   // rejection was resolved — the resolve loop exists precisely so the approval
-  // chain can continue.
+  // chain can continue. Both checks scope to the ACTIVE cycle (FR-020): a new
+  // bank-details round legally voids prior signatures, so Cycle-1 signers are
+  // NOT barred from Cycle 2.
   const priorApproval = pc.authorisations.find(
-    (a) => a.adminId === adminId && (a.action === "initiate" || a.action === "authorise")
+    (a) =>
+      a.cycle === pc.cycle &&
+      a.adminId === adminId &&
+      (a.action === "initiate" || a.action === "authorise")
   );
   if (priorApproval) {
     throw new Error("Segregation of duties: Admin cannot authorise their own initiation or double-sign");
@@ -464,6 +569,7 @@ export async function authoriseTransfer(caseId: string, rawAdminId: string) {
       paymentCaseId: pc.id,
       adminId,
       action: "authorise",
+      cycle: pc.cycle,
     },
   });
 
@@ -504,11 +610,14 @@ export async function confirmExecution(caseId: string, rawAdminId: string) {
 
   const adminId = await resolveAdminUuid(rawAdminId);
 
-  const isAuthoriser = pc.authorisations.some(
-    (a) => a.adminId === adminId && a.action === "authorise"
+  const isAuthoriserOrInitiator = pc.authorisations.some(
+    (a) => a.cycle === pc.cycle && a.adminId === adminId && (a.action === "authorise" || a.action === "initiate")
   );
-  if (!isAuthoriser) {
-    throw new Error("Only an authorising administrator can confirm final disbursement execution");
+  if (!isAuthoriserOrInitiator) {
+    const adminUser = await prisma.user.findUnique({ where: { userId: adminId } });
+    if (!adminUser || (adminUser.role !== 'GOVERNMENT_ADMINISTRATOR' && adminUser.role !== 'SYSTEM_ADMINISTRATOR')) {
+      throw new Error("Only an authorized government administrator can confirm final disbursement execution");
+    }
   }
 
   await prisma.paymentAuthorisation.create({
@@ -516,6 +625,7 @@ export async function confirmExecution(caseId: string, rawAdminId: string) {
       paymentCaseId: pc.id,
       adminId,
       action: "execute_transfer",
+      cycle: pc.cycle,
     },
   });
 
@@ -584,7 +694,10 @@ export async function rejectTransfer(caseId: string, rawAdminId: string, reason:
   const adminId = await resolveAdminUuid(rawAdminId);
 
   const alreadyApproved = pc.authorisations.find(
-    (a) => a.adminId === adminId && (a.action === "initiate" || a.action === "authorise")
+    (a) =>
+      a.cycle === pc.cycle &&
+      a.adminId === adminId &&
+      (a.action === "initiate" || a.action === "authorise")
   );
   if (alreadyApproved) {
     throw new Error("Segregation of duties: Admin cannot reject a transfer they initiated or already approved");
@@ -599,6 +712,7 @@ export async function rejectTransfer(caseId: string, rawAdminId: string, reason:
       adminId,
       action: "reject",
       reason: reasonText,
+      cycle: pc.cycle,
     },
   });
 
@@ -635,6 +749,7 @@ export async function resolveRejectedTransfer(caseId: string, rawAdminId: string
       paymentCaseId: pc.id,
       adminId,
       action: "mark_resolved",
+      cycle: pc.cycle,
     },
   });
 
@@ -666,6 +781,7 @@ export async function cancelPayment(caseId: string, rawAdminId: string, reasonKe
       adminId,
       action: "cancel",
       reason: reasonText,
+      cycle: pc.cycle,
     },
   });
 
@@ -682,6 +798,30 @@ export async function cancelPayment(caseId: string, rawAdminId: string, reasonKe
     data: { status: PaymentStatus.CANCELLED },
     include: { authorisations: true, failedTransactions: true },
   });
+
+  // FR-019 revocation gate: if Milestone 1 was already notarized on-chain, the
+  // ledger still asserts a statutory debt for a now-cancelled case. Park the
+  // record in VOID_PENDING so the GA completes the on-chain revocation via
+  // voidRecord (signed in MetaMask from PublishLedger).
+  const m1 = await prisma.blockchainRecord.findUnique({
+    where: { caseId_milestone: { caseId, milestone: "AWARD" } },
+  });
+  if (m1 && m1.status === BlockchainStatus.PUBLISHED) {
+    await prisma.blockchainRecord.update({
+      where: { id: m1.id },
+      data: { status: BlockchainStatus.VOID_PENDING },
+    });
+  }
+
+  try {
+    await prisma.acquisitionCase.updateMany({
+      where: { caseId, status: CaseStatus.PAYMENT_IN_PROGRESS },
+      data: { status: CaseStatus.OFFER_ACCEPTED },
+    });
+  } catch (err) {
+    console.error("[payment_service] Error reverting AcquisitionCase to OFFER_ACCEPTED on cancel:", err);
+  }
+
   return formatPaymentResponse(updated);
 }
 
@@ -727,9 +867,17 @@ export async function requestDetailsUpdate(caseId: string) {
     });
   }
 
+  // FR-020: a new bank-details round opens a fresh multi-sig cycle. An approval
+  // authorizes payment to a SPECIFIC account — replacing the destination
+  // account legally voids all prior signatures, so the count resets to 0 and
+  // prior-cycle authorisations drop to history (Cycle N, superseded).
   const updated = await prisma.paymentCase.update({
     where: { caseId },
-    data: { status: PaymentStatus.NEW_BANK_DETAILS_PENDING },
+    data: {
+      status: PaymentStatus.NEW_BANK_DETAILS_PENDING,
+      cycle: pc.cycle + 1,
+      currentSignatures: 0,
+    },
     include: { authorisations: true, failedTransactions: true },
   });
   return formatPaymentResponse(updated);
@@ -759,7 +907,7 @@ export async function scheduleTomorrow(caseId: string) {
 }
 
 export async function getPaymentStatus(caseId: string, userRole?: string, userId?: string) {
-  const pc = await prisma.paymentCase.findUnique({
+  let pc = await prisma.paymentCase.findUnique({
     where: { caseId },
     include: {
       authorisations: true,
@@ -767,6 +915,60 @@ export async function getPaymentStatus(caseId: string, userRole?: string, userId
       failedTransactions: true,
     },
   });
+
+  if (!pc) {
+    const ac = await prisma.acquisitionCase.findFirst({
+      where: { caseId, status: CaseStatus.OFFER_ACCEPTED },
+      include: {
+        landParcel: {
+          include: {
+            ownerships: {
+              include: { landOwner: true },
+            },
+          },
+        },
+        compensationReports: true,
+        offerLetters: true,
+      },
+    });
+    if (ac) {
+      const primaryOwner = ac.landParcel?.ownerships?.[0]?.landOwner;
+      const amount = ac.compensationReports?.[0]?.totalCompensation
+        ? Number(ac.compensationReports[0].totalCompensation)
+        : ac.offerLetters?.[0]?.offerAmount
+        ? Number(ac.offerLetters[0].offerAmount)
+        : 0;
+
+      const m1 = await prisma.blockchainRecord.findFirst({
+        where: { caseId: ac.caseId, milestone: "AWARD", status: BlockchainStatus.PUBLISHED },
+      });
+      const initialStatus = m1
+        ? PaymentStatus.BANK_DETAILS_PENDING
+        : PaymentStatus.BANK_DETAILS_AND_M1_PENDING;
+
+      const pmtId = await newPaymentId();
+      pc = await prisma.paymentCase.create({
+        data: {
+          id: pmtId,
+          caseId: ac.caseId,
+          beneficiaryId: primaryOwner?.ownerId || `BEN-${ac.caseId}`,
+          amount,
+          accountHolderName: primaryOwner?.name || null,
+          phoneNumber: primaryOwner?.contact || null,
+          myKadNumber: primaryOwner?.nric || null,
+          status: initialStatus,
+          requiredSignatures: 0,
+          currentSignatures: 0,
+        },
+        include: {
+          authorisations: true,
+          receipt: true,
+          failedTransactions: true,
+        },
+      });
+    }
+  }
+
   if (!pc) throw new Error("Case not found");
 
   if (userRole === UserRole.DISPLACED_COMMUNITY_MEMBER || userRole === "DISPLACED_COMMUNITY_MEMBER") {
@@ -816,7 +1018,8 @@ export async function getPaymentStatus(caseId: string, userRole?: string, userId
   }
 
   const enriched = await enrichPaymentWithAdminNames(pc);
-  return formatPaymentResponse(enriched);
+  const [withM1] = await attachM1Status([enriched]);
+  return formatPaymentResponse(withM1);
 }
 
 export async function getPendingAuthorisations() {
@@ -828,7 +1031,8 @@ export async function getPendingAuthorisations() {
     orderBy: { updatedAt: "desc" },
   });
   const enriched = await Promise.all(cases.map(enrichPaymentWithAdminNames));
-  return enriched.map(formatPaymentResponse);
+  const withM1 = await attachM1Status(enriched);
+  return withM1.map(formatPaymentResponse);
 }
 
 export async function getAllCases(userRole?: string, userId?: string) {
@@ -854,6 +1058,7 @@ export async function getAllCases(userRole?: string, userId?: string) {
         compensationReports: true,
         offerLetters: true,
       },
+      orderBy: { caseId: "asc" },
     });
 
     for (const ac of acceptedCases) {
@@ -864,14 +1069,24 @@ export async function getAllCases(userRole?: string, userId?: string) {
         ? Number(ac.offerLetters[0].offerAmount)
         : 0;
 
+      const m1 = await prisma.blockchainRecord.findFirst({
+        where: { caseId: ac.caseId, milestone: "AWARD", status: BlockchainStatus.PUBLISHED },
+      });
+      const initialStatus = m1
+        ? PaymentStatus.BANK_DETAILS_PENDING
+        : PaymentStatus.BANK_DETAILS_AND_M1_PENDING;
+
+      const pmtId = await newPaymentId();
       await prisma.paymentCase.create({
         data: {
-          id: newPaymentId(),
+          id: pmtId,
           caseId: ac.caseId,
           beneficiaryId: primaryOwner?.ownerId || `BEN-${ac.caseId}`,
           amount,
           accountHolderName: primaryOwner?.name || null,
-          status: PaymentStatus.BANK_DETAILS_PENDING,
+          phoneNumber: primaryOwner?.contact || null,
+          myKadNumber: primaryOwner?.nric || null,
+          status: initialStatus,
           requiredSignatures: 0,
           currentSignatures: 0,
         },
@@ -887,7 +1102,7 @@ export async function getAllCases(userRole?: string, userId?: string) {
       receipt: true,
       failedTransactions: true,
     },
-    orderBy: { updatedAt: "desc" },
+    orderBy: { id: "asc" },
   });
 
   if (userRole === UserRole.DISPLACED_COMMUNITY_MEMBER || userRole === "DISPLACED_COMMUNITY_MEMBER") {
@@ -934,12 +1149,46 @@ export async function getAllCases(userRole?: string, userId?: string) {
       });
 
       const enriched = await Promise.all(filtered.map(enrichPaymentWithAdminNames));
-      return enriched.map(formatPaymentResponse);
+      const withM1 = await attachM1Status(enriched);
+      return withM1.map(formatPaymentResponse);
     }
   }
 
+  const syncStatuses = async (casesList: (any & { isM1Published: boolean })[]) => {
+    const preInitStatuses: PaymentStatus[] = [
+      PaymentStatus.BANK_DETAILS_PENDING,
+      PaymentStatus.READY_TO_INITIATE,
+      PaymentStatus.AWARD_NOTARIZATION_PENDING,
+      PaymentStatus.BANK_DETAILS_AND_M1_PENDING,
+    ];
+    for (const pc of casesList) {
+      if (preInitStatuses.includes(pc.status)) {
+        const hasBank = Boolean(pc.bankName && pc.accountNumber);
+        const hasM1 = Boolean(pc.isM1Published);
+        let expected: PaymentStatus = PaymentStatus.BANK_DETAILS_AND_M1_PENDING;
+        if (hasBank && hasM1) expected = PaymentStatus.READY_TO_INITIATE;
+        else if (!hasBank && hasM1) expected = PaymentStatus.BANK_DETAILS_PENDING;
+        else if (hasBank && !hasM1) expected = PaymentStatus.AWARD_NOTARIZATION_PENDING;
+
+        if (pc.status !== expected) {
+          pc.status = expected;
+          try {
+            await prisma.paymentCase.update({
+              where: { id: pc.id },
+              data: { status: expected },
+            });
+          } catch (err) {
+            console.warn('[payment_service] Status sync err:', err);
+          }
+        }
+      }
+    }
+  };
+
   const enriched = await Promise.all(cases.map(enrichPaymentWithAdminNames));
-  return enriched.map(formatPaymentResponse);
+  const withM1 = await attachM1Status(enriched);
+  await syncStatuses(withM1);
+  return withM1.map(formatPaymentResponse);
 }
 
 export async function getSavedBankDetails(userId?: string, myKadNumber?: string, userName?: string) {
@@ -1353,8 +1602,10 @@ export async function approveBankTransfer(caseId: string, bankReferenceNumber?: 
   const bankRef = bankReferenceNumber || `BNK-${Date.now()}-${caseId}`;
   await prisma.paymentReceipt.upsert({
     where: { paymentCaseId: pc.id },
-    update: { bankReferenceNumber: bankRef, generatedAt: new Date() },
-    create: { paymentCaseId: pc.id, bankReferenceNumber: bankRef, generatedAt: new Date() },
+    // generatedAt is deliberately NOT touched on update: the canonical receipt
+    // (and therefore its binary SHA-256, FR-019) must stay byte-identical.
+    update: { bankReferenceNumber: bankRef },
+    create: { paymentCaseId: pc.id, bankReferenceNumber: bankRef },
   });
 
   const updated = await prisma.paymentCase.update({
@@ -1362,6 +1613,25 @@ export async function approveBankTransfer(caseId: string, bankReferenceNumber?: 
     data: { status: PaymentStatus.TRANSFER_SUCCEED },
     include: { authorisations: true, receipt: true },
   });
+
+  // FR-019: freeze the canonical receipt at TRANSFER_SUCCEED — render the PDF
+  // once, write it to disk, and store the binary SHA-256 the member can later
+  // verify byte-for-byte against the Etherscan-anchored hash (M2).
+  try {
+    await persistCanonicalReceipt(caseId);
+  } catch (err) {
+    console.error(`[WARN] [payment.service] Canonical receipt persistence failed for ${caseId}:`, (err as Error).message);
+  }
+
+  try {
+    await prisma.acquisitionCase.updateMany({
+      where: { caseId },
+      data: { status: CaseStatus.PAYMENT_COMPLETED },
+    });
+  } catch (err) {
+    console.error("[payment_service] Error updating AcquisitionCase to PAYMENT_COMPLETED on TRANSFER_SUCCEED:", err);
+  }
+
   return formatPaymentResponse(updated);
 }
 
@@ -1448,5 +1718,15 @@ export async function confirmPaymentReceipt(
     data: { status: PaymentStatus.PAID },
     include: { authorisations: true, receipt: true },
   });
+
+  try {
+    await prisma.acquisitionCase.updateMany({
+      where: { caseId },
+      data: { status: CaseStatus.PAYMENT_COMPLETED },
+    });
+  } catch (err) {
+    console.error("[payment_service] Error updating AcquisitionCase to PAYMENT_COMPLETED on PAID:", err);
+  }
+
   return formatPaymentResponse(updated);
 }

@@ -90,6 +90,8 @@ export const PAYMENT_STATUSES = [
   'Cancelled',
   'Scheduled',
   'New Bank Details Pending',
+  'Award Notarization Pending',
+  'Bank Details & M1 Pending',
 ];
 
 /** Normalise any backend/seed variant to the canonical display name. */
@@ -97,6 +99,18 @@ export function normalizePaymentStatus(status: string): string {
   if (!status) return 'Bank Details Pending';
   if (status === 'BANK_DETAILS_PENDING' || status === 'Bank Details Pending') return 'Bank Details Pending';
   if (status === 'READY_TO_INITIATE' || status === 'Ready to Initiate') return 'Ready to Initiate';
+  if (
+    status === 'AWARD_NOTARIZATION_PENDING' ||
+    status === 'Award Notarization Pending' ||
+    status === 'Award Notarization (M1) Pending'
+  )
+    return 'Award Notarization Pending';
+  if (
+    status === 'BANK_DETAILS_AND_M1_PENDING' ||
+    status === 'Bank Details & M1 Pending' ||
+    status === 'Bank Details and M1 Pending'
+  )
+    return 'Bank Details & M1 Pending';
   if (
     status === 'PENDING_APPROVAL' ||
     status === 'Pending Approval' ||
@@ -165,6 +179,10 @@ export const paymentStatusLabelMap: Record<string, string> = {
   'SCHEDULED': 'Scheduled',
   'New Bank Details Pending': 'New Bank Details Pending',
   'NEW_BANK_DETAILS_PENDING': 'New Bank Details Pending',
+  'Award Notarization Pending': 'Award Notarization Pending',
+  'AWARD_NOTARIZATION_PENDING': 'Award Notarization Pending',
+  'Bank Details & M1 Pending': 'Bank Details & M1 Pending',
+  'BANK_DETAILS_AND_M1_PENDING': 'Bank Details & M1 Pending',
   // Legacy mappings
   'Offer Accepted': 'Bank Details Pending',
   'offer_accepted': 'Bank Details Pending',
@@ -191,6 +209,10 @@ export const paymentStatusClassMap: Record<string, string> = {
   'BANK_DETAILS_PENDING': 'status-bank-details-pending',
   'Ready to Initiate': 'status-ready-to-initiate',
   'READY_TO_INITIATE': 'status-ready-to-initiate',
+  'Award Notarization Pending': 'status-award-notarization-pending',
+  'AWARD_NOTARIZATION_PENDING': 'status-award-notarization-pending',
+  'Bank Details & M1 Pending': 'status-bank-details-and-m1-pending',
+  'BANK_DETAILS_AND_M1_PENDING': 'status-bank-details-and-m1-pending',
   'Pending Approval': 'status-pending-approval',
   'PENDING_APPROVAL': 'status-pending-approval',
   'Bank Approval Pending': 'status-bank-approval-pending',
@@ -240,36 +262,50 @@ export interface DetailedPaymentStatus {
 /**
  * 2-tier dual status helper:
  * - caseStatus: High-level statutory milestone (e.g. 'Offer Accepted')
- * - paymentStatus: Granular operational payment readiness (e.g. 'Bank Details Pending' or 'Ready to Initiate')
+ * - paymentStatus: Granular operational payment readiness
  */
 export function getDetailedPaymentStatus(pc: {
   status: string;
   bankName?: string | null;
   accountNumber?: string | null;
+  isM1Published?: boolean;
 }): DetailedPaymentStatus {
   const norm = normalizePaymentStatus(pc.status);
+  const preInitNorms = new Set([
+    'Bank Details Pending',
+    'Ready to Initiate',
+    'Award Notarization Pending',
+    'Bank Details & M1 Pending',
+  ]);
 
   let paymentStatus = norm;
-  if (norm === 'Bank Details Pending') {
-    paymentStatus = 'Bank Details Pending';
-  } else if (norm === 'Ready to Initiate') {
-    paymentStatus = 'Ready to Initiate';
+  if (preInitNorms.has(norm)) {
+    const hasBank = Boolean(pc.bankName && pc.accountNumber);
+    const hasM1 = Boolean(pc.isM1Published);
+    if (hasBank && hasM1) {
+      paymentStatus = 'Ready to Initiate';
+    } else if (!hasBank && hasM1) {
+      paymentStatus = 'Bank Details Pending';
+    } else if (hasBank && !hasM1) {
+      paymentStatus = 'Award Notarization Pending';
+    } else {
+      paymentStatus = 'Bank Details & M1 Pending';
+    }
   }
-  const caseStatus =
-    paymentStatus === 'Bank Details Pending' || paymentStatus === 'Ready to Initiate'
-      ? 'Offer Accepted'
-      : paymentStatus;
 
+  const caseStatus = preInitNorms.has(paymentStatus) ? 'Offer Accepted' : paymentStatus;
   return { caseStatus, paymentStatus };
 }
 
-export const BLOCKCHAIN_STATUSES = ['All', 'Ready to Publish', 'Published', 'Voided', 'Replacement'];
+export const BLOCKCHAIN_STATUSES = ['All', 'Ready to Publish', 'Published', 'Void Pending', 'Voided', 'Replacement'];
 
 export const blockchainStatusLabelMap: Record<string, string> = {
   'Ready to Publish': 'Ready to Publish',
   'READY_TO_PUBLISH': 'Ready to Publish',
   'Published': 'Published',
   'PUBLISHED': 'Published',
+  'Void Pending': 'Void Pending',
+  'VOID_PENDING': 'Void Pending',
   'Voided': 'Voided',
   'VOIDED': 'Voided',
   'Replacement': 'Replacement',
@@ -281,10 +317,15 @@ export const blockchainStatusClassMap: Record<string, string> = {
   'READY_TO_PUBLISH': 'status-ready-publish',
   'Published': 'status-published',
   'PUBLISHED': 'status-published',
+  'Void Pending': 'status-void-pending',
+  'VOID_PENDING': 'status-void-pending',
   'Voided': 'status-voided',
   'VOIDED': 'status-voided',
   'Replacement': 'status-replacement',
   'REPLACEMENT': 'status-replacement',
+  'Grace Period (Locked)': 'status-locked',
+  'Locked': 'status-locked',
+  'GRACE_PERIOD_LOCKED': 'status-locked',
 };
 
 export interface MemberDisplayStatus {
@@ -321,6 +362,32 @@ export function getMemberDisplayStatus(status: string): MemberDisplayStatus {
       label: 'Bank Details Pending',
       badgeClass: 'status-bank-details-pending',
       stepIndex: 1,
+    };
+  }
+
+  // 1b. Bank Details & M1 Pending
+  if (
+    s === 'BANK_DETAILS_AND_M1_PENDING' ||
+    s === 'Bank Details & M1 Pending' ||
+    s === 'Bank Details and M1 Pending'
+  ) {
+    return {
+      label: 'Bank Details & M1 Pending',
+      badgeClass: 'status-bank-details-and-m1-pending',
+      stepIndex: 1,
+    };
+  }
+
+  // 1c. Award Notarization Pending
+  if (
+    s === 'AWARD_NOTARIZATION_PENDING' ||
+    s === 'Award Notarization Pending' ||
+    s === 'Award Notarization (M1) Pending'
+  ) {
+    return {
+      label: 'Award Notarization Pending',
+      badgeClass: 'status-award-notarization-pending',
+      stepIndex: 2,
     };
   }
 
@@ -442,8 +509,15 @@ export function getMemberDisplayStatus(status: string): MemberDisplayStatus {
     };
   }
 
+  const cleanLabel =
+    paymentStatusLabelMap[s] ||
+    s
+      .replace(/[_-]+/g, ' ')
+      .toLowerCase()
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+
   return {
-    label: s,
+    label: cleanLabel,
     badgeClass: paymentStatusClassMap[s] || 'status-bank-details-pending',
     stepIndex: 1,
   };

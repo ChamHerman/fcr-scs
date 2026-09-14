@@ -38,3 +38,4 @@ data_layer/ai_model_repository/datasets/uploads/
 .playwright-cli/
 /.claude
 
+/_herman-only

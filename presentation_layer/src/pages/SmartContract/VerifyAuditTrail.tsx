@@ -1,9 +1,11 @@
 import React, { useState, useRef } from 'react';
-import { UploadCloud, CheckCircle, Shield, FileText, Search, RefreshCw, XCircle, FileWarning } from 'lucide-react';
+import { UploadCloud, CheckCircle, Shield, FileText, Search, RefreshCw, XCircle, FileWarning, ExternalLink } from 'lucide-react';
 import { blockchainApi } from '../../services/blockchainApi';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { Button } from '../../components/ui/Button';
+import { CopyButton } from '../../components/ui/CopyButton';
+import { formatDateTime } from '../../utils/dateFormat';
 
 export default function VerifyAuditTrail() {
   const [dragActive, setDragActive] = useState(false);
@@ -200,21 +202,121 @@ export default function VerifyAuditTrail() {
                   {result.message || result.status}
                 </p>
                 
-                <div className="bg-[var(--md-background)] rounded-2xl p-5 text-left shadow-sm hover:shadow-md transition-shadow space-y-3 text-sm mt-4 border border-slate-100">
+                <div className="bg-[var(--md-background)] rounded-2xl p-5 text-left shadow-sm hover:shadow-md transition-shadow space-y-2.5 text-sm mt-4 border border-slate-100">
                   <div className="flex justify-between items-center pb-2 border-b border-slate-100">
                     <span className="text-slate-500">Status</span>
-                    <span className="font-semibold text-slate-800 bg-slate-100 px-2 py-1 rounded-md">{result.status || 'Unknown'}</span>
+                    <span className={`font-semibold px-2.5 py-0.5 rounded-md text-xs ${
+                      result.verified ? 'bg-green-100 text-green-800' : result.status === 'Voided' ? 'bg-orange-100 text-orange-800' : 'bg-red-100 text-red-800'
+                    }`}>
+                      {result.status || 'Unknown'}
+                    </span>
                   </div>
+
+                  {result.milestone && (
+                    <div className="pb-2 border-b border-slate-100">
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-500">Milestone</span>
+                        <span className="font-semibold text-slate-800 text-xs">
+                          {result.milestone === 'M1' ? 'M1 — Statutory Award (Form H)' : 'M2 — Settlement (Receipt)'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        {result.milestone === 'M1'
+                          ? 'Landowner award acceptance voucher anchored prior to fund release.'
+                          : 'Final statutory payment receipt cleared via RENTAS interbank settlement.'}
+                      </p>
+                    </div>
+                  )}
+
+                  {result.caseId && (
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                      <span className="text-slate-500">Case ID</span>
+                      <span className="font-mono text-slate-800 text-xs font-semibold">{result.caseId}</span>
+                    </div>
+                  )}
+
+                  {result.onChainKey && (
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                      <span className="text-slate-500">On-Chain Key</span>
+                      <span className="font-mono text-slate-800 text-xs">{result.onChainKey}</span>
+                    </div>
+                  )}
+
+                  {result.localHash && (
+                    <div className="pb-2 border-b border-slate-100 space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-500">File SHA-256</span>
+                        <div className="flex items-center gap-1">
+                          <span className="font-mono text-[11px] text-slate-700 truncate max-w-[170px]">{result.localHash}</span>
+                          <CopyButton value={result.localHash} title="Copy file hash" size="sm" />
+                        </div>
+                      </div>
+                      {result.onChainHash && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-500">On-Chain Hash</span>
+                          <div className="flex items-center gap-1">
+                            <span className="font-mono text-[11px] text-green-700 truncate max-w-[170px]">{result.onChainHash}</span>
+                            <span className="text-[10px] text-green-700 font-bold bg-green-50 px-1.5 py-0.5 rounded">
+                              {result.localHash.toLowerCase() === result.onChainHash.toLowerCase() ? 'Direct Match' : 'Verified Anchor'}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {result.transactionHash && (
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                      <span className="text-slate-500">Transaction</span>
+                      <div className="flex items-center gap-1">
+                        <a
+                          href={result.etherscanUrl || `https://sepolia.etherscan.io/tx/${result.transactionHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-mono text-xs text-blue-600 hover:underline flex items-center gap-1"
+                        >
+                          {result.transactionHash.slice(0, 10)}…{result.transactionHash.slice(-6)}
+                          <ExternalLink size={12} />
+                        </a>
+                        <CopyButton value={result.transactionHash} title="Copy tx hash" size="sm" />
+                      </div>
+                    </div>
+                  )}
+
+                  {result.contractAddress && (
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                      <span className="text-slate-500">Smart Contract</span>
+                      <div className="flex items-center gap-1">
+                        <a
+                          href={result.contractUrl || `https://sepolia.etherscan.io/address/${result.contractAddress}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-mono text-xs text-blue-600 hover:underline flex items-center gap-1"
+                        >
+                          {result.contractAddress.slice(0, 10)}…{result.contractAddress.slice(-6)}
+                          <ExternalLink size={12} />
+                        </a>
+                        <CopyButton value={result.contractAddress} title="Copy contract address" size="sm" />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                    <span className="text-slate-500">Network</span>
+                    <span className="text-xs text-slate-700 font-medium">{result.network || 'Sepolia Testnet'}</span>
+                  </div>
+
                   {result.timestamp && (
                     <div className="flex justify-between items-center pb-2 border-b border-slate-100">
                       <span className="text-slate-500">Timestamp</span>
-                      <span className="font-mono text-slate-800 text-xs">{new Date(result.timestamp * 1000).toLocaleString()}</span>
+                      <span className="font-mono text-slate-800 text-xs">{formatDateTime(result.timestamp * 1000)}</span>
                     </div>
                   )}
+
                   {result.voidReason && (
                     <div className="flex justify-between items-start pt-1">
                       <span className="text-red-500 font-medium">Void Reason</span>
-                      <span className="text-red-600 text-right max-w-[150px]">{result.voidReason}</span>
+                      <span className="text-red-600 text-right max-w-[180px]">{result.voidReason}</span>
                     </div>
                   )}
                 </div>
