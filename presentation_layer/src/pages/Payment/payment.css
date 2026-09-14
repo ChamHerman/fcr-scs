@@ -22,119 +22,143 @@
   flex-shrink: 0;
 }
 
-/* 1. Offer Accepted (Payment Starting State - Teal) */
+/* 1. Bank Details Pending (Teal) */
+.payment-badge.status-bank-details-pending,
 .payment-badge.status-offer-accepted {
   background: #E0F2F1;
   color: #00695C;
 }
+.payment-badge.status-bank-details-pending .dot,
 .payment-badge.status-offer-accepted .dot {
   background: #00897B;
 }
+.dark .payment-badge.status-bank-details-pending,
 .dark .payment-badge.status-offer-accepted {
   background: rgba(0, 137, 123, 0.22);
   color: #80CBC4;
 }
+.dark .payment-badge.status-bank-details-pending .dot,
 .dark .payment-badge.status-offer-accepted .dot {
   background: #4DB6AC;
 }
 
-/* 2. Bank Details Submitted (Cyan / Azure) */
+/* 2. Ready to Initiate (Azure / Cyan) */
+.payment-badge.status-ready-to-initiate,
+.payment-badge.status-ready-initiate,
 .payment-badge.status-bank-submitted {
   background: #E0F7FA;
   color: #006064;
 }
+.payment-badge.status-ready-to-initiate .dot,
+.payment-badge.status-ready-initiate .dot,
 .payment-badge.status-bank-submitted .dot {
   background: #00ACC1;
 }
+.dark .payment-badge.status-ready-to-initiate,
+.dark .payment-badge.status-ready-initiate,
 .dark .payment-badge.status-bank-submitted {
   background: rgba(0, 172, 193, 0.22);
   color: #80DEEA;
 }
+.dark .payment-badge.status-ready-to-initiate .dot,
+.dark .payment-badge.status-ready-initiate .dot,
 .dark .payment-badge.status-bank-submitted .dot {
   background: #4DD0E1;
 }
 
-/* 3. Transfer Initiated (In-flight Multi-sig - Amber) */
-.payment-badge.status-transfer-initiated {
-  background: #FFF8E1;
-  color: #8D6E00;
-}
-.payment-badge.status-transfer-initiated .dot {
-  background: #FFA000;
-}
-.dark .payment-badge.status-transfer-initiated {
-  background: rgba(255, 160, 0, 0.20);
-  color: #FFE082;
-}
-.dark .payment-badge.status-transfer-initiated .dot {
-  background: #FFD54F;
-}
-
-/* 4. Authorised (Fully Signed / Cleared for Disbursal - Indigo) */
-.payment-badge.status-authorised {
+/* 2b. Award Notarization Pending (Indigo / Violet) */
+.payment-badge.status-award-notarization-pending {
   background: #EDE7F6;
   color: #4527A0;
 }
-.payment-badge.status-authorised .dot {
-  background: #6750A4;
+.payment-badge.status-award-notarization-pending .dot {
+  background: #7E57C2;
 }
-.dark .payment-badge.status-authorised {
-  background: rgba(103, 80, 164, 0.25);
-  color: #D0BCFF;
+.dark .payment-badge.status-award-notarization-pending {
+  background: rgba(126, 87, 194, 0.22);
+  color: #D1C4E9;
 }
-.dark .payment-badge.status-authorised .dot {
+.dark .payment-badge.status-award-notarization-pending .dot {
   background: #B39DDB;
 }
 
-/* 4b. Waiting Bank Approval (Submitted to the Bank Queue - Blue) */
-.payment-badge.status-waiting-bank {
-  background: #E3F2FD;
-  color: #0D47A1;
+/* 2c. Bank Details & M1 Pending (Slate / Blue-Grey) */
+.payment-badge.status-bank-details-and-m1-pending {
+  background: #ECEFF1;
+  color: #37474F;
 }
-.payment-badge.status-waiting-bank .dot {
-  background: #1976D2;
+.payment-badge.status-bank-details-and-m1-pending .dot {
+  background: #78909C;
 }
-.dark .payment-badge.status-waiting-bank {
-  background: rgba(25, 118, 210, 0.22);
-  color: #90CAF9;
+.dark .payment-badge.status-bank-details-and-m1-pending {
+  background: rgba(120, 144, 156, 0.22);
+  color: #CFD8DC;
 }
-.dark .payment-badge.status-waiting-bank .dot {
-  background: #64B5F6;
+.dark .payment-badge.status-bank-details-and-m1-pending .dot {
+  background: #B0BEC5;
 }
 
-/* 5. Paid (Successfully Disbursed with Receipt - Emerald) */
-.payment-badge.status-paid {
+/* 3. Pending Approval (Amber) */
+.payment-badge.status-pending-approval,
+.payment-badge.status-transfer-initiated,
+.payment-badge.status-authorised {
+  background: #FFF8E1;
+  color: #8D6E00;
+}
+.payment-badge.status-pending-approval .dot,
+.payment-badge.status-transfer-initiated .dot,
+.payment-badge.status-authorised .dot {
+  background: #FFA000;
+}
+.dark .payment-badge.status-pending-approval,
+.dark .payment-badge.status-transfer-initiated,
+.dark .payment-badge.status-authorised {
+  background: rgba(255, 160, 0, 0.20);
+  color: #FFE082;
+}
+.dark .payment-badge.status-pending-approval .dot,
+.dark .payment-badge.status-transfer-initiated .dot,
+.dark .payment-badge.status-authorised .dot {
+  background: #FFD54F;
+}
+
+/* 4. Bank Approval Pending (Indigo / Purple) */
+.payment-badge.status-bank-approval-pending,
+.payment-badge.status-waiting-bank {
+  background: #EDE7F6;
+  color: #4527A0;
+}
+.payment-badge.status-bank-approval-pending .dot,
+.payment-badge.status-waiting-bank .dot {
+  background: #6750A4;
+}
+.dark .payment-badge.status-bank-approval-pending,
+.dark .payment-badge.status-waiting-bank {
+  background: rgba(103, 80, 164, 0.25);
+  color: #D0BCFF;
+}
+.dark .payment-badge.status-bank-approval-pending .dot,
+.dark .payment-badge.status-waiting-bank .dot {
+  background: #B39DDB;
+}
+
+/* 5. Transfer Succeed (Vibrant Emerald Green) */
+.payment-badge.status-transfer-succeed {
   background: #E8F5E9;
   color: #1B5E20;
 }
-.payment-badge.status-paid .dot {
+.payment-badge.status-transfer-succeed .dot {
   background: #2E7D32;
 }
-.dark .payment-badge.status-paid {
+.dark .payment-badge.status-transfer-succeed {
   background: rgba(46, 125, 50, 0.22);
   color: #A5D6A7;
 }
-.dark .payment-badge.status-paid .dot {
+.dark .payment-badge.status-transfer-succeed .dot {
   background: #81C784;
 }
 
-/* 6. Transfer Failed (Bank Rejection / Error - Bright Red) */
-.payment-badge.status-transfer-failed {
-  background: #FFEBEE;
-  color: #B71C1C;
-}
-.payment-badge.status-transfer-failed .dot {
-  background: #C62828;
-}
-.dark .payment-badge.status-transfer-failed {
-  background: rgba(198, 40, 40, 0.25);
-  color: #FFCDD2;
-}
-.dark .payment-badge.status-transfer-failed .dot {
-  background: #E57373;
-}
-
-/* 7. Transfer Rejected (Admin Rejected during Authorisation - Rose Wine) */
+/* 6. Transfer Rejected (Deep Rose / Wine) */
 .payment-badge.status-transfer-rejected {
   background: #FCE4EC;
   color: #880E4F;
@@ -152,7 +176,61 @@
   background: #F06292;
 }
 
-/* 8. Cancelled (Pre-transfer Cancellation - Slate) */
+/* 7. Transfer Failed (Crimson Red) */
+.payment-badge.status-transfer-failed {
+  background: #FFEBEE;
+  color: #B71C1C;
+}
+.payment-badge.status-transfer-failed .dot {
+  background: #C62828;
+}
+.dark .payment-badge.status-transfer-failed {
+  background: rgba(198, 40, 40, 0.25);
+  color: #FFCDD2;
+}
+.dark .payment-badge.status-transfer-failed .dot {
+  background: #E57373;
+}
+
+/* 8. Disputed (Warm Orange) */
+.payment-badge.status-disputed,
+.payment-badge.status-payment-disputed {
+  background: #FFF3E0;
+  color: #BF360C;
+  box-shadow: inset 0 0 0 1px rgba(230, 81, 0, 0.3);
+}
+.payment-badge.status-disputed .dot,
+.payment-badge.status-payment-disputed .dot {
+  background: #E65100;
+}
+.dark .payment-badge.status-disputed,
+.dark .payment-badge.status-payment-disputed {
+  background: rgba(230, 81, 0, 0.25);
+  color: #FFE0B2;
+  box-shadow: inset 0 0 0 1px rgba(255, 183, 77, 0.4);
+}
+.dark .payment-badge.status-disputed .dot,
+.dark .payment-badge.status-payment-disputed .dot {
+  background: #FFB74D;
+}
+
+/* 9. Paid (Forest Green) */
+.payment-badge.status-paid {
+  background: #DCEDC8;
+  color: #33691E;
+}
+.payment-badge.status-paid .dot {
+  background: #558B2F;
+}
+.dark .payment-badge.status-paid {
+  background: rgba(85, 139, 47, 0.22);
+  color: #C5E1A5;
+}
+.dark .payment-badge.status-paid .dot {
+  background: #7CB342;
+}
+
+/* 10. Cancelled (Slate Grey) */
 .payment-badge.status-cancelled {
   background: #F1F5F9;
   color: #475569;
@@ -168,56 +246,41 @@
   background: #94A3B8;
 }
 
-/* 9. Payment Disputed (Formal Dispute - Warm Orange) */
-.payment-badge.status-payment-disputed {
-  background: #FFF3E0;
-  color: #BF360C;
-  box-shadow: inset 0 0 0 1px rgba(230, 81, 0, 0.3);
-}
-.payment-badge.status-payment-disputed .dot {
-  background: #E65100;
-}
-.dark .payment-badge.status-payment-disputed {
-  background: rgba(230, 81, 0, 0.25);
-  color: #FFE0B2;
-  box-shadow: inset 0 0 0 1px rgba(255, 183, 77, 0.4);
-}
-.dark .payment-badge.status-payment-disputed .dot {
-  background: #FFB74D;
-}
-
-/* 10. Scheduled (Future Batch Clearing - Blue-Grey) */
+/* 11. Scheduled (Sky Blue) */
 .payment-badge.status-scheduled {
-  background: #ECEFF1;
-  color: #37474F;
+  background: #E1F5FE;
+  color: #01579B;
 }
 .payment-badge.status-scheduled .dot {
-  background: #546E7A;
+  background: #0288D1;
 }
 .dark .payment-badge.status-scheduled {
-  background: rgba(84, 110, 122, 0.25);
-  color: #CFD8DC;
+  background: rgba(2, 136, 209, 0.22);
+  color: #81D4FA;
 }
 .dark .payment-badge.status-scheduled .dot {
-  background: #90A4AE;
+  background: #29B6F6;
 }
 
-/* 11. Pending New Bank Details (Warm Honey) */
+/* 12. New Bank Details Pending (Warm Amber-Orange) */
+.payment-badge.status-new-bank-details-pending,
 .payment-badge.status-pending-details {
-  background: #FEF9C3;
-  color: #854D0E;
+  background: #FFF3E0;
+  color: #E65100;
 }
+.payment-badge.status-new-bank-details-pending .dot,
 .payment-badge.status-pending-details .dot {
-  background: #CA8A04;
+  background: #FB8C00;
 }
+.dark .payment-badge.status-new-bank-details-pending,
 .dark .payment-badge.status-pending-details {
-  background: rgba(202, 138, 4, 0.22);
-  color: #FEF08A;
+  background: rgba(251, 140, 0, 0.22);
+  color: #FFCC80;
 }
+.dark .payment-badge.status-new-bank-details-pending .dot,
 .dark .payment-badge.status-pending-details .dot {
-  background: #FACC15;
+  background: #FFA726;
 }
-
 /* 12. Ready to Publish (Blockchain Queue - Electric Sky) */
 .payment-badge.status-ready-publish {
   background: #E0F2FE;
@@ -282,6 +345,52 @@
   background: #C084FC;
 }
 
+/* 16. Void Pending (Awaiting On-Chain Revocation - Burnt Sienna) */
+.payment-badge.status-void-pending {
+  background: #FFF1E7;
+  color: #9A3412;
+}
+.payment-badge.status-void-pending .dot {
+  background: #EA580C;
+}
+.dark .payment-badge.status-void-pending {
+  background: rgba(234, 88, 12, 0.25);
+  color: #FED7AA;
+}
+.dark .payment-badge.status-void-pending .dot {
+  background: #FB923C;
+}
+
+/* 17. Grace Period Locked (Amber Warm Warning - DESIGN.md §4) */
+.payment-badge.status-locked,
+.payment-badge.status-grace-locked,
+.payment-badge.status-grace-period,
+.payment-badge.warning {
+  background: #FEF3C7;
+  color: #92400E;
+  border: 1px solid rgba(217, 119, 6, 0.25);
+}
+.payment-badge.status-locked .dot,
+.payment-badge.status-grace-locked .dot,
+.payment-badge.status-grace-period .dot,
+.payment-badge.warning .dot {
+  background: #D97706;
+}
+.dark .payment-badge.status-locked,
+.dark .payment-badge.status-grace-locked,
+.dark .payment-badge.status-grace-period,
+.dark .payment-badge.warning {
+  background: rgba(217, 119, 6, 0.22);
+  color: #FDE68A;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+.dark .payment-badge.status-locked .dot,
+.dark .payment-badge.status-grace-locked .dot,
+.dark .payment-badge.status-grace-period .dot,
+.dark .payment-badge.warning .dot {
+  background: #F59E0B;
+}
+
 /* Backward-compatible aliases */
 .payment-badge.approved { background: #E8F5E9; color: #1B5E20; }
 .payment-badge.approved .dot { background: #2E7D32; }
@@ -326,12 +435,13 @@
 }
 .payment-detail-item .value {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--md-on-surface);
   word-break: break-word;
 }
 .payment-detail-item .value.mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: 'Roboto', ui-monospace, monospace !important;
+  font-variant-numeric: tabular-nums;
   font-size: 13px;
 }
 
@@ -343,6 +453,10 @@
 }
 .case-id-wrap .case-id {
   cursor: pointer;
+  font-size: 12px;
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  line-height: inherit;
 }
 .case-id-wrap .case-id:hover {
   text-decoration: underline;
@@ -362,8 +476,67 @@
   white-space: nowrap;
 }
 
+
+/* ---- Table scroll and subtle grid borders ---- */
+.table-scroll table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+.table-scroll table th {
+  text-align: left;
+  padding: 12px 10px;
+  font-weight: 600;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--md-on-surface-variant);
+  white-space: nowrap;
+  border-bottom: 1px solid rgba(121, 116, 126, 0.08);
+  border-right: 1px solid rgba(121, 116, 126, 0.08);
+}
+.table-scroll table th:last-child {
+  border-right: none;
+}
+.table-scroll table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid rgba(121, 116, 126, 0.08);
+  border-right: 1px solid rgba(121, 116, 126, 0.08);
+  vertical-align: middle;
+}
+.table-scroll table td:last-child {
+  border-right: none;
+}
+.dark .table-scroll table th,
+.dark .table-scroll table td {
+  border-bottom-color: rgba(202, 196, 208, 0.08);
+  border-right-color: rgba(202, 196, 208, 0.08);
+}
 @media (max-width: 768px) {
   .payment-detail-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* ---- Action Bar ---- */
+.action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+.action-bar .left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: var(--md-on-surface);
+}
+.action-bar .left .count {
+  font-size: 0.875rem;
+}
+.action-bar .right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }

@@ -26,6 +26,12 @@ export interface SelectProps {
   name?: string;
   className?: string;
   error?: string;
+  /**
+   * When set, the listbox grows past the trigger width (up to 560px) and long
+   * option labels wrap instead of clipping. Used by reason dropdowns where a
+   * truncated option would be unreadable.
+   */
+  wrapLabels?: boolean;
 }
 
 const PANEL_MAX_HEIGHT = 280;
@@ -43,6 +49,7 @@ export const Select: React.FC<SelectProps> = ({
   name,
   className,
   error,
+  wrapLabels = false,
 }) => {
   const selectId = id || `select-${label.replace(/\s+/g, '-').toLowerCase()}`;
   const labelId = `${selectId}-label`;
@@ -312,7 +319,9 @@ export const Select: React.FC<SelectProps> = ({
               position: 'absolute',
               top: coords.top,
               left: coords.left,
-              width: coords.width,
+              width: wrapLabels ? 'auto' : coords.width,
+              minWidth: wrapLabels ? coords.width : undefined,
+              maxWidth: wrapLabels ? 560 : undefined,
               zIndex: 100005,
               transform: dropUp ? 'translateY(-100%)' : undefined,
             }}
@@ -357,7 +366,7 @@ export const Select: React.FC<SelectProps> = ({
                         isActive && !isSelected && 'bg-md-surface-container-low'
                       )}
                     >
-                      <span className="truncate">{opt.label}</span>
+                      <span className={wrapLabels ? 'whitespace-normal break-words' : 'truncate'}>{opt.label}</span>
                       {isSelected && <Check size={16} className="shrink-0" />}
                     </div>
                   );

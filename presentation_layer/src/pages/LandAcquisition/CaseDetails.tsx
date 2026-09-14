@@ -609,19 +609,7 @@ export const CaseView: React.FC = () => {
             </p>
           </Modal>
 
-          <div
-            style={{
-              marginTop: "32px",
-              fontSize: "13px",
-              color: "var(--md-on-surface-variant)",
-              opacity: 0.6,
-              textAlign: "center",
-              borderTop: "1px solid rgba(121,116,126,0.08)",
-              paddingTop: "18px",
-            }}
-          >
-            FCR-SCS · Land Acquisition Module · Connected to Live Backend Service
-          </div>
+            <div style={{ height: '32px' }} />
         </div>
       </div>
     </div>

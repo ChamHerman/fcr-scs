@@ -44,12 +44,16 @@ const Toast: React.FC<{
       ease: 'back.out(1.2)'
     });
 
-    // Auto dismiss after 3 seconds
-    const timer = setTimeout(() => {
-      handleDismiss();
-    }, 3000);
-
-    return () => clearTimeout(timer);
+    // DESIGN.md toast rule: success/info auto-dismiss briefly; errors stay on
+    // screen until the user closes them manually — an error that vanishes on
+    // its own is an error the user never got to read.
+    const duration = notification.type === 'error' ? 0 : notification.type === 'general' ? 8000 : 5000;
+    if (duration > 0) {
+      const timer = setTimeout(() => {
+        handleDismiss();
+      }, duration);
+      return () => clearTimeout(timer);
+    }
   }, []);
 
   const handleDismiss = () => {
@@ -114,7 +118,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     <NotificationContext.Provider value={{ notify }}>
       {children}
       {typeof document !== 'undefined' && createPortal(
-        <div className="fixed top-6 right-6 z-50 flex flex-col gap-3 pointer-events-none">
+        // DESIGN.md toast rule: right-hand notification stack always renders in
+        // front of everything, including modal overlays (z-index 99999).
+        <div className="fixed top-6 right-6 z-[100000] flex flex-col gap-3 pointer-events-none">
           {notifications.map(n => (
             <div key={n.id} className="pointer-events-auto">
               <Toast notification={n} onDismiss={dismiss} />

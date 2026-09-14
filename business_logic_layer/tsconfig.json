@@ -11,5 +11,15 @@
     "skipLibCheck": true,
     "types": ["node", "jest"]
   },
-  "include": ["server.ts", "__tests__/**/*", "payment_service/src/**/*", "smart_contract_service/src/**/*", "ai_prediction_service/src/**/*"]
+  "include": [
+    "server.ts",
+    "__tests__/**/*",
+    "payment_service/src/**/*",
+    "user_management_service/src/**/*",
+    "smart_contract_service/src/**/*",
+    "land_acquisition_service/src/**/*",
+    "compensation_management_service/src/**/*",
+    "reporting_service/src/**/*",
+    "ai_prediction_service/src/**/*"
+  ]
 }

@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import * as crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import * as offerService from "../services/offer-letter.service";
@@ -6,8 +7,9 @@ import { getOfferLetterStorageDir } from "../utils/storage.utils";
 
 export async function getAllOfferLetters(req: Request, res: Response): Promise<void> {
   try {
-    const { status, search, ownerNric, caseCreatedById, userRole, userId, page, limit } = req.query;
+    const { caseId, status, search, ownerNric, caseCreatedById, userRole, userId, page, limit } = req.query;
     const result = await offerService.getAllOfferLetters({
+      caseId: caseId as string,
       status: status as string,
       search: search as string,
       ownerNric: ownerNric as string,
@@ -92,8 +94,9 @@ export async function createOfferLetter(req: Request, res: Response): Promise<vo
 
 export async function acceptOffer(req: Request, res: Response): Promise<void> {
   const offerId = req.params.offerId as string;
-  const { forceAccept, ownerNric, ownerId, userId } = req.body;
+  const { forceAccept, ownerNric, ownerId, userId, clientHash } = req.body;
   let signedDocument = req.body.signedDocument as string | undefined;
+  let documentHash: string | undefined;
 
   if (!offerId) {
     res.status(400).json({ error: "offerId is required" });
@@ -106,6 +109,19 @@ export async function acceptOffer(req: Request, res: Response): Promise<void> {
 
     // Handle uploaded file if present
     if (req.file) {
+      // FR-019 anti-spoofing: the member browser computes SHA-256 over the
+      // selected Form H PDF (Web Crypto) and submits it as clientHash. The
+      // server recomputes over the received bytes — a mismatch means the
+      // document was corrupted/altered in transit and is rejected outright.
+      documentHash = "0x" + crypto.createHash("sha256").update(req.file.buffer).digest("hex");
+      if (clientHash && String(clientHash).toLowerCase() !== documentHash.toLowerCase()) {
+        res.status(400).json({
+          error:
+            "Document integrity check failed: the uploaded file does not match the fingerprint computed on your device. Please re-select the signed Form H PDF and try again.",
+        });
+        return;
+      }
+
       const storageDir = getOfferLetterStorageDir(caseId);
       if (!fs.existsSync(storageDir)) {
         fs.mkdirSync(storageDir, { recursive: true });
@@ -123,7 +139,7 @@ export async function acceptOffer(req: Request, res: Response): Promise<void> {
       offerId,
       signedDocument,
       Boolean(forceAccept === true || forceAccept === "true"),
-      { ownerNric, ownerId, userId }
+      { ownerNric, ownerId, userId, documentHash }
     );
     res.json({ offerLetter: offer });
   } catch (e: any) {

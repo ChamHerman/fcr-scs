@@ -219,6 +219,14 @@ export const useMemberWorkflow = ({
       return { currentStageNum: 3, progressPercent: 50, progressBadge: 'Stage 3 of 6 (Award Rejected)' };
     }
 
+    if (st === 'OBJECTION_FILED' || hasPendingObjection) {
+      return { currentStageNum: 4, progressPercent: 67, progressBadge: 'Stage 4 of 6 (Objection In Review)' };
+    }
+
+    if (st === 'OFFER_ACCEPTED' || isOfferAccepted) {
+      return { currentStageNum: 5, progressPercent: 83, progressBadge: 'Stage 5 of 6 (Payment Settlement)' };
+    }
+
     switch (st) {
       case 'CASE_REGISTERED':
         return { currentStageNum: 1, progressPercent: 17, progressBadge: 'Stage 1 of 6 (Notice Issued)' };
@@ -234,8 +242,6 @@ export const useMemberWorkflow = ({
         return { currentStageNum: 3, progressPercent: 50, progressBadge: 'Stage 3 of 6 (Offer Preparation)' };
       case 'OFFER_ISSUED':
         return { currentStageNum: 3, progressPercent: 50, progressBadge: 'Stage 3 of 6 (Form H Active)' };
-      case 'OFFER_ACCEPTED':
-      case 'OBJECTION_FILED':
       case 'OBJECTION_RESOLVED':
         return { currentStageNum: 4, progressPercent: 67, progressBadge: 'Stage 4 of 6 (Claimant Decision)' };
       case 'PAYMENT_IN_PROGRESS':
@@ -249,7 +255,7 @@ export const useMemberWorkflow = ({
       default:
         return { currentStageNum: 1, progressPercent: 17, progressBadge: 'Stage 1 of 6 (Registered)' };
     }
-  }, [caseDetails, activeOffer]);
+  }, [caseDetails, activeOffer, isOfferAccepted, hasPendingObjection]);
 
   // Dynamic Total Compensation Award
   const totalCompensation = useMemo(() => {
@@ -496,14 +502,18 @@ export const useMemberWorkflow = ({
         subtitle: 'Formal Acceptance or Objection Filing',
         date: isOfferAccepted
           ? 'Accepted'
+          : hasPendingObjection
+          ? 'Objection Filed'
           : activeOffer?.rejectedAt
           ? 'Rejected'
           : currentStageNum >= 4
           ? 'Awaiting Decision'
           : 'Upcoming',
-        status: getStepStatus(4),
+        status: isOfferAccepted ? 'completed' : hasPendingObjection ? 'current' : getStepStatus(4),
         badgeText: isOfferAccepted
           ? 'Award Accepted'
+          : hasPendingObjection
+          ? 'Objection In Review'
           : activeOffer?.rejectedAt
           ? 'Award Rejected'
           : getStepStatus(4) === 'current'
@@ -517,10 +527,16 @@ export const useMemberWorkflow = ({
         id: 5,
         title: 'Compensation Payout & Settlement',
         subtitle: 'Electronic GIRO Fund Disbursement',
-        date: currentStageNum >= 5 ? 'Processing Payout' : 'Pending Stage 4',
-        status: getStepStatus(5),
+        date: isOfferAccepted
+          ? 'Active'
+          : currentStageNum >= 5
+          ? 'Processing Payout'
+          : 'Pending Stage 4',
+        status: isOfferAccepted && currentStageNum === 5 ? 'current' : getStepStatus(5),
         badgeText:
-          currentStageNum >= 5
+          isOfferAccepted && currentStageNum === 5 && caseDetails?.status !== 'PAYMENT_COMPLETED'
+            ? 'Action Required'
+            : currentStageNum >= 5
             ? caseDetails?.status === 'PAYMENT_COMPLETED'
               ? 'Paid & Settled'
               : 'Disbursing Funds'
@@ -552,6 +568,7 @@ export const useMemberWorkflow = ({
     assignedOfficer,
     totalCompensation,
     isOfferAccepted,
+    hasPendingObjection,
     hasOfferLetter,
     daysRemaining,
   ]);

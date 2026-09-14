@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, Hourglass, Fingerprint, Loader2 } from 'lucide-react';
+import { Clock, User, Hourglass, Fingerprint, Loader2, ShieldAlert, Activity, RefreshCw } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
@@ -7,20 +7,25 @@ import { paymentApi } from '../../services/paymentApi';
 import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Button } from '../../components/ui/Button';
+import { CopyButton } from '../../components/ui/CopyButton';
+import { Pagination } from '../../components/ui/Pagination';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
-import '../LandAcquisition/case_management.css';
+import { useAuth } from '../../context/AuthContext';
 import './payment.css';
+import { RefreshButton } from './RefreshButton';
 import {
   ViewDetailsModal,
   AuthoriseTransferModal,
   RejectTransferModal,
   CancelPaymentModal,
+  FinalExecutionConfirmModal,
   paymentBadge,
   fmtAmount,
   initiatorOf,
   hasSignedOrInitiated,
   signaturesLeft,
 } from './paymentModals';
+import { CaseDetailsModal } from './CaseDetailsModal';
 import { PaymentRowActions } from './PaymentRowActions';
 import type { PaymentRow } from './paymentModals';
 
@@ -40,12 +45,15 @@ export default function PendingAuthorisations() {
   const [searchQuery, setSearchQuery] = useState(deepLink || '');
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
+  const [caseDetailsId, setCaseDetailsId] = useState<string | null>(null);
+  const [finalConfirmCase, setFinalConfirmCase] = useState<PaymentRow | null>(null);
   const { identityId } = useAdminIdentity();
+  const { user } = useAuth();
   const pageRef = useRef<HTMLDivElement>(null);
 
   useGSAP(() => {
     gsap.fromTo('.pending-header', { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.45, ease: 'power2.out' });
-    gsap.fromTo('.stats-grid, .filter-bar, .table-wrap', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.08, ease: 'back.out(1.2)', delay: 0.2 });
+    gsap.fromTo('.stats-grid, .filter-bar, .action-bar, .table-wrap', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.08, ease: 'back.out(1.2)', delay: 0.2 });
   }, { scope: pageRef });
 
   const loadData = useCallback(async (silent = false) => {
@@ -68,8 +76,8 @@ export default function PendingAuthorisations() {
   const stats = useMemo(() => {
     const outstanding = cases.reduce((sum, c) => sum + signaturesLeft(c), 0);
     return [
-      { label: 'Awaiting Approval', value: cases.length, change: 'Requires action', icon: Hourglass },
-      { label: 'Signatures Outstanding', value: outstanding, change: `Bank 1 + approvals model`, icon: Fingerprint },
+      { label: 'Awaiting Approval', value: cases.length, icon: Hourglass, iconColor: 'text-amber-500' },
+      { label: 'Signatures Outstanding', value: outstanding, icon: Fingerprint, iconColor: 'text-md-primary' },
     ];
   }, [cases]);
 
@@ -98,6 +106,17 @@ export default function PendingAuthorisations() {
     });
   }, [cases, searchQuery, identityId]);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
+  const totalCount = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const safePage = Math.max(1, Math.min(currentPage, totalPages));
+  const pageRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
   const closeModal = () => setModal(null);
 
   return (
@@ -117,6 +136,14 @@ export default function PendingAuthorisations() {
         </div>
       </div>
 
+      {user?.role === 'SYSTEM_ADMINISTRATOR' && (
+        <div className="my-4 px-4 py-3 rounded-xl bg-md-surface-container-highest border border-md-outline/20 text-md-on-surface text-sm flex items-center gap-3">
+          <ShieldAlert className="text-amber-500 shrink-0" size={18} />
+          <span>
+            <strong>View-Only Mode:</strong> System Administrators have read-only access and cannot perform disbursement mutations.
+          </span>
+        </div>
+      )}
       {error && (
         <div className="my-4 px-4 py-3 rounded-xl bg-md-error/10 border border-md-error/30 text-md-on-error text-sm">
           {error}
@@ -126,10 +153,9 @@ export default function PendingAuthorisations() {
       <div className="stats-grid">
         {stats.map((stat, idx) => (
           <div key={idx} className="stat-card">
-            <stat.icon className="stat-icon" size={32} />
+            <stat.icon className={`stat-icon ${stat.iconColor || 'text-md-primary'}`} size={32} />
             <div className="stat-label">{stat.label}</div>
             <div className="stat-number">{stat.value}</div>
-            <div className="stat-change">{stat.change}</div>
           </div>
         ))}
       </div>
@@ -143,7 +169,11 @@ export default function PendingAuthorisations() {
 
       <div className="action-bar">
         <div className="left">
-          <span className="count">{filtered.length} transfer{filtered.length === 1 ? '' : 's'} awaiting approval</span>
+          <Activity size={18} />
+          <span className="count">Authorisation queue ({filtered.length})</span>
+        </div>
+        <div className="right">
+          <RefreshButton onClick={() => loadData()} loading={loading} />
         </div>
       </div>
 
@@ -152,29 +182,27 @@ export default function PendingAuthorisations() {
           <table>
             <thead>
               <tr>
-                <th>Payment ID</th>
-                <th>Case ID</th>
-                <th>Beneficiary</th>
-                <th>Amount</th>
-                <th>Sigs</th>
-                <th>Initiator</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th style={{ width: '135px' }}>Payment ID</th>
+                <th style={{ width: '175px' }}>Case ID</th>
+                <th style={{ width: '140px' }}>Beneficiary</th>
+                <th style={{ width: '130px' }}>Amount</th>
+                <th style={{ width: '140px' }}>Initiator</th>
+                <th style={{ width: '180px' }}>Status</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="text-center text-gray-500 py-8">
+                  <td colSpan={6} className="text-center text-gray-500 py-8">
                     <Loader2 size={22} className="inline animate-spin" /><span className="ml-2">Loading pending authorisations…</span>
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center text-gray-500 py-8">No pending authorisations in queue.</td>
+                  <td colSpan={6} className="text-center text-gray-500 py-8">No pending authorisations in queue.</td>
                 </tr>
               ) : (
-                filtered.map((pc) => {
+                pageRows.map((pc) => {
                   const initiator = initiatorOf(pc);
                   const paymentId = pc.paymentId || `PMT-${pc.caseId}`;
                   return (
@@ -184,25 +212,18 @@ export default function PendingAuthorisations() {
                       onClick={() => setModal({ type: 'view', pc })}
                     >
                       <td>
-                        <span className="font-mono font-bold text-xs text-md-primary">
-                          {paymentId}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-bold text-xs text-md-primary">
+                            {paymentId}
+                          </span>
+                          <CopyButton value={paymentId} title="Copy Payment ID" />
+                        </div>
                       </td>
-                      <td><CaseIdCell caseId={pc.caseId} /></td>
+                      <td><CaseIdCell caseId={pc.caseId} onClick={(cid) => setCaseDetailsId(cid)} /></td>
                       <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
-                      <td style={{ fontWeight: 600 }}>{fmtAmount(pc.amount)}</td>
-                      <td><span className="meta-text">{pc.currentSignatures}/{pc.requiredSignatures || 1}</span></td>
+                      <td className="font-semibold">{fmtAmount(pc.amount)}</td>
                       <td><span className="meta-text">{initiator || '—'}</span></td>
-                      <td>{paymentBadge(pc.status)}</td>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <PaymentRowActions
-                          pc={pc}
-                          identityId={identityId}
-                          onAction={(type, target) => setModal({ type, pc: target } as ModalState)}
-                          activeMenu={activeMenu}
-                          setActiveMenu={setActiveMenu}
-                        />
-                      </td>
+                      <td>{paymentBadge(pc.status, pc.currentSignatures, pc.requiredSignatures)}</td>
                     </tr>
                   );
                 })
@@ -212,22 +233,56 @@ export default function PendingAuthorisations() {
         </div>
       </div>
 
-      <div style={{ marginTop: '24px', fontSize: '13px', color: 'var(--md-on-surface-variant)', opacity: 0.6, textAlign: 'center', borderTop: '1px solid rgba(121,116,126,0.08)', paddingTop: '18px' }}>
-        FCR-SCS · Payments · Pending Authorisations · Connected to Live Backend Data
-      </div>
+      <Pagination
+        currentPage={safePage}
+        totalPages={totalPages}
+        totalCount={totalCount}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+        itemLabel="pending authorisations"
+      />
 
-      <ViewDetailsModal pc={modal?.type === 'view' ? modal.pc : null} onClose={closeModal} />
+      <div style={{ height: '32px' }} />
+
+      <ViewDetailsModal
+        pc={modal?.type === 'view' ? modal.pc : null}
+        identityId={identityId}
+        onClose={closeModal}
+        onAction={(type, target) => {
+          if (type === 'confirm-execution') {
+            setFinalConfirmCase(target);
+          } else {
+            setModal({ type, pc: target } as ModalState);
+          }
+        }}
+      />
       <AuthoriseTransferModal
         pc={modal?.type === 'authorise' ? modal.pc : null}
         onClose={closeModal}
         onDone={() => {
           closeModal();
           loadData();
-          // The backend auto-submits AUTHORISED → WAITING_BANK_APPROVAL after
-          // 5s, which removes the case from this queue — refresh so the row
-          // disappears without a manual reload.
-          setTimeout(() => loadData(true), 5500);
         }}
+      />
+      <FinalExecutionConfirmModal
+        pc={finalConfirmCase}
+        isOpen={Boolean(finalConfirmCase)}
+        onConfirm={async () => {
+          if (!finalConfirmCase) return;
+          await paymentApi.confirmExecution({ caseId: finalConfirmCase.caseId, adminId: identityId });
+          setTimeout(() => {
+            setFinalConfirmCase(null);
+            loadData();
+          }, 1100);
+        }}
+        onHold={() => {
+          setFinalConfirmCase(null);
+          loadData();
+        }}
+      />
+      <CaseDetailsModal
+        caseId={caseDetailsId}
+        onClose={() => setCaseDetailsId(null)}
       />
       <RejectTransferModal
         pc={modal?.type === 'reject' ? modal.pc : null}

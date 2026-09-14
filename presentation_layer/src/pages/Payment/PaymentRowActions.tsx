@@ -1,13 +1,13 @@
 import React from 'react';
-import { Send, PenLine, XCircle, RotateCcw, Download, Ban, BadgeCheck, Lock } from 'lucide-react';
+import { Send, PenLine, XCircle, RotateCcw, Download, BadgeCheck, Lock } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { IconButton } from '../../components/ui/IconButton';
 import { ActionMenuPortal } from '../../components/ui/ActionMenuPortal';
 import { useNotification } from '../../components/ui/NotificationSystem';
+import { useAuth } from '../../context/AuthContext';
 import { normalizePaymentStatus } from './statusMaps';
 import { hasBankDetails, hasSignedOrInitiated, signaturesLeft, downloadReceipt } from './paymentModals';
 import type { PaymentRow } from './paymentModals';
-
 /**
  * Shared per-row actions for every payment list (overview, initiate, pending,
  * failed). One render path per status — clicking the row opens the detail
@@ -16,13 +16,13 @@ import type { PaymentRow } from './paymentModals';
 export type PaymentRowActionType =
   | 'initiate'
   | 'authorise'
+  | 'confirm-execution'
   | 'reject'
   | 'cancel'
   | 'retry'
   | 'request-update'
   | 'schedule'
   | 'resolve-dispute';
-
 interface PaymentRowActionsProps {
   pc: PaymentRow;
   identityId: string;
@@ -45,9 +45,18 @@ export const PaymentRowActions: React.FC<PaymentRowActionsProps> = ({
   extraMenuActions,
 }) => {
   const { notify } = useNotification();
+  const { user } = useAuth();
   const norm = normalizePaymentStatus(pc.status);
   const signed = hasSignedOrInitiated(pc, identityId);
   const left = signaturesLeft(pc);
+
+  if (user?.role === 'SYSTEM_ADMINISTRATOR') {
+    return (
+      <div className="row-actions">
+        <span className="text-xs text-md-on-surface-variant italic px-2">View Only</span>
+      </div>
+    );
+  }
 
   const menu = (actions: Array<{ label: string; onClick: () => void }>) => (
     <ActionMenuPortal
@@ -57,23 +66,49 @@ export const PaymentRowActions: React.FC<PaymentRowActionsProps> = ({
       actions={actions}
     />
   );
-
   switch (norm) {
     case 'Offer Accepted':
     case 'Bank Details Submitted':
-      if (!hasBankDetails(pc)) return <div className="row-actions" />;
+      if (!hasBankDetails(pc)) {
+        return (
+          <div className="row-actions">
+            <Button
+              size="sm"
+              variant="filled"
+              disabled
+              title="Awaiting beneficiary bank details before transfer can be initiated"
+              className={pillBtn}
+            >
+              <Send size={13} className="shrink-0" />
+              <span>Initiate</span>
+            </Button>
+          </div>
+        );
+      }
+      if (!pc.isM1Published) {
+        return (
+          <div className="row-actions">
+            <Button
+              size="sm"
+              variant="tonal"
+              disabled
+              title="Initiation is locked: Milestone 1 (Statutory Award) must be published on the blockchain first"
+              className={`${pillBtn} opacity-60 cursor-not-allowed`}
+            >
+              <Lock size={12} className="shrink-0 text-amber-500" />
+              <span>Awaiting M1 Notarization</span>
+            </Button>
+          </div>
+        );
+      }
       return (
         <div className="row-actions">
           <Button size="sm" variant="filled" className={pillBtn} onClick={() => onAction('initiate', pc)}>
             <Send size={13} className="shrink-0" />
             <span>Initiate</span>
           </Button>
-          <IconButton title="Cancel Payment" variant="danger" onClick={() => onAction('cancel', pc)}>
-            <Ban size={16} />
-          </IconButton>
         </div>
       );
-
     case 'Transfer Initiated':
     case 'Authorised': {
       if (left > 0 && !signed) {
@@ -86,12 +121,26 @@ export const PaymentRowActions: React.FC<PaymentRowActionsProps> = ({
             <IconButton title="Reject Transfer" variant="danger" onClick={() => onAction('reject', pc)}>
               <XCircle size={16} />
             </IconButton>
-            {menu([{ label: 'Cancel Payment', onClick: () => onAction('cancel', pc) }])}
           </div>
         );
       }
-      // Self-signed or fully signed: the current admin already approved (SoD),
-      // and the transfer is on its way to the bank — nothing left to do.
+      if (left === 0) {
+        // Fully authorised — awaiting explicit final confirmation order
+        return (
+          <div className="row-actions">
+            <Button
+              size="sm"
+              variant="filled"
+              className={`${pillBtn} !bg-md-error !text-md-on-error hover:!bg-md-error/90`}
+              onClick={() => onAction('confirm-execution', pc)}
+            >
+              <Send size={13} className="shrink-0" />
+              <span>Confirm Release</span>
+            </Button>
+          </div>
+        );
+      }
+      // Self-signed while still waiting for others
       return (
         <div className="row-actions">
           <Button
@@ -99,14 +148,10 @@ export const PaymentRowActions: React.FC<PaymentRowActionsProps> = ({
             variant="tonal"
             disabled
             className={`${pillBtn} opacity-60 cursor-not-allowed`}
-            title={
-              signed
-                ? 'You already signed this transfer (Segregation of Duties) — it cannot be rejected or signed again'
-                : 'All required signatures collected — the transfer is being submitted to the bank'
-            }
+            title="You already signed this transfer (Segregation of Duties) — waiting for remaining authorisers"
           >
             <Lock size={12} className="shrink-0 text-amber-500" />
-            <span>Authorised</span>
+            <span>Signed ({left} left)</span>
           </Button>
         </div>
       );
@@ -137,6 +182,7 @@ export const PaymentRowActions: React.FC<PaymentRowActionsProps> = ({
         </div>
       );
 
+    case 'Disputed':
     case 'Payment Disputed':
       return (
         <div className="row-actions">
@@ -148,14 +194,8 @@ export const PaymentRowActions: React.FC<PaymentRowActionsProps> = ({
       );
 
     case 'Scheduled':
-      // Scheduled for the next clearing window — still cancellable beforehand.
-      return (
-        <div className="row-actions">
-          <IconButton title="Cancel Payment" variant="danger" onClick={() => onAction('cancel', pc)}>
-            <Ban size={16} />
-          </IconButton>
-        </div>
-      );
+      // Scheduled for the next clearing window — cancellation handled via View Details Danger Zone.
+      return <div className="row-actions" />;
 
     default:
       // Waiting Bank Approval, Cancelled, Transfer Rejected, Pending New Bank

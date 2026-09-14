@@ -1,18 +1,21 @@
 {
   "name": "fcr-scs",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
     "postinstall": "prisma generate --schema=data_layer/database/prisma/schema.prisma",
     "prisma:generate": "prisma generate --schema=data_layer/database/prisma/schema.prisma",
-    "db:seed": "cd data_layer/database && npx ts-node seed.ts",
+    "db:migrate": "cd data_layer/database && npx prisma migrate deploy",
+    "db:reset": "cd data_layer/database && npx prisma migrate reset --force",
+    "db:seed": "cd data_layer/database && npx ts-node prisma/seed.ts",
+    "db:fresh": "cd data_layer/database && npx prisma migrate reset --force",
     "dev:backend": "cd business_logic_layer && npm run dev",
     "dev:frontend": "cd presentation_layer && npm run dev",
     "ai:venv": "python -m venv business_logic_layer/ai_prediction_service/.venv",
-    "ai:install": "node scripts/dev-ai.mjs --install",
-    "ai:dataset": "node scripts/dev-ai.mjs --dataset",
-    "ai:train": "node scripts/dev-ai.mjs --train",
-    "dev:ai": "node scripts/dev-ai.mjs",
+    "ai:install": "cd business_logic_layer/ai_prediction_service && pip install -r requirements.txt",
+    "ai:dataset": "cd business_logic_layer/ai_prediction_service && python generate_datasets.py",
+    "ai:train": "cd business_logic_layer/ai_prediction_service && python train_model.py",
+    "dev:ai": "cd business_logic_layer/ai_prediction_service && python start.py",
     "dev": "concurrently -n backend,frontend,ai \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run dev:ai\"",
     "build": "npm run build --workspace=presentation_layer"
   },
@@ -23,6 +26,17 @@
     "data_layer/*"
   ],
   "devDependencies": {
-    "concurrently": "^10.0.5"
+    "@playwright/cli": "^0.1.19",
+    "@playwright/mcp": "^0.0.80",
+    "concurrently": "^10.0.5",
+    "playwright": "^1.63.0"
+  },
+  "allowScripts": {
+    "bcrypt@6.0.0": true,
+    "core-js@3.50.0": true,
+    "keccak@3.0.4": true,
+    "prisma@7.9.1": true,
+    "secp256k1@4.0.4": true,
+    "@prisma/engines@7.9.1": true
   }
-}
+}

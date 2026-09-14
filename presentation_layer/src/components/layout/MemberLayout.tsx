@@ -1,15 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Outlet, useNavigate, Link } from 'react-router-dom';
-import { 
-  LogOut, 
-  Bell, 
-  ChevronDown, 
-  User, 
-  Settings, 
-  Landmark, 
-  CircleDollarSign, 
-  ScrollText, 
-  FileCheck2 
+import {
+  LogOut,
+  Bell,
+  ChevronDown,
+  User,
+  Settings,
+  CircleDollarSign,
+  ScrollText,
+  FileCheck2
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useRole } from '../../hooks/useRole';
@@ -41,6 +40,11 @@ export const MemberLayout: React.FC = () => {
     logout();
     navigate('/login');
   };
+
+  // Strict Light Theme enforcement for Member Portal (DESIGN.md)
+  useEffect(() => {
+    document.documentElement.classList.remove('dark');
+  }, []);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -131,8 +135,8 @@ export const MemberLayout: React.FC = () => {
                 <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-md-outline/20 overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-150">
                   {/* User Info Header */}
                   <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
-                    <p className="text-xs font-bold text-slate-900">{displayName}</p>
-                    {displayEmail && <p className="text-[11px] text-slate-500 truncate">{displayEmail}</p>}
+                    <p className="text-sm font-bold text-slate-900">{displayName}</p>
+                    {displayEmail && <p className="text-xs text-slate-500 truncate">{displayEmail}</p>}
                     {displayId && (
                       <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200/60">
                         ID: {displayId}
@@ -145,7 +149,7 @@ export const MemberLayout: React.FC = () => {
                     <Link
                       to="/member"
                       onClick={() => setDropdownOpen(false)}
-                      className="flex items-center gap-2.5 px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 transition"
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition"
                     >
                       <User size={16} className="text-md-primary" />
                       <span>Profile & Case Overview</span>
@@ -154,25 +158,16 @@ export const MemberLayout: React.FC = () => {
                     <Link
                       to="/member/offer-letter"
                       onClick={() => setDropdownOpen(false)}
-                      className="flex items-center gap-2.5 px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 transition"
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition"
                     >
                       <FileCheck2 size={16} className="text-violet-600" />
                       <span>Notice of Award (Form G)</span>
                     </Link>
 
                     <Link
-                      to="/member/bank-details"
-                      onClick={() => setDropdownOpen(false)}
-                      className="flex items-center gap-2.5 px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 transition"
-                    >
-                      <Landmark size={16} className="text-emerald-600" />
-                      <span>Bank Payout Details</span>
-                    </Link>
-
-                    <Link
                       to="/member/payment-status"
                       onClick={() => setDropdownOpen(false)}
-                      className="flex items-center gap-2.5 px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 transition"
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition"
                     >
                       <CircleDollarSign size={16} className="text-amber-600" />
                       <span>Payment Status</span>
@@ -181,23 +176,20 @@ export const MemberLayout: React.FC = () => {
                     <Link
                       to="/member/verify-audit"
                       onClick={() => setDropdownOpen(false)}
-                      className="flex items-center gap-2.5 px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 transition"
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition"
                     >
                       <ScrollText size={16} className="text-violet-600" />
                       <span>Verify Audit Trail</span>
                     </Link>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDropdownOpen(false);
-                        alert('Profile Settings: Claimant personal details, contact preferences, and notifications.');
-                      }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 transition text-left cursor-pointer"
+                    <Link
+                      to="/member/settings"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition"
                     >
                       <Settings size={16} className="text-slate-500" />
-                      <span>Profile Settings</span>
-                    </button>
+                      <span>Settings & Payout Account</span>
+                    </Link>
                   </div>
 
                   {/* Divider & Red Logout Button */}
@@ -208,7 +200,7 @@ export const MemberLayout: React.FC = () => {
                         setDropdownOpen(false);
                         handleLogout();
                       }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-[#ef4444] hover:bg-red-50 transition text-left font-semibold cursor-pointer"
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-[#ef4444] hover:bg-red-50 transition text-left font-semibold cursor-pointer"
                     >
                       <LogOut size={16} className="text-[#ef4444]" />
                       <span>Logout</span>

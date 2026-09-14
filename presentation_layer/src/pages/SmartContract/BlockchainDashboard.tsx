@@ -1,23 +1,28 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, Activity, Wallet, Loader2, RefreshCw, FilePlus2, Undo2, Lock, Upload, Ban, CheckCircle2 } from 'lucide-react';
+import { Clock, User, Activity, Wallet, Loader2, RefreshCw, FilePlus2, Undo2, Lock, Upload, Ban, CheckCircle2, Folder } from 'lucide-react';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { blockchainApi } from '../../services/blockchainApi';
 import { paymentApi } from '../../services/paymentApi';
+import { compensationApi } from '../../services/compensationApi';
 import { useWallet } from '../../hooks/useWallet';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { CaseIdCell } from '../../components/admin/CaseIdCell';
+import { CaseDetailsModal } from '../Payment/CaseDetailsModal';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
+import { CopyButton } from '../../components/ui/CopyButton';
 import { WalletButton } from '../../components/ui/WalletButton';
 import { ActionMenuPortal } from '../../components/ui/ActionMenuPortal';
-import { NetworkSelector } from './NetworkSelector';
+import { NetworkStatusBadge } from './NetworkSelector';
 import type { NetworkInfo } from './NetworkSelector';
+import { RefreshButton } from '../Payment/RefreshButton';
+import { Pagination } from '../../components/ui/Pagination';
+import { formatGraceCountdown } from './PublishLedger';
 import '../LandAcquisition/case_management.css';
 import '../Payment/payment.css';
-import { BLOCKCHAIN_STATUSES } from '../Payment/statusMaps';
 import {
   ViewLedgerModal,
   PublishModal,
@@ -41,6 +46,7 @@ export const BlockchainDashboard: React.FC = () => {
   const { identityId } = useAdminIdentity();
   const { notify } = useNotification();
   const [searchQuery, setSearchQuery] = useState('');
+  const [caseDetailsId, setCaseDetailsId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('All');
   const [records, setRecords] = useState<LedgerRow[]>([]);
   const [readyRows, setReadyRows] = useState<LedgerRow[]>([]);
@@ -61,49 +67,139 @@ export const BlockchainDashboard: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const [recData, netData] = await Promise.all([
+      const [recData, netData, paidRes, offersRes] = await Promise.all([
         blockchainApi.getRecords(),
         blockchainApi.getNetworkInfo().catch(() => null),
+        paymentApi.getAllCases().catch(() => ({ cases: [] })),
+        compensationApi
+          .getAllOfferLetters({ status: 'ACCEPTED', limit: 200 } as any)
+          .catch(() => ({ offers: [], offerLetters: [] })),
       ]);
-      const ledger: LedgerRow[] = (recData.records || []).map((r: any) => ({
-        id: r.id,
-        caseId: r.caseId,
-        // The record id is the short FCR-XXXXXXXX id stored on publish
-        publicId: r.id,
-        transactionHash: r.transactionHash,
-        documentHash: r.documentHash,
-        status: r.status === 'Published' || r.status === 'PUBLISHED' ? 'Published' : 'Voided',
-        voidReason: r.voidReason,
-        voidTransactionHash: r.voidTransactionHash,
-        publishedAt: r.publishedAt ?? r.createdAt,
-        voidedAt: r.voidedAt,
-        createdAt: r.createdAt,
-        recordType: 'Original',
-      }));
+      const paidMap = new Map((paidRes.cases || []).map((c: any) => [c.caseId, c]));
+      const offersList: any[] = offersRes.offers || offersRes.offerLetters || [];
+      const offerMap = new Map(offersList.map((o: any) => [o.caseId, o]));
 
-      // Derive "Ready to Publish" — payment Paid + no active ledger record (PLAN_HM_1308 §5.6).
-      const paidRes = await paymentApi.getAllCases().catch(() => ({ cases: [] }));
-      const paid = (paidRes.cases || []).filter((c: any) => c.status === 'Paid' || c.status === 'PAID');
-      const existing = new Set(ledger.map((r) => r.caseId));
-      const derived: LedgerRow[] = await Promise.all(
+      const ledger: LedgerRow[] = (recData.records || []).map((r: any) => {
+        const pmt: any = paidMap.get(r.caseId);
+        const off: any = offerMap.get(r.caseId);
+        const ben = r.beneficiary || pmt?.beneficiary || pmt?.accountHolderName || off?.landOwnership?.landOwner?.name;
+        const amt = r.amount || pmt?.amount || off?.offerAmount;
+        return {
+          id: r.id,
+          caseId: r.caseId,
+          // The record id is the canonical BCN-YYYY-MM-#### stored on publish
+          publicId: r.id,
+          milestone: (r.milestone ?? 'AWARD') === 'AWARD' ? ('M1' as const) : ('M2' as const),
+          onChainKey: r.onChainKey || `${r.caseId}#${(r.milestone ?? 'AWARD') === 'AWARD' ? 'M1' : 'M2'}`,
+          transactionHash: r.transactionHash,
+          documentHash: r.documentHash,
+          beneficiary: ben,
+          amount: amt,
+          status:
+            r.status === 'Published' || r.status === 'PUBLISHED'
+              ? 'Published'
+              : r.status === 'Void Pending' || r.status === 'VOID_PENDING'
+              ? 'Void Pending'
+              : 'Voided',
+          voidReason: r.voidReason,
+          voidTransactionHash: r.voidTransactionHash,
+          publishedAt: r.publishedAt ?? r.createdAt,
+          voidedAt: r.voidedAt,
+          createdAt: r.createdAt,
+          recordType: 'Original',
+        };
+      });
+
+      // FR-019 dual-milestone "Ready to Publish" derivation:
+      //   M1 (Award)  — accepted offers past the 24-hour grace window, Form H
+      //                 hash frozen, with no M1 record on the ledger yet.
+      //   M2 (Settlement) — Paid payment cases whose receipt hash has no M2
+      //                 record on the ledger yet.
+      const ACCEPTANCE_GRACE_PERIOD_MS = 24 * 60 * 60 * 1000;
+      const now = Date.now();
+      const m1Published = new Set(
+        ledger.filter((r) => r.milestone === 'M1').map((r) => r.caseId)
+      );
+      const m2Published = new Set(
+        ledger.filter((r) => r.milestone === 'M2').map((r) => r.caseId)
+      );
+
+      const nowYear = new Date().getFullYear();
+      const nowMonth = String(new Date().getMonth() + 1).padStart(2, '0');
+      const bcnPrefix = `BCN-${nowYear}-${nowMonth}-`;
+
+      let maxSeq = 0;
+      ledger.forEach((r) => {
+        const idToCheck = r.publicId || r.id || '';
+        if (idToCheck.startsWith(bcnPrefix)) {
+          const parts = idToCheck.split('-');
+          const num = parseInt(parts[parts.length - 1], 10);
+          if (!isNaN(num) && num > maxSeq) maxSeq = num;
+        }
+      });
+
+      let currentSeq = maxSeq;
+
+      const offers: any[] = offersRes.offers || offersRes.offerLetters || [];
+      const awardOffers = offers
+        .filter((o) => {
+          if (!o.caseId || m1Published.has(o.caseId)) return false;
+          return Boolean(o.acceptedAt);
+        })
+        .sort((a, b) => (a.caseId || '').localeCompare(b.caseId || ''));
+
+      const awardReady: LedgerRow[] = awardOffers.map((o) => {
+        currentSeq += 1;
+        const bcnId = `${bcnPrefix}${String(currentSeq).padStart(4, '0')}`;
+        const acceptedAtMs = o.acceptedAt ? new Date(o.acceptedAt).getTime() : null;
+        const graceEndsAtMs = acceptedAtMs != null ? acceptedAtMs + ACCEPTANCE_GRACE_PERIOD_MS : null;
+        const graceLocked = graceEndsAtMs != null && now < graceEndsAtMs;
+        return {
+          id: bcnId,
+          publicId: bcnId,
+          caseId: o.caseId,
+          milestone: 'M1' as const,
+          onChainKey: `${o.caseId}#M1`,
+          status: graceLocked ? 'Grace Period (Locked)' : 'Ready to Publish',
+          beneficiary: o.landOwnership?.landOwner?.name,
+          amount: o.offerAmount,
+          documentHash: o.blockchainHash || null,
+          recordType: 'Original' as const,
+          publishedAt: null,
+          graceEndsAt: graceEndsAtMs,
+          acceptedAt: o.acceptedAt || null,
+        };
+      });
+
+      const paid = (paidRes.cases || [])
+        .filter((c: any) => c.status === 'Paid' || c.status === 'PAID')
+        .sort((a: any, b: any) => (a.caseId || '').localeCompare(b.caseId || ''));
+
+      const settlementReady: LedgerRow[] = await Promise.all(
         paid
-          .filter((c: any) => !existing.has(c.caseId))
-          .map(async (c: any) => ({
-            id: `ready-${c.caseId}`,
-            caseId: c.caseId,
-            // No FCR record exists yet — show the payment's PMT-XXXXXXXX id
-            publicId: c.paymentId || c.id,
-            status: 'Ready to Publish',
-            beneficiary: c.accountHolderName || c.beneficiaryId,
-            amount: c.amount,
-            documentHash: await computeSettlementHash(c.caseId, c.amount),
-            recordType: 'Original',
-            certificateVersion: 1,
-          }))
+          .filter((c: any) => !m2Published.has(c.caseId))
+          .map(async (c: any) => {
+            currentSeq += 1;
+            const bcnId = `${bcnPrefix}${String(currentSeq).padStart(4, '0')}`;
+            return {
+              id: bcnId,
+              publicId: bcnId,
+              caseId: c.caseId,
+              milestone: 'M2' as const,
+              onChainKey: `${c.caseId}#M2`,
+              status: 'Ready to Publish',
+              documentHash: c.receipt?.documentHash || (await computeSettlementHash(c.caseId, c.amount)),
+              certificateVersion: 1,
+              beneficiary: c.accountHolderName || c.beneficiaryId,
+              amount: c.amount,
+              recordType: 'Original' as const,
+              publishedAt: null,
+            };
+          })
       );
 
       setRecords(ledger);
-      setReadyRows(derived);
+      setReadyRows([...awardReady, ...settlementReady]);
       setNetworkInfo(netData);
     } catch (err: any) {
       setError(err.message || 'Failed to load ledger data');
@@ -118,29 +214,71 @@ export const BlockchainDashboard: React.FC = () => {
 
   const allRows = useMemo(() => [...readyRows, ...records], [readyRows, records]);
 
+  // Dynamically derive available statuses strictly from loaded records
+  const availableStatuses = useMemo(() => {
+    const set = new Set<string>();
+    allRows.forEach((r) => {
+      if (r.status) set.add(r.status);
+    });
+    return ['All', ...Array.from(set).sort()];
+  }, [allRows]);
+
+  useEffect(() => {
+    if (statusFilter !== 'All' && !availableStatuses.includes(statusFilter)) {
+      setStatusFilter('All');
+    }
+  }, [availableStatuses, statusFilter]);
+
   const stats = useMemo(() => {
-    const ready = allRows.filter((r) => r.status === 'Ready to Publish').length;
+    const readyM1 = allRows.filter((r) => r.status === 'Ready to Publish' && r.milestone === 'M1').length;
+    const readyM2 = allRows.filter((r) => r.status === 'Ready to Publish' && r.milestone === 'M2').length;
+    const locked = allRows.filter((r) => r.status === 'Grace Period (Locked)').length;
     const published = allRows.filter((r) => r.status === 'Published').length;
-    const voided = allRows.filter((r) => r.status === 'Voided').length;
+    const voided = allRows.filter((r) => r.status === 'Voided' || r.status === 'Void Pending').length;
     return [
-      { label: 'Ready to Publish', value: ready, change: 'Derived from payment state', icon: Activity },
-      { label: 'Published', value: published, change: 'On-chain', icon: Wallet },
-      { label: 'Voided', value: voided, change: 'Voided on-chain', icon: Lock },
+      {
+        label: 'Ready to Publish',
+        value: readyM1 + readyM2 + locked,
+        icon: Activity,
+        iconColor: 'text-amber-500',
+      },
+      { label: 'Published', value: published, icon: Wallet, iconColor: 'text-emerald-500' },
+      { label: 'Voided', value: voided, icon: Lock, iconColor: 'text-red-500' },
     ];
   }, [allRows]);
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return allRows.filter((r) => {
-      const mStatus = statusFilter === 'All' || r.status === statusFilter;
-      const mSearch =
-        !q ||
-        (r.publicId ?? '').toLowerCase().includes(q) ||
-        r.caseId.toLowerCase().includes(q) ||
-        (r.transactionHash ?? '').toLowerCase().includes(q);
-      return mStatus && mSearch;
-    });
+    return allRows
+      .filter((r) => {
+        const mStatus = statusFilter === 'All' || r.status === statusFilter;
+        const mSearch =
+          !q ||
+          (r.publicId ?? '').toLowerCase().includes(q) ||
+          r.caseId.toLowerCase().includes(q) ||
+          (r.transactionHash ?? '').toLowerCase().includes(q) ||
+          (r.beneficiary ?? '').toLowerCase().includes(q);
+        return mStatus && mSearch;
+      })
+      .sort((a, b) => {
+        const caseCmp = (a.caseId || '').localeCompare(b.caseId || '');
+        if (caseCmp !== 0) return caseCmp;
+        const mRank = (m?: string) => (m === 'M1' ? 1 : m === 'M2' ? 2 : 3);
+        return mRank(a.milestone) - mRank(b.milestone);
+      });
   }, [allRows, searchQuery, statusFilter]);
+
+  // Pagination standard: max 10 records per page (DESIGN.md)
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
+  const totalCount = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const safePage = Math.max(1, Math.min(currentPage, totalPages));
+  const pageRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter]);
 
   const handleFollowUp = async (row: LedgerRow, key: string) => {
     const choice = FOLLOW_UP_CHOICES.find((c) => c.key === key);
@@ -178,9 +316,8 @@ export const BlockchainDashboard: React.FC = () => {
           </div>
         </div>
         <div className="topbar-right flex items-center gap-3">
-          <NetworkSelector networkInfo={networkInfo} onNetworkChange={(net) => setNetworkInfo(net)} />
           {walletConnected ? (
-            <WalletButton walletAddress={walletAddress || undefined} adminId={identityId} />
+            <WalletButton walletAddress={walletAddress || undefined} label="Government Wallet" />
           ) : (
             <Button onClick={handleConnectWallet} variant="animated-primary" className="font-semibold flex items-center justify-center gap-2" style={{ minWidth: '180px' }}>
               <Wallet size={16} />
@@ -207,10 +344,9 @@ export const BlockchainDashboard: React.FC = () => {
       <div className="stats-grid">
         {stats.map((stat, idx) => (
           <div key={idx} className="stat-card">
-            <stat.icon className="stat-icon" size={32} />
+            <stat.icon className={`stat-icon ${stat.iconColor || 'text-md-primary'}`} size={32} />
             <div className="stat-label">{stat.label}</div>
             <div className="stat-number">{stat.value}</div>
-            <div className="stat-change">{stat.change}</div>
           </div>
         ))}
       </div>
@@ -222,7 +358,7 @@ export const BlockchainDashboard: React.FC = () => {
         <div className="filter-group">
           <Select
             label="Status"
-            options={BLOCKCHAIN_STATUSES.map((s) => ({ value: s, label: s === 'All' ? 'All statuses' : s }))}
+            options={availableStatuses.map((s) => ({ value: s, label: s === 'All' ? 'All statuses' : s }))}
             value={statusFilter}
             onChange={setStatusFilter}
             placeholder="All statuses"
@@ -236,10 +372,9 @@ export const BlockchainDashboard: React.FC = () => {
           <Activity size={18} />
           <span className="count">Ledger activity ({filtered.length})</span>
         </div>
-        <div className="right">
-          <Button variant="tonal" size="sm" onClick={loadData}>
-            <RefreshCw size={14} className="mr-1" /> Refresh
-          </Button>
+        <div className="right flex items-center gap-2">
+          <NetworkStatusBadge networkInfo={networkInfo} />
+          <RefreshButton onClick={loadData} loading={loading} />
         </div>
       </div>
 
@@ -248,13 +383,13 @@ export const BlockchainDashboard: React.FC = () => {
           <table>
             <thead>
               <tr>
-                <th>Record ID</th>
-                <th>Case</th>
-                <th>Type</th>
-                <th>Tx Hash</th>
-                <th>Published Date</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th style={{ width: '135px' }}>Blockchain ID</th>
+                <th style={{ width: '140px' }}>Case ID</th>
+                <th style={{ width: '110px' }}>Milestone</th>
+                <th style={{ width: '110px' }}>Document Hash</th>
+                <th style={{ width: '110px' }}>Transaction Hash</th>
+                <th style={{ width: '140px' }}>Published Date</th>
+                <th style={{ width: '125px' }}>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -269,75 +404,133 @@ export const BlockchainDashboard: React.FC = () => {
                   <td colSpan={7} className="text-center text-gray-500 py-8">No ledger records match your filters.</td>
                 </tr>
               ) : (
-                filtered.map((row) => (
-                  <tr key={row.id} className="row-clickable" onClick={() => setModal({ type: 'view', row })}>
-                    <td>
-                      <span className="font-mono font-bold text-xs text-md-primary">
-                        {row.publicId ?? row.caseId}
-                      </span>
-                    </td>
-                    <td><CaseIdCell caseId={row.caseId} /></td>
-                    <td>
-                      <span className="meta-text">{row.recordType ?? 'Original'}</span>
-                      {followUps[row.caseId] && (
-                        <div className="payment-hint mt-1">{followUps[row.caseId]}</div>
+                pageRows.map((row, idx, arr) => {
+                  const blockchainId = row.publicId?.startsWith('BCN-')
+                    ? row.publicId
+                    : row.id?.startsWith('BCN-')
+                    ? row.id
+                    : (row.publicId || row.id);
+                  const isFirstInGroup = idx === 0 || row.caseId !== arr[idx - 1].caseId;
+                  const isLastInGroup = idx === arr.length - 1 || row.caseId !== arr[idx + 1].caseId;
+                  const sameCaseRecords = allRows.filter((r) => r.caseId === row.caseId);
+
+                  return (
+                    <React.Fragment key={row.id}>
+                      {isFirstInGroup && (
+                        <tr className="bg-md-primary/[0.06] dark:bg-md-primary/[0.12] text-xs">
+                          <td colSpan={7} className="py-2.5 px-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Folder size={15} className="text-md-primary/70 dark:text-md-primary/80" />
+                                <span className="font-mono font-bold text-xs text-md-primary">{row.caseId}</span>
+                                <span className="text-md-outline/40 font-bold">·</span>
+                                <span className="text-md-on-surface font-semibold text-xs">{row.beneficiary || 'Landowner / Beneficiary'}</span>
+                              </div>
+                              <span className="text-[11px] font-bold text-md-primary bg-md-primary/10 dark:bg-md-primary/20 px-2.5 py-0.5 rounded-full border border-md-primary/20 font-mono">
+                                {sameCaseRecords.length} {sameCaseRecords.length === 1 ? 'Milestone' : 'Milestones'} ({sameCaseRecords.map((r) => r.milestone || 'M1').join(' · ')})
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                    <td style={{ fontFamily: 'monospace', color: 'var(--md-on-surface-variant)' }}>{fmtTx(row.transactionHash)}</td>
-                    <td><span className="meta-text">{fmtDate(row.publishedAt ?? row.createdAt)}</span></td>
-                    <td>{ledgerBadge(row.status)}</td>
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <div className="row-actions">
-                        {(row.status === 'Ready to Publish' || row.status === 'READY_TO_PUBLISH') && (
-                          <Button
-                            size="sm"
-                            variant="filled"
-                            className="h-8 px-3.5 text-xs inline-flex items-center gap-2 rounded-full font-medium"
-                            onClick={() => setModal({ type: 'publish', row })}
-                          >
-                            <Upload size={13} className="shrink-0" />
-                            <span>Publish</span>
-                          </Button>
-                        )}
-                        {(row.status === 'Published' || row.status === 'PUBLISHED') && (
-                          <Button
-                            size="sm"
-                            variant="filled"
-                            className="h-8 px-3.5 text-xs inline-flex items-center gap-2 rounded-full font-medium bg-red-600 hover:bg-red-700 text-white shadow-sm"
-                            onClick={() => setModal({ type: 'void', row })}
-                          >
-                            <Ban size={13} className="shrink-0" />
-                            <span>Void</span>
-                          </Button>
-                        )}
-                        {row.status === 'Voided' && (
-                          <ActionMenuPortal
-                            isOpen={activeMenu === row.caseId}
-                            onToggle={() => setActiveMenu(activeMenu === row.caseId ? null : row.caseId)}
-                            onClose={() => setActiveMenu(null)}
-                            actions={FOLLOW_UP_CHOICES.map((c) => ({
-                              label: c.label,
-                              onClick: () => handleFollowUp(row, c.key),
-                            }))}
-                          />
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      <tr
+                        className={`row-clickable bg-white dark:bg-slate-900/80 ${
+                          isLastInGroup
+                            ? 'border-b border-md-outline/25 dark:border-md-outline/30'
+                            : 'border-b border-md-outline/10 dark:border-md-outline/10'
+                        }`}
+                        onClick={() => setModal({ type: 'view', row })}
+                      >
+                        <td>
+                          <div className="flex items-center gap-1.5 cursor-pointer">
+                            <span className="font-mono font-bold text-xs text-md-primary" title="View Blockchain Notarization Details">
+                              {blockchainId}
+                            </span>
+                            <CopyButton value={blockchainId} title="Copy Blockchain ID" />
+                          </div>
+                        </td>
+                        <td>
+                          <CaseIdCell caseId={row.caseId} onClick={(cid) => setCaseDetailsId(cid)} />
+                        </td>
+                        <td>
+                          <span className="meta-text font-medium">
+                            {row.milestone === 'M1'
+                              ? 'Award (M1)'
+                              : row.milestone === 'M2'
+                              ? 'Settlement (M2)'
+                              : row.recordType ?? 'Original'}
+                          </span>
+                        </td>
+                        <td className="font-mono text-xs text-md-on-surface-variant">
+                          {row.documentHash ? (
+                            <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                              <span title={row.documentHash}>{fmtTx(row.documentHash)}</span>
+                              <CopyButton value={row.documentHash} title="Copy Document Hash" />
+                            </div>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                        <td className="font-mono text-xs text-md-on-surface-variant">
+                          {row.transactionHash ? (
+                            <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                              <span>{fmtTx(row.transactionHash)}</span>
+                              <CopyButton value={row.transactionHash} title="Copy Transaction Hash" />
+                            </div>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                        <td>{fmtDate(row.publishedAt)}</td>
+                        <td>
+                          {(() => {
+                            const graceLocked =
+                              row.status === 'Grace Period (Locked)' ||
+                              (!!row.graceEndsAt && Date.now() < new Date(row.graceEndsAt).getTime());
+                            if (graceLocked && row.graceEndsAt) {
+                              const countdown = formatGraceCountdown(new Date(row.graceEndsAt).getTime() - Date.now());
+                              return (
+                                <span
+                                  className="payment-badge status-locked whitespace-nowrap"
+                                  title={`Milestone 1 unlocks in ${countdown} when the statutory 24-hour acceptance grace period ends`}
+                                >
+                                  <span className="dot" />
+                                  Locked ({countdown} Left)
+                                </span>
+                              );
+                            }
+                            return ledgerBadge(row.status);
+                          })()}
+                        </td>
+                      </tr>
+                    </React.Fragment>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      <div style={{ marginTop: '24px', fontSize: '13px', color: 'var(--md-on-surface-variant)', opacity: 0.6, textAlign: 'center', borderTop: '1px solid rgba(121,116,126,0.08)', paddingTop: '18px' }}>
-        FCR-SCS · Blockchain · Connected to Live Backend Data
-      </div>
+      <Pagination
+        currentPage={safePage}
+        totalPages={totalPages}
+        totalCount={totalCount}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+        itemLabel="ledger records"
+      />
 
-      <ViewLedgerModal row={modal?.type === 'view' ? modal.row : null} onClose={closeModal} />
+      <div style={{ height: '32px' }} />
+
+      <ViewLedgerModal
+        row={modal?.type === 'view' ? modal.row : null}
+        onClose={closeModal}
+        onAction={(type, r) => setModal({ type, row: r })}
+      />
       <PublishModal row={modal?.type === 'publish' ? modal.row : null} onClose={closeModal} onDone={() => { closeModal(); loadData(); }} />
       <VoidModal row={modal?.type === 'void' ? modal.row : null} onClose={closeModal} onDone={() => { closeModal(); loadData(); }} />
+      <CaseDetailsModal caseId={caseDetailsId} onClose={() => setCaseDetailsId(null)} />
     </div>
   );
 };

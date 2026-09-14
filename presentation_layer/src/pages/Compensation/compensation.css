@@ -561,12 +561,27 @@
   letter-spacing: 0.3px;
   color: var(--md-on-surface-variant);
   white-space: nowrap;
+  border-bottom: 1px solid rgba(121, 116, 126, 0.08);
+  border-right: 1px solid rgba(121, 116, 126, 0.08);
+}
+.compensation-dashboard table th:last-child {
+  border-right: none;
 }
 .compensation-dashboard table td {
   padding: 12px 10px;
-  border-bottom: 1px solid rgba(121, 116, 126, 0.06);
+  border-bottom: 1px solid rgba(121, 116, 126, 0.08);
+  border-right: 1px solid rgba(121, 116, 126, 0.08);
   vertical-align: middle;
   word-break: break-word;
+}
+.compensation-dashboard table td:last-child {
+  border-right: none;
+}
+
+.dark .compensation-dashboard table th,
+.dark .compensation-dashboard table td {
+  border-bottom-color: rgba(202, 196, 208, 0.08);
+  border-right-color: rgba(202, 196, 208, 0.08);
 }
 .compensation-dashboard table tbody tr {
   transition: background 0.15s;
@@ -620,24 +635,40 @@
 .compensation-dashboard .status-badge.status-review { background: #E0F2FE; color: #075985; }
 .compensation-dashboard .status-badge.review .dot,
 .compensation-dashboard .status-badge.status-review .dot { background: #0284C7; }
-@media (prefers-color-scheme: dark) {
-  .compensation-dashboard .status-badge.pending,
-  .compensation-dashboard .status-badge.status-pending { background: rgba(202,138,4,0.22); color: #FEF08A; }
-  .compensation-dashboard .status-badge.pending .dot,
-  .compensation-dashboard .status-badge.status-pending .dot { background: #FACC15; }
-  .compensation-dashboard .status-badge.approved,
-  .compensation-dashboard .status-badge.status-approved { background: rgba(46,125,50,0.22); color: #A5D6A7; }
-  .compensation-dashboard .status-badge.approved .dot,
-  .compensation-dashboard .status-badge.status-approved .dot { background: #81C784; }
-  .compensation-dashboard .status-badge.rejected,
-  .compensation-dashboard .status-badge.status-rejected { background: rgba(198,40,40,0.25); color: #FFCDD2; }
-  .compensation-dashboard .status-badge.rejected .dot,
-  .compensation-dashboard .status-badge.status-rejected .dot { background: #E57373; }
-  .compensation-dashboard .status-badge.review,
-  .compensation-dashboard .status-badge.status-review { background: rgba(2,132,199,0.22); color: #7DD3FC; }
-  .compensation-dashboard .status-badge.review .dot,
-  .compensation-dashboard .status-badge.status-review .dot { background: #38BDF8; }
-}
+
+[data-theme="dark"] .compensation-dashboard .status-badge.pending,
+.dark .compensation-dashboard .status-badge.pending,
+[data-theme="dark"] .compensation-dashboard .status-badge.status-pending,
+.dark .compensation-dashboard .status-badge.status-pending { background: rgba(202,138,4,0.22); color: #FEF08A; }
+[data-theme="dark"] .compensation-dashboard .status-badge.pending .dot,
+.dark .compensation-dashboard .status-badge.pending .dot,
+[data-theme="dark"] .compensation-dashboard .status-badge.status-pending .dot,
+.dark .compensation-dashboard .status-badge.status-pending .dot { background: #FACC15; }
+[data-theme="dark"] .compensation-dashboard .status-badge.approved,
+.dark .compensation-dashboard .status-badge.approved,
+[data-theme="dark"] .compensation-dashboard .status-badge.status-approved,
+.dark .compensation-dashboard .status-badge.status-approved { background: rgba(46,125,50,0.22); color: #A5D6A7; }
+[data-theme="dark"] .compensation-dashboard .status-badge.approved .dot,
+.dark .compensation-dashboard .status-badge.approved .dot,
+[data-theme="dark"] .compensation-dashboard .status-badge.status-approved .dot,
+.dark .compensation-dashboard .status-badge.status-approved .dot { background: #81C784; }
+[data-theme="dark"] .compensation-dashboard .status-badge.rejected,
+.dark .compensation-dashboard .status-badge.rejected,
+[data-theme="dark"] .compensation-dashboard .status-badge.status-rejected,
+.dark .compensation-dashboard .status-badge.status-rejected { background: rgba(198,40,40,0.25); color: #FFCDD2; }
+[data-theme="dark"] .compensation-dashboard .status-badge.rejected .dot,
+.dark .compensation-dashboard .status-badge.rejected .dot,
+[data-theme="dark"] .compensation-dashboard .status-badge.status-rejected .dot,
+.dark .compensation-dashboard .status-badge.status-rejected .dot { background: #E57373; }
+[data-theme="dark"] .compensation-dashboard .status-badge.review,
+.dark .compensation-dashboard .status-badge.review,
+[data-theme="dark"] .compensation-dashboard .status-badge.status-review,
+.dark .compensation-dashboard .status-badge.status-review { background: rgba(2,132,199,0.22); color: #7DD3FC; }
+[data-theme="dark"] .compensation-dashboard .status-badge.review .dot,
+.dark .compensation-dashboard .status-badge.review .dot,
+[data-theme="dark"] .compensation-dashboard .status-badge.status-review .dot,
+.dark .compensation-dashboard .status-badge.status-review .dot { background: #38BDF8; }
+
 .compensation-dashboard .pagination {
   display: flex;
   justify-content: space-between;
@@ -1283,19 +1314,23 @@
   color: #7f1d1d;
 }
 
-@media (prefers-color-scheme: dark) {
-  .project-budget-card .status-pill.success {
+
+[data-theme="dark"] .project-budget-card .status-pill.success,
+.dark .project-budget-card .status-pill.success {
     color: #86efac;
     background: rgba(34, 197, 94, 0.18);
   }
-  .project-budget-card .status-pill.danger {
+[data-theme="dark"] .project-budget-card .status-pill.danger,
+.dark .project-budget-card .status-pill.danger {
     color: #fca5a5;
     background: rgba(239, 68, 68, 0.18);
   }
-  .project-budget-card .budget-alert-banner.success {
+[data-theme="dark"] .project-budget-card .budget-alert-banner.success,
+.dark .project-budget-card .budget-alert-banner.success {
     color: #bbf7d0;
   }
-  .project-budget-card .budget-alert-banner.danger {
+[data-theme="dark"] .project-budget-card .budget-alert-banner.danger,
+.dark .project-budget-card .budget-alert-banner.danger {
     color: #fecaca;
   }
-}
+

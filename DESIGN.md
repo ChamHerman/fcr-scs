@@ -39,6 +39,7 @@ The application uses standard `react-router-dom` routing. All pages are rendered
 1. **Auto-hiding Navbar**: A sticky `<Navbar />` with SVG Logo mark and "Smart Contract Resettlement" wordmark that listens to scroll direction.
 2. **Global Footer**: A `<Footer />` consistently applied at the bottom of every page.
 3. **Notification Provider**: Root-level state for triggering MD3-compliant toast notifications from any page or component.
+4. **Toast Stacking Rule (LOCKED)**: The right-hand toast stack (`NotificationSystem`) always renders at the very front of the screen — `z-index: 100000`, above every modal overlay (`md-modal-overlay` sits at `99999`) and above any page content. Success, error, warning, and info toasts must never be hidden behind a modal. **Toast duration rule (LOCKED 2026-09-12)**: success auto-dismisses after 5s, general/info after 8s, and **errors never auto-dismiss** — an error toast stays on screen until the user closes it manually (industry standard: transient confirmations are brief, failures persist until acknowledged). Every toast keeps a visible close button.
 
 ## Design Tokens
 
@@ -64,16 +65,45 @@ Defined in `tailwind.config.js` and `index.css`.
 - **`--md-scrollbar-thumb`**: Light `rgba(121,116,126,0.4)` / Dark `rgba(147,143,153,0.45)` — used by `.md-scroll-thin`
 
 ### Typography
-- **Font Family**: Roboto (imported via Google Fonts).
-- Headings use medium (500) and bold (700) weights for friendly impact.
-- Body text uses regular (400) weight for optimal readability.
-
-### Border Radius
+- **Single Typeface — Roboto (JetBrains Mono REVOKED 2026-09-12)**: the whole system uses ONE Google font, Roboto (`font-sans`, weights 400/500/700). Running JetBrains Mono beside Roboto produced inconsistent text spacing and line rhythm across portals, so the dual-font standard was revoked.
+  - Headings use medium (500) and bold (700) weights for friendly impact.
+  - Body text uses regular (400) weight for optimal readability.
+  - Identifiers, hashes, masked accounts, MyKad numbers, and **all currency figures (`RM X,XXX,XXX.XX`)** all render in Roboto.
+- **Tabular Numerals (column alignment without a second font)**: the `font-mono` / `.mono` / `.case-id` / `code` / `pre` / `kbd` / `samp` slots keep their semantic hook but render Roboto with fixed-width figures:
+  - Configured in `tailwind.config.js` (`mono: ['Roboto', 'ui-monospace', 'monospace']`) and `index.css`:
+    ```css
+    .font-mono, .mono, .case-id, code, pre, kbd, samp {
+      font-family: 'Roboto', ui-monospace, monospace !important;
+      font-variant-numeric: tabular-nums;
+    }
+    ```
+  - **Tabular Application (semantics unchanged)**:
+    1. **Case IDs**: `LAC-YYYY-MM-XXXX` (always rendered with `font-mono font-bold`).
+    2. **Payment IDs**: `PMT-YYYY-MM-####` (canonical Doc 5 §1.4 format, always rendered with `font-mono font-bold`; updated 2026-09-13 from the legacy `PMT-LAC-...` composite display).
+    3. **Blockchain Notarization Record IDs**: `BCN-YYYY-MM-####` (canonical Doc 5 §1.4 format, always rendered with `font-mono font-bold`; updated 2026-09-13 from the legacy `FCR-XXXXXXXX`).
+    4. **Blockchain Hashes & Addresses**: `0x...`, transaction hashes, and wallet addresses (`font-mono`).
+    5. **Bank Accounts**: Masked account numbers (e.g. `•••• 1234`) and account references (`font-mono`).
+    6. **Identification Numbers**: Malaysian MyKad / NRIC numbers (`font-mono`).
+- **Spacing consistency rule**: identical text spacing and line spacing across every portal — never re-introduce a second font family.
 Defined in `tailwind.config.js`. Standard card, input, and modal radius is **`xl` (28px)**.
 - `xs` (8px), `sm` (12px), `md` (16px)
 - **`lg` / `xl` (28px)**: Standard card, container, form input, and modal radius.
 - `2xl` (32px), `3xl` (48px)
 - `full` (9999px): Pill-shaped buttons and chips.
+
+### Date & Time Formatting Standard (LOCKED 2026-09-13)
+- **Universal Date-Time Display**: `DD MMM YYYY, HH:mm PM/AM` (12-hour display with capitalized AM/PM).
+  - Example: `13 Sep 2026, 05:41 PM`.
+  - Prohibited: 24-hour time or raw slash-separated timestamps (e.g. `13/09/2026, 17:41` or `2026-09-13 17:41`).
+  - Implementation: Exported centralized helper `formatDateTime(date)` from `presentation_layer/src/utils/dateFormat.ts`.
+  - Application: All tables, status badges, verification proof cards, modal timestamps, and official PDF receipts across Admin, Bank, and Member portals.
+
+### High-Value Settlement Network — RENTAS (LOCKED 2026-09-13)
+- **Clearing House & Bank System**: **RENTAS (Real-time Electronic Transfer of Funds and Securities)**.
+  - Operated by **Bank Negara Malaysia (BNM)** / Payments Network Malaysia (PayNet).
+  - Used for large-value government statutory land acquisition compensation disbursements.
+  - The Bank Portal is officially styled as the **RENTAS Host Gateway / BNM RTGS Terminal**.
+  - All payment channel displays and official settlement receipts explicitly identify RENTAS RTGS as the clearing authority.
 
 ### Motion and Easing
 - **`md-bouncy`** (`cubic-bezier(0.34, 1.56, 0.64, 1)`): The sole global motion standard applied across hover, press, modal pop-in, and loading transitions.
@@ -173,12 +203,12 @@ Admin list pages (Payments Overview, Initiate, Pending Authorisations, Failed Tr
 - Canonical action icons: Eye = view details, Send = initiate, PenLine = authorise/sign, XCircle = reject, Ban = cancel/void, RotateCcw = retry, PencilLine = request details update, CalendarClock = schedule, Download = receipt, BadgeCheck = resolve, Upload = publish to blockchain, FilePlus2 = create corrected certificate, Undo2 = reopen payment, Lock = self-signed / SoD restricted.
 
 ### Payment & Blockchain Identifier Columns
-- **Dedicated PAYMENT ID Column**: Every payment module table (`/admin/payment`, `/admin/payment/initiate`, `/admin/payment/pending`, `/admin/payment/failed`, `/bank-portal`) renders a dedicated `PAYMENT ID` column displaying `PMT-${caseId}` (e.g. `PMT-LAC-2026-08-0001`) with monospace bold styling alongside the `CASE ID` column.
+- **Dedicated PAYMENT ID Column**: Every payment module table (`/admin/payment`, `/admin/payment/initiate`, `/admin/payment/pending`, `/admin/payment/failed`, `/bank-portal`) renders a dedicated `PAYMENT ID` column displaying the canonical `PMT-YYYY-MM-####` id assigned by the payment service (e.g. `PMT-2026-09-0042`) with monospace bold styling alongside the `CASE ID` column. The `PMT-${caseId}` string is only a last-resort display fallback and is never the stored id.
 - **Case ID cells are clickable and copyable**:
   - The case ID renders as a link-styled span (`cursor: pointer`, underline on hover) that opens the row's detail modal directly — no separate menu step.
   - A copy icon sits beside every case ID (`CaseIdCell`), writing the ID to the clipboard with a success toast.
 
-### 15 Unique Status Color Matrix (11 Payment + 4 Blockchain)
+### 16 Unique Status Color Matrix (11 Payment + 5 Blockchain)
 Every status in the Payment and Blockchain modules is mapped to a dedicated CSS badge class (`.payment-badge .status-*`) with unique light and dark mode colors:
 
 | # | Status | Domain | CSS Class | Light Mode (Bg / Text / Dot) | Dark Mode (Bg / Text / Dot) |
@@ -196,8 +226,9 @@ Every status in the Payment and Blockchain modules is mapped to a dedicated CSS 
 | 11 | **Pending New Bank Details** | Payment | `.status-pending-details` | `#FEF9C3` / `#854D0E` / `#CA8A04` (Warm Honey) | `rgba(202,138,4,0.22)` / `#FEF08A` / `#FACC15` |
 | 12 | **Ready to Publish** | Blockchain | `.status-ready-publish` | `#E0F2FE` / `#075985` / `#0284C7` (Electric Sky) | `rgba(2,132,199,0.22)` / `#7DD3FC` / `#38BDF8` |
 | 13 | **Published** | Blockchain | `.status-published` | `#DCFCE7` / `#166534` / `#16A34A` (Mint Green) | `rgba(22,163,74,0.22)` / `#86EFAC` / `#4ADE80` |
-| 14 | **Voided** | Blockchain | `.status-voided` | `#FFE4E6` / `#9F1239` / `#E11D48` (Deep Crimson) | `rgba(225,29,72,0.25)` / `#FECDD3` / `#FB7185` |
-| 15 | **Replacement** | Blockchain | `.status-replacement` | `#F3E8FF` / `#6B21A8` / `#9333EA` (Purple Lilac) | `rgba(147,51,234,0.25)` / `#E9D5FF` / `#C084FC` |
+| 14 | **Void Pending** | Blockchain | `.status-void-pending` | `#FFF1E7` / `#9A3412` / `#EA580C` (Burnt Sienna) | `rgba(234,88,12,0.25)` / `#FED7AA` / `#FB923C` |
+| 15 | **Voided** | Blockchain | `.status-voided` | `#FFE4E6` / `#9F1239` / `#E11D48` (Deep Crimson) | `rgba(225,29,72,0.25)` / `#FECDD3` / `#FB7185` |
+| 16 | **Replacement** | Blockchain | `.status-replacement` | `#F3E8FF` / `#6B21A8` / `#9333EA` (Purple Lilac) | `rgba(147,51,234,0.25)` / `#E9D5FF` / `#C084FC` |
 
 *Note: All statuses use canonical Title Case strings (e.g. `Cancelled`, `Paid`, `Offer Accepted`).*
 
@@ -212,6 +243,14 @@ Every status in the Payment and Blockchain modules is mapped to a dedicated CSS 
 - Model: the bank initiator always contributes 1 signature; admin approvals add the rest. `required = 1 + approvals` where `approvals = 1 + floor(amount / 1,000,000)`.
 - Authorise/sign actions are offered only while signatures are outstanding (`current < required`); once the total is met the transfer is already in process.
 
+### Dual-Milestone Blockchain UX (LOCKED 2026-09-13, FR-019 / NFR-011)
+- **Milestone 1 banner**: `ViewDetailsModal`, `InitiateTransferModal` and `AuthoriseModal` open with a full-width tonal banner above the particulars — success (`bg-md-success/10 border-md-success/30`, `CheckCircle2`) when the award is notarized, with a clickable Etherscan tx link in `font-mono`; warning (`bg-md-warning/10 border-md-warning/30`, `AlertTriangle`) while pending; error (`bg-md-error/10 border-md-error/30`, `ShieldAlert`) when an on-chain void is required after cancellation.
+- **Initiation gate**: with M1 unpublished, the Initiate button renders in the drained disabled state labelled `Initiate Transfer (Awaiting M1 Notarization)` — never a grey replacement box (guideline 5).
+- **Publish Ledger tabs**: three segmented pill tabs (scrollable pill row on mobile) — `Milestone 1 — Statutory Award (Form H)`, `Milestone 2 — Disbursement Settlement (Receipt)`, `Void Required`. M1 rows carry the `Form H Hash` column with a `Form H Hash missing` warning chip and a disabled Publish button when the accepted offer has no frozen fingerprint; M2 rows carry the `Receipt Hash` (the frozen canonical receipt binary SHA-256). Within the 24-hour acceptance grace window the M1 row renders a `Grace Period (Locked)` status chip plus an `unlocks in Xm` countdown beside a drained disabled `[ <Lock> Locked (Grace Period) ]` button (FR-019 rule 9); the tab polls once per minute so the unlock appears live.
+- **Superseded multi-sig cycles**: the governance audit groups authorisations by cycle; the active cycle renders in full color, superseded cycles sit in a muted container (`opacity-60 grayscale-[0.35]`) headed `Cycle N (Superseded — bank details replaced)`. The section header shows `(x/y Signatures · Cycle N)`.
+- **Member on-chain badges**: the 5-step member stepper and the Track timeline keep their length and gain pill badge chips only — emerald clickable `Notarized on Sepolia` (with `ShieldCheck` + `ExternalLink`) when the milestone is published, muted `notarization pending` otherwise. Never expand the stepper to expose blockchain internals.
+- **Danger Zone cancel**: `CancelPaymentModal` requires selecting a statutory reason AND retyping the Payment ID (`PMT-...`); a static advisory beneath the input reminds the GA of the M1 void obligation when the award was already notarized.
+
 ## Usage Guidelines
 1. **Never use pure white or pure black backgrounds**: Always utilize `md-background` or `md-surface-container`.
 2. **Standard Radius**: Standard cards, inputs, and modals must use `28px` (`rounded-xl`). The single exception is dropdowns, whose bottom corners square off so the list joins the field.
@@ -225,3 +264,19 @@ Every status in the Payment and Blockchain modules is mapped to a dedicated CSS 
 10. **Case IDs are interactive**: clicking the case ID opens its detail modal, and a copy icon sits beside every case ID.
 11. **Filters apply on selection**: no Apply button — changing the dropdown value filters immediately.
 12. **Distinct sidebar icons**: sibling nav items within a module never share an icon.
+13. **Tabular Numerals for Identifiers & Hashes** (updated 2026-09-12, JetBrains Mono revoked): Case IDs, Payment IDs, Ledger Record Keys, Hashes, Bank Account Numbers, and NRICs always render through the `font-mono` slot, which is Roboto with `font-variant-numeric: tabular-nums` — column-aligned, single typeface. Currency and monetary figures (`RM` amounts) use the default **Roboto**. Never re-introduce a second font family.
+14. **Topbar & Content Vertical Spacing**: Every page view must provide at least 24px–32px (`pt-6 sm:pt-8`) of breathing space below the sticky top navbar before the first card/container to prevent elements sticking to the header.
+15. **Mobile + Desktop Responsive UI Standard (Member Portal & Core Views)**:
+    - Every single page in the Member Portal must be strictly responsive across all screen sizes (Mobile: 360px–480px, Tablet: 768px, Desktop: 1024px–1440px).
+    - **Adaptive Layout Structure**:
+      - Headers, stat summaries, and metadata bars must collapse vertically on mobile (`flex flex-col sm:flex-row`, `items-start sm:items-center`, `justify-between`) with clean gap spacing (`gap-3 sm:gap-4`).
+      - Multi-column grids must adapt responsively (`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3`).
+      - Action buttons must stretch full-width on mobile (`w-full sm:w-auto`) to provide accessible touch targets ($\ge 44\text{px}$ touch height).
+      - Horizontal button toolbars must reverse on mobile (`flex flex-col-reverse sm:flex-row justify-end gap-3`) so primary confirming actions appear at top on mobile and rightmost on desktop.
+      - Tab navigation must provide an adaptive pattern: an adaptive dropdown or scrollable pill container on mobile (`overflow-x-auto no-scrollbar`), and segmented pill buttons on desktop.
+      - Steppers and timeline cards must adapt from vertical linear steps on mobile (`sm:hidden`) to multi-column segmented progress bars on desktop (`hidden sm:block`).
+      - Modals and forms must constrain maximum width with responsive margins (`max-w-lg sm:max-w-xl`, `mx-4 sm:mx-auto`, `max-h-[85vh]`).
+16. **Payment Record Modal Sections (LOCKED 2026-09-12)**: the Disbursement Case Record shows two audit sections — **From Government Admin** (every GA action: Initiate / Authorise / Execute / Reject / Resolved / Cancel, with reason + timestamp) and **From Bank / Beneficiary** (successful bank clearances incl. bank reference, bank returns, member disputes). A GA rejection never appears under From Bank / Beneficiary — it is not a transfer attempt.
+17. **Payment Timestamps (LOCKED 2026-09-12)**: every payment-related modal shows the case **Created** and **Last Updated** datetimes (`CaseTimestamps`); payment tables label their datetime column **Updated** (never the ambiguous "Date & Time").
+18. **Dispute Statement Review (LOCKED 2026-09-12)**: a member-uploaded dispute PDF is reviewed via **Open PDF in New Tab** or **Download** from the record modal — never embedded as an iframe inside the modal (the modal is too small for a PDF reader).
+19. **Fullscreen Modal Overlay (LOCKED 2026-09-12)**: every modal in every portal uses the shared `Modal` component (portal to `<body>`, `.md-modal-overlay` fixed inset-0, z-index 99999). Hand-rolled `fixed z-50` overlays are forbidden — inside GSAP-transformed containers they lose viewport anchoring and leave the topbar un-covered.

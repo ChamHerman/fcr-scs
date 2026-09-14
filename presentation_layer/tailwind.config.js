@@ -26,10 +26,12 @@ export default {
         'md-warning': 'var(--md-warning)',
         'md-on-warning': 'var(--md-on-warning)',
         'md-success': 'var(--md-success)',
+        'md-success-text': 'var(--md-success-text)',
         'md-on-success': 'var(--md-on-success)',
       },
       fontFamily: {
         sans: ['Roboto', 'sans-serif'],
+        mono: ['Roboto', 'ui-monospace', 'monospace'],
       },
       borderRadius: {
         'xs': '8px',

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, CheckCircle2, Loader2, Eye } from 'lucide-react';
+import { Clock, User, CheckCircle2, Loader2, Eye, ShieldAlert, Lock, RefreshCw, Activity } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
@@ -8,8 +8,12 @@ import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
+import { CopyButton } from '../../components/ui/CopyButton';
+import { Pagination } from '../../components/ui/Pagination';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
+import { useAuth } from '../../context/AuthContext';
 import '../LandAcquisition/case_management.css';
+import { RefreshButton } from './RefreshButton';
 import './payment.css';
 import {
   ViewDetailsModal,
@@ -21,6 +25,7 @@ import {
   hasBankDetails,
   isReadyToInitiate,
 } from './paymentModals';
+import { CaseDetailsModal } from './CaseDetailsModal';
 import { PaymentRowActions } from './PaymentRowActions';
 import { normalizePaymentStatus } from './statusMaps';
 import type { PaymentRow } from './paymentModals';
@@ -41,12 +46,13 @@ export default function InitiateTransfer() {
   const [bankFilter, setBankFilter] = useState('All banks');
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
+  const [caseDetailsId, setCaseDetailsId] = useState<string | null>(null);
   const { identityId } = useAdminIdentity();
+  const { user } = useAuth();
   const pageRef = useRef<HTMLDivElement>(null);
-
   useGSAP(() => {
     gsap.fromTo('.initiate-header', { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.45, ease: 'power2.out' });
-    gsap.fromTo('.stats-grid, .filter-bar, .table-wrap', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.08, ease: 'back.out(1.2)', delay: 0.2 });
+    gsap.fromTo('.stats-grid, .filter-bar, .action-bar, .table-wrap', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.08, ease: 'back.out(1.2)', delay: 0.2 });
   }, { scope: pageRef });
 
   const loadData = useCallback(async () => {
@@ -66,35 +72,104 @@ export default function InitiateTransfer() {
     loadData();
   }, [loadData]);
 
-  const eligible = useMemo(() => cases.filter(isReadyToInitiate), [cases]);
-  const awaitingBank = useMemo(
-    () =>
-      cases.filter(
-        (c) => ['Offer Accepted', 'Bank Details Submitted'].includes(normalizePaymentStatus(c.status)) && !hasBankDetails(c)
-      ),
+  const normalizeStatusKey = (s?: string) => (s || '').toUpperCase().replace(/\s+/g, '_');
+
+  const isInInitiationQueue = (c: PaymentRow) => {
+    const k = normalizeStatusKey(c.status);
+    return (
+      k === 'READY_TO_INITIATE' ||
+      k === 'BANK_DETAILS_PENDING' ||
+      k === 'AWARD_NOTARIZATION_PENDING' ||
+      k === 'BANK_DETAILS_AND_M1_PENDING' ||
+      k === 'NEW_BANK_DETAILS_PENDING'
+    );
+  };
+
+  const INITIATION_STATUS_RANK: Record<string, number> = {
+    'READY_TO_INITIATE': 1,
+    'PENDING_APPROVAL': 2,
+    'BANK_DETAILS_AND_M1_PENDING': 3,
+    'AWARD_NOTARIZATION_PENDING': 4,
+    'BANK_DETAILS_PENDING': 5,
+    'NEW_BANK_DETAILS_PENDING': 6,
+  };
+
+  const queueCases = useMemo(() => {
+    const filtered = cases.filter(isInInitiationQueue);
+    return filtered.sort((a, b) => {
+      const ka = normalizeStatusKey(a.status);
+      const kb = normalizeStatusKey(b.status);
+      const rankA = INITIATION_STATUS_RANK[ka] ?? 99;
+      const rankB = INITIATION_STATUS_RANK[kb] ?? 99;
+      if (rankA !== rankB) {
+        return rankA - rankB;
+      }
+      // Oldest updated/created at the top
+      const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      return timeA - timeB;
+    });
+  }, [cases]);
+
+  const readyCases = useMemo(
+    () => cases.filter((c) => normalizeStatusKey(c.status) === 'READY_TO_INITIATE'),
+    [cases]
+  );
+  const pendingBankCases = useMemo(
+    () => cases.filter((c) => normalizeStatusKey(c.status) === 'BANK_DETAILS_PENDING'),
+    [cases]
+  );
+  const awardNotarizationPendingCases = useMemo(
+    () => cases.filter((c) => normalizeStatusKey(c.status) === 'AWARD_NOTARIZATION_PENDING'),
+    [cases]
+  );
+  const bothPendingCases = useMemo(
+    () => cases.filter((c) => normalizeStatusKey(c.status) === 'BANK_DETAILS_AND_M1_PENDING'),
     [cases]
   );
 
   const stats = [
-    { label: 'Eligible to Initiate', value: eligible.length, change: 'Ready now', icon: CheckCircle2 },
-    { label: 'Awaiting Bank Details', value: awaitingBank.length, change: 'Blocked (UC-PMT-002 A1)', icon: Eye },
+    { label: 'Ready to Initiate', value: readyCases.length, icon: CheckCircle2, iconColor: 'text-emerald-600' },
+    { label: 'Bank Details Pending', value: pendingBankCases.length, icon: Clock, iconColor: 'text-amber-600' },
+    { label: 'Award Notarization Pending', value: awardNotarizationPendingCases.length, icon: ShieldAlert, iconColor: 'text-indigo-600' },
+    { label: 'Bank Details & M1 Pending', value: bothPendingCases.length, icon: RefreshCw, iconColor: 'text-slate-600' },
   ];
 
   const banks = useMemo(() => {
     const set = new Set<string>();
-    eligible.forEach((c) => c.bankName && set.add(c.bankName));
+    queueCases.forEach((c) => c.bankName && set.add(c.bankName));
     return ['All banks', ...Array.from(set)];
-  }, [eligible]);
+  }, [queueCases]);
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return eligible.filter((c) => {
+    return queueCases.filter((c) => {
       const mBank = bankFilter === 'All banks' || c.bankName === bankFilter;
       const mSearch =
-        !q || c.caseId.toLowerCase().includes(q) || (c.accountHolderName ?? '').toLowerCase().includes(q);
+        !q ||
+        c.caseId.toLowerCase().includes(q) ||
+        (c.accountHolderName ?? '').toLowerCase().includes(q) ||
+        (c.paymentId ?? '').toLowerCase().includes(q);
       return mBank && mSearch;
     });
-  }, [eligible, searchQuery, bankFilter]);
+  }, [queueCases, searchQuery, bankFilter]);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
+  const totalCount = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const safePage = Math.max(1, Math.min(currentPage, totalPages));
+  const pageRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, bankFilter]);
+
+  useEffect(() => {
+    if (bankFilter !== 'All banks' && !banks.includes(bankFilter)) {
+      setBankFilter('All banks');
+    }
+  }, [banks, bankFilter]);
 
   const closeModal = () => setModal(null);
 
@@ -103,7 +178,7 @@ export default function InitiateTransfer() {
       <div className="topbar initiate-header">
         <div className="topbar-left">
           <h1>Initiate Transfer</h1>
-          <div className="sub">Queue of eligible cases ready for initiation — eligible = status Offer Accepted / Bank Details Submitted with valid bank details.</div>
+          <div className="sub">Queue of eligible cases ready for initiation — requires valid bank details and published Milestone 1 (Statutory Award) notarization.</div>
         </div>
         <div className="topbar-right">
           <div className="date-badge">
@@ -115,6 +190,14 @@ export default function InitiateTransfer() {
         </div>
       </div>
 
+      {user?.role === 'SYSTEM_ADMINISTRATOR' && (
+        <div className="my-4 px-4 py-3 rounded-xl bg-md-surface-container-highest border border-md-outline/20 text-md-on-surface text-sm flex items-center gap-3">
+          <ShieldAlert className="text-amber-500 shrink-0" size={18} />
+          <span>
+            <strong>View-Only Mode:</strong> System Administrators have read-only access and cannot perform disbursement mutations.
+          </span>
+        </div>
+      )}
       {error && (
         <div className="my-4 px-4 py-3 rounded-xl bg-md-error/10 border border-md-error/30 text-md-on-error text-sm">
           {error}
@@ -124,10 +207,9 @@ export default function InitiateTransfer() {
       <div className="stats-grid">
         {stats.map((stat, idx) => (
           <div key={idx} className="stat-card">
-            <stat.icon className="stat-icon" size={32} />
+            <stat.icon className={`stat-icon ${stat.iconColor || 'text-md-primary'}`} size={32} />
             <div className="stat-label">{stat.label}</div>
             <div className="stat-number">{stat.value}</div>
-            <div className="stat-change">{stat.change}</div>
           </div>
         ))}
       </div>
@@ -148,7 +230,11 @@ export default function InitiateTransfer() {
 
       <div className="action-bar">
         <div className="left">
-          <span className="count">{filtered.length} eligible {filtered.length === 1 ? 'case' : 'cases'}</span>
+          <Activity size={18} />
+          <span className="count">Initiation queue ({filtered.length})</span>
+        </div>
+        <div className="right">
+          <RefreshButton onClick={() => loadData()} loading={loading} />
         </div>
       </div>
 
@@ -157,28 +243,27 @@ export default function InitiateTransfer() {
           <table>
             <thead>
               <tr>
-                <th>Payment ID</th>
-                <th>Case ID</th>
-                <th>Beneficiary</th>
-                <th>Bank</th>
-                <th>Amount</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th style={{ width: '135px' }}>Payment ID</th>
+                <th style={{ width: '175px' }}>Case ID</th>
+                <th style={{ width: '140px' }}>Beneficiary</th>
+                <th style={{ width: '150px' }}>Bank</th>
+                <th style={{ width: '130px' }}>Amount</th>
+                <th style={{ width: '180px' }}>Status</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="text-center text-gray-500 py-8">
-                    <Loader2 size={22} className="inline animate-spin" /><span className="ml-2">Loading eligible cases…</span>
+                  <td colSpan={6} className="text-center text-gray-500 py-8">
+                    <Loader2 size={22} className="inline animate-spin" /><span className="ml-2">Loading queue cases…</span>
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center text-gray-500 py-8">No cases eligible to initiate right now.</td>
+                  <td colSpan={6} className="text-center text-gray-500 py-8">No payment records currently in the initiation queue.</td>
                 </tr>
               ) : (
-                filtered.map((pc) => {
+                pageRows.map((pc) => {
                   const paymentId = pc.paymentId || `PMT-${pc.caseId}`;
                   return (
                     <tr
@@ -187,24 +272,30 @@ export default function InitiateTransfer() {
                       onClick={() => setModal({ type: 'view', pc })}
                     >
                       <td>
-                        <span className="font-mono font-bold text-xs text-md-primary">
-                          {paymentId}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-bold text-xs text-md-primary">
+                            {paymentId}
+                          </span>
+                          <CopyButton value={paymentId} title="Copy Payment ID" />
+                        </div>
                       </td>
-                      <td><CaseIdCell caseId={pc.caseId} /></td>
+                      <td><CaseIdCell caseId={pc.caseId} onClick={(cid) => setCaseDetailsId(cid)} /></td>
                       <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
-                      <td>{pc.bankName ? `${pc.bankName} ${maskAccount(pc.accountNumber)}` : '—'}</td>
-                      <td style={{ fontWeight: 600 }}>{fmtAmount(pc.amount)}</td>
-                      <td>{paymentBadge(pc.status)}</td>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <PaymentRowActions
-                          pc={pc}
-                          identityId={identityId}
-                          onAction={(type, target) => setModal({ type, pc: target } as ModalState)}
-                          activeMenu={activeMenu}
-                          setActiveMenu={setActiveMenu}
-                        />
+                      <td>
+                        {pc.bankName && pc.accountNumber ? (
+                          <div className="flex items-center gap-1.5">
+                            <span>{pc.bankName}</span>
+                            <span className="font-mono text-xs text-md-on-surface-variant">{maskAccount(pc.accountNumber)}</span>
+                            <CopyButton value={pc.accountNumber} title="Copy Account Number" />
+                          </div>
+                        ) : pc.bankName ? (
+                          pc.bankName
+                        ) : (
+                          '—'
+                        )}
                       </td>
+                      <td className="font-semibold">{fmtAmount(pc.amount)}</td>
+                      <td>{paymentBadge(pc.status, pc.currentSignatures, pc.requiredSignatures)}</td>
                     </tr>
                   );
                 })
@@ -214,11 +305,27 @@ export default function InitiateTransfer() {
         </div>
       </div>
 
-      <div style={{ marginTop: '24px', fontSize: '13px', color: 'var(--md-on-surface-variant)', opacity: 0.6, textAlign: 'center', borderTop: '1px solid rgba(121,116,126,0.08)', paddingTop: '18px' }}>
-        FCR-SCS · Payments · Initiate · Connected to Live Backend Data
-      </div>
+      <Pagination
+        currentPage={safePage}
+        totalPages={totalPages}
+        totalCount={totalCount}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+        itemLabel="eligible cases"
+      />
 
-      <ViewDetailsModal pc={modal?.type === 'view' ? modal.pc : null} onClose={closeModal} />
+      <div style={{ height: '32px' }} />
+
+      <CaseDetailsModal
+        caseId={caseDetailsId}
+        onClose={() => setCaseDetailsId(null)}
+      />
+      <ViewDetailsModal
+        pc={modal?.type === 'view' ? modal.pc : null}
+        identityId={identityId}
+        onClose={closeModal}
+        onAction={(type, target) => setModal({ type, pc: target } as ModalState)}
+      />
       <InitiateTransferModal
         pc={modal?.type === 'initiate' ? modal.pc : null}
         onClose={closeModal}

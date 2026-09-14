@@ -19,6 +19,7 @@ import { useGSAP } from '@gsap/react';
 import { paymentApi } from '../../services/paymentApi';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { Button } from '../../components/ui/Button';
+import { CopyButton } from '../../components/ui/CopyButton';
 import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Modal } from '../../components/ui/Modal';
@@ -33,21 +34,38 @@ import {
   fmtDate,
   maskAccount,
 } from '../Payment/paymentModals';
+import { CaseDetailsModal } from '../Payment/CaseDetailsModal';
 import { normalizePaymentStatus } from '../Payment/statusMaps';
+import { RefreshButton } from '../Payment/RefreshButton';
 import type { PaymentRow } from '../Payment/paymentModals';
 import '../LandAcquisition/case_management.css';
 import '../Payment/payment.css';
 
-const FAILURE_REASONS: SelectOption[] = [
-  { value: 'BENEFICIARY_NAME_MISMATCH', label: 'Beneficiary name does not match bank account records (Name Mismatch)' },
-  { value: 'ACCOUNT_DORMANT_OR_FROZEN', label: 'Beneficiary bank account is dormant, frozen, or closed' },
-  { value: 'INVALID_ROUTING_OR_SWIFT', label: 'Invalid bank branch routing code / SWIFT identifier' },
-  { value: 'DAILY_CLEARING_LIMIT_EXCEEDED', label: 'Daily interbank clearing quota exceeded by receiving bank' },
-  { value: 'AML_SANCTIONS_FLAG', label: 'Transaction flagged by AML / Sanctions automated screening' },
-  { value: 'INSUFFICIENT_ESCROW_LIQUIDITY', label: 'Clearing account insufficient settlement liquidity balance' },
-  { value: 'CUSTOM', label: 'Other Custom Failure Reason (specify below)' },
+export const CATEGORY_A_REASONS: SelectOption[] = [
+  { value: 'RECIPIENT_ACCOUNT_INVALID_OR_NOT_FOUND', label: 'Recipient account number not found or routing code invalid' },
+  { value: 'RECIPIENT_ACCOUNT_CLOSED_OR_FROZEN', label: 'Recipient bank account is dormant, frozen, or closed' },
+  { value: 'NAME_MISMATCH_OUTDATED_DETAILS', label: 'Beneficiary name does not match bank account records' },
 ];
 
+export const CATEGORY_B_REASONS: SelectOption[] = [
+  { value: 'INTERBANK_SWITCH_GATEWAY_TIMEOUT', label: 'Interbank switch gateway communication timeout' },
+  { value: 'DAILY_CLEARING_QUOTA_EXCEEDED', label: 'Daily interbank clearing quota exceeded by receiving bank' },
+  { value: 'PROCESSING_PIPELINE_SYSTEM_ERROR', label: 'Internal bank processing anomaly during settlement execution' },
+];
+
+const FAILURE_REASONS: SelectOption[] = [
+  ...CATEGORY_A_REASONS.map((r) => ({ ...r, label: `[Category A: Transfer Rejected] ${r.label}` })),
+  ...CATEGORY_B_REASONS.map((r) => ({ ...r, label: `[Category B: Transfer Failed] ${r.label}` })),
+];
+
+const FAILURE_SOLUTIONS: Record<string, string> = {
+  RECIPIENT_ACCOUNT_INVALID_OR_NOT_FOUND: 'Permitted Resolution: Request New Bank Details (Member must input new bank details)',
+  RECIPIENT_ACCOUNT_CLOSED_OR_FROZEN: 'Permitted Resolution: Request New Bank Details (Member must input new bank details)',
+  NAME_MISMATCH_OUTDATED_DETAILS: 'Permitted Resolution: Request New Bank Details (Member must input new bank details)',
+  INTERBANK_SWITCH_GATEWAY_TIMEOUT: 'Permitted Resolutions: Schedule Tomorrow or Request New Bank Details',
+  DAILY_CLEARING_QUOTA_EXCEEDED: 'Permitted Resolutions: Schedule Tomorrow or Request New Bank Details',
+  PROCESSING_PIPELINE_SYSTEM_ERROR: 'Permitted Resolutions: Schedule Tomorrow or Request New Bank Details',
+};
 const ITEMS_PER_PAGE = 10;
 
 export default function BankPortal() {
@@ -63,8 +81,8 @@ export default function BankPortal() {
 
   const [rejectModalCase, setRejectModalCase] = useState<PaymentRow | null>(null);
   const [detailModalCase, setDetailModalCase] = useState<PaymentRow | null>(null);
+  const [caseDetailsId, setCaseDetailsId] = useState<string | null>(null);
   const [selectedReason, setSelectedReason] = useState(FAILURE_REASONS[0].value);
-  const [customReasonText, setCustomReasonText] = useState('');
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   const { notify } = useNotification();
@@ -139,26 +157,26 @@ export default function BankPortal() {
 
   const handleRejectConfirm = async () => {
     if (!rejectModalCase) return;
-    const finalReason =
-      selectedReason === 'CUSTOM'
-        ? customReasonText.trim() || 'Commercial bank settlement clearance declined'
-        : FAILURE_REASONS.find((r) => r.value === selectedReason)?.label || selectedReason;
+    const isCatA = CATEGORY_A_REASONS.some((r) => r.value === selectedReason);
+    const rawLabel = [...CATEGORY_A_REASONS, ...CATEGORY_B_REASONS].find((r) => r.value === selectedReason)?.label || selectedReason;
+    const finalReason = `${selectedReason}: ${rawLabel}`;
 
     setProcessingId(rejectModalCase.caseId);
     try {
       await paymentApi.rejectBank({
         caseId: rejectModalCase.caseId,
         errorReason: finalReason,
+        isRejectedCategory: isCatA,
       });
       notify({
         type: 'general',
-        title: 'Transfer Rejected by Bank',
-        message: `Case ${rejectModalCase.caseId} marked Transfer Failed. Logged in Failed Transactions queue.`,
+        title: isCatA ? 'Transfer Rejected (Category A)' : 'Transfer Failed (Category B)',
+        message: `Case ${rejectModalCase.caseId} marked ${isCatA ? 'Transfer Rejected' : 'Transfer Failed'}. Logged in Failed Transactions queue.`,
       });
       setRejectModalCase(null);
-      setCustomReasonText('');
       loadData();
-    } catch (e: any) {
+    } catch (err: unknown) {
+      const e = err as Error;
       notify({
         type: 'error',
         title: 'Rejection Failed',
@@ -208,21 +226,21 @@ export default function BankPortal() {
 
   const stats = [
     {
-      label: 'Awaiting Bank Approval',
+      label: 'RENTAS Queue (Pending Clearing)',
       value: pendingCases.length,
-      change: 'Submitted for bank approval',
+      change: 'Awaiting gross RTGS settlement',
       icon: Clock,
       colorClass: 'text-amber-500',
     },
     {
-      label: 'Settled Payouts (Paid)',
+      label: 'Settled Gross RTGS (Paid)',
       value: historyCases.filter((c) => normalizePaymentStatus(c.status) === 'Paid').length,
-      change: 'Disbursed with bank receipt',
+      change: 'Settled with RENTAS receipt',
       icon: FileCheck,
       colorClass: 'text-emerald-500',
     },
     {
-      label: 'Failed / Rejected Logs',
+      label: 'RENTAS Clearing Exceptions',
       value: historyCases.filter((c) => normalizePaymentStatus(c.status) === 'Transfer Failed').length,
       change: 'Logged for retry & resolution',
       icon: FileX,
@@ -231,39 +249,33 @@ export default function BankPortal() {
   ];
 
   return (
-    <div className="main min-h-screen bg-md-background text-md-on-surface" ref={containerRef}>
+    <div className="main min-h-screen bg-md-background text-md-on-surface px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-10" ref={containerRef}>
       {/* Topbar adhering to DESIGN.md standard */}
       <div className="topbar bank-topbar">
         <div className="topbar-left">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-md-primary/10 border border-md-primary/20 flex items-center justify-center text-md-primary font-bold shadow-sm">
-              <Landmark size={22} />
+            <div className="w-11 h-11 rounded-2xl bg-[#0f172a] text-[#fbbf24] border border-[#fbbf24]/30 flex items-center justify-center font-bold shadow-md">
+              <Landmark size={24} />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold tracking-tight">Interbank Clearing Gateway</h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-2xl font-bold tracking-tight">RENTAS Host Gateway</h1>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider bg-[#0f172a] text-[#fbbf24] border border-[#fbbf24]/40 uppercase">
+                  Bank Negara Malaysia RTGS
+                </span>
                 <span className="payment-badge status-paid" style={{ fontSize: '11px', padding: '2px 10px' }}>
-                  <span className="dot" /> LIVE SIMULATION
+                  <span className="dot" /> LIVE TERMINAL
                 </span>
               </div>
               <div className="sub mt-0.5">
-                External commercial banking network settlement engine · Simulates bank gateway payout approvals &amp; failure handling.
+                Real-time Electronic Transfer of Funds and Securities · High-Value Interbank Settlement Network.
               </div>
             </div>
           </div>
         </div>
 
         <div className="topbar-right flex items-center gap-2.5">
-          <Button
-            variant="tonal"
-            size="sm"
-            onClick={() => loadData()}
-            disabled={loading}
-            className="inline-flex items-center gap-1.5"
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            <span>Refresh Queue</span>
-          </Button>
+          <RefreshButton onClick={() => loadData()} loading={loading} label="Refresh Queue" />
           <Link to="/admin/payment">
             <Button variant="outlined" size="sm" className="inline-flex items-center gap-1.5">
               <span>Admin Payments</span>
@@ -304,7 +316,7 @@ export default function BankPortal() {
             }`}
           >
             <ShieldCheck size={16} />
-            <span>Pending Clearing Queue</span>
+            <span>RENTAS Clearing Queue</span>
             <span
               className={`px-2 py-0.5 text-xs rounded-full ${
                 activeTab === 'pending'
@@ -326,7 +338,7 @@ export default function BankPortal() {
             }`}
           >
             <Clock size={16} />
-            <span>Clearance History &amp; Audit Logs</span>
+            <span>RENTAS Settlement History &amp; Logs</span>
             <span
               className={`px-2 py-0.5 text-xs rounded-full ${
                 activeTab === 'history'
@@ -368,7 +380,7 @@ export default function BankPortal() {
             <div className="action-bar">
               <div className="left">
                 <span className="count">
-                  {filteredPending.length} transfer{filteredPending.length === 1 ? '' : 's'} awaiting commercial clearance
+                  {filteredPending.length} transfer{filteredPending.length === 1 ? '' : 's'} awaiting RENTAS gross clearance
                 </span>
               </div>
             </div>
@@ -393,7 +405,7 @@ export default function BankPortal() {
                       <tr>
                         <td colSpan={8} className="text-center text-md-on-surface-variant py-8">
                           <RefreshCw size={22} className="inline animate-spin mr-2 text-md-primary" />
-                          <span>Connecting to commercial bank gateway…</span>
+                          <span>Connecting to Bank Negara Malaysia RENTAS Gateway…</span>
                         </td>
                       </tr>
                     ) : pagedPendingRows.length === 0 ? (
@@ -418,25 +430,29 @@ export default function BankPortal() {
                         return (
                           <tr key={pc.caseId} className="row-clickable" onClick={() => setDetailModalCase(pc)}>
                             <td>
-                              <span className="font-mono font-bold text-xs text-md-primary">{paymentId}</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono font-bold text-xs text-md-primary">{paymentId}</span>
+                                <CopyButton value={paymentId} title="Copy Payment ID" />
+                              </div>
                             </td>
                             <td>
-                              <CaseIdCell caseId={pc.caseId} />
+                              <CaseIdCell caseId={pc.caseId} onClick={(cid) => setCaseDetailsId(cid)} />
                             </td>
                             <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
                             <td>
                               <div>{pc.bankName || 'Maybank'}</div>
-                              <div className="text-xs font-mono text-md-on-surface-variant">
-                                {maskAccount(pc.accountNumber)}
+                              <div className="flex items-center gap-1.5 text-xs font-mono text-md-on-surface-variant">
+                                <span>{maskAccount(pc.accountNumber)}</span>
+                                {pc.accountNumber && <CopyButton value={pc.accountNumber} title="Copy Account Number" />}
                               </div>
                             </td>
-                            <td style={{ fontWeight: 600 }}>{fmtAmount(pc.amount)}</td>
+                            <td className="font-semibold">{fmtAmount(pc.amount)}</td>
                             <td>
                               <span className="meta-text">
                                 {pc.currentSignatures}/{pc.requiredSignatures || 1} met
                               </span>
                             </td>
-                            <td>{paymentBadge(pc.status)}</td>
+                            <td>{paymentBadge(pc.status, pc.currentSignatures, pc.requiredSignatures)}</td>
                             <td onClick={(e) => e.stopPropagation()}>
                               <div className="row-actions">
                                 <Button
@@ -456,7 +472,6 @@ export default function BankPortal() {
                                   onClick={() => {
                                     setRejectModalCase(pc);
                                     setSelectedReason(FAILURE_REASONS[0].value);
-                                    setCustomReasonText('');
                                   }}
                                   className="h-8 px-3 text-xs inline-flex items-center gap-2 rounded-full font-medium shadow-sm"
                                 >
@@ -516,7 +531,7 @@ export default function BankPortal() {
             <div className="action-bar">
               <div className="left">
                 <span className="count">
-                  {filteredHistory.length} cleared or rejected bank gateway record{filteredHistory.length === 1 ? '' : 's'}
+                  {filteredHistory.length} cleared or rejected RENTAS RTGS record{filteredHistory.length === 1 ? '' : 's'}
                 </span>
               </div>
             </div>
@@ -550,19 +565,23 @@ export default function BankPortal() {
                         return (
                           <tr key={c.caseId} className="row-clickable" onClick={() => setDetailModalCase(c)}>
                             <td>
-                              <span className="font-mono font-bold text-xs text-md-primary">{paymentId}</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono font-bold text-xs text-md-primary">{paymentId}</span>
+                                <CopyButton value={paymentId} title="Copy Payment ID" />
+                              </div>
                             </td>
                             <td>
-                              <CaseIdCell caseId={c.caseId} />
+                              <CaseIdCell caseId={c.caseId} onClick={(cid) => setCaseDetailsId(cid)} />
                             </td>
                             <td>{c.accountHolderName || c.beneficiaryId || '—'}</td>
-                            <td style={{ fontWeight: 600 }}>{fmtAmount(c.amount)}</td>
-                            <td>{paymentBadge(c.status)}</td>
+                            <td className="font-semibold">{fmtAmount(c.amount)}</td>
+                            <td>{paymentBadge(c.status, c.currentSignatures, c.requiredSignatures)}</td>
                             <td>
                               {isPaid ? (
-                                <span className="font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                                  {c.receipt?.bankReferenceNumber || 'BNK-CLEARED'}
-                                </span>
+                                <div className="flex items-center gap-1.5 font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                                  <span>{c.receipt?.bankReferenceNumber || 'BNK-CLEARED'}</span>
+                                  <CopyButton value={c.receipt?.bankReferenceNumber || 'BNK-CLEARED'} title="Copy Bank Reference Number" />
+                                </div>
                               ) : (
                                 <span className="text-xs text-rose-600 dark:text-rose-400 font-medium">
                                   {latestFail?.errorLog || 'Bank clearance declined by commercial gateway'}
@@ -570,7 +589,7 @@ export default function BankPortal() {
                               )}
                             </td>
                             <td>
-                              <span className="meta-text">{fmtDate(c.updatedAt || c.createdAt)}</span>
+                              <span className="meta-text font-mono text-xs">{fmtDate(c.updatedAt || c.createdAt)}</span>
                             </td>
                           </tr>
                         );
@@ -595,9 +614,7 @@ export default function BankPortal() {
         )}
       </div>
 
-      <div style={{ marginTop: '32px', fontSize: '13px', color: 'var(--md-on-surface-variant)', opacity: 0.6, textAlign: 'center', borderTop: '1px solid rgba(121,116,126,0.08)', paddingTop: '18px' }}>
-        FCR-SCS · Interbank Commercial Clearance Gateway · Simulation Mode · Connected to Live Backend
-      </div>
+      <div style={{ height: '32px' }} />
 
       {/* Reject Simulation Modal adhering to DESIGN.md §4 */}
       <Modal
@@ -618,37 +635,34 @@ export default function BankPortal() {
               <div className="font-bold mb-1 flex items-center gap-1.5">
                 <AlertTriangle size={15} /> Rejecting Payout Clearance for {rejectModalCase.caseId}
               </div>
-              Select a failure reason code below. This will transition the case status to{' '}
-              <strong>Transfer Failed</strong> and record the diagnostic error message in the admin Failed Transactions queue for resolution or retry.
+              Select a locked failure reason code below. Category A issues mark the payment as{' '}
+              <strong>Transfer Rejected</strong> (requiring new bank details), while Category B network issues mark it as{' '}
+              <strong>Transfer Failed</strong> (unlocking reschedule or new details).
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-2">
               <Select
                 label="Rejection / Failure Code"
                 options={FAILURE_REASONS}
                 value={selectedReason}
                 onChange={setSelectedReason}
                 placeholder="Select bank rejection reason"
+                wrapLabels
               />
+              {FAILURE_SOLUTIONS[selectedReason] && (
+                <div className="text-xs bg-md-surface-container-highest rounded-lg px-3 py-2 text-md-on-surface-variant flex items-center gap-1.5 font-medium">
+                  <span className="text-md-primary font-bold">Standard SOP:</span>
+                  <span>{FAILURE_SOLUTIONS[selectedReason]}</span>
+                </div>
+              )}
             </div>
-
-            {selectedReason === 'CUSTOM' && (
-              <div className="space-y-1">
-                <Textarea
-                  label="Custom Failure Description"
-                  rows={3}
-                  placeholder="Enter detailed commercial bank error diagnostic..."
-                  value={customReasonText}
-                  onChange={(e) => setCustomReasonText(e.target.value)}
-                />
-              </div>
-            )}
           </div>
         )}
       </Modal>
 
       {/* Full Details Modal */}
       <ViewDetailsModal pc={detailModalCase} onClose={() => setDetailModalCase(null)} />
+      <CaseDetailsModal caseId={caseDetailsId} onClose={() => setCaseDetailsId(null)} />
     </div>
   );
 }

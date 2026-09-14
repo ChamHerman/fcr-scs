@@ -20,6 +20,7 @@ import {
   EyeOff,
   ChevronDown,
   ChevronUp,
+  Check,
   X, 
   UserCheck, 
   AlertCircle, 
@@ -40,6 +41,7 @@ import { Textarea } from '../../components/ui/Textarea';
 import { FileUpload } from '../../components/ui/FileUpload';
 import { CurrencyInput } from '../../components/ui/CurrencyInput';
 import { CopyButton } from '../../components/ui/CopyButton';
+import { Select } from '../../components/ui/Select';
 import { OfferResponseModals } from '../../components/OfferResponseModals';
 import { CreateObjectionModal } from '../../components/objection';
 import { useOfferResponse } from '../Compensation/hooks/useOfferResponse';
@@ -83,16 +85,42 @@ export const MemberOfferLetter: React.FC = () => {
     let isMounted = true;
     async function loadCases() {
       try {
-        const res = await landAcquisitionApi.getAllCases({ limit: 50 });
-        const list = res.cases || res || [];
-        if (!isMounted) return;
-        setCasesList(list);
+        const res = await landAcquisitionApi.getAllCases({
+          limit: 50,
+          ownerNric: identificationNumber || user?.identificationNumber,
+          userId: user?.userId,
+          userRole: user?.role,
+        });
+        const allList = res.cases || res || [];
+        const cleanIc = (identificationNumber || user?.identificationNumber || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        const memberName = (userName || user?.name || '').toLowerCase();
+        const memberEmail = (user?.email || '').toLowerCase();
 
-        if (!selectedCaseId && list.length > 0) {
-          // Default to first case that has an offer letter, or first case
-          const caseWithOffer = list.find((c: any) => c.offerLetters && c.offerLetters.length > 0);
-          const defaultCase = caseWithOffer || list[0];
-          setSelectedCaseId(defaultCase.caseId);
+        const memberCases = allList.filter((c: any) => {
+          if (c.createdById === user?.userId) return true;
+          const owners = c.landParcel?.ownerships?.map((o: any) => o.landOwner).filter(Boolean) || [];
+          return owners.some((ow: any) => {
+            const owIc = (ow.icNumber || ow.nric || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            return (
+              (cleanIc && owIc === cleanIc) ||
+              ow.ownerId === user?.userId ||
+              (ow.name && ow.name.toLowerCase() === memberName) ||
+              (ow.email && ow.email.toLowerCase() === memberEmail)
+            );
+          });
+        });
+        if (!isMounted) return;
+        setCasesList(memberCases);
+
+        if (queryCaseId) {
+          setSelectedCaseId(queryCaseId);
+        } else {
+          setSelectedCaseId((prev) => {
+            if (prev) return prev;
+            const caseWithOffer = memberCases.find((c: any) => c.status === 'OFFER_ISSUED' || c.status === 'OFFER_ACCEPTED');
+            const defaultCase = caseWithOffer || memberCases[0];
+            return defaultCase?.caseId || '';
+          });
         }
       } catch (err) {
         console.error('Failed to load member cases:', err);
@@ -100,25 +128,57 @@ export const MemberOfferLetter: React.FC = () => {
     }
     loadCases();
     return () => { isMounted = false; };
-  }, []);
+  }, [identificationNumber, user, userName, queryCaseId]);
+
+  useEffect(() => {
+    if (queryCaseId && queryCaseId !== selectedCaseId) {
+      setSelectedCaseId(queryCaseId);
+    }
+  }, [queryCaseId, selectedCaseId]);
 
   // 2. Fetch Offer Letter Data
   const loadOfferData = useCallback(async () => {
     setLoading(true);
     try {
-      let resolvedOfferId = routeOfferId || queryOfferId;
+      let resolvedOfferId = '';
 
-      // If no offerId specified directly, search via selectedCaseId
-      if (!resolvedOfferId && selectedCaseId) {
-        const caseData = await landAcquisitionApi.getCaseById(selectedCaseId);
-        const c = caseData.acquisitionCase || caseData;
-        if (c?.offerLetters && c.offerLetters.length > 0) {
-          resolvedOfferId = c.offerLetters[0].offerId;
+      // Priority 1: If user selected a case or queryCaseId is present, find offer for THIS case
+      if (selectedCaseId) {
+        try {
+          const caseData = await landAcquisitionApi.getCaseById(selectedCaseId);
+          const c = caseData.case || caseData.acquisitionCase || caseData;
+          if (c?.offerLetters && c.offerLetters.length > 0) {
+            // Pick pending offer if available, otherwise first offer
+            const pending = c.offerLetters.find((ol: any) => ol.status === 'PENDING');
+            resolvedOfferId = (pending || c.offerLetters[0]).offerId;
+          }
+        } catch (e) {
+          console.warn('Could not load case data for offer resolution:', e);
+        }
+
+        if (!resolvedOfferId) {
+          try {
+            const allOffersRes = await compensationApi.getAllOfferLetters({
+              caseId: selectedCaseId,
+              limit: 5,
+            });
+            const list = allOffersRes.offerLetters || allOffersRes || [];
+            if (list.length > 0) {
+              resolvedOfferId = list[0].offerId;
+            }
+          } catch (e) {
+            console.warn('Could not query offer letters by caseId:', e);
+          }
         }
       }
 
+      // Priority 2: If no offer found via selectedCaseId, check routeOfferId or queryOfferId
+      if (!resolvedOfferId && (routeOfferId || queryOfferId)) {
+        resolvedOfferId = routeOfferId || queryOfferId;
+      }
+
+      // Priority 3: Fall back to all offer letters for this landowner
       if (!resolvedOfferId) {
-        // Try to query all offer letters for the current user/landowner
         const allOffersRes = await compensationApi.getAllOfferLetters({
           ownerNric: identificationNumber || user?.identificationNumber,
           limit: 10
@@ -237,7 +297,7 @@ export const MemberOfferLetter: React.FC = () => {
       const currentUserStatus = currentUserOwner ? currentUserOwner.status : null;
 
       // 1-day grace period computation:
-      const acceptedDate = isMultiOwner && currentUserOwner?.respondedAtDate
+      const acceptedDate = currentUserOwner?.respondedAtDate
         ? currentUserOwner.respondedAtDate
         : o.acceptedAt
         ? new Date(o.acceptedAt)
@@ -385,7 +445,7 @@ export const MemberOfferLetter: React.FC = () => {
       };
 
       setOffer(formatted);
-      if (c?.caseId && c.caseId !== selectedCaseId) {
+      if (c?.caseId && !selectedCaseId) {
         setSelectedCaseId(c.caseId);
       }
     } catch (err: any) {
@@ -407,7 +467,7 @@ export const MemberOfferLetter: React.FC = () => {
   // Handle Case Switching
   const handleCaseChange = (newCaseId: string) => {
     setSelectedCaseId(newCaseId);
-    setSearchParams({ caseId: newCaseId }, { replace: true });
+    navigate(`/member/offer-letter?caseId=${encodeURIComponent(newCaseId)}`, { replace: true });
   };
 
   // ---------------------------------------------------------------------------
@@ -587,6 +647,31 @@ export const MemberOfferLetter: React.FC = () => {
       </div>
 
       {/* ------------------------------------------------------------- */}
+      {/* CASE SWITCHER — always a dropdown, labels carry case details   */}
+      {/* ------------------------------------------------------------- */}
+      {casesList.length > 0 && (
+        <div className="bg-white border-b border-slate-200 px-4 sm:px-6 lg:px-8 py-3">
+          <div className="max-w-7xl mx-auto sm:w-[460px]">
+            <Select
+              label="Select Case"
+              placeholder="Select an acquisition case…"
+              options={casesList.map((c: any) => {
+                const lot = c.landParcel?.lotNo ? `Lot ${c.landParcel.lotNo}` : c.caseTitle || c.caseId;
+                const statusLabel = c.status ? String(c.status).replace(/_/g, ' ') : '';
+                return {
+                  value: c.caseId,
+                  label: `${c.caseId} — ${lot}${statusLabel ? ` [${statusLabel}]` : ''}`,
+                };
+              })}
+              value={selectedCaseId}
+              onChange={handleCaseChange}
+              wrapLabels
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
       {/* MAIN CONTAINER                                                */}
       {/* ------------------------------------------------------------- */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
@@ -670,7 +755,7 @@ export const MemberOfferLetter: React.FC = () => {
                   <span className="text-[11px] font-bold text-violet-900/70 uppercase tracking-wider block">
                     Total Statutory Award (Form H)
                   </span>
-                  <div className="text-2xl sm:text-3xl font-black text-emerald-700 mt-1 font-mono">
+                  <div className="text-2xl sm:text-3xl font-black text-emerald-700 mt-1">
                     {formatCurrencyRM(offer.totalCompensation)}
                   </div>
                   <div className="text-[11px] text-slate-600 mt-1 flex items-center md:justify-end gap-1 font-medium">
@@ -904,13 +989,23 @@ export const MemberOfferLetter: React.FC = () => {
                   {/* Actions Row */}
                   <div className="flex items-center justify-end gap-3 flex-wrap pt-2">
                     <Button
-                      variant="danger"
+                      variant="outlined"
                       size="md"
                       onClick={handleOpenCreateObjection}
                       className="w-full sm:w-auto"
                     >
+                      <AlertTriangle size={16} className="text-amber-600" />
+                      <span>Submit Objection (Form N)</span>
+                    </Button>
+
+                    <Button
+                      variant="danger"
+                      size="md"
+                      onClick={() => setShowRejectModal(true)}
+                      className="w-full sm:w-auto"
+                    >
                       <XCircle size={16} />
-                      <span>Reject and Submit Objection</span>
+                      <span>Reject Offer</span>
                     </Button>
 
                     <Button
@@ -968,14 +1063,29 @@ export const MemberOfferLetter: React.FC = () => {
                           </div>
                         </div>
 
-                        <span className={`px-2.5 py-1 rounded-xl text-xs font-bold ${
+                        <span className={`px-2.5 py-1 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 ${
                           ow.status === 'ACCEPTED'
                             ? 'bg-emerald-100 text-emerald-800'
                             : ow.status === 'REJECTED'
                             ? 'bg-rose-100 text-rose-800'
                             : 'bg-amber-100 text-amber-800'
                         }`}>
-                          {ow.status === 'ACCEPTED' ? '✓ Accepted' : ow.status === 'REJECTED' ? '✕ Rejected' : '⏳ Pending'}
+                          {ow.status === 'ACCEPTED' ? (
+                            <span className="inline-flex items-center gap-1">
+                              <Check size={13} strokeWidth={2.5} />
+                              <span>Accepted</span>
+                            </span>
+                          ) : ow.status === 'REJECTED' ? (
+                            <span className="inline-flex items-center gap-1">
+                              <X size={13} strokeWidth={2.5} />
+                              <span>Rejected</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1">
+                              <Clock size={13} strokeWidth={2.5} />
+                              <span>Pending</span>
+                            </span>
+                          )}
                         </span>
                       </div>
                       {ow.respondedAt && (

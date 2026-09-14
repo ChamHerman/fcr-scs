@@ -48,6 +48,7 @@ import { MemberOfferLetter } from './pages/Member/MemberOfferLetter';
 import SubmitBankDetails from './pages/Member/SubmitBankDetails';
 import MemberPaymentStatus from './pages/Member/MemberPaymentStatus';
 import VerifyAuditTrail from './pages/Member/VerifyAuditTrail';
+import { MemberSettings } from './pages/Member/MemberSettings';
 import { CaseManagementDashboard } from './pages/LandAcquisition/CaseDashboard';
 import { CaseCreate } from './pages/LandAcquisition/CaseCreate';
 import { CaseEdit } from './pages/LandAcquisition/CaseEdit';
@@ -86,8 +87,9 @@ function App() {
             <Route path="/submit-bank-details" element={<PaymentSubmitBankDetails />} />
             <Route path="/verify-audit-trail" element={<SmartContractVerifyAuditTrail />} />
             <Route path="/track-payment" element={<TrackPaymentStatus />} />
-            <Route path="/bank-portal" element={<BankPortal />} />
           </Route>
+          {/* Bank operations portal: rendered bare (no public Navbar/Footer chrome). */}
+          <Route path="/bank-portal" element={<BankPortal />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/activate" element={<AccountActivation />} />
@@ -179,6 +181,7 @@ function App() {
               <Route path="bank-details" element={<SubmitBankDetails />} />
               <Route path="payment-status" element={<MemberPaymentStatus />} />
               <Route path="verify-audit" element={<VerifyAuditTrail />} />
+              <Route path="settings" element={<MemberSettings />} />
             </Route>
           </Route>
         </Routes>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, AlertOctagon, Loader2, FileWarning } from 'lucide-react';
+import { Clock, User, AlertOctagon, Loader2, FileWarning, ShieldAlert, Activity, RefreshCw } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
@@ -7,24 +7,29 @@ import { paymentApi } from '../../services/paymentApi';
 import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Button } from '../../components/ui/Button';
+import { CopyButton } from '../../components/ui/CopyButton';
+import { Pagination } from '../../components/ui/Pagination';
 import { Modal } from '../../components/ui/Modal';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
-import '../LandAcquisition/case_management.css';
+import { useAuth } from '../../context/AuthContext';
 import './payment.css';
+import { RefreshButton } from './RefreshButton';
 import {
   ViewDetailsModal,
   RetryPaymentModal,
   RequestDetailsUpdateModal,
   ScheduleTomorrowModal,
   CancelPaymentModal,
+  ResolveRejectionModal,
   paymentBadge,
   fmtAmount,
   fmtDate,
+  stripRawLogPrefix,
 } from './paymentModals';
+import { CaseDetailsModal } from './CaseDetailsModal';
 import { PaymentRowActions } from './PaymentRowActions';
 import type { PaymentRow } from './paymentModals';
 import { normalizePaymentStatus } from './statusMaps';
-
 type ModalState =
   | { type: 'view'; pc: PaymentRow }
   | { type: 'error-log'; pc: PaymentRow }
@@ -32,6 +37,7 @@ type ModalState =
   | { type: 'request-update'; pc: PaymentRow }
   | { type: 'schedule'; pc: PaymentRow }
   | { type: 'cancel'; pc: PaymentRow }
+  | { type: 'resolve-rejection'; pc: PaymentRow }
   | null;
 
 export default function FailedTransactions() {
@@ -43,12 +49,13 @@ export default function FailedTransactions() {
   const [searchQuery, setSearchQuery] = useState(deepLink || '');
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
+  const [caseDetailsId, setCaseDetailsId] = useState<string | null>(null);
   const { identityId } = useAdminIdentity();
+  const { user } = useAuth();
   const pageRef = useRef<HTMLDivElement>(null);
-
   useGSAP(() => {
     gsap.fromTo('.failed-header', { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.45, ease: 'power2.out' });
-    gsap.fromTo('.stats-grid, .filter-bar, .table-wrap', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.08, ease: 'back.out(1.2)', delay: 0.2 });
+    gsap.fromTo('.stats-grid, .filter-bar, .action-bar, .table-wrap', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.08, ease: 'back.out(1.2)', delay: 0.2 });
   }, { scope: pageRef });
 
   const loadData = useCallback(async () => {
@@ -69,14 +76,14 @@ export default function FailedTransactions() {
   }, [loadData]);
 
   const stats = useMemo(() => {
-    const failed = cases.filter((c) => normalizePaymentStatus(c.status) === 'Transfer Failed').length;
+    const failed = cases.filter((c) => ['Transfer Failed', 'Transfer Rejected'].includes(normalizePaymentStatus(c.status))).length;
     const unresolved = cases.filter((c) => {
       const ft = c.failedTransactions ?? [];
       return ft.length === 0 || ft[ft.length - 1].resolution == null;
     }).length;
     return [
-      { label: 'Failed', value: failed, change: 'Transfer Failed', icon: AlertOctagon },
-      { label: 'Pending Resolution', value: unresolved, change: 'Needs SOP action', icon: FileWarning },
+      { label: 'Failed / Rejected', value: failed, icon: AlertOctagon, iconColor: 'text-red-500' },
+      { label: 'Pending Resolution', value: unresolved, icon: FileWarning, iconColor: 'text-amber-500' },
     ];
   }, [cases]);
 
@@ -84,6 +91,17 @@ export default function FailedTransactions() {
     const q = searchQuery.trim().toLowerCase();
     return cases.filter((c) => !q || c.caseId.toLowerCase().includes(q) || (c.accountHolderName ?? '').toLowerCase().includes(q));
   }, [cases, searchQuery]);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
+  const totalCount = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const safePage = Math.max(1, Math.min(currentPage, totalPages));
+  const pageRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
 
   const closeModal = () => setModal(null);
 
@@ -106,6 +124,15 @@ export default function FailedTransactions() {
         </div>
       </div>
 
+      {user?.role === 'SYSTEM_ADMINISTRATOR' && (
+        <div className="my-4 px-4 py-3 rounded-xl bg-md-surface-container-highest border border-md-outline/20 text-md-on-surface text-sm flex items-center gap-3">
+          <ShieldAlert className="text-amber-500 shrink-0" size={18} />
+          <span>
+            <strong>View-Only Mode:</strong> System Administrators have read-only access and cannot perform disbursement mutations.
+          </span>
+        </div>
+      )}
+
       {error && (
         <div className="my-4 px-4 py-3 rounded-xl bg-md-error/10 border border-md-error/30 text-md-on-error text-sm">
           {error}
@@ -115,10 +142,9 @@ export default function FailedTransactions() {
       <div className="stats-grid">
         {stats.map((stat, idx) => (
           <div key={idx} className="stat-card">
-            <stat.icon className="stat-icon" size={32} />
+            <stat.icon className={`stat-icon ${stat.iconColor || 'text-md-primary'}`} size={32} />
             <div className="stat-label">{stat.label}</div>
             <div className="stat-number">{stat.value}</div>
-            <div className="stat-change">{stat.change}</div>
           </div>
         ))}
       </div>
@@ -132,7 +158,11 @@ export default function FailedTransactions() {
 
       <div className="action-bar">
         <div className="left">
-          <span className="count">{filtered.length} failed {filtered.length === 1 ? 'transaction' : 'transactions'}</span>
+          <Activity size={18} />
+          <span className="count">Failed transactions ({filtered.length})</span>
+        </div>
+        <div className="right">
+          <RefreshButton onClick={() => loadData()} loading={loading} />
         </div>
       </div>
 
@@ -141,33 +171,39 @@ export default function FailedTransactions() {
           <table>
             <thead>
               <tr>
-                <th>Payment ID</th>
-                <th>Case ID</th>
-                <th>Beneficiary</th>
-                <th>Error</th>
-                <th>Attempted At</th>
-                <th>Resolution Status</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th style={{ width: '150px' }}>Payment ID</th>
+                <th style={{ width: '185px' }}>Case ID</th>
+                <th style={{ width: '150px' }}>Beneficiary</th>
+                <th style={{ width: '280px' }}>Error</th>
+                <th style={{ width: '160px' }}>Attempted At</th>
+                <th style={{ width: '170px' }}>Status</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="text-center text-gray-500 py-8">
+                  <td colSpan={6} className="text-center text-gray-500 py-8">
                     <Loader2 size={22} className="inline animate-spin" /><span className="ml-2">Loading failed transactions…</span>
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center text-gray-500 py-8">No failed transactions requiring resolution.</td>
+                  <td colSpan={6} className="text-center text-gray-500 py-8">No failed transactions requiring resolution.</td>
                 </tr>
               ) : (
-                filtered.map((pc) => {
+                pageRows.map((pc) => {
                   const ft = pc.failedTransactions ?? [];
                   const latest = ft[ft.length - 1];
-                  const errorLog = latest?.errorLog || 'No error log available.';
-                  const unresolved = !latest?.resolution;
+                  // GA-rejected cases (FR-018) carry no failedTransaction row —
+                  // surface the rejection reason from the governance audit list.
+                  const rejectionReason = [...(pc.authorisations ?? [])]
+                    .reverse()
+                    .find((a) => a.action === 'reject')?.reason;
+                  const errorLog = latest
+                    ? stripRawLogPrefix(latest.errorLog)
+                    : rejectionReason
+                      ? `Rejected by Government Admin: ${rejectionReason}`
+                      : 'No error log available.';
                   const paymentId = pc.paymentId || `PMT-${pc.caseId}`;
                   return (
                     <tr
@@ -176,38 +212,22 @@ export default function FailedTransactions() {
                       onClick={() => setModal({ type: 'view', pc })}
                     >
                       <td>
-                        <span className="font-mono font-bold text-xs text-md-primary">
-                          {paymentId}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-bold text-xs text-md-primary">
+                            {paymentId}
+                          </span>
+                          <CopyButton value={paymentId} title="Copy Payment ID" />
+                        </div>
                       </td>
-                      <td><CaseIdCell caseId={pc.caseId} /></td>
+                      <td><CaseIdCell caseId={pc.caseId} onClick={(cid) => setCaseDetailsId(cid)} /></td>
                       <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
                       <td>
                         <span className="meta-text" style={{ display: 'block', maxWidth: 280 }}>
                           {errorLog.length > 70 ? `${errorLog.slice(0, 70)}…` : errorLog}
                         </span>
                       </td>
-                      <td><span className="meta-text">{latest ? fmtDate(latest.createdAt) : fmtDate(pc.updatedAt)}</span></td>
-                      <td>
-                        {unresolved ? (
-                          <span className="payment-badge status-transfer-failed"><span className="dot" />Pending resolution</span>
-                        ) : (
-                          <span className="payment-badge status-paid"><span className="dot" />Resolved</span>
-                        )}
-                      </td>
-                      <td>{paymentBadge(pc.status)}</td>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <PaymentRowActions
-                          pc={pc}
-                          identityId={identityId}
-                          onAction={(type, target) => setModal({ type, pc: target } as ModalState)}
-                          activeMenu={activeMenu}
-                          setActiveMenu={setActiveMenu}
-                          extraMenuActions={[
-                            { label: 'View Error Logs', onClick: () => setModal({ type: 'error-log', pc }) },
-                          ]}
-                        />
-                      </td>
+                      <td><span className="meta-text font-mono text-xs">{latest ? fmtDate(latest.createdAt) : fmtDate(pc.updatedAt)}</span></td>
+                      <td>{paymentBadge(pc.status, pc.currentSignatures, pc.requiredSignatures)}</td>
                     </tr>
                   );
                 })
@@ -217,9 +237,21 @@ export default function FailedTransactions() {
         </div>
       </div>
 
-      <div style={{ marginTop: '24px', fontSize: '13px', color: 'var(--md-on-surface-variant)', opacity: 0.6, textAlign: 'center', borderTop: '1px solid rgba(121,116,126,0.08)', paddingTop: '18px' }}>
-        FCR-SCS · Payments · Failed Transactions · Connected to Live Backend Data
-      </div>
+      <Pagination
+        currentPage={safePage}
+        totalPages={totalPages}
+        totalCount={totalCount}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+        itemLabel="failed transactions"
+      />
+
+      <div style={{ height: '32px' }} />
+
+      <CaseDetailsModal
+        caseId={caseDetailsId}
+        onClose={() => setCaseDetailsId(null)}
+      />
 
       {/* View Error Logs modal */}
       <Modal isOpen={Boolean(selectedErrorLog)} onClose={closeModal} title="Error Logs" subtitle={selectedErrorLog ? `Case ${selectedErrorLog.caseId} · ${fmtAmount(selectedErrorLog.amount)}` : ''} cancelText="Close">
@@ -242,7 +274,7 @@ export default function FailedTransactions() {
                     <div className="text-xs text-md-on-surface-variant mb-1">
                       Attempt #{i + 1} · {fmtDate(f.createdAt)}
                     </div>
-                    <div className="text-sm text-md-on-surface break-words whitespace-pre-wrap">{f.errorLog}</div>
+                    <div className="text-sm text-md-on-surface break-words whitespace-pre-wrap">{stripRawLogPrefix(f.errorLog)}</div>
                     {f.resolution && (
                       <div className="text-xs text-md-on-success mt-1">
                         Resolution: {f.resolution} {f.resolvedAt ? `· ${fmtDate(f.resolvedAt)}` : ''}
@@ -256,7 +288,12 @@ export default function FailedTransactions() {
         )}
       </Modal>
 
-      <ViewDetailsModal pc={modal?.type === 'view' ? modal.pc : null} onClose={closeModal} />
+      <ViewDetailsModal
+        pc={modal?.type === 'view' ? modal.pc : null}
+        identityId={identityId}
+        onClose={closeModal}
+        onAction={(type, target) => setModal({ type, pc: target } as ModalState)}
+      />
       <RetryPaymentModal
         pc={modal?.type === 'retry' ? modal.pc : null}
         onClose={closeModal}
@@ -274,6 +311,11 @@ export default function FailedTransactions() {
       />
       <CancelPaymentModal
         pc={modal?.type === 'cancel' ? modal.pc : null}
+        onClose={closeModal}
+        onDone={() => { closeModal(); loadData(); }}
+      />
+      <ResolveRejectionModal
+        pc={modal?.type === 'resolve-rejection' ? modal.pc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />
