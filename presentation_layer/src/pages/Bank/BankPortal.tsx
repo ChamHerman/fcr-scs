@@ -541,13 +541,13 @@ export default function BankPortal() {
                 <table>
                   <thead>
                     <tr>
-                      <th>Payment ID</th>
-                      <th>Case ID</th>
+                      <th className="whitespace-nowrap">Payment ID</th>
+                      <th className="whitespace-nowrap">Case ID</th>
                       <th>Beneficiary</th>
                       <th>Amount</th>
                       <th>Status</th>
-                      <th>Bank Reference / Failure Diagnostic</th>
-                      <th>Timestamp</th>
+                      <th className="whitespace-nowrap px-4">Bank Reference / Clearing Failure</th>
+                      <th className="whitespace-nowrap px-4">Settlement Timestamp</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -559,7 +559,15 @@ export default function BankPortal() {
                       </tr>
                     ) : (
                       pagedHistoryRows.map((c) => {
-                        const isPaid = normalizePaymentStatus(c.status) === 'Paid';
+                        const isCleared =
+                          normalizePaymentStatus(c.status) === 'Transfer Succeed' ||
+                          normalizePaymentStatus(c.status) === 'Paid' ||
+                          c.status === 'TRANSFER_SUCCEED' ||
+                          c.status === 'PAID' ||
+                          Boolean(c.receipt);
+                        const isFailed =
+                          normalizePaymentStatus(c.status) === 'Transfer Failed' ||
+                          c.status === 'TRANSFER_FAILED';
                         const latestFail = c.failedTransactions?.[c.failedTransactions.length - 1];
                         const paymentId = c.paymentId || `PMT-${c.caseId}`;
                         return (
@@ -576,19 +584,21 @@ export default function BankPortal() {
                             <td>{c.accountHolderName || c.beneficiaryId || '—'}</td>
                             <td className="font-semibold">{fmtAmount(c.amount)}</td>
                             <td>{paymentBadge(c.status, c.currentSignatures, c.requiredSignatures)}</td>
-                            <td>
-                              {isPaid ? (
-                                <div className="flex items-center gap-1.5 font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                                  <span>{c.receipt?.bankReferenceNumber || 'BNK-CLEARED'}</span>
-                                  <CopyButton value={c.receipt?.bankReferenceNumber || 'BNK-CLEARED'} title="Copy Bank Reference Number" />
+                            <td className="px-4">
+                              {isCleared ? (
+                                <div className="flex items-center gap-1.5 font-mono text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                                  <span>{c.receipt?.bankReferenceNumber || 'RENTAS-BNM-CLEARED'}</span>
+                                  <CopyButton value={c.receipt?.bankReferenceNumber || 'RENTAS-BNM-CLEARED'} title="Copy RENTAS Reference Number" />
                                 </div>
-                              ) : (
+                              ) : isFailed ? (
                                 <span className="text-xs text-rose-600 dark:text-rose-400 font-medium">
                                   {latestFail?.errorLog || 'Bank clearance declined by commercial gateway'}
                                 </span>
+                              ) : (
+                                <span className="text-xs text-md-on-surface-variant font-mono">—</span>
                               )}
                             </td>
-                            <td>
+                            <td className="px-4 whitespace-nowrap">
                               <span className="meta-text font-mono text-xs">{fmtDate(c.updatedAt || c.createdAt)}</span>
                             </td>
                           </tr>

@@ -14,6 +14,7 @@ import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { landAcquisitionApi } from '../../services/landAcquisitionApi';
 import { CASE_STATUS_CLASS_MAP, CASE_STATUS_LABEL_MAP } from '../../constants/landAcquisition';
+import { formatDateTime } from '../../utils/dateFormat';
 interface CaseDetailsModalProps {
   caseId: string | null;
   onClose: () => void;
@@ -130,6 +131,20 @@ export const CaseDetailsModal: React.FC<CaseDetailsModalProps> = ({ caseId, onCl
                   : '—'}
               </span>
             </div>
+          </div>
+
+          <div className="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-md-on-surface-variant bg-md-surface-container-low rounded-xl px-4 py-2 border border-md-outline/10">
+            <span>
+              <span className="font-semibold">Case Created:</span> {formatDateTime(caseData.createdAt || caseData.registrationDate)}
+            </span>
+            {caseData.offerLetters?.find((o: any) => o.status === 'ACCEPTED' || o.acceptedAt)?.acceptedAt && (
+              <span>
+                <span className="font-semibold">Offer Accepted:</span> {formatDateTime(caseData.offerLetters.find((o: any) => o.status === 'ACCEPTED' || o.acceptedAt).acceptedAt)}
+              </span>
+            )}
+            <span>
+              <span className="font-semibold">Last Updated:</span> {formatDateTime(caseData.updatedAt)}
+            </span>
           </div>
 
           {/* Project Details */}

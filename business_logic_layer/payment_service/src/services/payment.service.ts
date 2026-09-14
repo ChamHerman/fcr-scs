@@ -3,6 +3,7 @@ import { prisma } from "../prisma";
 import { PaymentStatus, UserRole, CaseStatus, BlockchainStatus } from "@prisma/client";
 import * as bankService from "./bank.service";
 import { persistCanonicalReceipt } from "./receipt.service";
+import { newRecordId } from "../../../smart_contract_service/src/services/blockchain.service";
 
 export function calculateRequiredSignatures(amount: number, totalActiveGAs = 5): number {
   let signatures = 2; // base (1 initiator + 1 approver)
@@ -907,8 +908,37 @@ export async function scheduleTomorrow(caseId: string) {
 }
 
 export async function getPaymentStatus(caseId: string, userRole?: string, userId?: string) {
-  let pc = await prisma.paymentCase.findUnique({
-    where: { caseId },
+  const eligibleAc = await prisma.acquisitionCase.findFirst({
+    where: {
+      caseId,
+      status: {
+        in: [
+          CaseStatus.OFFER_ACCEPTED,
+          CaseStatus.PAYMENT_IN_PROGRESS,
+          CaseStatus.PAYMENT_COMPLETED,
+          CaseStatus.CASE_CLOSED,
+        ],
+      },
+    },
+    include: {
+      landParcel: {
+        include: {
+          ownerships: {
+            include: { landOwner: true },
+          },
+        },
+      },
+      compensationReports: true,
+      offerLetters: true,
+    },
+  });
+
+  if (!eligibleAc) {
+    throw new Error("Payment record not available: case has not reached offer accepted status.");
+  }
+
+  let pc = await prisma.paymentCase.findFirst({
+    where: { caseId, deletedAt: null },
     include: {
       authorisations: true,
       receipt: true,
@@ -917,56 +947,41 @@ export async function getPaymentStatus(caseId: string, userRole?: string, userId
   });
 
   if (!pc) {
-    const ac = await prisma.acquisitionCase.findFirst({
-      where: { caseId, status: CaseStatus.OFFER_ACCEPTED },
+    const ac = eligibleAc;
+    const primaryOwner = ac.landParcel?.ownerships?.[0]?.landOwner;
+    const amount = ac.compensationReports?.[0]?.totalCompensation
+      ? Number(ac.compensationReports[0].totalCompensation)
+      : ac.offerLetters?.[0]?.offerAmount
+      ? Number(ac.offerLetters[0].offerAmount)
+      : 0;
+
+    const m1 = await prisma.blockchainRecord.findFirst({
+      where: { caseId: ac.caseId, milestone: "AWARD", status: BlockchainStatus.PUBLISHED },
+    });
+    const initialStatus = m1
+      ? PaymentStatus.BANK_DETAILS_PENDING
+      : PaymentStatus.BANK_DETAILS_AND_M1_PENDING;
+
+    const pmtId = await newPaymentId();
+    pc = await prisma.paymentCase.create({
+      data: {
+        id: pmtId,
+        caseId: ac.caseId,
+        beneficiaryId: primaryOwner?.ownerId || `BEN-${ac.caseId}`,
+        amount,
+        accountHolderName: primaryOwner?.name || null,
+        phoneNumber: primaryOwner?.contact || null,
+        myKadNumber: primaryOwner?.nric || null,
+        status: initialStatus,
+        requiredSignatures: 0,
+        currentSignatures: 0,
+      },
       include: {
-        landParcel: {
-          include: {
-            ownerships: {
-              include: { landOwner: true },
-            },
-          },
-        },
-        compensationReports: true,
-        offerLetters: true,
+        authorisations: true,
+        receipt: true,
+        failedTransactions: true,
       },
     });
-    if (ac) {
-      const primaryOwner = ac.landParcel?.ownerships?.[0]?.landOwner;
-      const amount = ac.compensationReports?.[0]?.totalCompensation
-        ? Number(ac.compensationReports[0].totalCompensation)
-        : ac.offerLetters?.[0]?.offerAmount
-        ? Number(ac.offerLetters[0].offerAmount)
-        : 0;
-
-      const m1 = await prisma.blockchainRecord.findFirst({
-        where: { caseId: ac.caseId, milestone: "AWARD", status: BlockchainStatus.PUBLISHED },
-      });
-      const initialStatus = m1
-        ? PaymentStatus.BANK_DETAILS_PENDING
-        : PaymentStatus.BANK_DETAILS_AND_M1_PENDING;
-
-      const pmtId = await newPaymentId();
-      pc = await prisma.paymentCase.create({
-        data: {
-          id: pmtId,
-          caseId: ac.caseId,
-          beneficiaryId: primaryOwner?.ownerId || `BEN-${ac.caseId}`,
-          amount,
-          accountHolderName: primaryOwner?.name || null,
-          phoneNumber: primaryOwner?.contact || null,
-          myKadNumber: primaryOwner?.nric || null,
-          status: initialStatus,
-          requiredSignatures: 0,
-          currentSignatures: 0,
-        },
-        include: {
-          authorisations: true,
-          receipt: true,
-          failedTransactions: true,
-        },
-      });
-    }
   }
 
   if (!pc) throw new Error("Case not found");
@@ -1023,29 +1038,74 @@ export async function getPaymentStatus(caseId: string, userRole?: string, userId
 }
 
 export async function getPendingAuthorisations() {
+  const eligibleAcquisitionCases = await prisma.acquisitionCase.findMany({
+    where: {
+      status: {
+        in: [
+          CaseStatus.OFFER_ACCEPTED,
+          CaseStatus.PAYMENT_IN_PROGRESS,
+          CaseStatus.PAYMENT_COMPLETED,
+          CaseStatus.CASE_CLOSED,
+        ],
+      },
+    },
+    select: { caseId: true, status: true },
+  });
+  const eligibleCaseMap = new Map(eligibleAcquisitionCases.map((c) => [c.caseId, c.status]));
+  const eligibleCaseIds = Array.from(new Set(eligibleAcquisitionCases.map((c) => c.caseId)));
+
   const cases = await prisma.paymentCase.findMany({
     where: {
       status: PaymentStatus.PENDING_APPROVAL,
+      deletedAt: null,
+      caseId: { in: eligibleCaseIds },
     },
     include: { authorisations: true },
     orderBy: { updatedAt: "desc" },
   });
   const enriched = await Promise.all(cases.map(enrichPaymentWithAdminNames));
   const withM1 = await attachM1Status(enriched);
-  return withM1.map(formatPaymentResponse);
+  return withM1.map((c) => ({
+    ...formatPaymentResponse(c),
+    caseStatus: eligibleCaseMap.get(c.caseId) || "OFFER_ACCEPTED",
+  }));
 }
 
 export async function getAllCases(userRole?: string, userId?: string) {
+  const eligibleAcquisitionCases = await prisma.acquisitionCase.findMany({
+    where: {
+      status: {
+        in: [
+          CaseStatus.OFFER_ACCEPTED,
+          CaseStatus.PAYMENT_IN_PROGRESS,
+          CaseStatus.PAYMENT_COMPLETED,
+          CaseStatus.CASE_CLOSED,
+        ],
+      },
+    },
+    select: { caseId: true, status: true },
+  });
+  const eligibleCaseMap = new Map(eligibleAcquisitionCases.map((c) => [c.caseId, c.status]));
+  const eligibleCaseIds = new Set(eligibleAcquisitionCases.map((c) => c.caseId));
+
   try {
-    const existingPaymentCases = await prisma.paymentCase.findMany({
-      select: { caseId: true },
+    // Ensure any payment cases whose acquisition case is not at or after OFFER_ACCEPTED are soft-deleted
+    await prisma.paymentCase.updateMany({
+      where: {
+        caseId: { notIn: Array.from(eligibleCaseIds) },
+        deletedAt: null,
+      },
+      data: { deletedAt: new Date() },
     });
-    const existingCaseIds = existingPaymentCases.map((p) => p.caseId);
+
+    const existingPaymentCases = await prisma.paymentCase.findMany({
+      select: { caseId: true, id: true, deletedAt: true },
+    });
+    const existingCaseMap = new Map(existingPaymentCases.map((p) => [p.caseId, p]));
 
     const acceptedCases = await prisma.acquisitionCase.findMany({
       where: {
         status: CaseStatus.OFFER_ACCEPTED,
-        ...(existingCaseIds.length > 0 ? { caseId: { notIn: existingCaseIds } } : {}),
       },
       include: {
         landParcel: {
@@ -1062,41 +1122,81 @@ export async function getAllCases(userRole?: string, userId?: string) {
     });
 
     for (const ac of acceptedCases) {
-      const primaryOwner = ac.landParcel?.ownerships?.[0]?.landOwner;
-      const amount = ac.compensationReports?.[0]?.totalCompensation
-        ? Number(ac.compensationReports[0].totalCompensation)
-        : ac.offerLetters?.[0]?.offerAmount
-        ? Number(ac.offerLetters[0].offerAmount)
-        : 0;
+      const existing = existingCaseMap.get(ac.caseId);
+      if (existing) {
+        if (existing.deletedAt != null) {
+          // Restore previously soft-deleted PaymentCase upon re-acceptance
+          await prisma.paymentCase.update({
+            where: { id: existing.id },
+            data: { deletedAt: null },
+          });
+        }
+      } else {
+        const primaryOwner = ac.landParcel?.ownerships?.[0]?.landOwner;
+        const amount = ac.compensationReports?.[0]?.totalCompensation
+          ? Number(ac.compensationReports[0].totalCompensation)
+          : ac.offerLetters?.[0]?.offerAmount
+          ? Number(ac.offerLetters[0].offerAmount)
+          : 0;
 
-      const m1 = await prisma.blockchainRecord.findFirst({
-        where: { caseId: ac.caseId, milestone: "AWARD", status: BlockchainStatus.PUBLISHED },
-      });
-      const initialStatus = m1
-        ? PaymentStatus.BANK_DETAILS_PENDING
-        : PaymentStatus.BANK_DETAILS_AND_M1_PENDING;
+        const m1 = await prisma.blockchainRecord.findFirst({
+          where: { caseId: ac.caseId, milestone: "AWARD", status: BlockchainStatus.PUBLISHED },
+        });
+        const initialStatus = m1
+          ? PaymentStatus.BANK_DETAILS_PENDING
+          : PaymentStatus.BANK_DETAILS_AND_M1_PENDING;
 
-      const pmtId = await newPaymentId();
-      await prisma.paymentCase.create({
-        data: {
-          id: pmtId,
-          caseId: ac.caseId,
-          beneficiaryId: primaryOwner?.ownerId || `BEN-${ac.caseId}`,
-          amount,
-          accountHolderName: primaryOwner?.name || null,
-          phoneNumber: primaryOwner?.contact || null,
-          myKadNumber: primaryOwner?.nric || null,
-          status: initialStatus,
-          requiredSignatures: 0,
-          currentSignatures: 0,
-        },
+        const pmtId = await newPaymentId();
+        await prisma.paymentCase.create({
+          data: {
+            id: pmtId,
+            caseId: ac.caseId,
+            beneficiaryId: primaryOwner?.ownerId || `BEN-${ac.caseId}`,
+            amount,
+            accountHolderName: primaryOwner?.name || null,
+            phoneNumber: primaryOwner?.contact || null,
+            myKadNumber: primaryOwner?.nric || null,
+            status: initialStatus,
+            requiredSignatures: 0,
+            currentSignatures: 0,
+          },
+        });
+      }
+
+      // Also ensure blockchainRecord exists for Milestone 1 (AWARD)
+      const existingBcn = await prisma.blockchainRecord.findUnique({
+        where: { caseId_milestone: { caseId: ac.caseId, milestone: "AWARD" } },
       });
+      if (!existingBcn) {
+        const formHHash = ac.offerLetters?.[0]?.blockchainHash || "0x0000000000000000000000000000000000000000000000000000000000000000";
+        const bcnId = await newRecordId();
+        await prisma.blockchainRecord.create({
+          data: {
+            id: bcnId,
+            caseId: ac.caseId,
+            milestone: "AWARD",
+            onChainKey: `${ac.caseId}#M1`,
+            documentHash: formHHash,
+            status: BlockchainStatus.READY_TO_PUBLISH,
+            createdAt: new Date(),
+          },
+        });
+      } else if (existingBcn.deletedAt != null) {
+        await prisma.blockchainRecord.update({
+          where: { id: existingBcn.id },
+          data: { deletedAt: null },
+        });
+      }
     }
   } catch (err) {
     console.error("[payment_service] Error syncing accepted cases to payment cases:", err);
   }
 
   const cases = await prisma.paymentCase.findMany({
+    where: {
+      deletedAt: null,
+      caseId: { in: Array.from(eligibleCaseIds) },
+    },
     include: {
       authorisations: true,
       receipt: true,
@@ -1188,7 +1288,10 @@ export async function getAllCases(userRole?: string, userId?: string) {
   const enriched = await Promise.all(cases.map(enrichPaymentWithAdminNames));
   const withM1 = await attachM1Status(enriched);
   await syncStatuses(withM1);
-  return withM1.map(formatPaymentResponse);
+  return withM1.map((c) => ({
+    ...formatPaymentResponse(c),
+    caseStatus: eligibleCaseMap.get(c.caseId) || "OFFER_ACCEPTED",
+  }));
 }
 
 export async function getSavedBankDetails(userId?: string, myKadNumber?: string, userName?: string) {
@@ -1458,16 +1561,37 @@ export async function saveMemberBankDetails(
 }
 
 export async function getFailedTransactions() {
+  const eligibleAcquisitionCases = await prisma.acquisitionCase.findMany({
+    where: {
+      status: {
+        in: [
+          CaseStatus.OFFER_ACCEPTED,
+          CaseStatus.PAYMENT_IN_PROGRESS,
+          CaseStatus.PAYMENT_COMPLETED,
+          CaseStatus.CASE_CLOSED,
+        ],
+      },
+    },
+    select: { caseId: true, status: true },
+  });
+  const eligibleCaseMap = new Map(eligibleAcquisitionCases.map((c) => [c.caseId, c.status]));
+  const eligibleCaseIds = Array.from(new Set(eligibleAcquisitionCases.map((c) => c.caseId)));
+
   // GA-rejected transfers (FR-018) carry no failedTransaction row on purpose —
   // they enter this register by status instead, awaiting "Mark as Resolved".
   const cases = await prisma.paymentCase.findMany({
     where: {
+      deletedAt: null,
+      caseId: { in: eligibleCaseIds },
       OR: [{ failedTransactions: { some: {} } }, { status: PaymentStatus.TRANSFER_REJECTED }],
     },
     include: { failedTransactions: true, authorisations: true },
     orderBy: { updatedAt: "desc" },
   });
-  return cases.map(formatPaymentResponse);
+  return cases.map((c) => ({
+    ...formatPaymentResponse(c),
+    caseStatus: eligibleCaseMap.get(c.caseId) || "OFFER_ACCEPTED",
+  }));
 }
 
 export async function disputePayment(
@@ -1672,15 +1796,36 @@ export async function rejectBankTransfer(caseId: string, errorReason: string, is
 }
 
 export async function getBankHistory() {
+  const eligibleAcquisitionCases = await prisma.acquisitionCase.findMany({
+    where: {
+      status: {
+        in: [
+          CaseStatus.OFFER_ACCEPTED,
+          CaseStatus.PAYMENT_IN_PROGRESS,
+          CaseStatus.PAYMENT_COMPLETED,
+          CaseStatus.CASE_CLOSED,
+        ],
+      },
+    },
+    select: { caseId: true, status: true },
+  });
+  const eligibleCaseMap = new Map(eligibleAcquisitionCases.map((c) => [c.caseId, c.status]));
+  const eligibleCaseIds = Array.from(new Set(eligibleAcquisitionCases.map((c) => c.caseId)));
+
   const cases = await prisma.paymentCase.findMany({
     where: {
+      deletedAt: null,
+      caseId: { in: eligibleCaseIds },
       status: { in: [PaymentStatus.TRANSFER_SUCCEED, PaymentStatus.PAID, PaymentStatus.TRANSFER_FAILED, PaymentStatus.TRANSFER_REJECTED] },
     },
     include: { receipt: true, failedTransactions: true, authorisations: true },
     orderBy: { updatedAt: "desc" },
     take: 30,
   });
-  return cases.map(formatPaymentResponse);
+  return cases.map((c) => ({
+    ...formatPaymentResponse(c),
+    caseStatus: eligibleCaseMap.get(c.caseId) || "OFFER_ACCEPTED",
+  }));
 }
 
 export async function confirmPaymentReceipt(

@@ -39,7 +39,10 @@ The application uses standard `react-router-dom` routing. All pages are rendered
 1. **Auto-hiding Navbar**: A sticky `<Navbar />` with SVG Logo mark and "Smart Contract Resettlement" wordmark that listens to scroll direction.
 2. **Global Footer**: A `<Footer />` consistently applied at the bottom of every page.
 3. **Notification Provider**: Root-level state for triggering MD3-compliant toast notifications from any page or component.
-4. **Toast Stacking Rule (LOCKED)**: The right-hand toast stack (`NotificationSystem`) always renders at the very front of the screen — `z-index: 100000`, above every modal overlay (`md-modal-overlay` sits at `99999`) and above any page content. Success, error, warning, and info toasts must never be hidden behind a modal. **Toast duration rule (LOCKED 2026-09-12)**: success auto-dismisses after 5s, general/info after 8s, and **errors never auto-dismiss** — an error toast stays on screen until the user closes it manually (industry standard: transient confirmations are brief, failures persist until acknowledged). Every toast keeps a visible close button.
+4. **Toast Stacking & Duration Rule (LOCKED 2026-09-12, ENHANCED 2026-09-14)**: The right-hand toast stack (`NotificationSystem`) always renders at the very front of the screen — `z-index: 100000`, above every modal overlay (`md-modal-overlay` sits at `99999`) and above any page content. Success, error, warning, and info toasts must never be hidden behind a modal.
+   - **Duration**: success auto-dismisses after 5s, general/info after 8s, and **errors never auto-dismiss** — an error toast stays on screen until the user closes it manually (industry standard: transient confirmations are brief, failures persist until acknowledged).
+   - **Guaranteed Non-Overflow Architecture**: Toast content uses `min-w-0 flex-1` and `break-words` with `line-clamp-3` for message text, guaranteeing that long technical payloads, URLs, or JSON dumps never expand the flex container or push the close button off-screen. The dismiss (`X`) button is strictly pinned as `flex-shrink-0` at the top right.
+   - **GA-Friendly Normalization**: Uncaught exceptions or RPC rejections (e.g. Infura 401 Unauthorized) are automatically intercepted by `parseAppError` into polite, human-readable explanations accompanied by an actionable guidance card (e.g., setup `.env`) and an `[Error Details]` button linking to a full diagnostics modal.
 
 ## Design Tokens
 
@@ -182,7 +185,12 @@ Standard Material Design 3 responsive pagination bar for all data tables:
   - When `currentPage` is in the middle: Displays `1, ..., currentPage - 1, currentPage, currentPage + 1, ..., totalPages`.
 - **Navigation Controls**: Left `<ChevronLeft />` and right `<ChevronRight />` arrow buttons with proper disabled states on boundaries (`currentPage === 1` and `currentPage === totalPages`).
 - **Visual Styling**: Active page button rendered in `bg-md-primary text-md-on-primary` with subtle shadow (`shadow-sm`); hover state on inactive numbers uses `hover:bg-md-primary/8` with smooth bouncy scale (`scale-105`); ellipsis rendered as non-interactive muted dots `…`.
-- **Record Summary**: Left section displays `Showing {start}–{end} of {totalCount} {itemLabel}`.
+### 9. Notification & Error Diagnostics System (`NotificationSystem.tsx`, `errorParser.ts`)
+Comprehensive MD3 alerting and error diagnostic framework designed for high-stakes administrative workflows:
+- **Automatic Exception Normalization (`parseAppError`)**: Raw technical errors (e.g. Infura/Alchemy JSON-RPC 401 Unauthorized, MetaMask user rejections, out-of-gas, contract reverts, or server 500s) are automatically parsed into human-friendly language rather than intimidating code dumps.
+- **Actionable Guidance Card**: Every recognized error automatically displays an advisory tip (e.g., "Please configure a valid SEPOLIA_RPC_URL in your root .env file and restart the development server") directly inside the toast and diagnostic modal.
+- **Guaranteed Pinned Dismiss & Non-Overflow**: The toast layout pairs `min-w-0 flex-1` and `break-words` with `line-clamp-3` for error summaries, strictly preventing horizontal overflow and ensuring the `[ X ]` dismiss button (`flex-shrink-0`) remains pinned at the top-right and immediately clickable.
+- **Full Diagnostics Modal (`ErrorDetailsModal`)**: Clicking `[ View Error Details ]` on any error toast opens a dedicated MD3 modal displaying the category, friendly guidance, and the complete, unclipped technical payload inside a syntax-styled monospace code container with a one-click `Copy Payload` button for IT support and developer triage.
 
 ## Admin List & Row-Action Patterns
 
@@ -280,3 +288,9 @@ Every status in the Payment and Blockchain modules is mapped to a dedicated CSS 
 17. **Payment Timestamps (LOCKED 2026-09-12)**: every payment-related modal shows the case **Created** and **Last Updated** datetimes (`CaseTimestamps`); payment tables label their datetime column **Updated** (never the ambiguous "Date & Time").
 18. **Dispute Statement Review (LOCKED 2026-09-12)**: a member-uploaded dispute PDF is reviewed via **Open PDF in New Tab** or **Download** from the record modal — never embedded as an iframe inside the modal (the modal is too small for a PDF reader).
 19. **Fullscreen Modal Overlay (LOCKED 2026-09-12)**: every modal in every portal uses the shared `Modal` component (portal to `<body>`, `.md-modal-overlay` fixed inset-0, z-index 99999). Hand-rolled `fixed z-50` overlays are forbidden — inside GSAP-transformed containers they lose viewport anchoring and leave the topbar un-covered.
+20. **Operational Locking & Transaction Protection (LOCKED 2026-09-14)**:
+    - **Modal Lock During Active Operations**: When an asynchronous statutory action is executing (`loading = true`, such as publishing or voiding on-chain records), modal close controls are strictly locked. The top-right close `[ X ]` button is visually drained (`opacity-20`) and disabled, backdrop clicks are blocked (`preventBackdropClose = true`), the Escape key is silenced, and the Cancel button is disabled. Administrators cannot dismiss the modal until a definitive blockchain response (success or failure) is received.
+    - **Tab Unload Protection (`beforeunload`)**: If an administrator attempts to refresh the page, close the browser tab, or navigate away while a blockchain transaction is in progress, the browser immediately halts with a `beforeunload` warning prompt alerting them that leaving will cancel the publishment.
+    - **Immediate Cancellation on Unload**: If the browser tab is closed or refreshed, the frontend runtime immediately triggers cancellation guards (`isCancelledRef`), terminating downstream database recording and preventing orphaned record state.
+    - **Error Transparency & Diagnostics**: Any transaction failure surfaces an error toast with normalized, human-friendly wording and actionable guidance. Raw stack traces are never dumped directly into toasts; instead, a dedicated `[ Error Details ]` action opens the `ErrorDetailsModal` providing full technical output with one-click copy functionality.
+

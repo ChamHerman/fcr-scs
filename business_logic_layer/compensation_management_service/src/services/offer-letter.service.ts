@@ -5,6 +5,7 @@ import * as path from "path";
 import { CaseStatus, OfferStatus, ObjectionStatus, Prisma, PaymentStatus, BlockchainStatus } from "@prisma/client";
 import { buildNricConditions } from "../utils/nric.utils";
 import { newPaymentId } from "../../../payment_service/src/services/payment.service";
+import { newRecordId } from "../../../smart_contract_service/src/services/blockchain.service";
 
 export interface OfferLetterFilters {
   caseId?: string;
@@ -467,6 +468,7 @@ export async function acceptOffer(
       const primaryOwner = allOwners[0];
       const existingPmt = await tx.paymentCase.findUnique({
         where: { caseId: offer.caseId },
+        include: { receiverBankDetails: true },
       });
       if (!existingPmt) {
         const m1 = await tx.blockchainRecord.findFirst({
@@ -484,6 +486,62 @@ export async function acceptOffer(
             status: m1 ? PaymentStatus.BANK_DETAILS_PENDING : PaymentStatus.BANK_DETAILS_AND_M1_PENDING,
             requiredSignatures: 0,
             currentSignatures: 0,
+          },
+        });
+      } else {
+        // Reuse existing PaymentCase record (same PMT ID)
+        // Restore from soft-delete if it was previously cancelled during grace period
+        const m1 = await tx.blockchainRecord.findFirst({
+          where: { caseId: offer.caseId, milestone: "AWARD", status: BlockchainStatus.PUBLISHED },
+        });
+        const hasBank = Boolean(
+          existingPmt.bankName ||
+          existingPmt.accountNumber ||
+          existingPmt.receiverBankDetails?.accountNumber
+        );
+
+        let initialStatus: PaymentStatus;
+        if (!hasBank) {
+          initialStatus = m1 ? PaymentStatus.BANK_DETAILS_PENDING : PaymentStatus.BANK_DETAILS_AND_M1_PENDING;
+        } else {
+          // Bank details were preserved from prior submission
+          initialStatus = m1 ? PaymentStatus.READY_TO_INITIATE : PaymentStatus.AWARD_NOTARIZATION_PENDING;
+        }
+
+        await tx.paymentCase.update({
+          where: { id: existingPmt.id },
+          data: {
+            deletedAt: null,
+            amount: Number(offer.offerAmount),
+            status: initialStatus,
+          },
+        });
+      }
+
+      // Dynamically ingest or restore blockchain record for Milestone 1 (AWARD)
+      const existingBcn = await tx.blockchainRecord.findUnique({
+        where: { caseId_milestone: { caseId: offer.caseId, milestone: "AWARD" } },
+      });
+      if (!existingBcn) {
+        const bcnId = await newRecordId();
+        await tx.blockchainRecord.create({
+          data: {
+            id: bcnId,
+            caseId: offer.caseId,
+            milestone: "AWARD",
+            onChainKey: `${offer.caseId}#M1`,
+            documentHash: formHHash || "0x0000000000000000000000000000000000000000000000000000000000000000",
+            status: BlockchainStatus.READY_TO_PUBLISH,
+            createdAt: new Date(),
+          },
+        });
+      } else if (existingBcn.deletedAt != null) {
+        await tx.blockchainRecord.update({
+          where: { id: existingBcn.id },
+          data: {
+            deletedAt: null,
+            documentHash: formHHash || existingBcn.documentHash,
+            status: existingBcn.status === BlockchainStatus.PUBLISHED ? BlockchainStatus.PUBLISHED : BlockchainStatus.READY_TO_PUBLISH,
           },
         });
       }
@@ -690,6 +748,23 @@ export async function cancelAcceptance(
       await tx.acquisitionCase.update({
         where: { caseId: offer.caseId },
         data: { status: CaseStatus.OFFER_ISSUED },
+      });
+
+      // Soft-delete the associated payment case so it disappears from the active payment dashboard
+      // while retaining its sequential PMT-XXXX id and submitted bank details
+      await tx.paymentCase.updateMany({
+        where: { caseId: offer.caseId },
+        data: { deletedAt: new Date() },
+      });
+
+      // Soft-delete the ready-to-publish blockchain record so it disappears from queues
+      await tx.blockchainRecord.updateMany({
+        where: {
+          caseId: offer.caseId,
+          milestone: "AWARD",
+          status: BlockchainStatus.READY_TO_PUBLISH,
+        },
+        data: { deletedAt: new Date() },
       });
     }
 

@@ -174,12 +174,12 @@ export const VoidLedger: React.FC = () => {
             <thead>
               <tr>
                 <th style={{ width: '135px' }}>Blockchain ID</th>
-                <th style={{ width: '140px' }}>Case ID</th>
-                <th style={{ width: '110px' }}>Milestone</th>
+                <th style={{ width: '115px' }}>Case ID</th>
+                <th style={{ width: '90px' }}>Milestone</th>
                 <th style={{ width: '110px' }}>Document Hash</th>
-                <th style={{ width: '110px' }}>Transaction Hash</th>
-                <th style={{ width: '140px' }}>Published Date</th>
-                <th style={{ width: '125px' }}>Status</th>
+                <th style={{ width: '95px' }}>Transaction Hash</th>
+                <th style={{ width: '135px' }}>Published Date</th>
+                <th style={{ width: '215px', paddingRight: '20px' }}>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -270,7 +270,7 @@ export const VoidLedger: React.FC = () => {
                           )}
                         </td>
                         <td>{fmtDate(row.publishedAt)}</td>
-                        <td>{ledgerBadge(row.status)}</td>
+                        <td style={{ paddingRight: '20px' }}>{ledgerBadge(row.status)}</td>
                       </tr>
                     </React.Fragment>
                   );

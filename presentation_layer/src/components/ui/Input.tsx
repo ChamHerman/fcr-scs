@@ -5,15 +5,19 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
   label: string;
   error?: string;
   prefix?: React.ReactNode;
+  prefixClassName?: string;
   suffix?: React.ReactNode;
+  inputClassName?: string;
 }
 
 export const Input: React.FC<InputProps> = ({
   label,
   error,
   prefix,
+  prefixClassName,
   suffix,
   className,
+  inputClassName,
   id,
   disabled,
   ...props
@@ -33,7 +37,13 @@ export const Input: React.FC<InputProps> = ({
       </label>
       <div className="relative flex items-center w-full">
         {prefix && (
-          <div className="absolute left-4 top-[26px] -translate-y-1/2 text-sm text-md-on-surface-variant pointer-events-none z-10">
+          <div
+            className={classNames(
+              "absolute left-5 top-[36px] -translate-y-1/2 text-sm font-mono font-semibold text-md-on-surface pointer-events-none z-10 flex items-center select-none",
+              disabled ? "opacity-60" : "",
+              prefixClassName
+            )}
+          >
             {prefix}
           </div>
         )}
@@ -42,12 +52,13 @@ export const Input: React.FC<InputProps> = ({
           disabled={disabled}
           className={classNames(
             "bg-md-surface-container-low text-md-on-surface w-full h-14 pt-5 pb-1 rounded-xl border transition-colors duration-200 focus:outline-none text-sm placeholder:text-md-on-surface-variant/60 font-normal",
-            prefix ? "pl-11" : "px-5",
+            prefix ? "pl-[54px]" : "px-5",
             suffix ? "pr-24" : "px-5",
             error
               ? "border-md-error focus:border-md-error ring-1 ring-md-error/50"
               : "border-md-outline/30 focus:border-md-primary",
-            disabled ? "grayscale opacity-60 cursor-not-allowed" : ""
+            disabled ? "grayscale opacity-60 cursor-not-allowed" : "",
+            inputClassName
           )}
           {...props}
         />

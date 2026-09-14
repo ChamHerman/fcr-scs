@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, AlertOctagon, Loader2, FileWarning, ShieldAlert, Activity, RefreshCw } from 'lucide-react';
+import { Clock, User, AlertOctagon, Loader2, FileWarning, ShieldAlert, Activity, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
@@ -158,7 +158,7 @@ export default function FailedTransactions() {
 
       <div className="action-bar">
         <div className="left">
-          <Activity size={18} />
+          <AlertTriangle size={18} />
           <span className="count">Failed transactions ({filtered.length})</span>
         </div>
         <div className="right">
@@ -176,7 +176,7 @@ export default function FailedTransactions() {
                 <th style={{ width: '150px' }}>Beneficiary</th>
                 <th style={{ width: '280px' }}>Error</th>
                 <th style={{ width: '160px' }}>Attempted At</th>
-                <th style={{ width: '170px' }}>Status</th>
+                <th style={{ width: '180px' }}>Status</th>
               </tr>
             </thead>
             <tbody>

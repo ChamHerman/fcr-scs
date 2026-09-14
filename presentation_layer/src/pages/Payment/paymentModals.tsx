@@ -31,6 +31,8 @@ import { Checkbox } from '../../components/ui/Checkbox';
 import { paymentApi } from '../../services/paymentApi';
 import { landAcquisitionApi } from '../../services/landAcquisitionApi';
 import { blockchainApi } from '../../services/blockchainApi';
+import { compensationApi } from '../../services/compensationApi';
+import { formatGraceCountdown } from '../SmartContract/PublishLedger';
 import { BASE_URL } from '../../services/api';
 import { CASE_STATUS_CLASS_MAP, CASE_STATUS_LABEL_MAP } from '../../constants/landAcquisition';
 import { useNotification } from '../../components/ui/NotificationSystem';
@@ -84,6 +86,8 @@ export interface PaymentRow {
   disputeUploadedAt?: string | null;
   /** Whether Milestone 1 (Statutory Award) is notarized on-chain (FR-019). */
   isM1Published?: boolean;
+  /** Statutory case status from Land Acquisition (e.g. OFFER_ACCEPTED, OFFER_ISSUED). */
+  caseStatus?: string;
 }
 
 export const PRE_TRANSFER_STATUSES = [
@@ -266,16 +270,46 @@ export const bankBeneficiaryEvents = (pc: PaymentRow): BankBeneficiaryEvent[] =>
 };
 
 /** Case created / updated timestamps — shown in every payment-related modal. */
-export const CaseTimestamps: React.FC<{ pc: PaymentRow }> = ({ pc }) => (
-  <div className="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-md-on-surface-variant">
-    <span>
-      <span className="font-semibold">Case Created:</span> {fmtDate(pc.createdAt)}
-    </span>
-    <span>
-      <span className="font-semibold">Last Updated:</span> {fmtDate(pc.updatedAt)}
-    </span>
-  </div>
-);
+export const CaseTimestamps: React.FC<{ pc: PaymentRow; caseData?: any }> = ({ pc, caseData: propCaseData }) => {
+  const [fetchedCase, setFetchedCase] = useState<any>(null);
+
+  useEffect(() => {
+    if (propCaseData || !pc?.caseId) return;
+    let isMounted = true;
+    landAcquisitionApi
+      .getCaseById(pc.caseId)
+      .then((res: any) => {
+        if (isMounted) setFetchedCase(res?.data || res?.case || res);
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [pc?.caseId, propCaseData]);
+
+  const caseObj = propCaseData || fetchedCase;
+  const caseCreated = caseObj?.createdAt || caseObj?.registrationDate || pc.createdAt;
+  const caseUpdated = caseObj?.updatedAt || pc.updatedAt;
+  const acceptedAt =
+    caseObj?.offerLetters?.find((o: any) => o.status === 'ACCEPTED' || o.acceptedAt)?.acceptedAt ||
+    caseObj?.offerLetters?.[0]?.acceptedAt;
+
+  return (
+    <div className="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-md-on-surface-variant">
+      <span>
+        <span className="font-semibold">Case Created:</span> {fmtDate(caseCreated)}
+      </span>
+      {acceptedAt && (
+        <span>
+          <span className="font-semibold">Offer Accepted:</span> {fmtDate(acceptedAt)}
+        </span>
+      )}
+      <span>
+        <span className="font-semibold">Last Updated:</span> {fmtDate(caseUpdated)}
+      </span>
+    </div>
+  );
+};
 
 export const paymentBadge = (status: string, currentSigs?: number, requiredSigs?: number) => {  const s = normalizePaymentStatus(status);
   const cls = paymentStatusClassMap[s] ?? 'status-pending-approval';
@@ -301,51 +335,95 @@ export const etherscanTxUrl = (txHash?: string | null, chainId?: number) => {
 
 const fmtHash = (h?: string | null) => (h ? `${h.slice(0, 10)}…${h.slice(-6)}` : '');
 
-/** Fetches the Milestone 1 (Statutory Award) blockchain record for a case. */
+const ACCEPTANCE_GRACE_PERIOD_MS = 24 * 60 * 60 * 1000;
+
+/** Fetches the Milestone 1 (Statutory Award) blockchain record for a case and its grace status. */
 export const useMilestone1Record = (caseId?: string) => {
   const [record, setRecord] = useState<any | null | 'loading'>(caseId ? 'loading' : null);
+  const [acceptedAt, setAcceptedAt] = useState<string | null>(null);
+  const [now, setNow] = useState<number>(Date.now());
 
   useEffect(() => {
     if (!caseId) {
       setRecord(null);
+      setAcceptedAt(null);
       return;
     }
     let isMounted = true;
     setRecord('loading');
-    blockchainApi
-      .getRecords()
-      .then((res: any) => {
+
+    Promise.all([
+      blockchainApi.getRecords().catch(() => ({ records: [] })),
+      compensationApi.getAllOfferLetters({ limit: 200 } as any).catch(() => ({ offers: [], offerLetters: [] })),
+      landAcquisitionApi.getCaseById(caseId).catch(() => null),
+    ])
+      .then(([recordsRes, offersRes, caseRes]: [any, any, any]) => {
         if (!isMounted) return;
-        const list: any[] = res?.records || [];
-        setRecord(list.find((r) => r.caseId === caseId && (r.milestone ?? 'AWARD') === 'AWARD') ?? null);
+        const list: any[] = recordsRes?.records || [];
+        const m1Rec = list.find((r) => r.caseId === caseId && (r.milestone ?? 'AWARD') === 'AWARD') ?? null;
+        setRecord(m1Rec);
+
+        const offers: any[] = offersRes?.offers || offersRes?.offerLetters || [];
+        const foundOffer = offers.find((o: any) => o.caseId === caseId);
+        const caseObj = caseRes?.data || caseRes?.case || caseRes;
+        const caseOffer = caseObj?.offerLetters?.find((o: any) => o.status === 'ACCEPTED' || o.acceptedAt);
+        const accTime = foundOffer?.acceptedAt || caseOffer?.acceptedAt || null;
+        setAcceptedAt(accTime);
       })
       .catch(() => {
-        if (isMounted) setRecord(null);
+        if (isMounted) {
+          setRecord(null);
+          setAcceptedAt(null);
+        }
       });
+
     return () => {
       isMounted = false;
     };
   }, [caseId]);
 
+  // Tick clock every 10s to keep countdown active
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(Date.now());
+    }, 10_000);
+    return () => clearInterval(timer);
+  }, []);
+
   const loaded = record !== 'loading';
   const rawStatus = String((record as any)?.status || '').toUpperCase().replace(/[\s_]+/g, '_');
+  const isM1Published = loaded && !!record && rawStatus === 'PUBLISHED';
+  const isVoidPending = loaded && !!record && rawStatus === 'VOID_PENDING';
+
+  const acceptedAtMs = acceptedAt ? new Date(acceptedAt).getTime() : null;
+  const graceEndsAtMs = acceptedAtMs != null ? acceptedAtMs + ACCEPTANCE_GRACE_PERIOD_MS : null;
+  const isGraceLocked = !isM1Published && !isVoidPending && graceEndsAtMs != null && now < graceEndsAtMs;
+  const remainingMs = isGraceLocked && graceEndsAtMs != null ? Math.max(0, graceEndsAtMs - now) : 0;
+  const countdown = isGraceLocked ? formatGraceCountdown(remainingMs) : '';
+
   return {
     record: loaded ? (record as any) : null,
     loading: !loaded,
-    isM1Published: loaded && !!record && rawStatus === 'PUBLISHED',
-    isVoidPending: loaded && !!record && rawStatus === 'VOID_PENDING',
+    isM1Published,
+    isVoidPending,
+    isGraceLocked,
+    remainingMs,
+    countdown,
+    graceEndsAt: graceEndsAtMs,
+    acceptedAt,
   };
 };
 
 /**
  * Blockchain status banner for Milestone 1 (Statutory Award notarization).
  * Green tonal when the award is anchored on-chain (with an Etherscan link),
- * amber tonal while notarization is pending, red outline when the record is
- * awaiting on-chain void after cancellation (VOID_PENDING).
+ * red outline when the record is awaiting on-chain void after cancellation (VOID_PENDING),
+ * amber tonal when locked during statutory 24-hour acceptance cancellation grace period,
+ * and Electric Sky tonal when grace period has concluded and award is ready to publish.
  */
 export const Milestone1Banner: React.FC<{ caseId: string }> = ({ caseId }) => {
   const navigate = useNavigate();
-  const { record, loading, isM1Published, isVoidPending } = useMilestone1Record(caseId);
+  const { record, loading, isM1Published, isVoidPending, isGraceLocked, countdown } = useMilestone1Record(caseId);
 
   if (loading || !caseId) return null;
 
@@ -405,17 +483,50 @@ export const Milestone1Banner: React.FC<{ caseId: string }> = ({ caseId }) => {
     );
   }
 
+  if (isGraceLocked) {
+    return (
+      <div className="bg-amber-500/15 dark:bg-amber-500/25 border-2 border-amber-500/50 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+        <div className="flex items-start gap-2.5 min-w-0">
+          <Lock size={20} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div className="text-xs">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider bg-amber-500 text-white dark:bg-amber-400 dark:text-gray-900 shadow-2xs">
+                LOCKED
+              </span>
+              <span className="font-bold text-amber-900 dark:text-amber-200 text-xs sm:text-sm">
+                Milestone 1 Pending On-Chain Notarization
+              </span>
+            </div>
+            <div className="text-md-on-surface-variant mt-1 leading-relaxed">
+              Disbursement initiation is locked. The statutory award (Form H) is within its 24-hour acceptance cancellation grace period{countdown ? ` (${countdown} left)` : ''} before on-chain notarization can proceed.
+            </div>
+          </div>
+        </div>
+        <Button
+          size="sm"
+          variant="filled"
+          disabled
+          title={`Milestone 1 unlocks when the statutory 24-hour acceptance grace period ends (${countdown} left)`}
+          className="shrink-0 !bg-amber-600 !text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm self-start sm:self-center"
+        >
+          <Lock size={14} />
+          <span>Locked ({countdown || 'Grace Period'})</span>
+        </Button>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-amber-500/15 dark:bg-amber-500/25 border-2 border-amber-500/50 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+    <div className="bg-sky-500/10 dark:bg-sky-500/20 border-2 border-sky-500/40 dark:border-sky-500/50 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
       <div className="flex items-start gap-2.5 min-w-0">
-        <AlertTriangle size={20} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+        <UploadCloud size={20} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
         <div className="text-xs">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider bg-amber-500 text-white dark:bg-amber-400 dark:text-gray-900 shadow-2xs">
-              LOCKED
+            <span className="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider bg-sky-600 text-white dark:bg-sky-500 dark:text-gray-900 shadow-2xs">
+              READY
             </span>
-            <span className="font-bold text-amber-900 dark:text-amber-200 text-xs sm:text-sm">
-              Milestone 1 Pending On-Chain Notarization
+            <span className="font-bold text-sky-950 dark:text-sky-200 text-xs sm:text-sm">
+              Milestone 1 Ready for On-Chain Notarization
             </span>
           </div>
           <div className="text-md-on-surface-variant mt-1 leading-relaxed">
@@ -426,7 +537,7 @@ export const Milestone1Banner: React.FC<{ caseId: string }> = ({ caseId }) => {
       <Button
         size="sm"
         variant="filled"
-        className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm self-start sm:self-center cursor-pointer"
+        className="shrink-0 !bg-sky-600 hover:!bg-sky-700 !text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm self-start sm:self-center cursor-pointer"
         onClick={() => navigate(`/admin/blockchain/publish?caseId=${encodeURIComponent(caseId)}`)}
       >
         <UploadCloud size={14} />
@@ -447,7 +558,7 @@ export const ViewDetailsModal: React.FC<{
   const { notify } = useNotification();
   const { user } = useAuth();
   const [caseData, setCaseData] = useState<any>(null);
-  const { isM1Published } = useMilestone1Record(pc?.caseId);
+  const { isM1Published, isGraceLocked, countdown } = useMilestone1Record(pc?.caseId);
 
   useEffect(() => {
     if (!pc?.caseId) {
@@ -560,7 +671,9 @@ export const ViewDetailsModal: React.FC<{
               !hasBankDetails(pc)
                 ? 'Awaiting beneficiary bank details before transfer can be initiated'
                 : !isM1Published
-                ? 'Initiation is locked: Milestone 1 (Statutory Award) must be published on the blockchain first'
+                ? isGraceLocked
+                  ? `Initiation is locked: 24-hour acceptance cancellation grace period active (${countdown} left)`
+                  : 'Initiation is locked: Milestone 1 (Statutory Award) must be published on the blockchain first'
                 : undefined
             }
             onClick={() => {
@@ -827,7 +940,7 @@ export const ViewDetailsModal: React.FC<{
             </div>
           </div>
 
-          <CaseTimestamps pc={pc} />
+          <CaseTimestamps pc={pc} caseData={caseData} />
         </div>
 
         {/* Operational Payment Details */}

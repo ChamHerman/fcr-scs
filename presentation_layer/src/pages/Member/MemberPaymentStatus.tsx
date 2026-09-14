@@ -707,28 +707,29 @@ export default function MemberPaymentStatus() {
       </div>
 
       {/* Cryptographic Blockchain Proof & Transparency Card (M1 & M2) */}
-      <div className="bg-md-surface-container border border-md-outline/15 rounded-xl p-5 sm:p-6 shadow-sm space-y-5">
+      <div className="bg-md-surface-container/70 border border-md-outline/15 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-md-outline/10">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
-              <ShieldCheck size={18} />
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+              <ShieldCheck size={20} aria-hidden="true" />
             </div>
             <div>
               <h3 className="text-sm font-bold text-md-on-surface">
                 Cryptographic Blockchain Proof &amp; Transparency
               </h3>
               <p className="text-xs text-md-on-surface-variant">
-                Immutable proof on Ethereum Sepolia ledger. Zero possibility of hidden changes or falsified records.
+                Dual-milestone immutable verification on Ethereum Sepolia ledger.
               </p>
             </div>
           </div>
 
           <Link
             to="/member/verify-audit"
-            className="inline-flex items-center gap-1 text-xs font-semibold text-md-primary hover:underline shrink-0"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-md-primary hover:underline shrink-0 focus-visible:ring-2 focus-visible:ring-md-primary focus-visible:outline-none rounded"
+            aria-label="Verify Document File on blockchain audit trail"
           >
             <span>Verify Document File</span>
-            <ArrowRight size={13} />
+            <ArrowRight size={14} aria-hidden="true" />
           </Link>
         </div>
 
@@ -736,72 +737,73 @@ export default function MemberPaymentStatus() {
           {/* Milestone 1 Card */}
           <div className="p-4 rounded-xl bg-md-surface-container-low border border-md-outline/15 space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-md-primary/10 text-md-primary">
+              <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-md-primary/10 text-md-primary">
                 Milestone 1 · Statutory Award
               </span>
               {m1Record ? (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30">
-                  <CheckCircle2 size={11} />
+                <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                  <CheckCircle2 size={13} aria-hidden="true" />
                   <span>On-Chain Notarized</span>
                 </span>
               ) : (
-                <span className="text-[10px] font-medium text-amber-700 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/30">
+                <span className="text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/30">
                   Pending Notarization
                 </span>
               )}
             </div>
 
             <div>
-              <h4 className="text-xs font-bold text-md-on-surface">
-                Form H Award Offer Acceptance
+              <h4 className="text-sm font-bold text-md-on-surface">
+                Form H Award Acceptance
               </h4>
-              <p className="text-[11px] text-md-on-surface-variant leading-relaxed mt-0.5">
-                The government compensation award accepted by you is anchored on the blockchain. This locks the payout entitlement so it can never be revoked or altered.
+              <p className="text-xs text-md-on-surface-variant leading-relaxed mt-0.5">
+                Compensation award permanently anchored on-chain, securing your payout entitlement.
               </p>
             </div>
 
             {m1Record ? (
-              <div className="space-y-1.5 text-xs pt-2 border-t border-md-outline/10">
+              <div className="space-y-2 text-xs pt-2.5 border-t border-md-outline/10">
                 <div className="flex justify-between items-center">
-                  <span className="text-md-on-surface-variant text-[11px]">Ledger Key</span>
-                  <span className="font-mono text-[11px] text-md-on-surface font-semibold">
+                  <span className="text-md-on-surface-variant font-medium">Ledger Key</span>
+                  <span className="font-mono text-xs text-md-on-surface font-bold">
                     {m1Record.onChainKey || `${selectedCaseId}#M1`}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-md-on-surface-variant text-[11px]">Tx Hash</span>
-                  <div className="flex items-center gap-1">
+                  <span className="text-md-on-surface-variant font-medium">Tx Hash</span>
+                  <div className="flex items-center gap-1.5">
                     <a
                       href={`https://sepolia.etherscan.io/tx/${m1Record.transactionHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="font-mono text-[11px] text-md-primary hover:underline inline-flex items-center gap-0.5"
+                      className="font-mono text-xs font-semibold text-md-primary hover:underline inline-flex items-center gap-1 focus-visible:ring-1 focus-visible:ring-md-primary rounded"
+                      title="View transaction on Etherscan Sepolia"
                     >
                       <span>{m1Record.transactionHash.slice(0, 8)}…{m1Record.transactionHash.slice(-6)}</span>
-                      <ExternalLink size={10} />
+                      <ExternalLink size={11} aria-hidden="true" />
                     </a>
                     <CopyButton value={m1Record.transactionHash} size="sm" title="Copy transaction hash" />
                   </div>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-md-on-surface-variant text-[11px]">Form H SHA-256</span>
-                  <div className="flex items-center gap-1">
-                    <span className="font-mono text-[10px] text-md-on-surface truncate max-w-[130px]">
+                  <span className="text-md-on-surface-variant font-medium">Form H SHA-256</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-xs text-md-on-surface truncate max-w-[160px] sm:max-w-[200px]">
                       {m1Record.documentHash}
                     </span>
-                    <CopyButton value={m1Record.documentHash} size="sm" title="Copy document hash" />
+                    <CopyButton value={m1Record.documentHash} size="sm" title="Copy Form H hash" />
                   </div>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-md-on-surface-variant text-[11px]">Notarised At</span>
-                  <span className="font-mono text-[11px] text-md-on-surface">
+                  <span className="text-md-on-surface-variant font-medium">Notarised At</span>
+                  <span className="font-mono text-xs text-md-on-surface font-medium">
                     {formatDateTime(m1Record.createdAt)}
                   </span>
                 </div>
               </div>
             ) : (
-              <div className="p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/20 text-[11px] text-amber-800 dark:text-amber-300">
-                Awaiting administrative publication after the statutory 24-hour landowner review window elapses.
+              <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 font-medium">
+                Awaiting publication after the statutory review window.
               </div>
             )}
           </div>
@@ -809,72 +811,73 @@ export default function MemberPaymentStatus() {
           {/* Milestone 2 Card */}
           <div className="p-4 rounded-xl bg-md-surface-container-low border border-md-outline/15 space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+              <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
                 Milestone 2 · Settlement &amp; Payout
               </span>
               {m2Record ? (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30">
-                  <CheckCircle2 size={11} />
+                <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                  <CheckCircle2 size={13} aria-hidden="true" />
                   <span>On-Chain Notarized</span>
                 </span>
               ) : (
-                <span className="text-[10px] font-medium text-slate-500 bg-slate-500/10 px-2 py-0.5 rounded-full border border-slate-500/20">
+                <span className="text-xs font-semibold text-slate-500 bg-slate-500/10 px-2.5 py-0.5 rounded-full border border-slate-500/20">
                   Awaiting Settlement
                 </span>
               )}
             </div>
 
             <div>
-              <h4 className="text-xs font-bold text-md-on-surface">
-                RENTAS Payment Receipt &amp; Clearance
+              <h4 className="text-sm font-bold text-md-on-surface">
+                Official Payment Receipt
               </h4>
-              <p className="text-[11px] text-md-on-surface-variant leading-relaxed mt-0.5">
-                Upon transfer clearance by Bank Negara Malaysia's RENTAS RTGS system, your official payment receipt is sealed on the blockchain as permanent legal proof of payment.
+              <p className="text-xs text-md-on-surface-variant leading-relaxed mt-0.5">
+                Electronic funds transfer clearance and settlement receipt anchored on-chain.
               </p>
             </div>
 
             {m2Record ? (
-              <div className="space-y-1.5 text-xs pt-2 border-t border-md-outline/10">
+              <div className="space-y-2 text-xs pt-2.5 border-t border-md-outline/10">
                 <div className="flex justify-between items-center">
-                  <span className="text-md-on-surface-variant text-[11px]">Ledger Key</span>
-                  <span className="font-mono text-[11px] text-md-on-surface font-semibold">
+                  <span className="text-md-on-surface-variant font-medium">Ledger Key</span>
+                  <span className="font-mono text-xs text-md-on-surface font-bold">
                     {m2Record.onChainKey || `${selectedCaseId}#M2`}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-md-on-surface-variant text-[11px]">Tx Hash</span>
-                  <div className="flex items-center gap-1">
+                  <span className="text-md-on-surface-variant font-medium">Tx Hash</span>
+                  <div className="flex items-center gap-1.5">
                     <a
                       href={`https://sepolia.etherscan.io/tx/${m2Record.transactionHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="font-mono text-[11px] text-md-primary hover:underline inline-flex items-center gap-0.5"
+                      className="font-mono text-xs font-semibold text-md-primary hover:underline inline-flex items-center gap-1 focus-visible:ring-1 focus-visible:ring-md-primary rounded"
+                      title="View transaction on Etherscan Sepolia"
                     >
                       <span>{m2Record.transactionHash.slice(0, 8)}…{m2Record.transactionHash.slice(-6)}</span>
-                      <ExternalLink size={10} />
+                      <ExternalLink size={11} aria-hidden="true" />
                     </a>
-                    <CopyButton value={m2Record.transactionHash} size="sm" title="Copy transaction hash" />
+                    <CopyButton value={m2Record.transactionHash} size="sm" title="Copy tx hash" />
                   </div>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-md-on-surface-variant text-[11px]">Receipt SHA-256</span>
-                  <div className="flex items-center gap-1">
-                    <span className="font-mono text-[10px] text-md-on-surface truncate max-w-[130px]">
+                  <span className="text-md-on-surface-variant font-medium">Receipt SHA-256</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-xs text-md-on-surface truncate max-w-[160px] sm:max-w-[200px]">
                       {m2Record.documentHash}
                     </span>
-                    <CopyButton value={m2Record.documentHash} size="sm" title="Copy document hash" />
+                    <CopyButton value={m2Record.documentHash} size="sm" title="Copy receipt hash" />
                   </div>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-md-on-surface-variant text-[11px]">Notarised At</span>
-                  <span className="font-mono text-[11px] text-md-on-surface">
+                  <span className="text-md-on-surface-variant font-medium">Notarised At</span>
+                  <span className="font-mono text-xs text-md-on-surface font-medium">
                     {formatDateTime(m2Record.createdAt)}
                   </span>
                 </div>
               </div>
             ) : (
-              <div className="p-2.5 rounded-lg bg-slate-500/5 border border-slate-500/15 text-[11px] text-md-on-surface-variant">
-                Will be published on-chain immediately after bank transfer clearance and payment receipt generation.
+              <div className="p-3 rounded-lg bg-md-surface-container/60 border border-md-outline/15 text-xs text-md-on-surface-variant font-medium">
+                Scheduled for notarization upon interbank fund settlement.
               </div>
             )}
           </div>

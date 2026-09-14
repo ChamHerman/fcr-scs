@@ -127,11 +127,18 @@ export const PublishLedger: React.FC = () => {
       setNetworkInfo(netData);
 
       const records: any[] = recordsRes.records || [];
-      const m1Map = new Map<string, any>();
-      const m2Map = new Map<string, any>();
+      const m1Published = new Set<string>();
+      const m2Published = new Set<string>();
+      const readyRecordsMap = new Map<string, any>();
       records.forEach((r) => {
-        if ((r.milestone ?? 'AWARD') === 'AWARD') m1Map.set(r.caseId, r);
-        else m2Map.set(r.caseId, r);
+        const isM1 = (r.milestone ?? 'AWARD') === 'AWARD';
+        const s = String(r.status || '').toUpperCase().replace(/[\s_]+/g, '_');
+        if (s === 'READY_TO_PUBLISH') {
+          readyRecordsMap.set(`${r.caseId}#${isM1 ? 'M1' : 'M2'}`, r);
+        } else if (s === 'PUBLISHED' || s === 'VOID_PENDING' || s === 'VOIDED') {
+          if (isM1) m1Published.add(r.caseId);
+          else m2Published.add(r.caseId);
+        }
       });
 
       // ----- Tab 1: Milestone 1 Award queue, built from ACCEPTED offers —
@@ -143,20 +150,23 @@ export const PublishLedger: React.FC = () => {
       const awardQueue: LedgerRow[] = [];
       for (const offer of offers) {
         const caseId: string | undefined = offer.caseId;
-        if (!caseId || m1Map.has(caseId)) continue;
+        if (!caseId || m1Published.has(caseId)) continue;
+        const existingRec = readyRecordsMap.get(`${caseId}#M1`);
+        const bcnId = existingRec?.id || caseId;
         const acceptedAtMs = offer.acceptedAt ? new Date(offer.acceptedAt).getTime() : null;
         const graceEndsAtMs = acceptedAtMs != null ? acceptedAtMs + ACCEPTANCE_GRACE_PERIOD_MS : null;
         const graceLocked = graceEndsAtMs != null && now < graceEndsAtMs;
+        const m1Sec = Math.floor((acceptedAtMs || now) / 1000);
         awardQueue.push({
-          id: `M1-${caseId}`,
+          id: existingRec?.id || `M1-${caseId}`,
           caseId,
           milestone: 'M1',
-          onChainKey: `${caseId}#M1`,
-          publicId: caseId,
+          onChainKey: existingRec?.onChainKey || `${caseId}#M1-${m1Sec}`,
+          publicId: bcnId,
           beneficiary: offer.landOwnership?.landOwner?.name || undefined,
           amount: offer.offerAmount,
           status: graceLocked ? 'Grace Period (Locked)' : 'Ready to Publish',
-          documentHash: offer.blockchainHash || null,
+          documentHash: offer.blockchainHash || existingRec?.documentHash || null,
           graceEndsAt: graceEndsAtMs,
           acceptedAt: offer.acceptedAt || null,
         });
@@ -169,15 +179,17 @@ export const PublishLedger: React.FC = () => {
       const settlementQueue: LedgerRow[] = [];
       for (const pc of (allCases.cases || [])) {
         if (normalizePaymentStatus(pc.status) !== 'Paid') continue;
-        if (m2Map.has(pc.caseId)) continue;
+        if (m2Published.has(pc.caseId)) continue;
+        const existingRec = readyRecordsMap.get(`${pc.caseId}#M2`);
         const docHash = pc.receipt?.documentHash || (await computeSettlementHash(pc.caseId, pc.amount));
+        const paidAtMs = pc.receipt?.generatedAt || pc.updatedAt ? new Date(pc.receipt?.generatedAt || pc.updatedAt).getTime() : now;
+        const m2Sec = Math.floor(paidAtMs / 1000);
         settlementQueue.push({
-          id: pc.id || `M2-${pc.caseId}`,
+          id: existingRec?.id || pc.id || `M2-${pc.caseId}`,
           caseId: pc.caseId,
           milestone: 'M2',
-          onChainKey: `${pc.caseId}#M2`,
-          // No M1 record exists yet — show the payment's PMT-XXXXXXXX id
-          publicId: pc.paymentId || pc.id,
+          onChainKey: existingRec?.onChainKey || `${pc.caseId}#M2-${m2Sec}`,
+          publicId: existingRec?.id || pc.paymentId || pc.id,
           beneficiary: pc.accountHolderName || pc.beneficiaryId,
           amount: pc.amount,
           status: 'Ready to Publish',
@@ -230,7 +242,31 @@ export const PublishLedger: React.FC = () => {
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return rows.filter((r) => !q || r.caseId.toLowerCase().includes(q) || (r.beneficiary ?? '').toLowerCase().includes(q));
+    return rows
+      .filter((r) => !q || r.caseId.toLowerCase().includes(q) || (r.beneficiary ?? '').toLowerCase().includes(q))
+      .sort((a, b) => {
+        const getPriority = (r: LedgerRow) => {
+          const isLocked =
+            r.status === 'Grace Period (Locked)' ||
+            (!!r.graceEndsAt && Date.now() < new Date(r.graceEndsAt).getTime());
+          if (r.status === 'Ready to Publish' && !isLocked) return 1;
+          if (isLocked) return 2;
+          if (r.status === 'Published') return 3;
+          if (r.status === 'Void Pending') return 4;
+          if (r.status === 'Voided') return 5;
+          return 6;
+        };
+        const pA = getPriority(a);
+        const pB = getPriority(b);
+        if (pA !== pB) return pA - pB;
+
+        const bcnIdA = a.publicId?.startsWith('BCN-') ? a.publicId : a.id?.startsWith('BCN-') ? a.id : (a.publicId || a.id || '');
+        const bcnIdB = b.publicId?.startsWith('BCN-') ? b.publicId : b.id?.startsWith('BCN-') ? b.id : (b.publicId || b.id || '');
+        const bcnCmp = bcnIdA.localeCompare(bcnIdB, undefined, { numeric: true, sensitivity: 'base' });
+        if (bcnCmp !== 0) return bcnCmp;
+
+        return (a.caseId || '').localeCompare(b.caseId || '', undefined, { numeric: true });
+      });
   }, [rows, searchQuery]);
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -291,11 +327,10 @@ export const PublishLedger: React.FC = () => {
             ref={(el) => { tabRefs.current[t.key] = el; }}
             type="button"
             onClick={() => setActiveTab(t.key)}
-            className={`relative z-10 shrink-0 whitespace-nowrap px-4 py-2 rounded-full text-xs font-semibold transition-colors duration-200 cursor-pointer ${
-              activeTab === t.key
-                ? 'text-white font-bold'
-                : 'text-md-on-surface-variant hover:text-md-on-surface'
-            }`}
+            className={`relative z-10 shrink-0 whitespace-nowrap px-4 py-2 rounded-full text-xs font-semibold transition-colors duration-200 cursor-pointer ${activeTab === t.key
+              ? 'text-white font-bold'
+              : 'text-md-on-surface-variant hover:text-md-on-surface'
+              }`}
             title={t.label}
           >
             <span className="hidden sm:inline">{t.label}</span>
@@ -341,12 +376,12 @@ export const PublishLedger: React.FC = () => {
           <table>
             <thead>
               <tr>
-                <th style={{ width: '160px' }}>Blockchain ID</th>
-                <th style={{ width: '140px' }}>Case ID</th>
-                <th style={{ width: '150px' }}>Beneficiary</th>
-                <th style={{ width: '120px' }}>Amount</th>
-                <th style={{ width: '150px' }}>Document Hash</th>
-                <th style={{ width: '160px' }}>Status</th>
+                <th style={{ width: '135px' }}>Blockchain ID</th>
+                <th style={{ width: '120px' }}>Case ID</th>
+                <th style={{ width: '140px' }}>Beneficiary</th>
+                <th style={{ width: '115px' }}>Amount</th>
+                <th style={{ width: '135px' }}>Document Hash</th>
+                <th style={{ width: '130px', paddingRight: '10px' }}>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -369,8 +404,8 @@ export const PublishLedger: React.FC = () => {
                   const blockchainId = row.publicId?.startsWith('BCN-')
                     ? row.publicId
                     : row.id?.startsWith('BCN-')
-                    ? row.id
-                    : `BCN-${row.caseId}-${row.milestone || (activeTab === 'm2' ? 'M2' : 'M1')}`;
+                      ? row.id
+                      : `BCN-${row.caseId}-${row.milestone || (activeTab === 'm2' ? 'M2' : 'M1')}`;
 
                   return (
                     <tr
@@ -409,7 +444,7 @@ export const PublishLedger: React.FC = () => {
                           )}
                         </div>
                       </td>
-                      <td>
+                      <td style={{ paddingRight: '20px' }}>
                         {(() => {
                           const graceLocked =
                             activeTab === 'm1' &&

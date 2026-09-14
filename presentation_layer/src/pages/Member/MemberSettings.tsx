@@ -16,11 +16,12 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useRole } from '../../hooks/useRole';
+import { useNotification } from '../../components/ui/NotificationSystem';
 import { paymentApi } from '../../services/paymentApi';
+import { normalizeContactNumber } from './components/BankDetailsForm';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Select, type SelectOption } from '../../components/ui/Select';
-import { useNotification } from '../../components/ui/NotificationSystem';
 import { ConfirmSubmitModal, ConfirmRow } from '../../components/member/ConfirmSubmitModal';
 
 const MALAYSIAN_BANKS: SelectOption[] = [
@@ -51,7 +52,7 @@ export const MemberSettings: React.FC = () => {
   const [accountNumber, setAccountNumber] = useState<string>('');
   const [accountHolderName, setAccountHolderName] = useState<string>(user?.name || userName || '');
   const [myKadNumber, setMyKadNumber] = useState<string>(user?.identificationNumber || identificationNumber || '');
-  const [phoneNumber, setPhoneNumber] = useState<string>(user?.contactNumber || '');
+  const [phoneNumber, setPhoneNumber] = useState<string>(normalizeContactNumber(user?.contactNumber));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showSaveConfirm, setShowSaveConfirm] = useState<boolean>(false);
 
@@ -70,7 +71,7 @@ export const MemberSettings: React.FC = () => {
             setAccountNumber(acc.accountNumber || '');
             if (acc.accountHolderName) setAccountHolderName(acc.accountHolderName);
             if (acc.myKadNumber) setMyKadNumber(acc.myKadNumber);
-            if (acc.phoneNumber) setPhoneNumber(acc.phoneNumber);
+            if (acc.phoneNumber) setPhoneNumber(normalizeContactNumber(acc.phoneNumber));
           }
         }
       } catch {
@@ -111,12 +112,13 @@ export const MemberSettings: React.FC = () => {
     setErrors({});
     try {
       const effectiveMyKad = (user?.identificationNumber || identificationNumber || myKadNumber || '').trim();
+      const cleanPhone = normalizeContactNumber(phoneNumber);
       await paymentApi.saveDefaultBankDetails({
         bankName,
         accountNumber: accountNumber.trim(),
         accountHolderName: accountHolderName.trim(),
         myKadNumber: effectiveMyKad,
-        phoneNumber: phoneNumber.trim(),
+        phoneNumber: cleanPhone ? `+60${cleanPhone}` : '',
       });
 
       notify({
@@ -316,9 +318,14 @@ export const MemberSettings: React.FC = () => {
             <Input
               label="Contact Phone Number"
               name="phoneNumber"
+              type="tel"
+              inputMode="numeric"
+              autoComplete="tel-national"
               value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
-              placeholder="e.g. +60123456789"
+              onChange={(e) => setPhoneNumber(normalizeContactNumber(e.target.value))}
+              placeholder="172178475"
+              prefix="+60"
+              aria-label="Contact Phone Number, country code +60"
               className="font-mono"
             />
 
@@ -412,7 +419,13 @@ export const MemberSettings: React.FC = () => {
               value={user?.identificationNumber || identificationNumber || myKadNumber}
               mono
             />
-            {phoneNumber.trim() && <ConfirmRow label="Phone" value={phoneNumber.trim()} mono />}
+            {phoneNumber.trim() && (
+              <ConfirmRow
+                label="Phone"
+                value={`+60 ${normalizeContactNumber(phoneNumber)}`}
+                mono
+              />
+            )}
             <ConfirmRow
               label="Effect"
               value="Saved as your default payout account. Nothing is submitted to the admin portal until you submit bank details on a specific case."
