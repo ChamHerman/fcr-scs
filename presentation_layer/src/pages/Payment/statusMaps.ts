@@ -297,19 +297,13 @@ export function getDetailedPaymentStatus(pc: {
   return { caseStatus, paymentStatus };
 }
 
-export const BLOCKCHAIN_STATUSES = ['All', 'Ready to Publish', 'Published', 'Void Pending', 'Voided', 'Replacement'];
+export const BLOCKCHAIN_STATUSES = ['All', 'Ready to Publish', 'Published'];
 
 export const blockchainStatusLabelMap: Record<string, string> = {
   'Ready to Publish': 'Ready to Publish',
   'READY_TO_PUBLISH': 'Ready to Publish',
   'Published': 'Published',
   'PUBLISHED': 'Published',
-  'Void Pending': 'Void Pending',
-  'VOID_PENDING': 'Void Pending',
-  'Voided': 'Voided',
-  'VOIDED': 'Voided',
-  'Replacement': 'Replacement',
-  'REPLACEMENT': 'Replacement',
 };
 
 export const blockchainStatusClassMap: Record<string, string> = {
@@ -317,12 +311,6 @@ export const blockchainStatusClassMap: Record<string, string> = {
   'READY_TO_PUBLISH': 'status-ready-publish',
   'Published': 'status-published',
   'PUBLISHED': 'status-published',
-  'Void Pending': 'status-void-pending',
-  'VOID_PENDING': 'status-void-pending',
-  'Voided': 'status-voided',
-  'VOIDED': 'status-voided',
-  'Replacement': 'status-replacement',
-  'REPLACEMENT': 'status-replacement',
   'Grace Period (Locked)': 'status-locked',
   'Locked': 'status-locked',
   'GRACE_PERIOD_LOCKED': 'status-locked',

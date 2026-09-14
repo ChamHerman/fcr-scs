@@ -41,12 +41,43 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
   if (allowedRoles.includes('member') && isMember) hasRoleAccess = true;
   if (allowedRoles.includes('admin') && isAdmin) hasRoleAccess = true;
 
+  // Role Management is strictly reserved for SYSTEM_ADMINISTRATOR only
+  if (
+    userRole !== 'SYSTEM_ADMINISTRATOR' &&
+    (location.pathname === '/admin/role-management' || location.pathname.startsWith('/admin/role-management/'))
+  ) {
+    return <Navigate to="/unauthorized" replace />;
+  }
+
+  // Finance & Ledger pages (/admin/payment*, /admin/blockchain*) are strictly for GOVERNMENT_ADMINISTRATOR only
+  const isFinanceLedgerRoute =
+    location.pathname === '/admin/payment' ||
+    location.pathname.startsWith('/admin/payment/') ||
+    location.pathname === '/admin/blockchain' ||
+    location.pathname.startsWith('/admin/blockchain/');
+
+  if (
+    isFinanceLedgerRoute &&
+    userRole !== 'GOVERNMENT_ADMINISTRATOR' &&
+    userRole !== 'SYSTEM_ADMINISTRATOR'
+  ) {
+    return <Navigate to="/unauthorized" replace />;
+  }
+
   // Dynamic page-level check for admin users
   let hasPageAccess = true;
-  if (isAdmin && userRole !== 'SYSTEM_ADMINISTRATOR' && allowedPages.length > 0 && !allowedPages.includes('*')) {
-    hasPageAccess = allowedPages.some(page => 
-      location.pathname === page || location.pathname.startsWith(page + '/')
-    );
+  if (isAdmin && userRole !== 'SYSTEM_ADMINISTRATOR') {
+    if (allowedPages.length === 0) {
+      hasPageAccess = false;
+    } else if (!allowedPages.includes('*')) {
+      hasPageAccess = allowedPages.some((page) => {
+        // Root /admin must be matched exactly to avoid matching every /admin/* subroute
+        if (page === '/admin') {
+          return location.pathname === '/admin' || location.pathname === '/admin/';
+        }
+        return location.pathname === page || location.pathname.startsWith(page + '/');
+      });
+    }
   }
 
   const hasAccess = hasRoleAccess && hasPageAccess;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, Wallet, Loader2, UploadCloud, RefreshCw, Ban } from 'lucide-react';
+import { Clock, User, Wallet, Loader2, UploadCloud, RefreshCw } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
@@ -24,7 +24,6 @@ import { normalizePaymentStatus } from '../Payment/statusMaps';
 import {
   ViewLedgerModal,
   PublishModal,
-  VoidModal,
   ledgerBadge,
   fmtDate,
   fmtAmount,
@@ -33,13 +32,12 @@ import {
 } from './blockchainModals';
 import type { LedgerRow } from './blockchainModals';
 
-type ModalState = { type: 'view'; row: LedgerRow } | { type: 'publish'; row: LedgerRow } | { type: 'void'; row: LedgerRow } | null;
-type TabKey = 'm1' | 'm2' | 'void';
+type ModalState = { type: 'view'; row: LedgerRow } | { type: 'publish'; row: LedgerRow } | null;
+type TabKey = 'm1' | 'm2';
 
 const TABS: Array<{ key: TabKey; label: string; short: string }> = [
   { key: 'm1', label: 'Milestone 1 — Statutory Award (Form H)', short: 'Award (M1)' },
   { key: 'm2', label: 'Milestone 2 — Disbursement Settlement (Receipt)', short: 'Settlement (M2)' },
-  { key: 'void', label: 'Void Required — Cancelled Cases on Chain', short: 'Void Required' },
 ];
 
 /** "5m left" / "3h 20m left" countdown for grace-locked award rows. */
@@ -56,7 +54,6 @@ export const PublishLedger: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabKey>('m1');
   const [m1Rows, setM1Rows] = useState<LedgerRow[]>([]);
   const [m2Rows, setM2Rows] = useState<LedgerRow[]>([]);
-  const [voidRows, setVoidRows] = useState<LedgerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState(deepLink || '');
@@ -64,7 +61,7 @@ export const PublishLedger: React.FC = () => {
   const [caseDetailsId, setCaseDetailsId] = useState<string | null>(null);
   const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
   const pageRef = useRef<HTMLDivElement>(null);
-  const tabRefs = useRef<Record<TabKey, HTMLButtonElement | null>>({ m1: null, m2: null, void: null });
+  const tabRefs = useRef<Record<TabKey, HTMLButtonElement | null>>({ m1: null, m2: null });
   const sliderRef = useRef<HTMLDivElement>(null);
   const isFirstTabRender = useRef(true);
 
@@ -135,7 +132,7 @@ export const PublishLedger: React.FC = () => {
         const s = String(r.status || '').toUpperCase().replace(/[\s_]+/g, '_');
         if (s === 'READY_TO_PUBLISH') {
           readyRecordsMap.set(`${r.caseId}#${isM1 ? 'M1' : 'M2'}`, r);
-        } else if (s === 'PUBLISHED' || s === 'VOID_PENDING' || s === 'VOIDED') {
+        } else if (s === 'PUBLISHED') {
           if (isM1) m1Published.add(r.caseId);
           else m2Published.add(r.caseId);
         }
@@ -169,6 +166,8 @@ export const PublishLedger: React.FC = () => {
           documentHash: offer.blockchainHash || existingRec?.documentHash || null,
           graceEndsAt: graceEndsAtMs,
           acceptedAt: offer.acceptedAt || null,
+          createdAt: existingRec?.createdAt || offer.createdAt || undefined,
+          caseCreatedAt: offer.case?.createdAt || offer.case?.registrationDate || undefined,
         });
       }
       setM1Rows(awardQueue);
@@ -178,7 +177,8 @@ export const PublishLedger: React.FC = () => {
       // rows without a persisted hash fall back to the deterministic computed one.
       const settlementQueue: LedgerRow[] = [];
       for (const pc of (allCases.cases || [])) {
-        if (normalizePaymentStatus(pc.status) !== 'Paid') continue;
+        const norm = normalizePaymentStatus(pc.status);
+        if (norm !== 'Paid' && norm !== 'Transfer Succeed') continue;
         if (m2Published.has(pc.caseId)) continue;
         const existingRec = readyRecordsMap.get(`${pc.caseId}#M2`);
         const docHash = pc.receipt?.documentHash || (await computeSettlementHash(pc.caseId, pc.amount));
@@ -202,22 +202,6 @@ export const PublishLedger: React.FC = () => {
         });
       }
       setM2Rows(settlementQueue);
-
-      // ----- Void Required: published records parked for on-chain revocation
-      // after a post-notarization cancellation.
-      setVoidRows(
-        records
-          .filter((r) => {
-            const s = String(r.status || '').toUpperCase().replace(/[\s_]+/g, '_');
-            return s === 'VOID_PENDING';
-          })
-          .map((r) => ({
-            ...r,
-            milestone: (r.milestone ?? 'AWARD') === 'AWARD' ? ('M1' as const) : ('M2' as const),
-            onChainKey: r.onChainKey || `${r.caseId}#${(r.milestone ?? 'AWARD') === 'AWARD' ? 'M1' : 'M2'}`,
-            status: 'Void Pending',
-          }))
-      );
     } catch (err: any) {
       setError(err.message || 'Failed to load publish queue');
     } finally {
@@ -238,7 +222,7 @@ export const PublishLedger: React.FC = () => {
     return () => clearInterval(interval);
   }, [activeTab, modal, loadData]);
 
-  const rows = activeTab === 'm1' ? m1Rows : activeTab === 'm2' ? m2Rows : voidRows;
+  const rows = activeTab === 'm1' ? m1Rows : m2Rows;
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -252,9 +236,7 @@ export const PublishLedger: React.FC = () => {
           if (r.status === 'Ready to Publish' && !isLocked) return 1;
           if (isLocked) return 2;
           if (r.status === 'Published') return 3;
-          if (r.status === 'Void Pending') return 4;
-          if (r.status === 'Voided') return 5;
-          return 6;
+          return 4;
         };
         const pA = getPriority(a);
         const pB = getPriority(b);
@@ -350,20 +332,11 @@ export const PublishLedger: React.FC = () => {
 
       <div className="action-bar">
         <div className="left">
-          {activeTab === 'void' ? (
-            <>
-              <Ban size={18} />
-              <span className="count">{filtered.length} record{filtered.length === 1 ? '' : 's'} awaiting on-chain void</span>
-            </>
-          ) : (
-            <>
-              <UploadCloud size={18} />
-              <span className="count">
-                {filtered.length} record{filtered.length === 1 ? '' : 's'} ready to publish
-                {activeTab === 'm1' ? ' (Milestone 1)' : ' (Milestone 2)'}
-              </span>
-            </>
-          )}
+          <UploadCloud size={18} />
+          <span className="count">
+            {filtered.length} record{filtered.length === 1 ? '' : 's'} ready to publish
+            {activeTab === 'm1' ? ' (Milestone 1)' : ' (Milestone 2)'}
+          </span>
         </div>
         <div className="right flex items-center gap-2">
           <NetworkStatusBadge networkInfo={networkInfo} />
@@ -394,9 +367,7 @@ export const PublishLedger: React.FC = () => {
               ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center text-gray-500 py-8">
-                    {activeTab === 'void'
-                      ? 'No records awaiting on-chain void.'
-                      : 'Nothing ready to publish right now.'}
+                    Nothing ready to publish right now.
                   </td>
                 </tr>
               ) : (
@@ -472,7 +443,7 @@ export const PublishLedger: React.FC = () => {
                               </span>
                             );
                           }
-                          return ledgerBadge(row.status || (activeTab === 'void' ? 'Void Pending' : 'Ready to Publish'));
+                          return ledgerBadge(row.status || 'Ready to Publish');
                         })()}
                       </td>
                     </tr>
@@ -501,7 +472,6 @@ export const PublishLedger: React.FC = () => {
         onAction={(act, r) => setModal({ type: act, row: r })}
       />
       <PublishModal row={modal?.type === 'publish' ? modal.row : null} onClose={closeModal} onDone={() => { closeModal(); loadData(); }} />
-      <VoidModal row={modal?.type === 'void' ? modal.row : null} onClose={closeModal} onDone={() => { closeModal(); loadData(); }} />
       <CaseDetailsModal caseId={caseDetailsId} onClose={() => setCaseDetailsId(null)} />
     </div>
   );

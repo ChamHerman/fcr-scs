@@ -187,18 +187,16 @@ export default function VerifyAuditTrail() {
                 <div className="w-20 h-20 bg-[var(--md-background)] rounded-full flex items-center justify-center mx-auto shadow-md transform hover:rotate-12 transition-transform">
                   {result.verified ? (
                     <CheckCircle className="w-12 h-12 text-green-600" />
-                  ) : result.status === 'Voided' ? (
-                    <XCircle className="w-12 h-12 text-orange-500" />
                   ) : (
                     <XCircle className="w-12 h-12 text-red-500" />
                   )}
                 </div>
                 
-                <h3 className={`text-2xl font-bold tracking-tight ${result.verified ? 'text-green-600' : result.status === 'Voided' ? 'text-orange-500' : 'text-red-500'}`}>
-                  {result.verified ? 'Success: Authentic' : result.status === 'Voided' ? 'Document Voided' : 'Altered / Invalid'}
+                <h3 className={`text-2xl font-bold tracking-tight ${result.verified ? 'text-green-600' : 'text-red-500'}`}>
+                  {result.verified ? 'Success: Authentic' : 'Altered / Invalid'}
                 </h3>
                 
-                <p className={`text-sm font-medium px-4 py-2 rounded-full inline-block ${result.verified ? 'bg-green-100 text-green-700' : result.status === 'Voided' ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'}`}>
+                <p className={`text-sm font-medium px-4 py-2 rounded-full inline-block ${result.verified ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                   {result.message || result.status}
                 </p>
                 
@@ -206,7 +204,7 @@ export default function VerifyAuditTrail() {
                   <div className="flex justify-between items-center pb-2 border-b border-slate-100">
                     <span className="text-slate-500">Status</span>
                     <span className={`font-semibold px-2.5 py-0.5 rounded-md text-xs ${
-                      result.verified ? 'bg-green-100 text-green-800' : result.status === 'Voided' ? 'bg-orange-100 text-orange-800' : 'bg-red-100 text-red-800'
+                      result.verified ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                     }`}>
                       {result.status || 'Unknown'}
                     </span>
@@ -307,16 +305,9 @@ export default function VerifyAuditTrail() {
                   </div>
 
                   {result.timestamp && (
-                    <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                    <div className="flex justify-between items-center">
                       <span className="text-slate-500">Timestamp</span>
                       <span className="font-mono text-slate-800 text-xs">{formatDateTime(result.timestamp * 1000)}</span>
-                    </div>
-                  )}
-
-                  {result.voidReason && (
-                    <div className="flex justify-between items-start pt-1">
-                      <span className="text-red-500 font-medium">Void Reason</span>
-                      <span className="text-red-600 text-right max-w-[180px]">{result.voidReason}</span>
                     </div>
                   )}
                 </div>

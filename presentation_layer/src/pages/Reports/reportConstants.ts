@@ -52,5 +52,5 @@ export const PAYMENT_STATUS_OPTIONS = [
 export const BLOCKCHAIN_STATUS_OPTIONS = [
   'All',
   'Published',
-  'Voided'
+  'Ready to Publish'
 ];

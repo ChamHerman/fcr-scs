@@ -279,8 +279,6 @@ export default function VerifyAuditTrail() {
               <div className="w-16 h-16 bg-md-surface-container-low rounded-full flex items-center justify-center mx-auto mb-3.5 shadow-sm">
                 {result.verified ? (
                   <CheckCircle2 size={38} className="text-emerald-600 dark:text-emerald-400" />
-                ) : result.status === 'Voided' ? (
-                  <XCircle size={38} className="text-amber-500" />
                 ) : result.status === 'Not Found' ? (
                   <Clock size={38} className="text-md-primary" />
                 ) : (
@@ -291,16 +289,12 @@ export default function VerifyAuditTrail() {
               <h3 className={`text-xl sm:text-2xl font-bold ${
                 result.verified
                   ? 'text-emerald-700 dark:text-emerald-400'
-                  : result.status === 'Voided'
-                  ? 'text-amber-600'
                   : result.status === 'Not Found'
                   ? 'text-md-on-surface'
                   : 'text-red-600'
               }`}>
                 {result.verified
                   ? 'Cryptographically Verified on Ethereum'
-                  : result.status === 'Voided'
-                  ? 'Document Voided on Blockchain'
                   : result.status === 'Not Found'
                   ? 'Document Not Published on Blockchain'
                   : 'Certificate Altered / Unverified'}
@@ -310,20 +304,16 @@ export default function VerifyAuditTrail() {
               </p>
             </div>
 
-            {/* Guidance Advisory Card for Unverified / Altered / Voided / Not Found Documents */}
+            {/* Guidance Advisory Card for Unverified / Altered / Not Found Documents */}
             {!result.verified && (
               <div className={`p-5 rounded-2xl bg-md-surface-container-low border ${
                 result.status === 'Altered'
                   ? 'border-red-500/30'
-                  : result.status === 'Voided'
-                  ? 'border-amber-500/30'
                   : 'border-md-outline/25'
               } text-xs sm:text-sm space-y-3.5 shadow-sm`}>
                 <div className="flex items-start gap-3">
                   {result.status === 'Altered' ? (
                     <AlertTriangle size={24} className="shrink-0 text-red-600 dark:text-red-400 mt-0.5" />
-                  ) : result.status === 'Voided' ? (
-                    <AlertTriangle size={24} className="shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
                   ) : (
                     <Clock size={24} className="shrink-0 text-md-primary mt-0.5" />
                   )}
@@ -331,14 +321,10 @@ export default function VerifyAuditTrail() {
                     <div className={`font-bold text-xs uppercase tracking-wider ${
                       result.status === 'Altered'
                         ? 'text-red-700 dark:text-red-300'
-                        : result.status === 'Voided'
-                        ? 'text-amber-700 dark:text-amber-300'
                         : 'text-md-primary'
                     }`}>
                       {result.status === 'Altered'
                         ? 'Cryptographic Mismatch Detected (Document Altered)'
-                        : result.status === 'Voided'
-                        ? 'Statutory Revocation Notice (Document Voided)'
                         : 'Record Not Found (Awaiting Milestone Notarization)'}
                     </div>
                     <p className="text-xs leading-relaxed text-md-on-surface-variant font-medium">
@@ -352,10 +338,6 @@ export default function VerifyAuditTrail() {
                           )}.
                           Any alteration—including re-saving, PDF editing, text modification, or scanner compression—breaks cryptographic verification.
                           Please ensure you uploaded the genuine, unmodified official Form H or payment receipt.
-                        </>
-                      ) : result.status === 'Voided' ? (
-                        <>
-                          This record was legally revoked on the Ethereum blockchain. Reason: <strong className="text-amber-800 dark:text-amber-300 font-semibold">{result.voidReason || 'Statutory revocation order'}</strong>. Please consult the Land Acquisition Authority for details.
                         </>
                       ) : (
                         <>
@@ -432,8 +414,6 @@ export default function VerifyAuditTrail() {
                 <span className={`font-bold px-3 py-1 rounded-full text-xs ${
                   result.verified
                     ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30'
-                    : result.status === 'Voided'
-                    ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30'
                     : result.status === 'Not Found'
                     ? 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border border-slate-500/30'
                     : 'bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/30'
@@ -580,15 +560,6 @@ export default function VerifyAuditTrail() {
                   <span className="font-mono text-md-on-surface text-xs sm:text-sm font-medium">
                     {formatDateTime(result.timestamp * 1000)}
                   </span>
-                </div>
-              )}
-
-              {result.voidReason && (
-                <div className="pt-3 border-t border-red-500/20 text-red-600">
-                  <div className="flex justify-between items-start">
-                    <span className="font-bold">Void Reason</span>
-                    <span className="text-right max-w-sm font-medium">{result.voidReason}</span>
-                  </div>
                 </div>
               )}
             </div>

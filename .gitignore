@@ -39,3 +39,7 @@ data_layer/ai_model_repository/datasets/uploads/
 /.claude
 
 /_herman-only
+/.wolf
+GEMINI.md
+/data_layer/document_storage
+*.pdf

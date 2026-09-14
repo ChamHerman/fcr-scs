@@ -60,6 +60,9 @@ describe("Dynamic Payment Ingestion from OFFER_ACCEPTED", () => {
 
   afterEach(async () => {
     if (createdCaseId) {
+      await prisma.blockchainRecord.deleteMany({
+        where: { caseId: createdCaseId },
+      });
       await prisma.paymentAuthorisation.deleteMany({
         where: { paymentCase: { caseId: createdCaseId } },
       });
@@ -124,27 +127,66 @@ describe("Bank Account Uniqueness & Decoupled Profile Storage", () => {
   const member1MyKad = "900101145555";
   const member2MyKad = "910202146666";
 
+  let testLandOwnerId: string;
+  let testProjectId: string;
+  let testCreatedById: string;
+
   beforeAll(async () => {
+    const existingAc = await prisma.acquisitionCase.findFirst();
+    testProjectId = existingAc!.projectId;
+    testCreatedById = existingAc!.createdById;
+
+    const landowners = await prisma.landOwner.findMany({ take: 2 });
+    testLandOwnerId = landowners[0].ownerId;
+    let testLandOwnerId2 = landowners.length > 1 ? landowners[1].ownerId : null;
+    if (!testLandOwnerId2) {
+      const newLo = await prisma.landOwner.create({
+        data: {
+          name: "Member 2 Test",
+          nric: member2MyKad,
+          address: "No 2 Test Address",
+          contact: "0198765432",
+          email: `member2.${Date.now()}@example.com`,
+          createdById: testCreatedById,
+        },
+      });
+      testLandOwnerId2 = newLo.ownerId;
+    }
+
+    for (const cid of [testCaseId1, testCaseId2, testCaseId3]) {
+      await prisma.acquisitionCase.create({
+        data: {
+          caseId: cid,
+          projectId: testProjectId,
+          createdById: testCreatedById,
+          caseTitle: `Uniqueness Test ${cid}`,
+          status: CaseStatus.OFFER_ACCEPTED,
+          registrationDate: new Date(),
+          remarks: "Test case",
+        },
+      });
+    }
+
     await prisma.paymentCase.createMany({
       data: [
         {
           id: `PMT-${testCaseId1}`,
           caseId: testCaseId1,
-          beneficiaryId: "BEN-1",
+          beneficiaryId: testLandOwnerId,
           amount: 50000,
           status: PaymentStatus.BANK_DETAILS_PENDING,
         },
         {
           id: `PMT-${testCaseId2}`,
           caseId: testCaseId2,
-          beneficiaryId: "BEN-2",
+          beneficiaryId: testLandOwnerId2,
           amount: 60000,
           status: PaymentStatus.BANK_DETAILS_PENDING,
         },
         {
           id: `PMT-${testCaseId3}`,
           caseId: testCaseId3,
-          beneficiaryId: "BEN-1",
+          beneficiaryId: testLandOwnerId,
           amount: 70000,
           status: PaymentStatus.BANK_DETAILS_PENDING,
         },
@@ -157,6 +199,9 @@ describe("Bank Account Uniqueness & Decoupled Profile Storage", () => {
       where: { paymentCaseId: { in: [`PMT-${testCaseId1}`, `PMT-${testCaseId2}`, `PMT-${testCaseId3}`] } },
     });
     await prisma.paymentCase.deleteMany({
+      where: { caseId: { in: [testCaseId1, testCaseId2, testCaseId3] } },
+    });
+    await prisma.acquisitionCase.deleteMany({
       where: { caseId: { in: [testCaseId1, testCaseId2, testCaseId3] } },
     });
   });
@@ -204,11 +249,26 @@ describe("Bank Account Uniqueness & Decoupled Profile Storage", () => {
 
   it("saveMemberBankDetails does NOT prematurely mutate unsubmitted PaymentCase records", async () => {
     const pendingCaseId = `TEST-PENDING-${Date.now()}`;
+    const existingAc = await prisma.acquisitionCase.findFirst();
+    const lo = await prisma.landOwner.findFirst();
+
+    await prisma.acquisitionCase.create({
+      data: {
+        caseId: pendingCaseId,
+        projectId: existingAc!.projectId,
+        createdById: existingAc!.createdById,
+        caseTitle: `Pending Test ${pendingCaseId}`,
+        status: CaseStatus.OFFER_ACCEPTED,
+        registrationDate: new Date(),
+        remarks: "Test case",
+      },
+    });
+
     await prisma.paymentCase.create({
       data: {
         id: `PMT-${pendingCaseId}`,
         caseId: pendingCaseId,
-        beneficiaryId: "BEN-PENDING",
+        beneficiaryId: lo!.ownerId,
         amount: 30000,
         status: PaymentStatus.BANK_DETAILS_PENDING,
       },
@@ -234,6 +294,7 @@ describe("Bank Account Uniqueness & Decoupled Profile Storage", () => {
       expect(checkCase?.status).toBe(PaymentStatus.BANK_DETAILS_PENDING);
     } finally {
       await prisma.paymentCase.deleteMany({ where: { caseId: pendingCaseId } });
+      await prisma.acquisitionCase.deleteMany({ where: { caseId: pendingCaseId } });
     }
   });
 });
@@ -242,11 +303,26 @@ describe("generateReceipt — 1-page guarantee and RENTAS RTGS branding", () => 
   const receiptCaseId = `RCPT-1PAGE-${Date.now()}`;
 
   beforeAll(async () => {
+    const existingAc = await prisma.acquisitionCase.findFirst();
+    const lo = await prisma.landOwner.findFirst();
+
+    await prisma.acquisitionCase.create({
+      data: {
+        caseId: receiptCaseId,
+        projectId: existingAc!.projectId,
+        createdById: existingAc!.createdById,
+        caseTitle: `Receipt Test ${receiptCaseId}`,
+        status: CaseStatus.OFFER_ACCEPTED,
+        registrationDate: new Date(),
+        remarks: "Receipt test case",
+      },
+    });
+
     await prisma.paymentCase.create({
       data: {
         id: `PMT-${receiptCaseId}`,
         caseId: receiptCaseId,
-        beneficiaryId: "BEN-RECEIPT-TEST",
+        beneficiaryId: lo!.ownerId,
         accountHolderName: "Tan Ah Kow",
         bankName: "Malayan Banking Berhad",
         accountNumber: "1234567890",
@@ -266,6 +342,7 @@ describe("generateReceipt — 1-page guarantee and RENTAS RTGS branding", () => 
   afterAll(async () => {
     await prisma.paymentReceipt.deleteMany({ where: { paymentCase: { caseId: receiptCaseId } } });
     await prisma.paymentCase.deleteMany({ where: { caseId: receiptCaseId } });
+    await prisma.acquisitionCase.deleteMany({ where: { caseId: receiptCaseId } });
   });
 
   it("renders a valid PDF buffer with exactly 1 page and RENTAS branding", async () => {

@@ -27,13 +27,16 @@ import {
   ExternalLink,
   Layers,
   Phone,
-  Mail
+  Mail,
+  CreditCard,
+  CheckCircle
 } from 'lucide-react';
 import { useRole } from '../../hooks/useRole';
 import { compensationApi } from '../../services/compensationApi';
 import { landAcquisitionApi } from '../../services/landAcquisitionApi';
 import { BASE_URL } from '../../services/api';
 import { formatCurrencyRM } from '../../utils/currency';
+import { formatDateTime } from '../../utils/dateFormat';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
@@ -262,13 +265,7 @@ export const MemberOfferLetter: React.FC = () => {
           status,
           remarks: resp?.remarks,
           respondedAt: resp?.respondedAt
-            ? new Date(resp.respondedAt).toLocaleDateString('en-GB', {
-                day: '2-digit',
-                month: 'short',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              })
+            ? formatDateTime(resp.respondedAt)
             : undefined,
           respondedAtDate: resp?.respondedAt ? new Date(resp.respondedAt) : null,
           isCurrentUser: isCurrent,
@@ -297,10 +294,13 @@ export const MemberOfferLetter: React.FC = () => {
       const currentUserStatus = currentUserOwner ? currentUserOwner.status : null;
 
       // 1-day grace period computation:
-      const acceptedDate = currentUserOwner?.respondedAtDate
-        ? currentUserOwner.respondedAtDate
-        : o.acceptedAt
+      // Statutory acceptance date: o.acceptedAt is the canonical statutory timestamp for accepted offers
+      const acceptedDate = o.acceptedAt
         ? new Date(o.acceptedAt)
+        : currentUserOwner?.respondedAtDate
+        ? currentUserOwner.respondedAtDate
+        : o.memberResponses?.[0]?.respondedAt
+        ? new Date(o.memberResponses[0].respondedAt)
         : null;
 
       const isWithinOneDay = acceptedDate
@@ -414,7 +414,7 @@ export const MemberOfferLetter: React.FC = () => {
         acceptedCount,
         totalOwners: ownersList.length,
         hasRejectedOwner,
-        acceptedAtDate: o.acceptedAt ? new Date(o.acceptedAt) : null,
+        acceptedAtDate: o.acceptedAt ? new Date(o.acceptedAt) : acceptedDate,
         currentUserAcceptedAtDate: acceptedDate,
         isWithinOneDay,
         rejectedOwnerInfo: rejectedOwner
@@ -430,13 +430,7 @@ export const MemberOfferLetter: React.FC = () => {
               nric: ownerIc,
               remarks: o.remarks,
               respondedAt: o.rejectedAt
-                ? new Date(o.rejectedAt).toLocaleDateString('en-GB', {
-                    day: '2-digit',
-                    month: 'short',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })
+                ? formatDateTime(o.rejectedAt)
                 : undefined,
             }
           : null,
@@ -552,6 +546,70 @@ export const MemberOfferLetter: React.FC = () => {
     const diff = Math.ceil((expDate - Date.now()) / (1000 * 60 * 60 * 24));
     return Math.max(0, diff);
   }, [offer]);
+
+  // ---------------------------------------------------------------------------
+  // Real-Time 24-Hour Statutory Cooling Grace Period Ticker & Helpers
+  // ---------------------------------------------------------------------------
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const effectiveAcceptedAt = useMemo(() => {
+    if (!offer) return null;
+    if (offer.acceptedAtDate) return new Date(offer.acceptedAtDate);
+    if (offer.rawOffer?.acceptedAt) return new Date(offer.rawOffer.acceptedAt);
+    if (offer.currentUserAcceptedAtDate) return new Date(offer.currentUserAcceptedAtDate);
+    if (offer.rawOffer?.memberResponses?.[0]?.respondedAt) {
+      return new Date(offer.rawOffer.memberResponses[0].respondedAt);
+    }
+    return null;
+  }, [offer]);
+
+  const graceEndsAt = useMemo(() => {
+    if (!effectiveAcceptedAt) return null;
+    return new Date(effectiveAcceptedAt.getTime() + 24 * 60 * 60 * 1000);
+  }, [effectiveAcceptedAt]);
+
+  const remainingGraceMs = useMemo(() => {
+    if (!graceEndsAt || !isOfferAccepted) return 0;
+    return Math.max(0, graceEndsAt.getTime() - currentTime);
+  }, [graceEndsAt, isOfferAccepted, currentTime]);
+
+  const isWithinGracePeriod = isOfferAccepted && remainingGraceMs > 0;
+
+  const formatDetailedCountdown = (ms: number): string => {
+    if (ms <= 0) return '00:00:00';
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (hours > 0) {
+      return `${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`;
+    }
+    return `${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`;
+  };
+
+  const formatCompactCountdown = (ms: number): string => {
+    if (ms <= 0) return '0m';
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    }
+    return `${seconds}s`;
+  };
 
   // Open PDF in new browser tab / window
   const handleOpenPdfInNewTab = async () => {
@@ -759,12 +817,37 @@ export const MemberOfferLetter: React.FC = () => {
                     {formatCurrencyRM(offer.totalCompensation)}
                   </div>
                   <div className="text-[11px] text-slate-600 mt-1 flex items-center md:justify-end gap-1 font-medium">
-                    <Clock size={12} className="text-amber-600" />
-                    <span>
-                      {daysRemaining !== null 
-                        ? `${daysRemaining} days remaining to accept` 
-                        : `Issued on ${offer.issueDate}`}
-                    </span>
+                    {isOfferAccepted ? (
+                      isWithinGracePeriod ? (
+                        <>
+                          <Clock size={12} className="text-amber-600 animate-pulse" />
+                          <span className="text-amber-800 font-semibold font-mono">
+                            Grace Period Active ({formatCompactCountdown(remainingGraceMs)} left)
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle size={12} className="text-emerald-600" />
+                          <span className="text-emerald-700 font-semibold">
+                            Award Acceptance Finalized
+                          </span>
+                        </>
+                      )
+                    ) : isOfferRejected ? (
+                      <>
+                        <XCircle size={12} className="text-rose-600" />
+                        <span className="text-rose-700 font-semibold">Offer Formally Rejected</span>
+                      </>
+                    ) : (
+                      <>
+                        <Clock size={12} className="text-amber-600" />
+                        <span>
+                          {daysRemaining !== null 
+                            ? `${daysRemaining} days remaining to accept` 
+                            : `Issued on ${offer.issueDate}`}
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -913,7 +996,9 @@ export const MemberOfferLetter: React.FC = () => {
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
                     {isOfferAccepted
-                      ? 'You have formally accepted this compensation award. You can proceed with setting up your electronic bank payout.'
+                      ? isWithinGracePeriod
+                        ? 'You have formally accepted this compensation award. You are currently in the statutory 24-hour cooling grace window.'
+                        : 'You have formally accepted this compensation award and the cooling grace window has concluded.'
                       : isOfferRejected
                       ? 'You have rejected this compensation award. You may file an objection for officer review and reassessment.'
                       : 'Please download the Form G offer document below, sign the declaration, and upload the signed PDF before accepting.'}
@@ -923,15 +1008,16 @@ export const MemberOfferLetter: React.FC = () => {
                 {/* Status Badges & Quick Shortcuts */}
                 {isOfferAccepted ? (
                   <div className="flex items-center gap-2.5 flex-wrap">
-                    {offer.isWithinOneDay && (
-                      <Button
-                        variant="outlined"
-                        size="sm"
-                        onClick={() => setShowCancelApprovalModal(true)}
-                        isLoading={cancellingApproval}
-                      >
-                        <XCircle size={15} /> Cancel Acceptance (Grace Period)
-                      </Button>
+                    {isWithinGracePeriod ? (
+                      <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-xs font-bold">
+                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                        <span>Grace Period Active ({formatCompactCountdown(remainingGraceMs)})</span>
+                      </div>
+                    ) : (
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold">
+                        <CheckCircle size={14} className="text-emerald-600" />
+                        <span>Official Acceptance Finalized</span>
+                      </div>
                     )}
                   </div>
                 ) : isOfferRejected ? (
@@ -942,6 +1028,132 @@ export const MemberOfferLetter: React.FC = () => {
                   </div>
                 ) : null}
               </div>
+
+              {/* Accepted: Dedicated 24-Hour Grace Period & Finalization Information Card */}
+              {isOfferAccepted && (
+                <div className="space-y-4">
+                  {isWithinGracePeriod ? (
+                    <div className="bg-gradient-to-br from-amber-50/80 via-amber-50/40 to-white p-5 rounded-2xl border border-amber-200/90 shadow-sm space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-amber-200/50 pb-3">
+                        <div className="flex items-center gap-2 text-sm font-bold text-amber-950">
+                          <Clock size={18} className="text-amber-600 animate-pulse" />
+                          <span>Statutory 24-Hour Cooling-Off Grace Period</span>
+                        </div>
+                        <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-100/80 border border-amber-300/80 rounded-full text-xs font-mono font-bold text-amber-900 shadow-sm">
+                          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                          <span>{formatDetailedCountdown(remainingGraceMs)} remaining</span>
+                        </div>
+                      </div>
+
+                      {/* Timestamps & Policy Grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                        <div className="bg-white/80 p-3.5 rounded-xl border border-amber-200/60">
+                          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                            Offer Accepted At
+                          </span>
+                          <span className="text-xs font-bold text-slate-900 mt-1 block">
+                            {formatDateTime(effectiveAcceptedAt)}
+                          </span>
+                          <span className="text-[10px] text-slate-500 block mt-0.5">
+                            Signed Form H submitted
+                          </span>
+                        </div>
+
+                        <div className="bg-white/80 p-3.5 rounded-xl border border-amber-200/60">
+                          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                            Grace Window Ends
+                          </span>
+                          <span className="text-xs font-bold text-amber-900 mt-1 block font-mono">
+                            {formatDateTime(graceEndsAt)}
+                          </span>
+                          <span className="text-[10px] text-slate-500 block mt-0.5">
+                            24h statutory cooling-off limit
+                          </span>
+                        </div>
+
+                        <div className="bg-white/80 p-3.5 rounded-xl border border-amber-200/60 sm:col-span-2 md:col-span-1">
+                          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                            Right to Cancel
+                          </span>
+                          <span className="text-xs font-bold text-slate-900 mt-1 block">
+                            Permitted until 00:00:00
+                          </span>
+                          <span className="text-[10px] text-slate-500 block mt-0.5">
+                            Retains signed PDF as draft
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
+                        <p className="text-xs text-amber-900/80 leading-relaxed">
+                          You may cancel this acceptance at any time during this grace window (even in the final seconds).
+                          Once cancelled, your case status reverts to <strong>Offer Issued</strong> and you may reconsider or file an objection.
+                        </p>
+
+                        <Button
+                          variant="outlined"
+                          size="md"
+                          onClick={() => setShowCancelApprovalModal(true)}
+                          isLoading={cancellingApproval}
+                          className="border-rose-300 text-rose-700 hover:bg-rose-50 font-bold shrink-0 shadow-sm"
+                        >
+                          <XCircle size={16} className="text-rose-600" />
+                          <span>Cancel Acceptance (Grace Period)</span>
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-gradient-to-br from-emerald-50/80 via-emerald-50/40 to-white p-5 rounded-2xl border border-emerald-200/90 shadow-sm space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-200/50 pb-3">
+                        <div className="flex items-center gap-2 text-sm font-bold text-emerald-950">
+                          <CheckCircle2 size={18} className="text-emerald-600" />
+                          <span>Statutory Award Acceptance Finalized</span>
+                        </div>
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-100/80 border border-emerald-300/80 rounded-full text-xs font-semibold text-emerald-900">
+                          <CheckCircle size={13} className="text-emerald-700" />
+                          <span>24h Grace Window Concluded</span>
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="bg-white/80 p-3.5 rounded-xl border border-emerald-200/60">
+                          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                            Offer Accepted At
+                          </span>
+                          <span className="text-xs font-bold text-slate-900 mt-1 block">
+                            {formatDateTime(effectiveAcceptedAt)}
+                          </span>
+                        </div>
+
+                        <div className="bg-white/80 p-3.5 rounded-xl border border-emerald-200/60">
+                          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                            Finalized At
+                          </span>
+                          <span className="text-xs font-bold text-emerald-900 mt-1 block">
+                            {formatDateTime(graceEndsAt)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
+                        <p className="text-xs text-slate-600 leading-relaxed">
+                          Your award acceptance is legally finalized. Please proceed to verify and configure your bank account details for electronic statutory compensation disbursement.
+                        </p>
+
+                        <Button
+                          variant="filled"
+                          size="md"
+                          onClick={() => navigate(`/member/payment-status?caseId=${encodeURIComponent(offer.caseId)}`)}
+                          className="shrink-0 font-bold"
+                        >
+                          <CreditCard size={16} />
+                          <span>Setup Electronic Bank Payout</span>
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Pending Acceptance: Upload & Action Buttons */}
               {isOfferPending && (
@@ -1115,6 +1327,7 @@ export const MemberOfferLetter: React.FC = () => {
         onCloseCancelModal={() => setShowCancelApprovalModal(false)}
         onCancelApproval={handleCancelApproval}
         cancellingApproval={cancellingApproval}
+        graceCountdown={isWithinGracePeriod ? formatDetailedCountdown(remainingGraceMs) : undefined}
         // Active Objection
         showObjectionPrompt={showObjectionPrompt}
         activeObjection={activeObjection}

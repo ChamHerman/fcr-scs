@@ -465,7 +465,16 @@ export async function acceptOffer(
       });
 
       // Dynamically ingest payment case
-      const primaryOwner = allOwners[0];
+      let primaryOwner: any = allOwners[0];
+      if (!primaryOwner) {
+        primaryOwner = await tx.landOwner.findFirst({
+          where: { ownerships: { some: { landParcel: { caseId: offer.caseId } } } },
+        });
+      }
+      if (!primaryOwner) {
+        primaryOwner = await tx.landOwner.findFirst();
+      }
+
       const existingPmt = await tx.paymentCase.findUnique({
         where: { caseId: offer.caseId },
         include: { receiverBankDetails: true },
@@ -478,7 +487,7 @@ export async function acceptOffer(
           data: {
             id: await newPaymentId(),
             caseId: offer.caseId,
-            beneficiaryId: primaryOwner?.ownerId || `BEN-${offer.caseId}`,
+            beneficiaryId: primaryOwner?.ownerId || offer.ownershipId,
             amount: Number(offer.offerAmount),
             accountHolderName: primaryOwner?.name || null,
             phoneNumber: primaryOwner?.contact || null,
@@ -699,11 +708,13 @@ export async function cancelAcceptance(
   }
 
   const now = new Date();
-  const diffHours = (now.getTime() - new Date(acceptanceTime).getTime()) / (1000 * 60 * 60);
+  const GRACE_PERIOD_MS = 24 * 60 * 60 * 1000;
+  const NETWORK_LATENCY_BUFFER_MS = 60 * 1000; // 60s network tolerance buffer for requests submitted near 0s
+  const elapsedMs = now.getTime() - new Date(acceptanceTime).getTime();
 
-  if (diffHours > 24) {
+  if (elapsedMs > (GRACE_PERIOD_MS + NETWORK_LATENCY_BUFFER_MS)) {
     throw new Error(
-      "The 1-day cancellation period has expired. Approvals cannot be cancelled or modified after 24 hours."
+      "The 24-hour statutory cancellation period has expired. Approvals cannot be cancelled or modified after the grace window."
     );
   }
 
@@ -757,12 +768,11 @@ export async function cancelAcceptance(
         data: { deletedAt: new Date() },
       });
 
-      // Soft-delete the ready-to-publish blockchain record so it disappears from queues
+      // Soft-delete the associated milestone 1 blockchain record so it disappears from queues
       await tx.blockchainRecord.updateMany({
         where: {
           caseId: offer.caseId,
           milestone: "AWARD",
-          status: BlockchainStatus.READY_TO_PUBLISH,
         },
         data: { deletedAt: new Date() },
       });

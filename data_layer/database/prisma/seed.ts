@@ -222,33 +222,114 @@ async function main() {
 
   // ===========================================================================
   // 1b. Seed Role Permissions (page-level RBAC matrix)
-  // Government Admins: full Finance & Ledger pages (actions still endpoint-enforced).
-  // Government Officers: view-only page access (backend blocks CUD).
-  // SYSTEM_ADMINISTRATOR needs no rows (code bypass, view-only in payment/blockchain).
-  // BANK_OPERATOR has no admin pages (the bank portal is a standalone route).
+  // Government Admins: all admin portal pages EXCEPT /admin/role-management.
+  // Finance & Ledger pages are strictly for Government Admins (actions endpoint-enforced).
+  // Government Officers: operational pages only; Finance & Ledger strictly removed.
+  // SYSTEM_ADMINISTRATOR needs no rows (implicit code bypass to all pages).
   // ===========================================================================
   console.log('\n--- 1b. Seeding Role Permissions ---');
 
-  const FINANCE_LEDGER_PAGES = [
+  const ALL_ADMIN_PAGES = [
+    // Main
+    '/admin',
+    '/admin/valuers',
+    '/admin/forms',
+
+    // Land Acquisition
+    '/admin/case',
+    '/admin/case/valuation',
+
+    // Compensation
+    '/admin/compensation/report',
+    '/admin/compensation/offer',
+    '/admin/compensation/objection',
+
+    // Finance & Ledger (GA only)
     '/admin/payment',
     '/admin/payment/initiate',
     '/admin/payment/pending',
     '/admin/payment/failed',
     '/admin/blockchain',
     '/admin/blockchain/publish',
-    '/admin/blockchain/void',
+
+    // AI Valuation
+    '/admin/prediction',
+    '/admin/prediction/retrain',
+
+    // Reporting
+    '/admin/reports',
+    '/admin/reports/case-status',
+    '/admin/reports/payment',
+    '/admin/reports/blockchain-audit',
+
+    // System
+    '/admin/profile',
+    '/admin/users',
+    '/admin/role-management',
+    '/admin/audit-logs',
+    '/admin/alerts',
+    '/admin/settings',
   ];
 
-  for (const role of [UserRole.GOVERNMENT_ADMINISTRATOR, UserRole.GOVERNMENT_OFFICER]) {
-    for (const pagePath of FINANCE_LEDGER_PAGES) {
-      await prisma.rolePermission.upsert({
-        where: { role_pagePath: { role, pagePath } },
-        update: { canAccess: true },
-        create: { role, pagePath, canAccess: true },
-      });
-    }
+  const OFFICER_ALLOWED_PAGES = new Set([
+    '/admin',
+    '/admin/valuers',
+    '/admin/forms',
+    '/admin/case',
+    '/admin/case/valuation',
+    '/admin/compensation/report',
+    '/admin/compensation/offer',
+    '/admin/compensation/objection',
+    '/admin/prediction',
+    '/admin/prediction/retrain',
+    '/admin/reports',
+    '/admin/reports/case-status',
+    '/admin/profile',
+    '/admin/audit-logs',
+    '/admin/alerts',
+  ]);
+
+  const VALUER_ALLOWED_PAGES = new Set([
+    '/admin',
+    '/admin/case',
+    '/admin/case/valuation',
+    '/admin/prediction',
+    '/admin/profile',
+  ]);
+
+  // Seed Government Administrator permissions:
+  // Allowed to access all admin portal pages EXCEPT for role management page only.
+  for (const pagePath of ALL_ADMIN_PAGES) {
+    const canAccess = pagePath !== '/admin/role-management';
+    await prisma.rolePermission.upsert({
+      where: { role_pagePath: { role: UserRole.GOVERNMENT_ADMINISTRATOR, pagePath } },
+      update: { canAccess },
+      create: { role: UserRole.GOVERNMENT_ADMINISTRATOR, pagePath, canAccess },
+    });
   }
-  console.log('✅ Upserted RolePermissions (Finance & Ledger pages) for Government Admins + Officers');
+
+  // Seed Government Officer permissions:
+  // Finance & Ledger permissions removed; operational pages granted; role management & user admin denied.
+  for (const pagePath of ALL_ADMIN_PAGES) {
+    const canAccess = OFFICER_ALLOWED_PAGES.has(pagePath);
+    await prisma.rolePermission.upsert({
+      where: { role_pagePath: { role: UserRole.GOVERNMENT_OFFICER, pagePath } },
+      update: { canAccess },
+      create: { role: UserRole.GOVERNMENT_OFFICER, pagePath, canAccess },
+    });
+  }
+
+  // Seed Land Valuer permissions:
+  for (const pagePath of ALL_ADMIN_PAGES) {
+    const canAccess = VALUER_ALLOWED_PAGES.has(pagePath);
+    await prisma.rolePermission.upsert({
+      where: { role_pagePath: { role: UserRole.LAND_VALUER, pagePath } },
+      update: { canAccess },
+      create: { role: UserRole.LAND_VALUER, pagePath, canAccess },
+    });
+  }
+
+  console.log('✅ Upserted RolePermissions: Finance & Ledger strictly for Government Admins; Government Admins granted all pages except Role Management; Officers removed from Finance & Ledger');
 
   // ===========================================================================
   // 2. Seed Email Templates
@@ -1147,19 +1228,55 @@ async function main() {
               updatedAt: acceptedAt,
             },
           });
-          const owner = await prisma.landOwner.findFirst({ where: { email: primaryMember.email } });
-          if (owner) {
-            await prisma.offerMemberResponse.upsert({
-              where: { offerId_ownerId: { offerId: existingOffer.offerId, ownerId: owner.ownerId } },
-              update: { status: OfferStatus.ACCEPTED, respondedAt: acceptedAt, signedDocument: formHArtifact.signedDocument },
-              create: {
+          // Look up the land parcel and owners specific to this case
+          const parcel = await prisma.landParcel.findFirst({
+            where: { caseId: dbCase.caseId },
+            include: { ownerships: { include: { landOwner: true } } },
+          });
+          const parcelOwners = parcel?.ownerships?.map((o) => o.landOwner).filter(Boolean) || [];
+
+          if (parcelOwners.length > 0) {
+            const validOwnerIds = parcelOwners.map((o) => o.ownerId);
+            // Delete any spurious responses not belonging to this parcel's owners
+            await prisma.offerMemberResponse.deleteMany({
+              where: {
                 offerId: existingOffer.offerId,
-                ownerId: owner.ownerId,
-                status: OfferStatus.ACCEPTED,
-                signedDocument: formHArtifact.signedDocument,
-                respondedAt: acceptedAt,
+                ownerId: { notIn: validOwnerIds },
               },
             });
+
+            for (const owner of parcelOwners) {
+              await prisma.offerMemberResponse.upsert({
+                where: { offerId_ownerId: { offerId: existingOffer.offerId, ownerId: owner.ownerId } },
+                update: {
+                  status: OfferStatus.ACCEPTED,
+                  respondedAt: acceptedAt,
+                  signedDocument: formHArtifact.signedDocument,
+                },
+                create: {
+                  offerId: existingOffer.offerId,
+                  ownerId: owner.ownerId,
+                  status: OfferStatus.ACCEPTED,
+                  signedDocument: formHArtifact.signedDocument,
+                  respondedAt: acceptedAt,
+                },
+              });
+            }
+          } else {
+            const owner = await prisma.landOwner.findFirst({ where: { email: primaryMember.email } });
+            if (owner) {
+              await prisma.offerMemberResponse.upsert({
+                where: { offerId_ownerId: { offerId: existingOffer.offerId, ownerId: owner.ownerId } },
+                update: { status: OfferStatus.ACCEPTED, respondedAt: acceptedAt, signedDocument: formHArtifact.signedDocument },
+                create: {
+                  offerId: existingOffer.offerId,
+                  ownerId: owner.ownerId,
+                  status: OfferStatus.ACCEPTED,
+                  signedDocument: formHArtifact.signedDocument,
+                  respondedAt: acceptedAt,
+                },
+              });
+            }
           }
         }
       }
@@ -1434,12 +1551,17 @@ async function main() {
   await prisma.paymentCase.deleteMany({});
   await prisma.blockchainRecord.deleteMany({});
 
-  // Purge any legacy demo cases from previous runs
-  const legacyCases = await prisma.acquisitionCase.findMany({
-    where: { caseId: { startsWith: 'LAC-2026-09-100' } },
+  // Purge any non-canonical or test cases (e.g. INGEST-*, CANCEL-TEST-*, LAC-2026-09-100-*)
+  const canonicalCaseIds = Array.from({ length: 20 }, (_, i) => generateCaseId(1 + i));
+  const nonCanonicalCases = await prisma.acquisitionCase.findMany({
+    where: { caseId: { notIn: canonicalCaseIds } },
     select: { caseId: true },
   });
-  for (const lc of legacyCases) {
+  for (const lc of nonCanonicalCases) {
+    await prisma.failedTransaction.deleteMany({ where: { paymentCase: { caseId: lc.caseId } } });
+    await prisma.paymentReceipt.deleteMany({ where: { paymentCase: { caseId: lc.caseId } } });
+    await prisma.paymentAuthorisation.deleteMany({ where: { paymentCase: { caseId: lc.caseId } } });
+    await prisma.receiverBankDetails.deleteMany({ where: { paymentCase: { caseId: lc.caseId } } });
     await prisma.blockchainRecord.deleteMany({ where: { caseId: lc.caseId } });
     await prisma.paymentCase.deleteMany({ where: { caseId: lc.caseId } });
     await prisma.offerMemberResponse.deleteMany({ where: { offerLetter: { caseId: lc.caseId } } });
@@ -1458,6 +1580,10 @@ async function main() {
     const legacyDir = path.resolve(__dirname, '../../document_storage/offer_letter', lc.caseId);
     if (fs.existsSync(legacyDir)) {
       fs.rmSync(legacyDir, { recursive: true, force: true });
+    }
+    const legacyDocDir = path.resolve(__dirname, '../../document_storage/case_document', lc.caseId);
+    if (fs.existsSync(legacyDocDir)) {
+      fs.rmSync(legacyDocDir, { recursive: true, force: true });
     }
   }
 
@@ -1541,6 +1667,7 @@ async function main() {
 
     if (!acCase) continue;
     const primaryOwner = acCase.landParcel?.ownerships?.[0]?.landOwner;
+    if (!primaryOwner) continue;
     const offerLetter = acCase.offerLetters?.[0];
     const amount = offerLetter ? Number(offerLetter.offerAmount) : 2500000;
     const recordTime = offerLetter?.acceptedAt || acCase.updatedAt || new Date(seedRunNow - 25 * 60 * 60 * 1000);
@@ -1550,7 +1677,7 @@ async function main() {
       data: {
         id: pmtId,
         caseId: cId,
-        beneficiaryId: primaryOwner?.ownerId || `BEN-${cId}`,
+        beneficiaryId: primaryOwner.ownerId,
         amount,
         accountHolderName: primaryOwner?.name || null,
         phoneNumber: primaryOwner?.contact || null,

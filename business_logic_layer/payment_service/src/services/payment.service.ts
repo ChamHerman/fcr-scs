@@ -343,7 +343,18 @@ export async function submitBankDetails(data: {
       offerLetters: true,
     },
   });
-  const owner = ac?.landParcel?.ownerships?.[0]?.landOwner;
+  const existingPc = await prisma.paymentCase.findUnique({
+    where: { caseId: data.caseId },
+    include: { beneficiary: true },
+  });
+  const owner =
+    existingPc?.beneficiary ||
+    ac?.landParcel?.ownerships?.[0]?.landOwner ||
+    (await prisma.landOwner.findFirst({
+      where: { ownerships: { some: { landParcel: { caseId: data.caseId } } } },
+    })) ||
+    (await prisma.landOwner.findFirst());
+  if (!owner) throw new Error("Cannot submit bank details: No registered landowner found");
   const amount = ac?.compensationReports?.[0]?.totalCompensation
     ? Number(ac.compensationReports[0].totalCompensation)
     : ac?.offerLetters?.[0]?.offerAmount
@@ -380,7 +391,7 @@ export async function submitBankDetails(data: {
     create: {
       id: await newPaymentId(),
       caseId: data.caseId,
-      beneficiaryId: owner?.ownerId || "BEN-" + data.caseId,
+      beneficiaryId: owner.ownerId,
       amount,
       bankName: data.bankName,
       accountNumber: cleanAccountNumber,
@@ -800,20 +811,6 @@ export async function cancelPayment(caseId: string, rawAdminId: string, reasonKe
     include: { authorisations: true, failedTransactions: true },
   });
 
-  // FR-019 revocation gate: if Milestone 1 was already notarized on-chain, the
-  // ledger still asserts a statutory debt for a now-cancelled case. Park the
-  // record in VOID_PENDING so the GA completes the on-chain revocation via
-  // voidRecord (signed in MetaMask from PublishLedger).
-  const m1 = await prisma.blockchainRecord.findUnique({
-    where: { caseId_milestone: { caseId, milestone: "AWARD" } },
-  });
-  if (m1 && m1.status === BlockchainStatus.PUBLISHED) {
-    await prisma.blockchainRecord.update({
-      where: { id: m1.id },
-      data: { status: BlockchainStatus.VOID_PENDING },
-    });
-  }
-
   try {
     await prisma.acquisitionCase.updateMany({
       where: { caseId, status: CaseStatus.PAYMENT_IN_PROGRESS },
@@ -934,6 +931,10 @@ export async function getPaymentStatus(caseId: string, userRole?: string, userId
   });
 
   if (!eligibleAc) {
+    const rawCase = await prisma.acquisitionCase.findFirst({ where: { caseId } });
+    if (!rawCase) {
+      throw new Error(`Acquisition case not found: ${caseId}`);
+    }
     throw new Error("Payment record not available: case has not reached offer accepted status.");
   }
 
@@ -948,7 +949,13 @@ export async function getPaymentStatus(caseId: string, userRole?: string, userId
 
   if (!pc) {
     const ac = eligibleAc;
-    const primaryOwner = ac.landParcel?.ownerships?.[0]?.landOwner;
+    const primaryOwner =
+      ac.landParcel?.ownerships?.[0]?.landOwner ||
+      (await prisma.landOwner.findFirst({
+        where: { ownerships: { some: { landParcel: { caseId: ac.caseId } } } },
+      })) ||
+      (await prisma.landOwner.findFirst());
+    if (!primaryOwner) throw new Error(`Case ${ac.caseId} has no registered landowner`);
     const amount = ac.compensationReports?.[0]?.totalCompensation
       ? Number(ac.compensationReports[0].totalCompensation)
       : ac.offerLetters?.[0]?.offerAmount
@@ -967,7 +974,7 @@ export async function getPaymentStatus(caseId: string, userRole?: string, userId
       data: {
         id: pmtId,
         caseId: ac.caseId,
-        beneficiaryId: primaryOwner?.ownerId || `BEN-${ac.caseId}`,
+        beneficiaryId: primaryOwner.ownerId,
         amount,
         accountHolderName: primaryOwner?.name || null,
         phoneNumber: primaryOwner?.contact || null,
@@ -1132,7 +1139,13 @@ export async function getAllCases(userRole?: string, userId?: string) {
           });
         }
       } else {
-        const primaryOwner = ac.landParcel?.ownerships?.[0]?.landOwner;
+        const primaryOwner =
+          ac.landParcel?.ownerships?.[0]?.landOwner ||
+          (await prisma.landOwner.findFirst({
+            where: { ownerships: { some: { landParcel: { caseId: ac.caseId } } } },
+          })) ||
+          (await prisma.landOwner.findFirst());
+        if (!primaryOwner) continue;
         const amount = ac.compensationReports?.[0]?.totalCompensation
           ? Number(ac.compensationReports[0].totalCompensation)
           : ac.offerLetters?.[0]?.offerAmount
@@ -1151,7 +1164,7 @@ export async function getAllCases(userRole?: string, userId?: string) {
           data: {
             id: pmtId,
             caseId: ac.caseId,
-            beneficiaryId: primaryOwner?.ownerId || `BEN-${ac.caseId}`,
+            beneficiaryId: primaryOwner.ownerId,
             amount,
             accountHolderName: primaryOwner?.name || null,
             phoneNumber: primaryOwner?.contact || null,

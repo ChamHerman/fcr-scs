@@ -85,7 +85,7 @@ export const getDashboardOverviewStats = async () => {
       totalPaidAmount: sumPaid,
       totalBlockchainRecords: blockchainTotal,
       publishedBlockchainRecords: blockchainStatusDistribution[BlockchainStatus.PUBLISHED] || blockchainStatusDistribution["Published"] || 0,
-      voidedBlockchainRecords: blockchainStatusDistribution[BlockchainStatus.VOIDED] || blockchainStatusDistribution["Voided"] || 0,
+      readyToPublishBlockchainRecords: blockchainStatusDistribution[BlockchainStatus.READY_TO_PUBLISH] || blockchainStatusDistribution["Ready to Publish"] || 0,
       completedCases: caseStatusDistribution["CASE_CLOSED"] || caseStatusDistribution["PAYMENT_COMPLETED"] || 0,
       pendingValuation: (caseStatusDistribution["CASE_REGISTERED"] || 0) + (caseStatusDistribution["VALUATION_IN_PROGRESS"] || 0),
       pendingCompensation: caseStatusDistribution["VALUATION_APPROVED"] || 0,
@@ -267,7 +267,7 @@ export const generateBlockchainAuditData = async (filters: ReportFilterParams) =
   });
 
   const publishedRecords = records.filter((r) => r.status === BlockchainStatus.PUBLISHED || (r.status as any) === "Published").length;
-  const voidedRecords = records.filter((r) => r.status === BlockchainStatus.VOIDED || (r.status as any) === "Voided").length;
+  const readyToPublishRecords = records.filter((r) => r.status === BlockchainStatus.READY_TO_PUBLISH || (r.status as any) === "Ready to Publish").length;
 
   return {
     reportType: "Blockchain Audit Report",
@@ -277,7 +277,7 @@ export const generateBlockchainAuditData = async (filters: ReportFilterParams) =
     summary: {
       totalRecords: records.length,
       publishedRecords,
-      voidedRecords,
+      readyToPublishRecords,
       integrityStatus: "100% Cryptographically Verified",
       network: "Ethereum Sepolia Testnet",
     },

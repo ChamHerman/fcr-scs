@@ -89,7 +89,7 @@ const FALLBACK_CATEGORY_DATA: Record<string, ReportGeneratedResponse> = {
     reportId: 'FR-RPT-013-DEMO',
     generatedAt: new Date().toISOString(),
     filterApplied: {},
-    summary: { totalRecords: 2, publishedRecords: 2, voidedRecords: 0, integrityStatus: '100% Cryptographically Verified' },
+    summary: { totalRecords: 2, publishedRecords: 2, readyToPublishRecords: 0, integrityStatus: '100% Cryptographically Verified' },
     details: [
       { caseId: 'BC-2026-004', transactionHash: '0x89ab...34fe', documentHash: '0x12cd...78ba', status: 'Published', publishedAt: '2026-08-08' },
       { caseId: 'BC-2026-003', transactionHash: '0x45cd...11aa', documentHash: '0x99ee...22cc', status: 'Published', publishedAt: '2026-08-05' },
@@ -145,7 +145,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
           totalPaidAmount: 2450000,
           totalBlockchainRecords: 14,
           publishedBlockchainRecords: 12,
-          voidedBlockchainRecords: 2,
+          readyToPublishBlockchainRecords: 2,
           completedCases: 9,
           pendingValuation: 6,
           pendingCompensation: 4,
@@ -164,7 +164,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
         },
         blockchainStatusDistribution: {
           "Published": 12,
-          "Voided": 2
+          "Ready to Publish": 2
         },
         monthlyTrends: {
           "Feb": 4, "Mar": 8, "Apr": 14, "May": 19, "Jun": 21, "Jul": 26, "Aug": 24
@@ -287,11 +287,11 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
 
   // Blockchain Status Doughnut
   const blockchainDoughnutData = {
-    labels: ['Published On-chain', 'Voided Records'],
+    labels: ['Published On-chain', 'Ready to Publish'],
     datasets: [
       {
-        data: [data?.kpis.publishedBlockchainRecords ?? 12, data?.kpis.voidedBlockchainRecords ?? 2],
-        backgroundColor: ['#0277BD', '#B00020'],
+        data: [data?.kpis.publishedBlockchainRecords ?? 12, data?.kpis.readyToPublishBlockchainRecords ?? 2],
+        backgroundColor: ['#0277BD', '#FB8C00'],
         borderWidth: 2,
         borderColor: '#ffffff',
       },
@@ -400,7 +400,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
           <>
             <StatCard icon={<ShieldCheck size={16} className="text-[#0b5b8c]" />} label="Total Ledger Records" value={categoryData?.summary?.totalRecords ?? 0} sub="Smart Contract Events" />
             <StatCard icon={<CheckCircle2 size={16} className="text-[#1e7b4a]" />} label="Published On-Chain" value={categoryData?.summary?.publishedRecords ?? 0} sub="Ethereum Sepolia Verified" />
-            <StatCard icon={<AlertCircle size={16} className="text-[#b3261e]" />} label="Voided / Revoked" value={categoryData?.summary?.voidedRecords ?? 0} sub="Superseded Contracts" />
+            <StatCard icon={<Clock size={16} className="text-[#a8600b]" />} label="Ready to Publish" value={categoryData?.summary?.readyToPublishRecords ?? 0} sub="Pending Publication" />
             <StatCard icon={<ShieldCheck size={16} className="text-[#6750A4]" />} label="Cryptographic Integrity" value={categoryData?.summary?.integrityStatus ?? 'Verified'} sub="SHA-256 Validated" />
           </>
         )}

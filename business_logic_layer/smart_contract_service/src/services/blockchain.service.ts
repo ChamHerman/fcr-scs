@@ -53,7 +53,7 @@ export async function newRecordId(): Promise<string> {
 }
 
 /**
- * Publish/void transactions are signed by the ADMIN WALLET in MetaMask (the
+ * Publication transactions are signed by the ADMIN WALLET in MetaMask (the
  * frontend sends them via eth_sendTransaction). The backend never signs: it
  * verifies the supplied transaction hash on the active network (mined,
  * successful, targeted the CompensationLedger contract) and only then records
@@ -212,34 +212,6 @@ export async function publishRecord(params: {
   }
 
   return record;
-}
-
-export async function voidRecord(params: {
-  caseId: string;
-  milestone?: string;
-  voidReason: string;
-  transactionHash: string;
-}) {
-  const { caseId, voidReason, transactionHash } = params;
-  const milestone = normalizeMilestone(params.milestone);
-
-  const r = await prisma.blockchainRecord.findUnique({
-    where: { caseId_milestone: { caseId, milestone } },
-  });
-  if (!r) throw new Error("Record not found");
-  if (r.status === BlockchainStatus.VOIDED) throw new Error("Record already voided");
-
-  await assertRecordedOnChain(transactionHash);
-
-  return prisma.blockchainRecord.update({
-    where: { id: r.id },
-    data: {
-      status: BlockchainStatus.VOIDED,
-      voidReason,
-      voidTransactionHash: transactionHash,
-      voidedAt: new Date(),
-    },
-  });
 }
 
 export async function getRecords(status?: string) {
@@ -439,27 +411,6 @@ export async function verifyDocument(fileBuffer: Buffer) {
       caseId: record.caseId,
       milestone: record.milestone === "SETTLEMENT" ? "M2" : "M1",
       onChainKey,
-    };
-  }
-
-  if (chain.isVoided) {
-    return {
-      verified: false,
-      status: "Voided",
-      message: "Warning: This settlement record was legally voided on-chain. Reason: " + chain.voidReason,
-      voidReason: chain.voidReason,
-      timestamp: chain.publishedAt,
-      localHash,
-      onChainHash: chain.documentHash,
-      caseId: record.caseId,
-      milestone: record.milestone === "SETTLEMENT" ? "M2" : "M1",
-      onChainKey,
-      transactionHash: record.voidTransactionHash || record.transactionHash,
-      contractAddress,
-      network: net.label,
-      chainId: net.chainId,
-      etherscanUrl: (record.voidTransactionHash || record.transactionHash) ? `${etherscanBase}/tx/${record.voidTransactionHash || record.transactionHash}` : null,
-      contractUrl: contractAddress ? `${etherscanBase}/address/${contractAddress}` : null,
     };
   }
 

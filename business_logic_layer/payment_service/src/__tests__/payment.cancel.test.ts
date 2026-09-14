@@ -13,9 +13,20 @@ describe("POST /api/payments/cancel (RBAC & SOP Hardening)", () => {
   let gaToken: string;
   let sysAdminToken: string;
 
+  let testLandOwnerId: string;
+  let testProjectId: string;
+  let testCreatedById: string;
+
   beforeAll(async () => {
     gaToken = await getTestSessionToken(UserRole.GOVERNMENT_ADMINISTRATOR, 1, "cancel");
     sysAdminToken = await getTestSessionToken(UserRole.SYSTEM_ADMINISTRATOR, 1, "cancel");
+
+    const existingAc = await prisma.acquisitionCase.findFirst();
+    testProjectId = existingAc!.projectId;
+    testCreatedById = existingAc!.createdById;
+
+    const lo = await prisma.landOwner.findFirst();
+    testLandOwnerId = lo!.ownerId;
   });
 
   afterAll(async () => {
@@ -23,11 +34,23 @@ describe("POST /api/payments/cancel (RBAC & SOP Hardening)", () => {
   });
 
   const makeCase = async (status: PaymentStatus) => {
+    const caseId = `CANCEL-TEST-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    await prisma.acquisitionCase.create({
+      data: {
+        caseId,
+        projectId: testProjectId,
+        createdById: testCreatedById,
+        caseTitle: "Cancel Test Acquisition Case",
+        status: "OFFER_ACCEPTED",
+        registrationDate: new Date(),
+        remarks: "Test case for cancel",
+      },
+    });
     const pc = await prisma.paymentCase.create({
       data: {
         id: await newPaymentId(),
-        caseId: `CANCEL-TEST-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        beneficiaryId: "BEN-TEST",
+        caseId,
+        beneficiaryId: testLandOwnerId,
         amount: 500000,
         bankName: "Maybank",
         accountHolderName: "Test Beneficiary",
@@ -49,6 +72,9 @@ describe("POST /api/payments/cancel (RBAC & SOP Hardening)", () => {
         where: { paymentCase: { caseId: createdCaseId } },
       });
       await prisma.paymentCase.deleteMany({
+        where: { caseId: createdCaseId },
+      });
+      await prisma.acquisitionCase.deleteMany({
         where: { caseId: createdCaseId },
       });
       createdCaseId = "";

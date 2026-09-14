@@ -50,6 +50,9 @@ export const RoleManagement: React.FC = () => {
 
   const handleToggle = (path: string) => {
     if (selectedRole === 'SYSTEM_ADMINISTRATOR') return; // Cannot modify system admin
+    if (path === '/admin/role-management') return; // Strictly reserved for system admin
+    if (selectedRole !== 'GOVERNMENT_ADMINISTRATOR' && (path.startsWith('/admin/payment') || path.startsWith('/admin/blockchain'))) return; // Strictly for GA
+
     setPermissions(prev => ({
       ...prev,
       [path]: !prev[path]
@@ -58,10 +61,18 @@ export const RoleManagement: React.FC = () => {
 
   const handleToggleCategory = (categoryPages: AdminPageInfo[]) => {
     if (selectedRole === 'SYSTEM_ADMINISTRATOR') return;
-    const allEnabled = categoryPages.every(page => !!permissions[page.path]);
+    if (selectedRole !== 'GOVERNMENT_ADMINISTRATOR' && categoryPages.some(p => p.category === 'Finance & Ledger')) return;
+
+    const modifiablePages = categoryPages.filter(p => {
+      if (p.path === '/admin/role-management') return false;
+      if (selectedRole !== 'GOVERNMENT_ADMINISTRATOR' && p.category === 'Finance & Ledger') return false;
+      return true;
+    });
+
+    const allEnabled = modifiablePages.every(page => !!permissions[page.path]);
     setPermissions(prev => {
       const updated = { ...prev };
-      categoryPages.forEach(page => {
+      modifiablePages.forEach(page => {
         updated[page.path] = !allEnabled;
       });
       return updated;
@@ -175,7 +186,10 @@ export const RoleManagement: React.FC = () => {
               
               <div className="flex flex-col gap-3">
                 {pages.map(page => {
-                  const checked = isSysAdmin ? true : !!permissions[page.path];
+                  const isRoleMgmtLocked = page.path === '/admin/role-management';
+                  const isFinanceLocked = page.category === 'Finance & Ledger' && selectedRole !== 'GOVERNMENT_ADMINISTRATOR';
+                  const isDisabled = isSysAdmin || isRoleMgmtLocked || isFinanceLocked;
+                  const checked = isSysAdmin ? true : (isRoleMgmtLocked ? false : (isFinanceLocked ? false : !!permissions[page.path]));
                   return (
                     <label 
                       key={page.path} 
@@ -183,12 +197,24 @@ export const RoleManagement: React.FC = () => {
                         ${checked 
                           ? 'bg-md-primary-container/20 border-md-primary/20 shadow-sm' 
                           : 'bg-md-surface hover:bg-md-surface-variant/10 border-md-outline/10'} 
-                        ${!isSysAdmin ? 'cursor-pointer hover:shadow-md' : 'opacity-70 cursor-not-allowed'}`}
+                        ${!isDisabled ? 'cursor-pointer hover:shadow-md' : 'opacity-60 cursor-not-allowed'}`}
                     >
                       <div className="flex flex-col pr-4">
-                        <span className={`text-sm font-semibold transition-colors ${checked ? 'text-md-on-surface' : 'text-md-on-surface-variant'}`}>
-                          {page.name}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-sm font-semibold transition-colors ${checked ? 'text-md-on-surface' : 'text-md-on-surface-variant'}`}>
+                            {page.name}
+                          </span>
+                          {isRoleMgmtLocked && (
+                            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-md-outline/15 text-md-on-surface-variant">
+                              SysAdmin Only
+                            </span>
+                          )}
+                          {isFinanceLocked && (
+                            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-md-outline/15 text-md-on-surface-variant">
+                              GovAdmin Only
+                            </span>
+                          )}
+                        </div>
                         <span className="text-xs font-medium text-md-on-surface-variant/70 mt-1 truncate max-w-[200px]" title={page.path}>
                           {page.path}
                         </span>
@@ -205,7 +231,7 @@ export const RoleManagement: React.FC = () => {
                         className="sr-only"
                         checked={checked}
                         onChange={() => handleToggle(page.path)}
-                        disabled={isSysAdmin}
+                        disabled={isDisabled}
                       />
                     </label>
                   );

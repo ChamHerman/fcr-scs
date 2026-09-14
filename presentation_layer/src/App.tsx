@@ -33,7 +33,6 @@ import BankPortal from './pages/Bank/BankPortal';
 // Import Smart Contract & Blockchain Pages
 import { BlockchainDashboard } from './pages/SmartContract/BlockchainDashboard';
 import { PublishLedger } from './pages/SmartContract/PublishLedger';
-import { VoidLedger } from './pages/SmartContract/VoidLedger';
 import SmartContractVerifyAuditTrail from './pages/SmartContract/VerifyAuditTrail';
 
 // Import Admin Payment Pages
@@ -167,7 +166,6 @@ function App() {
               <Route path="blockchain">
                 <Route index element={<WalletGate><BlockchainDashboard /></WalletGate>} />
                 <Route path="publish" element={<WalletGate><PublishLedger /></WalletGate>} />
-                <Route path="void" element={<WalletGate><VoidLedger /></WalletGate>} />
               </Route>
             </Route>
           </Route>

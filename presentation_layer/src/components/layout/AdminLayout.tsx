@@ -45,6 +45,8 @@ export const AdminLayout: React.FC = () => {
     return localStorage.getItem('admin_theme') === 'dark';
   });
 
+  const hasFinanceAccess = allowedPages.includes('*') || allowedPages.some(p => p.startsWith('/admin/payment') || p.startsWith('/admin/blockchain'));
+
   // Sidebar groups: expanded = route-pinned ∪ click-pinned ∪ hover-previewed.
   // Hover is a single source of truth, set on label-enter and cleared only when
   // the pointer leaves the nav (with a short grace delay). Per-section
@@ -485,66 +487,62 @@ export const AdminLayout: React.FC = () => {
               </div>
             </div>
 
-            <div className="nav-section">
-              {!isCollapsed && (
+            {hasFinanceAccess && (
+              <div className="nav-section">
+                {!isCollapsed && (
+                  <div
+                    className="nav-label"
+                    onClick={() => toggleGroup('finance')}
+                    onMouseEnter={() => handleGroupEnter('finance')}
+                  >
+                    <span>Finance & Ledger</span>
+                    {isGroupExpanded('finance') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </div>
+                )}
+                {isCollapsed && <div className="nav-divider" />}
                 <div
-                  className="nav-label"
-                  onClick={() => toggleGroup('finance')}
-                  onMouseEnter={() => handleGroupEnter('finance')}
+                  className="nav-group-items"
+                  ref={(el) => { navGroupRefs.current.finance = el; }}
                 >
-                  <span>Finance & Ledger</span>
-                  {isGroupExpanded('finance') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    {(allowedPages.includes('*') || allowedPages.includes('/admin/payment')) && (
+                      <NavLink to="/admin/payment" end className="nav-item" title={isCollapsed ? "Payments Overview" : ""}>
+                        <CreditCard size={22} className="nav-icon" />
+                        {!isCollapsed && <span>Payments Overview</span>}
+                      </NavLink>
+                    )}
+                    {(allowedPages.includes('*') || allowedPages.includes('/admin/payment/initiate')) && (
+                      <NavLink to="/admin/payment/initiate" className="nav-item" title={isCollapsed ? "Initiate" : ""}>
+                        <Send size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                        {!isCollapsed && <span>Initiate</span>}
+                      </NavLink>
+                    )}
+                    {(allowedPages.includes('*') || allowedPages.includes('/admin/payment/pending')) && (
+                      <NavLink to="/admin/payment/pending" className="nav-item" title={isCollapsed ? "Pending Authorisations" : ""}>
+                        <PenLine size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                        {!isCollapsed && <span>Pending Authorisations</span>}
+                      </NavLink>
+                    )}
+                    {(allowedPages.includes('*') || allowedPages.includes('/admin/payment/failed')) && (
+                      <NavLink to="/admin/payment/failed" className="nav-item" title={isCollapsed ? "Failed Transactions" : ""}>
+                        <AlertTriangle size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                        {!isCollapsed && <span>Failed Transactions</span>}
+                      </NavLink>
+                    )}
+                    {(allowedPages.includes('*') || allowedPages.includes('/admin/blockchain')) && (
+                      <NavLink to="/admin/blockchain" end className="nav-item" title={isCollapsed ? "Blockchain Overview" : ""}>
+                        <LinkIcon size={22} className="nav-icon" />
+                        {!isCollapsed && <span>Blockchain Overview</span>}
+                      </NavLink>
+                    )}
+                    {(allowedPages.includes('*') || allowedPages.includes('/admin/blockchain/publish')) && (
+                      <NavLink to="/admin/blockchain/publish" className="nav-item" title={isCollapsed ? "Publish" : ""}>
+                        <Upload size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                        {!isCollapsed && <span>Publish</span>}
+                      </NavLink>
+                    )}
                 </div>
-              )}
-              {isCollapsed && <div className="nav-divider" />}
-              <div
-                className="nav-group-items"
-                ref={(el) => { navGroupRefs.current.finance = el; }}
-              >
-                  {(allowedPages.includes('*') || allowedPages.includes('/admin/payment')) && (
-                    <NavLink to="/admin/payment" end className="nav-item" title={isCollapsed ? "Payments Overview" : ""}>
-                      <CreditCard size={22} className="nav-icon" />
-                      {!isCollapsed && <span>Payments Overview</span>}
-                    </NavLink>
-                  )}
-                  {(allowedPages.includes('*') || allowedPages.includes('/admin/payment/initiate')) && (
-                    <NavLink to="/admin/payment/initiate" className="nav-item" title={isCollapsed ? "Initiate" : ""}>
-                      <Send size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
-                      {!isCollapsed && <span>Initiate</span>}
-                    </NavLink>
-                  )}
-                  {(allowedPages.includes('*') || allowedPages.includes('/admin/payment/pending')) && (
-                    <NavLink to="/admin/payment/pending" className="nav-item" title={isCollapsed ? "Pending Authorisations" : ""}>
-                      <PenLine size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
-                      {!isCollapsed && <span>Pending Authorisations</span>}
-                    </NavLink>
-                  )}
-                  {(allowedPages.includes('*') || allowedPages.includes('/admin/payment/failed')) && (
-                    <NavLink to="/admin/payment/failed" className="nav-item" title={isCollapsed ? "Failed Transactions" : ""}>
-                      <AlertTriangle size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
-                      {!isCollapsed && <span>Failed Transactions</span>}
-                    </NavLink>
-                  )}
-                  {(allowedPages.includes('*') || allowedPages.includes('/admin/blockchain')) && (
-                    <NavLink to="/admin/blockchain" end className="nav-item" title={isCollapsed ? "Blockchain Overview" : ""}>
-                      <LinkIcon size={22} className="nav-icon" />
-                      {!isCollapsed && <span>Blockchain Overview</span>}
-                    </NavLink>
-                  )}
-                  {(allowedPages.includes('*') || allowedPages.includes('/admin/blockchain/publish')) && (
-                    <NavLink to="/admin/blockchain/publish" className="nav-item" title={isCollapsed ? "Publish" : ""}>
-                      <Upload size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
-                      {!isCollapsed && <span>Publish</span>}
-                    </NavLink>
-                  )}
-                  {(allowedPages.includes('*') || allowedPages.includes('/admin/blockchain/void')) && (
-                    <NavLink to="/admin/blockchain/void" className="nav-item" title={isCollapsed ? "Void" : ""}>
-                      <Ban size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
-                      {!isCollapsed && <span>Void</span>}
-                    </NavLink>
-                  )}
               </div>
-            </div>
+            )}
 
             <div className="nav-section">
               {!isCollapsed && (

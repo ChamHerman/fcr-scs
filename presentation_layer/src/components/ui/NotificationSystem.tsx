@@ -146,37 +146,82 @@ const Toast: React.FC<{
   onDismiss: (id: string) => void;
   onShowDetails: (notification: Notification) => void;
 }> = ({ notification, onDismiss, onShowDetails }) => {
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const toastRef = useRef<HTMLDivElement>(null);
+  const isDismissingRef = useRef<boolean>(false);
 
-  useGSAP(() => {
-    // Slide in from right
-    gsap.from(toastRef.current, {
-      x: 100,
-      opacity: 0,
-      duration: 0.5,
-      ease: 'back.out(1.2)'
+  const { contextSafe } = useGSAP({ scope: wrapperRef });
+
+  const handleDismiss = contextSafe(() => {
+    if (isDismissingRef.current || !toastRef.current || !wrapperRef.current) return;
+    isDismissingRef.current = true;
+
+    // Smooth exit: slide out right with opacity & scale decay, then collapse height
+    const tl = gsap.timeline({
+      onComplete: () => onDismiss(notification.id),
     });
 
-    // DESIGN.md toast rule: success/info auto-dismiss briefly; errors stay on
-    // screen until the user closes them manually.
-    const duration = notification.type === 'error' ? 0 : notification.type === 'general' ? 8000 : 5000;
-    if (duration > 0) {
-      const timer = setTimeout(() => {
-        handleDismiss();
-      }, duration);
-      return () => clearTimeout(timer);
-    }
-  }, []);
-
-  const handleDismiss = () => {
-    gsap.to(toastRef.current, {
-      x: 100,
+    tl.to(toastRef.current, {
+      x: 120,
       opacity: 0,
-      duration: 0.3,
+      scale: 0.94,
+      duration: 0.32,
       ease: 'power3.in',
-      onComplete: () => onDismiss(notification.id)
-    });
-  };
+    }).to(
+      wrapperRef.current,
+      {
+        height: 0,
+        opacity: 0,
+        paddingTop: 0,
+        paddingBottom: 0,
+        marginTop: 0,
+        marginBottom: 0,
+        duration: 0.24,
+        ease: 'power2.out',
+      },
+      '-=0.12'
+    );
+  });
+
+  useGSAP(
+    () => {
+      if (!toastRef.current) return;
+
+      // Smooth slide-in with subtle bounce
+      gsap.fromTo(
+        toastRef.current,
+        {
+          x: 120,
+          opacity: 0,
+          scale: 0.94,
+        },
+        {
+          x: 0,
+          opacity: 1,
+          scale: 1,
+          duration: 0.45,
+          ease: 'power3.out',
+        }
+      );
+
+      // DESIGN.md toast persistence rules (strictly preserved):
+      // success: 5s, general: 8s, error: persists indefinitely (0)
+      const duration =
+        notification.type === 'error'
+          ? 0
+          : notification.type === 'general'
+          ? 8000
+          : 5000;
+
+      if (duration > 0) {
+        const timer = setTimeout(() => {
+          handleDismiss();
+        }, duration);
+        return () => clearTimeout(timer);
+      }
+    },
+    { scope: wrapperRef }
+  );
 
   const typeConfig = {
     success: { bg: 'bg-md-success', border: 'border-md-success', text: 'text-md-on-success', icon: <CheckCircle2 size={24} /> },
@@ -187,66 +232,68 @@ const Toast: React.FC<{
   const config = typeConfig[notification.type];
 
   return (
-    <div
-      ref={toastRef}
-      className={classNames(
-        "flex items-start gap-3 p-4 rounded-xl border shadow-xl w-[420px] max-w-[calc(100vw-2rem)] relative overflow-hidden transition-all",
-        config.bg,
-        config.border,
-        config.text
-      )}
-    >
-      <div className="flex-shrink-0 mt-0.5">
-        {config.icon}
-      </div>
+    <div ref={wrapperRef} className="overflow-hidden pointer-events-auto transition-all">
+      <div
+        ref={toastRef}
+        className={classNames(
+          "flex items-start gap-3 p-4 rounded-xl border shadow-xl w-[420px] max-w-[calc(100vw-2rem)] relative overflow-hidden transition-colors will-change-transform",
+          config.bg,
+          config.border,
+          config.text
+        )}
+      >
+        <div className="flex-shrink-0 mt-0.5">
+          {config.icon}
+        </div>
 
-      {/* Content wrapper: min-w-0 flex-1 guarantees that long text wraps and never pushes the close button */}
-      <div className="flex-1 min-w-0 pr-1">
-        <div className="flex items-center gap-2 mb-1 flex-wrap">
-          <h4 className="font-bold text-sm leading-snug">{notification.title}</h4>
-          {notification.category && (
-            <span className="text-[10px] font-semibold tracking-wider uppercase px-1.5 py-0.5 rounded-md bg-black/10 dark:bg-white/15 shrink-0 opacity-90">
-              {notification.category}
-            </span>
+        {/* Content wrapper: min-w-0 flex-1 guarantees that long text wraps and never pushes the close button */}
+        <div className="flex-1 min-w-0 pr-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <h4 className="font-bold text-sm leading-snug">{notification.title}</h4>
+            {notification.category && (
+              <span className="text-[10px] font-semibold tracking-wider uppercase px-1.5 py-0.5 rounded-md bg-black/10 dark:bg-white/15 shrink-0 opacity-90">
+                {notification.category}
+              </span>
+            )}
+          </div>
+
+          {notification.message && (
+            <p className="text-xs opacity-90 leading-relaxed break-words line-clamp-3">
+              {notification.message}
+            </p>
+          )}
+
+          {notification.guidance && (
+            <div className="mt-2 p-2 rounded-lg bg-black/5 dark:bg-white/10 text-[11px] leading-snug border border-black/10 dark:border-white/15 flex items-start gap-1.5 text-inherit">
+              <HelpCircle size={13} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+              <span className="break-words font-medium">{notification.guidance}</span>
+            </div>
+          )}
+
+          {notification.rawDetails && (
+            <div className="mt-2.5">
+              <button
+                type="button"
+                onClick={() => onShowDetails(notification)}
+                className="inline-flex items-center gap-1.5 text-xs font-bold underline opacity-90 hover:opacity-100 transition-opacity cursor-pointer"
+              >
+                <Terminal size={12} className="shrink-0" />
+                <span>Error Details</span>
+              </button>
+            </div>
           )}
         </div>
 
-        {notification.message && (
-          <p className="text-xs opacity-90 leading-relaxed break-words line-clamp-3">
-            {notification.message}
-          </p>
-        )}
-
-        {notification.guidance && (
-          <div className="mt-2 p-2 rounded-lg bg-black/5 dark:bg-white/10 text-[11px] leading-snug border border-black/10 dark:border-white/15 flex items-start gap-1.5 text-inherit">
-            <HelpCircle size={13} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
-            <span className="break-words font-medium">{notification.guidance}</span>
-          </div>
-        )}
-
-        {notification.rawDetails && (
-          <div className="mt-2.5">
-            <button
-              type="button"
-              onClick={() => onShowDetails(notification)}
-              className="inline-flex items-center gap-1.5 text-xs font-bold underline opacity-90 hover:opacity-100 transition-opacity cursor-pointer"
-            >
-              <Terminal size={12} className="shrink-0" />
-              <span>Error Details</span>
-            </button>
-          </div>
-        )}
+        {/* Pinned dismiss button: flex-shrink-0 ensures it is NEVER pushed away */}
+        <button 
+          type="button"
+          onClick={handleDismiss}
+          className="flex-shrink-0 p-1 -mr-1 -mt-1 rounded-lg opacity-70 hover:opacity-100 hover:bg-black/10 dark:hover:bg-white/15 transition-all cursor-pointer"
+          aria-label="Close notification"
+        >
+          <X size={18} />
+        </button>
       </div>
-
-      {/* Pinned dismiss button: flex-shrink-0 ensures it is NEVER pushed away */}
-      <button 
-        type="button"
-        onClick={handleDismiss}
-        className="flex-shrink-0 p-1 -mr-1 -mt-1 rounded-lg opacity-70 hover:opacity-100 hover:bg-black/10 dark:hover:bg-white/15 transition-all cursor-pointer"
-        aria-label="Close notification"
-      >
-        <X size={18} />
-      </button>
     </div>
   );
 };

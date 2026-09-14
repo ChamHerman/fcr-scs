@@ -38,7 +38,7 @@ CREATE TYPE "LogType" AS ENUM ('COMPLIANCE', 'BACKUP');
 CREATE TYPE "PaymentStatus" AS ENUM ('BANK_DETAILS_PENDING', 'READY_TO_INITIATE', 'PENDING_APPROVAL', 'BANK_APPROVAL_PENDING', 'TRANSFER_SUCCEED', 'TRANSFER_REJECTED', 'TRANSFER_FAILED', 'DISPUTED', 'PAID', 'CANCELLED', 'SCHEDULED', 'NEW_BANK_DETAILS_PENDING', 'AWARD_NOTARIZATION_PENDING', 'BANK_DETAILS_AND_M1_PENDING');
 
 -- CreateEnum
-CREATE TYPE "BlockchainStatus" AS ENUM ('READY_TO_PUBLISH', 'PUBLISHED', 'VOID_PENDING', 'VOIDED', 'REPLACEMENT');
+CREATE TYPE "BlockchainStatus" AS ENUM ('READY_TO_PUBLISH', 'PUBLISHED');
 
 -- CreateEnum
 CREATE TYPE "FundingSource" AS ENUM ('GOVERNMENT', 'PRIVATE', 'OTHERS');
@@ -67,18 +67,15 @@ CREATE TABLE "role_permission" (
 -- CreateTable
 CREATE TABLE "blockchain_record" (
     "id" TEXT NOT NULL,
-    "caseId" TEXT NOT NULL,
+    "case_id" VARCHAR(255) NOT NULL,
     "milestone" TEXT NOT NULL DEFAULT 'AWARD',
-    "onChainKey" TEXT,
-    "transactionHash" TEXT,
-    "documentHash" TEXT NOT NULL,
+    "on_chain_key" TEXT,
+    "transaction_hash" TEXT,
+    "document_hash" TEXT NOT NULL,
     "status" "BlockchainStatus" NOT NULL DEFAULT 'PUBLISHED',
-    "voidReason" TEXT,
-    "voidTransactionHash" TEXT,
-    "publishedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "voidedAt" TIMESTAMP(3),
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "published_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
 
     CONSTRAINT "blockchain_record_pkey" PRIMARY KEY ("id")
@@ -87,24 +84,24 @@ CREATE TABLE "blockchain_record" (
 -- CreateTable
 CREATE TABLE "payment_case" (
     "id" TEXT NOT NULL,
-    "caseId" TEXT NOT NULL,
-    "beneficiaryId" TEXT NOT NULL,
+    "case_id" VARCHAR(255) NOT NULL,
+    "beneficiary_id" UUID NOT NULL,
     "amount" DECIMAL(65,30) NOT NULL,
-    "bankName" TEXT,
-    "accountNumber" TEXT,
-    "accountHolderName" TEXT,
-    "phoneNumber" TEXT,
-    "encryptedBankDetails" TEXT,
-    "myKadNumber" TEXT,
+    "bank_name" TEXT,
+    "account_number" TEXT,
+    "account_holder_name" TEXT,
+    "phone_number" TEXT,
+    "encrypted_bank_details" TEXT,
+    "my_kad_number" TEXT,
     "status" "PaymentStatus" NOT NULL DEFAULT 'BANK_DETAILS_PENDING',
-    "requiredSignatures" INTEGER NOT NULL DEFAULT 1,
-    "currentSignatures" INTEGER NOT NULL DEFAULT 0,
+    "required_signatures" INTEGER NOT NULL DEFAULT 1,
+    "current_signatures" INTEGER NOT NULL DEFAULT 0,
     "cycle" INTEGER NOT NULL DEFAULT 1,
     "dispute_document_path" TEXT,
     "dispute_document_name" TEXT,
     "dispute_uploaded_at" TIMESTAMP(3),
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
 
     CONSTRAINT "payment_case_pkey" PRIMARY KEY ("id")
@@ -113,12 +110,12 @@ CREATE TABLE "payment_case" (
 -- CreateTable
 CREATE TABLE "payment_authorisation" (
     "id" TEXT NOT NULL,
-    "paymentCaseId" TEXT NOT NULL,
-    "adminId" TEXT NOT NULL,
+    "payment_case_id" TEXT NOT NULL,
+    "admin_id" UUID NOT NULL,
     "action" TEXT NOT NULL,
     "reason" TEXT,
     "cycle" INTEGER NOT NULL DEFAULT 1,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "deleted_at" TIMESTAMP(3),
 
     CONSTRAINT "payment_authorisation_pkey" PRIMARY KEY ("id")
@@ -127,11 +124,11 @@ CREATE TABLE "payment_authorisation" (
 -- CreateTable
 CREATE TABLE "payment_receipt" (
     "id" TEXT NOT NULL,
-    "paymentCaseId" TEXT NOT NULL,
-    "bankReferenceNumber" TEXT NOT NULL,
-    "documentHash" TEXT,
-    "documentPath" TEXT,
-    "generatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "payment_case_id" TEXT NOT NULL,
+    "bank_reference_number" TEXT NOT NULL,
+    "document_hash" TEXT,
+    "document_path" TEXT,
+    "generated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "deleted_at" TIMESTAMP(3),
 
     CONSTRAINT "payment_receipt_pkey" PRIMARY KEY ("id")
@@ -140,11 +137,11 @@ CREATE TABLE "payment_receipt" (
 -- CreateTable
 CREATE TABLE "failed_transaction" (
     "id" TEXT NOT NULL,
-    "paymentCaseId" TEXT NOT NULL,
-    "errorLog" TEXT NOT NULL,
+    "payment_case_id" TEXT NOT NULL,
+    "error_log" TEXT NOT NULL,
     "resolution" TEXT,
-    "resolvedAt" TIMESTAMP(3),
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "resolved_at" TIMESTAMP(3),
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "deleted_at" TIMESTAMP(3),
 
     CONSTRAINT "failed_transaction_pkey" PRIMARY KEY ("id")
@@ -153,13 +150,13 @@ CREATE TABLE "failed_transaction" (
 -- CreateTable
 CREATE TABLE "receiver_bank_details" (
     "id" TEXT NOT NULL,
-    "bankName" TEXT NOT NULL,
-    "accountNumber" TEXT NOT NULL,
-    "accountHolderName" TEXT NOT NULL,
-    "phoneNumber" TEXT NOT NULL,
-    "myKadNumber" TEXT NOT NULL,
-    "encryptedBankDetails" TEXT NOT NULL,
-    "paymentCaseId" TEXT NOT NULL,
+    "bank_name" TEXT NOT NULL,
+    "account_number" TEXT NOT NULL,
+    "account_holder_name" TEXT NOT NULL,
+    "phone_number" TEXT NOT NULL,
+    "my_kad_number" TEXT NOT NULL,
+    "encrypted_bank_details" TEXT NOT NULL,
+    "payment_case_id" TEXT NOT NULL,
     "deleted_at" TIMESTAMP(3),
 
     CONSTRAINT "receiver_bank_details_pkey" PRIMARY KEY ("id")
@@ -584,19 +581,19 @@ CREATE TABLE "compliance_backup_log" (
 CREATE UNIQUE INDEX "role_permission_role_page_path_key" ON "role_permission"("role", "page_path");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "blockchain_record_onChainKey_key" ON "blockchain_record"("onChainKey");
+CREATE UNIQUE INDEX "blockchain_record_on_chain_key_key" ON "blockchain_record"("on_chain_key");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "blockchain_record_caseId_milestone_key" ON "blockchain_record"("caseId", "milestone");
+CREATE UNIQUE INDEX "blockchain_record_case_id_milestone_key" ON "blockchain_record"("case_id", "milestone");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "payment_case_caseId_key" ON "payment_case"("caseId");
+CREATE UNIQUE INDEX "payment_case_case_id_key" ON "payment_case"("case_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "payment_receipt_paymentCaseId_key" ON "payment_receipt"("paymentCaseId");
+CREATE UNIQUE INDEX "payment_receipt_payment_case_id_key" ON "payment_receipt"("payment_case_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "receiver_bank_details_paymentCaseId_key" ON "receiver_bank_details"("paymentCaseId");
+CREATE UNIQUE INDEX "receiver_bank_details_payment_case_id_key" ON "receiver_bank_details"("payment_case_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "member_payout_detail_user_id_key" ON "member_payout_detail"("user_id");
@@ -734,16 +731,28 @@ CREATE INDEX "system_metric_recorded_at_idx" ON "system_metric"("recorded_at");
 CREATE INDEX "compliance_backup_log_log_type_idx" ON "compliance_backup_log"("log_type");
 
 -- AddForeignKey
-ALTER TABLE "payment_authorisation" ADD CONSTRAINT "payment_authorisation_paymentCaseId_fkey" FOREIGN KEY ("paymentCaseId") REFERENCES "payment_case"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "blockchain_record" ADD CONSTRAINT "blockchain_record_case_id_fkey" FOREIGN KEY ("case_id") REFERENCES "acquisition_case"("case_id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "payment_receipt" ADD CONSTRAINT "payment_receipt_paymentCaseId_fkey" FOREIGN KEY ("paymentCaseId") REFERENCES "payment_case"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "payment_case" ADD CONSTRAINT "payment_case_case_id_fkey" FOREIGN KEY ("case_id") REFERENCES "acquisition_case"("case_id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "failed_transaction" ADD CONSTRAINT "failed_transaction_paymentCaseId_fkey" FOREIGN KEY ("paymentCaseId") REFERENCES "payment_case"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "payment_case" ADD CONSTRAINT "payment_case_beneficiary_id_fkey" FOREIGN KEY ("beneficiary_id") REFERENCES "land_owner"("owner_id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "receiver_bank_details" ADD CONSTRAINT "receiver_bank_details_paymentCaseId_fkey" FOREIGN KEY ("paymentCaseId") REFERENCES "payment_case"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "payment_authorisation" ADD CONSTRAINT "payment_authorisation_payment_case_id_fkey" FOREIGN KEY ("payment_case_id") REFERENCES "payment_case"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "payment_authorisation" ADD CONSTRAINT "payment_authorisation_admin_id_fkey" FOREIGN KEY ("admin_id") REFERENCES "user"("user_id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "payment_receipt" ADD CONSTRAINT "payment_receipt_payment_case_id_fkey" FOREIGN KEY ("payment_case_id") REFERENCES "payment_case"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "failed_transaction" ADD CONSTRAINT "failed_transaction_payment_case_id_fkey" FOREIGN KEY ("payment_case_id") REFERENCES "payment_case"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "receiver_bank_details" ADD CONSTRAINT "receiver_bank_details_payment_case_id_fkey" FOREIGN KEY ("payment_case_id") REFERENCES "payment_case"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "member_payout_detail" ADD CONSTRAINT "member_payout_detail_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "user"("user_id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -870,4 +879,3 @@ ALTER TABLE "system_alert" ADD CONSTRAINT "system_alert_recipient_id_fkey" FOREI
 
 -- AddForeignKey
 ALTER TABLE "email_template" ADD CONSTRAINT "email_template_created_by_id_fkey" FOREIGN KEY ("created_by_id") REFERENCES "user"("user_id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
