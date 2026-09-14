@@ -1,8 +1,8 @@
 {
   "activeModel": {
-    "version": "v1.2",
+    "version": "v1.0",
     "file": "fcr_scs_property_valuation_rf.joblib",
-    "trainedAt": "2026-09-09T19:24:29.648219+00:00",
+    "trainedAt": "2026-09-14T05:43:53.190144+00:00",
     "metrics": {
       "mae": 682229.84,
       "rmse": 1473149.63,
