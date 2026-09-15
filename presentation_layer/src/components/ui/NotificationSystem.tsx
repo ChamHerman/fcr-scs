@@ -6,7 +6,7 @@ import classNames from 'classnames';
 import { CheckCircle2, AlertCircle, Info, X, HelpCircle, Terminal, Copy, Check } from 'lucide-react';
 import { Modal } from './Modal';
 import { Button } from './Button';
-import { parseAppError } from '../../utils/errorParser';
+import { parseAppError, isMemberAudience, memberErrorMessage } from '../../utils/errorParser';
 
 export type NotificationType = 'success' | 'error' | 'general';
 
@@ -167,7 +167,9 @@ const Toast: React.FC<{
       scale: 0.94,
       duration: 0.32,
       ease: 'power3.in',
-    }).to(
+    })
+    .set(wrapperRef.current, { overflow: 'hidden' })
+    .to(
       wrapperRef.current,
       {
         height: 0,
@@ -232,11 +234,11 @@ const Toast: React.FC<{
   const config = typeConfig[notification.type];
 
   return (
-    <div ref={wrapperRef} className="overflow-hidden pointer-events-auto transition-all">
+    <div ref={wrapperRef} className="pointer-events-auto">
       <div
         ref={toastRef}
         className={classNames(
-          "flex items-start gap-3 p-4 rounded-xl border shadow-xl w-[420px] max-w-[calc(100vw-2rem)] relative overflow-hidden transition-colors will-change-transform",
+          "flex items-start gap-3 p-4 rounded-xl border shadow-[0_2px_8px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_16px_rgba(0,0,0,0.35)] w-[420px] max-w-[calc(100vw-2rem)] relative overflow-hidden transition-colors will-change-transform",
           config.bg,
           config.border,
           config.text
@@ -306,6 +308,17 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const notify = useCallback((input: NotificationInput) => {
     const id = Math.random().toString(36).substr(2, 9);
     let { type, title, message, guidance, category, rawDetails, error } = input;
+
+    // Member-portal audience: keep error toasts short and plain —
+    // no category badge, no diagnostics guidance, no Error Details modal.
+    if (type === 'error' && isMemberAudience()) {
+      const parsed = parseAppError(error || message || '', title);
+      setNotifications(prev => [
+        ...prev,
+        { id, type, title, message: memberErrorMessage(typeof message === 'string' ? message : undefined, parsed) },
+      ]);
+      return;
+    }
 
     // Automated error diagnostic normalization
     if (type === 'error' && (error || message)) {

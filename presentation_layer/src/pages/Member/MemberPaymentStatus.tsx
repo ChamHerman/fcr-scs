@@ -25,7 +25,7 @@ import { Modal } from '../../components/ui/Modal';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { useAuth } from '../../context/AuthContext';
 import { ConfirmSubmitModal, ConfirmRow } from '../../components/member/ConfirmSubmitModal';
-import { BankDetailsForm } from './components/BankDetailsForm';
+import { BankDetailsForm, formatLocalContactNumber } from './components/BankDetailsForm';
 import { formatDateTime } from '../../utils/dateFormat';
 import { CopyButton } from '../../components/ui/CopyButton';
 
@@ -1178,7 +1178,7 @@ export default function MemberPaymentStatus() {
             <div className="flex justify-between items-center pb-2 border-b border-md-outline/10">
               <span className="text-md-on-surface-variant font-medium">Contact Mobile</span>
               <span className="font-mono font-semibold text-md-on-surface">
-                {paymentCase?.phoneNumber || user?.contactNumber || '—'}
+                {formatLocalContactNumber(paymentCase?.phoneNumber || user?.contactNumber) || '—'}
               </span>
             </div>
 

@@ -227,7 +227,7 @@ export default function FailedTransactions() {
                         </span>
                       </td>
                       <td><span className="meta-text font-mono text-xs">{latest ? fmtDate(latest.createdAt) : fmtDate(pc.updatedAt)}</span></td>
-                      <td>{paymentBadge(pc.status, pc.currentSignatures, pc.requiredSignatures)}</td>
+                      <td>{paymentBadge(pc.status, pc.currentSignatures, pc.requiredSignatures, pc.scheduledFor)}</td>
                     </tr>
                   );
                 })

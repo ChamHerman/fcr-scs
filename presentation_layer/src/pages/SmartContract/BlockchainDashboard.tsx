@@ -8,6 +8,8 @@ import { compensationApi } from '../../services/compensationApi';
 import { useWallet } from '../../hooks/useWallet';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
+import { useAuth } from '../../context/AuthContext';
+import { usePublishClaims } from '../../hooks/usePublishClaims';
 import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { CaseDetailsModal } from '../Payment/CaseDetailsModal';
 import { SearchInput } from '../../components/ui/SearchInput';
@@ -31,21 +33,50 @@ import {
   fmtTx,
   fmtDate,
   computeSettlementHash,
+  formatClaimElapsed,
 } from './blockchainModals';
-import type { LedgerRow } from './blockchainModals';
+import type { LedgerRow, PublishLockState } from './blockchainModals';
 
 type ModalState =
   | { type: 'view'; row: LedgerRow }
   | { type: 'publish'; row: LedgerRow }
   | null;
 
+const SORT_STORAGE_KEY = 'blockchain_overview_sort';
+type SortKey = 'priority' | 'recent';
+const SORT_OPTIONS = [
+  { value: 'priority', label: 'Default (Status Priority)' },
+  { value: 'recent', label: 'Most Recent Activity' },
+] as const;
+
 export const BlockchainDashboard: React.FC = () => {
   const { walletAddress, walletConnected, error: walletError, setError: setWalletError, connectWallet: handleConnectWallet } = useWallet();
   const { identityId } = useAdminIdentity();
+  // Live cross-admin publish locks, polled so a record another admin is
+  // publishing is visibly taken within seconds rather than after minutes of work.
+  const { user } = useAuth();
+  const { claimFor, refresh: refreshClaims } = usePublishClaims(user?.userId);
+  const lockFor = useCallback(
+    (row: LedgerRow): PublishLockState => {
+      const claim = claimFor(row.caseId, row.milestone);
+      if (!claim) return { heldByOther: false, heldByMe: false };
+      return {
+        heldByOther: claim.adminId !== user?.userId,
+        heldByMe: claim.adminId === user?.userId,
+        adminName: claim.adminName,
+        claimedAt: claim.claimedAt,
+      };
+    },
+    [claimFor, user?.userId]
+  );
   const { notify } = useNotification();
   const [searchQuery, setSearchQuery] = useState('');
   const [caseDetailsId, setCaseDetailsId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('All');
+  const [sortKey, setSortKey] = useState<SortKey>(() => {
+    const stored = localStorage.getItem(SORT_STORAGE_KEY) as SortKey | null;
+    return stored && SORT_OPTIONS.some((o) => o.value === stored) ? stored : 'priority';
+  });
   const [records, setRecords] = useState<LedgerRow[]>([]);
   const [readyRows, setReadyRows] = useState<LedgerRow[]>([]);
   const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
@@ -53,6 +84,18 @@ export const BlockchainDashboard: React.FC = () => {
   const [error, setError] = useState('');
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
+
+  useEffect(() => {
+    localStorage.setItem(SORT_STORAGE_KEY, sortKey);
+  }, [sortKey]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useGSAP(() => {
@@ -219,6 +262,8 @@ export const BlockchainDashboard: React.FC = () => {
               publishedAt: null,
               graceEndsAt: null,
               acceptedAt: null,
+              paidAt: c.receipt?.generatedAt || c.paidAt || c.updatedAt || null,
+              createdAt: existingRec?.createdAt || c.receipt?.generatedAt || c.updatedAt || undefined,
             };
           })
       );
@@ -239,14 +284,28 @@ export const BlockchainDashboard: React.FC = () => {
 
   const allRows = useMemo(() => [...readyRows, ...records], [readyRows, records]);
 
+  const getRowStatus = (r: LedgerRow): string => {
+    if (r.status === 'Published' || r.status === 'PUBLISHED' || r.status === 'CONFIRMED') {
+      return 'Published';
+    }
+    const isGraceLocked =
+      r.milestone === 'M1' &&
+      !!r.graceEndsAt &&
+      currentTime < new Date(r.graceEndsAt).getTime();
+    if (isGraceLocked) return 'Grace Period (Locked)';
+    if (r.status === 'Grace Period (Locked)') return 'Ready to Publish';
+    return r.status || 'Ready to Publish';
+  };
+
   // Dynamically derive available statuses strictly from loaded records
   const availableStatuses = useMemo(() => {
     const set = new Set<string>();
     allRows.forEach((r) => {
-      if (r.status) set.add(r.status);
+      const s = getRowStatus(r);
+      if (s) set.add(s);
     });
     return ['All', ...Array.from(set).sort()];
-  }, [allRows]);
+  }, [allRows, currentTime]);
 
   useEffect(() => {
     if (statusFilter !== 'All' && !availableStatuses.includes(statusFilter)) {
@@ -255,11 +314,11 @@ export const BlockchainDashboard: React.FC = () => {
   }, [availableStatuses, statusFilter]);
 
   const stats = useMemo(() => {
-    const readyM1 = allRows.filter((r) => r.status === 'Ready to Publish' && r.milestone === 'M1').length;
-    const readyM2 = allRows.filter((r) => r.status === 'Ready to Publish' && r.milestone === 'M2').length;
-    const locked = allRows.filter((r) => r.status === 'Grace Period (Locked)').length;
-    const published = allRows.filter((r) => r.status === 'Published').length;
-    const settledM2 = allRows.filter((r) => r.status === 'Published' && r.milestone === 'M2').length;
+    const readyM1 = allRows.filter((r) => getRowStatus(r) === 'Ready to Publish' && r.milestone === 'M1').length;
+    const readyM2 = allRows.filter((r) => getRowStatus(r) === 'Ready to Publish' && r.milestone === 'M2').length;
+    const locked = allRows.filter((r) => getRowStatus(r) === 'Grace Period (Locked)').length;
+    const published = allRows.filter((r) => getRowStatus(r) === 'Published').length;
+    const settledM2 = allRows.filter((r) => getRowStatus(r) === 'Published' && r.milestone === 'M2').length;
     return [
       {
         label: 'Ready to Publish',
@@ -270,20 +329,12 @@ export const BlockchainDashboard: React.FC = () => {
       { label: 'Published (All)', value: published, icon: Wallet, iconColor: 'text-emerald-500' },
       { label: 'Settled (M2)', value: settledM2, icon: CheckCircle2, iconColor: 'text-blue-500' },
     ];
-  }, [allRows]);
+  }, [allRows, currentTime]);
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
 
-    // Identify cases that currently have an M2 milestone ready to publish
-    const casesWithM2Ready = new Set<string>();
-    allRows.forEach((r) => {
-      if ((r.milestone === 'M2' || (r as any).milestone === 'SETTLEMENT') && r.status === 'Ready to Publish') {
-        casesWithM2Ready.add(r.caseId);
-      }
-    });
-
-    // Determine the representative/earliest blockchain ID for each case
+    // Determine representative/earliest blockchain ID for each case
     const caseBcnMap = new Map<string, string>();
     allRows.forEach((r) => {
       const bcn = r.publicId?.startsWith('BCN-')
@@ -297,9 +348,89 @@ export const BlockchainDashboard: React.FC = () => {
       }
     });
 
+    // Group allRows by caseId to determine each case's overall milestone state
+    const caseRowsMap = new Map<string, LedgerRow[]>();
+    allRows.forEach((r) => {
+      const list = caseRowsMap.get(r.caseId) || [];
+      list.push(r);
+      caseRowsMap.set(r.caseId, list);
+    });
+
+    // Helper for latest datetime of a row
+    const getRowTime = (r: LedgerRow): number => {
+      const candidates = [
+        r.publishedAt,
+        r.paidAt,
+        r.acceptedAt,
+        r.createdAt,
+        r.caseCreatedAt,
+      ];
+      let latest = 0;
+      for (const c of candidates) {
+        if (!c) continue;
+        const t = new Date(c).getTime();
+        if (!isNaN(t) && t > latest) {
+          latest = t;
+        }
+      }
+      return latest;
+    };
+
+    // Case-level status priority rank:
+    // Rank 1: m1: ready to publish
+    // Rank 2: m2(grouped with m1 published): ready to publish
+    // Rank 3: m1 + m2: published
+    // Rank 4: m1: published
+    const caseRankMap = new Map<string, number>();
+    const caseLatestTimeMap = new Map<string, number>();
+
+    caseRowsMap.forEach((cRows, cId) => {
+      const m1 = cRows.find((r) => r.milestone === 'M1');
+      const m2 = cRows.find((r) => r.milestone === 'M2');
+
+      const s1 = m1 ? getRowStatus(m1) : null;
+      const s2 = m2 ? getRowStatus(m2) : null;
+
+      const isM1Ready = s1 === 'Ready to Publish' || s1 === 'Grace Period (Locked)';
+      const isM1Published = s1 === 'Published';
+      const isM2Ready = s2 === 'Ready to Publish';
+      const isM2Published = s2 === 'Published';
+
+      if (isM1Ready) {
+        caseRankMap.set(cId, 1);
+      } else if (isM2Ready) {
+        caseRankMap.set(cId, 2);
+      } else if (isM1Published && isM2Published) {
+        caseRankMap.set(cId, 3);
+      } else if (isM1Published) {
+        caseRankMap.set(cId, 4);
+      } else {
+        caseRankMap.set(cId, 5);
+      }
+
+      let maxT = 0;
+      cRows.forEach((r) => {
+        const t = getRowTime(r);
+        if (t > maxT) maxT = t;
+      });
+      caseLatestTimeMap.set(cId, maxT);
+    });
+
+    // Milestone ranking within the same case:
+    // Actionable ready to publish on top (M2 ready then M1 ready), then published (M1 published then M2 published)
+    const getMilestoneRankWithinCase = (r: LedgerRow) => {
+      const s = getRowStatus(r);
+      if (r.milestone === 'M2' && (s === 'Ready to Publish' || s === 'Grace Period (Locked)')) return 1;
+      if (r.milestone === 'M1' && (s === 'Ready to Publish' || s === 'Grace Period (Locked)')) return 2;
+      if (r.milestone === 'M1') return 3;
+      if (r.milestone === 'M2') return 4;
+      return 5;
+    };
+
     return allRows
       .filter((r) => {
-        const mStatus = statusFilter === 'All' || r.status === statusFilter;
+        const effectiveStatus = getRowStatus(r);
+        const mStatus = statusFilter === 'All' || effectiveStatus === statusFilter;
         const mSearch =
           !q ||
           (r.publicId ?? '').toLowerCase().includes(q) ||
@@ -309,15 +440,19 @@ export const BlockchainDashboard: React.FC = () => {
         return mStatus && mSearch;
       })
       .sort((a, b) => {
-        // Tier 1: Cases with M2 ready to publish are put on top
-        const aHasM2Ready = casesWithM2Ready.has(a.caseId);
-        const bHasM2Ready = casesWithM2Ready.has(b.caseId);
-        if (aHasM2Ready !== bHasM2Ready) {
-          return aHasM2Ready ? -1 : 1;
-        }
-
-        // Tier 2: Between different cases, sort by Blockchain ID
         if (a.caseId !== b.caseId) {
+          if (sortKey === 'recent') {
+            const tA = caseLatestTimeMap.get(a.caseId) || 0;
+            const tB = caseLatestTimeMap.get(b.caseId) || 0;
+            if (tA !== tB) return tB - tA; // Latest datetime first
+          } else {
+            // Default: Status Priority (1 > 2 > 3 > 4)
+            const rankA = caseRankMap.get(a.caseId) ?? 99;
+            const rankB = caseRankMap.get(b.caseId) ?? 99;
+            if (rankA !== rankB) return rankA - rankB;
+          }
+
+          // Secondary sort: Blockchain ID
           const bcnA = caseBcnMap.get(a.caseId) || a.caseId;
           const bcnB = caseBcnMap.get(b.caseId) || b.caseId;
           const bcnCmp = bcnA.localeCompare(bcnB, undefined, { numeric: true, sensitivity: 'base' });
@@ -325,23 +460,22 @@ export const BlockchainDashboard: React.FC = () => {
           return a.caseId.localeCompare(b.caseId, undefined, { numeric: true });
         }
 
-        // Tier 3: Within the same case, put M2 Ready on top, then M1 Ready, then published
-        const getMilestoneRank = (r: LedgerRow) => {
-          if (r.milestone === 'M2' && r.status === 'Ready to Publish') return 1;
-          if (r.milestone === 'M1' && r.status === 'Ready to Publish') return 2;
-          if (r.milestone === 'M2') return 3;
-          if (r.milestone === 'M1') return 4;
-          return 5;
-        };
-        const mRankA = getMilestoneRank(a);
-        const mRankB = getMilestoneRank(b);
-        if (mRankA !== mRankB) return mRankA - mRankB;
+        // Within the same case:
+        if (sortKey === 'recent') {
+          const timeA = getRowTime(a);
+          const timeB = getRowTime(b);
+          if (timeA !== timeB) return timeB - timeA;
+        } else {
+          const mRankA = getMilestoneRankWithinCase(a);
+          const mRankB = getMilestoneRankWithinCase(b);
+          if (mRankA !== mRankB) return mRankA - mRankB;
+        }
 
         const bcnIdA = a.publicId?.startsWith('BCN-') ? a.publicId : a.id?.startsWith('BCN-') ? a.id : (a.publicId || a.id || '');
         const bcnIdB = b.publicId?.startsWith('BCN-') ? b.publicId : b.id?.startsWith('BCN-') ? b.id : (b.publicId || b.id || '');
         return bcnIdA.localeCompare(bcnIdB, undefined, { numeric: true, sensitivity: 'base' });
       });
-  }, [allRows, searchQuery, statusFilter]);
+  }, [allRows, searchQuery, statusFilter, sortKey, currentTime]);
 
   // Pagination standard: max 10 records per page (DESIGN.md)
   const [currentPage, setCurrentPage] = useState(1);
@@ -353,7 +487,7 @@ export const BlockchainDashboard: React.FC = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, statusFilter]);
+  }, [searchQuery, statusFilter, sortKey]);
 
   const closeModal = () => setModal(null);
 
@@ -407,6 +541,13 @@ export const BlockchainDashboard: React.FC = () => {
           <SearchInput placeholder="Search record/case ID, public ID or tx hash..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
         </div>
         <div className="filter-group">
+          <Select
+            label="Sort"
+            options={SORT_OPTIONS as unknown as { value: string; label: string }[]}
+            value={sortKey}
+            onChange={(val) => setSortKey(val as SortKey)}
+            placeholder="Sort by"
+          />
           <Select
             label="Status"
             options={availableStatuses.map((s) => ({ value: s, label: s === 'All' ? 'All statuses' : s }))}
@@ -465,6 +606,12 @@ export const BlockchainDashboard: React.FC = () => {
                   const isLastInGroup = idx === arr.length - 1 || row.caseId !== arr[idx + 1].caseId;
                   const sameCaseRecords = allRows.filter((r) => r.caseId === row.caseId);
 
+                  const effectiveStatus = getRowStatus(row);
+                  const effectiveRow: LedgerRow = {
+                    ...row,
+                    status: effectiveStatus,
+                  };
+
                   return (
                     <React.Fragment key={row.id}>
                       {isFirstInGroup && (
@@ -489,7 +636,7 @@ export const BlockchainDashboard: React.FC = () => {
                           ? 'border-b border-md-outline/25 dark:border-md-outline/30'
                           : 'border-b border-md-outline/10 dark:border-md-outline/10'
                           }`}
-                        onClick={() => setModal({ type: 'view', row })}
+                        onClick={() => setModal({ type: 'view', row: effectiveRow })}
                       >
                         <td>
                           <div className="flex items-center gap-1.5 cursor-pointer">
@@ -534,11 +681,29 @@ export const BlockchainDashboard: React.FC = () => {
                         <td>{fmtDate(row.publishedAt)}</td>
                         <td style={{ paddingRight: '20px' }}>
                           {(() => {
-                            const graceLocked =
-                              row.status === 'Grace Period (Locked)' ||
-                              (!!row.graceEndsAt && Date.now() < new Date(row.graceEndsAt).getTime());
-                            if (graceLocked && row.graceEndsAt) {
-                              const countdown = formatGraceCountdown(new Date(row.graceEndsAt).getTime() - Date.now());
+                            const isGraceLocked =
+                              row.milestone === 'M1' &&
+                              !!row.graceEndsAt &&
+                              currentTime < new Date(row.graceEndsAt).getTime();
+                            const remainingMs = isGraceLocked && row.graceEndsAt
+                              ? new Date(row.graceEndsAt).getTime() - currentTime
+                              : 0;
+                            const countdown = isGraceLocked ? formatGraceCountdown(remainingMs) : '';
+                            const lock = lockFor(row);
+                            if (lock.heldByOther) {
+                              return (
+                                <span
+                                  className="payment-badge info whitespace-nowrap"
+                                  title={`${lock.adminName || 'Another government administrator'} is publishing this record to Sepolia · ${formatClaimElapsed(
+                                    lock.claimedAt ? Math.max(0, currentTime - new Date(lock.claimedAt).getTime()) : 0
+                                  )} elapsed. The lock clears when they finish, or automatically if their session drops.`}
+                                >
+                                  <span className="dot" />
+                                  Publishing · {lock.adminName || 'Gov Admin'}
+                                </span>
+                              );
+                            }
+                            if (isGraceLocked) {
                               return (
                                 <span
                                   className="payment-badge status-locked whitespace-nowrap"
@@ -549,7 +714,7 @@ export const BlockchainDashboard: React.FC = () => {
                                 </span>
                               );
                             }
-                            return ledgerBadge(row.status);
+                            return ledgerBadge(effectiveStatus);
                           })()}
                         </td>
                       </tr>
@@ -577,8 +742,15 @@ export const BlockchainDashboard: React.FC = () => {
         row={modal?.type === 'view' ? modal.row : null}
         onClose={closeModal}
         onAction={(type, r) => setModal({ type, row: r })}
+        lock={modal ? lockFor(modal.row) : undefined}
       />
-      <PublishModal row={modal?.type === 'publish' ? modal.row : null} onClose={closeModal} onDone={() => { closeModal(); loadData(); }} />
+      <PublishModal
+        row={modal?.type === 'publish' ? modal.row : null}
+        onClose={closeModal}
+        lock={modal ? lockFor(modal.row) : undefined}
+        onLocksChanged={refreshClaims}
+        onDone={() => { closeModal(); loadData(); refreshClaims(); }}
+      />
       <CaseDetailsModal caseId={caseDetailsId} onClose={() => setCaseDetailsId(null)} />
     </div>
   );

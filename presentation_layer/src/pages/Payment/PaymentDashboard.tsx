@@ -64,25 +64,55 @@ const SORT_OPTIONS = [
   { value: 'amount-asc', label: 'Amount (Low to High)' },
 ] as const;
 
+const normalizeStatusRankKey = (s?: string) =>
+  (s || '').toUpperCase().replace(/&/g, 'AND').replace(/\s+/g, '_');
+
 /**
- * Default "Action Priority" ranking (user-locked): actionable cases first —
- * Ready to Initiate, then Pending Approval — while terminal/inactive records
- * sink; Bank Details Pending always last and Paid second last.
+ * Default primary sorting priority:
+ * 1. READY_TO_INITIATE
+ * 2. PENDING_APPROVAL
+ * 3. AWARD_NOTARIZATION_PENDING
+ * 4. BANK_DETAILS_AND_M1_PENDING
+ * 5. NEW_BANK_DETAILS_PENDING
+ * 6. BANK_DETAILS_PENDING
+ * 7. BANK_APPROVAL_PENDING
+ * 8. TRANSFER_SUCCEED
+ * 9. SCHEDULED
+ * 10. PAID
+ * 11. TRANSFER_REJECTED
+ * 12. TRANSFER_FAILED
+ * 13. DISPUTED
+ * 14. CANCELLED
  */
 const STATUS_PRIORITY_RANK: Record<string, number> = {
+  'READY_TO_INITIATE': 1,
   'Ready to Initiate': 1,
+  'PENDING_APPROVAL': 2,
   'Pending Approval': 2,
-  'Bank Details & M1 Pending': 3,
-  'Award Notarization Pending': 4,
-  'Bank Details Pending': 5,
-  'Scheduled': 6,
+  'AWARD_NOTARIZATION_PENDING': 3,
+  'Award Notarization Pending': 3,
+  'BANK_DETAILS_AND_M1_PENDING': 4,
+  'Bank Details & M1 Pending': 4,
+  'NEW_BANK_DETAILS_PENDING': 5,
+  'New Bank Details Pending': 5,
+  'BANK_DETAILS_PENDING': 6,
+  'Bank Details Pending': 6,
+  'BANK_APPROVAL_PENDING': 7,
   'Bank Approval Pending': 7,
-  'Transfer Rejected': 8,
-  'Transfer Failed': 9,
-  'Disputed': 10,
-  'New Bank Details Pending': 11,
-  'Paid': 12,
-  'Cancelled': 13,
+  'TRANSFER_SUCCEED': 8,
+  'Transfer Succeed': 8,
+  'SCHEDULED': 9,
+  'Scheduled': 9,
+  'PAID': 10,
+  'Paid': 10,
+  'TRANSFER_REJECTED': 11,
+  'Transfer Rejected': 11,
+  'TRANSFER_FAILED': 12,
+  'Transfer Failed': 12,
+  'DISPUTED': 13,
+  'Disputed': 13,
+  'CANCELLED': 14,
+  'Cancelled': 14,
 };
 
 export default function PaymentDashboard() {
@@ -222,8 +252,10 @@ export default function PaymentDashboard() {
         return rows.sort((a, b) => {
           const detA = getDetailedPaymentStatus(a);
           const detB = getDetailedPaymentStatus(b);
-          const ra = STATUS_PRIORITY_RANK[detA.paymentStatus] ?? 50;
-          const rb = STATUS_PRIORITY_RANK[detB.paymentStatus] ?? 50;
+          const keyA = normalizeStatusRankKey(detA.paymentStatus);
+          const keyB = normalizeStatusRankKey(detB.paymentStatus);
+          const ra = STATUS_PRIORITY_RANK[keyA] ?? STATUS_PRIORITY_RANK[detA.paymentStatus] ?? 99;
+          const rb = STATUS_PRIORITY_RANK[keyB] ?? STATUS_PRIORITY_RANK[detB.paymentStatus] ?? 99;
           if (ra !== rb) return ra - rb;
           // Secondary sort: Payment ID using natural numerical ordering
           const pmtCmp = byPmtIdAsc(a, b);
@@ -396,7 +428,7 @@ export default function PaymentDashboard() {
                       </td>
                       <td className="font-semibold">{fmtAmount(pc.amount)}</td>
                       <td><span className="meta-text font-mono text-xs">{fmtDate(pc.updatedAt || pc.createdAt)}</span></td>
-                      <td>{paymentBadge(detailed.paymentStatus, pc.currentSignatures, pc.requiredSignatures)}</td>
+                      <td>{paymentBadge(detailed.paymentStatus, pc.currentSignatures, pc.requiredSignatures, pc.scheduledFor)}</td>
                     </tr>
                   );
                 })

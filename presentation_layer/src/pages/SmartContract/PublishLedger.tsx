@@ -7,6 +7,8 @@ import { blockchainApi } from '../../services/blockchainApi';
 import { paymentApi } from '../../services/paymentApi';
 import { compensationApi } from '../../services/compensationApi';
 import { useWallet } from '../../hooks/useWallet';
+import { useAuth } from '../../context/AuthContext';
+import { usePublishClaims } from '../../hooks/usePublishClaims';
 import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { CaseDetailsModal } from '../Payment/CaseDetailsModal';
 import { SearchInput } from '../../components/ui/SearchInput';
@@ -29,8 +31,9 @@ import {
   fmtAmount,
   fmtTx,
   computeSettlementHash,
+  formatClaimElapsed,
 } from './blockchainModals';
-import type { LedgerRow } from './blockchainModals';
+import type { LedgerRow, PublishLockState } from './blockchainModals';
 
 type ModalState = { type: 'view'; row: LedgerRow } | { type: 'publish'; row: LedgerRow } | null;
 type TabKey = 'm1' | 'm2';
@@ -40,12 +43,17 @@ const TABS: Array<{ key: TabKey; label: string; short: string }> = [
   { key: 'm2', label: 'Milestone 2 — Disbursement Settlement (Receipt)', short: 'Settlement (M2)' },
 ];
 
-/** "5m left" / "3h 20m left" countdown for grace-locked award rows. */
+/** "5m left" / "3h 20m left" / "45s left" countdown for grace-locked award rows. */
 export const formatGraceCountdown = (msRemaining: number): string => {
-  const totalMinutes = Math.max(0, Math.ceil(msRemaining / 60_000));
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+  if (msRemaining <= 0) return '';
+  const totalSeconds = Math.max(1, Math.ceil(msRemaining / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m`;
+  return `${seconds}s`;
 };
 
 export const PublishLedger: React.FC = () => {
@@ -60,12 +68,38 @@ export const PublishLedger: React.FC = () => {
   const [modal, setModal] = useState<ModalState>(null);
   const [caseDetailsId, setCaseDetailsId] = useState<string | null>(null);
   const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
   const pageRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<Record<TabKey, HTMLButtonElement | null>>({ m1: null, m2: null });
   const sliderRef = useRef<HTMLDivElement>(null);
   const isFirstTabRender = useRef(true);
 
   const { walletAddress, walletConnected, error: walletError, connectWallet } = useWallet();
+
+  // Live cross-admin publish locks, polled so a record another admin is
+  // publishing is visibly taken within seconds instead of after minutes of work.
+  const { user } = useAuth();
+  const { claimFor, claimedByOther, refresh: refreshClaims } = usePublishClaims(user?.userId);
+  const lockFor = useCallback(
+    (row: LedgerRow): PublishLockState => {
+      const claim = claimFor(row.caseId, row.milestone);
+      if (!claim) return { heldByOther: false, heldByMe: false };
+      return {
+        heldByOther: claim.adminId !== user?.userId,
+        heldByMe: claim.adminId === user?.userId,
+        adminName: claim.adminName,
+        claimedAt: claim.claimedAt,
+      };
+    },
+    [claimFor, user?.userId]
+  );
 
   useGSAP(() => {
     gsap.fromTo('.publish-header', { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.45, ease: 'power2.out' });
@@ -231,9 +265,10 @@ export const PublishLedger: React.FC = () => {
       .sort((a, b) => {
         const getPriority = (r: LedgerRow) => {
           const isLocked =
-            r.status === 'Grace Period (Locked)' ||
-            (!!r.graceEndsAt && Date.now() < new Date(r.graceEndsAt).getTime());
-          if (r.status === 'Ready to Publish' && !isLocked) return 1;
+            r.milestone === 'M1' &&
+            !!r.graceEndsAt &&
+            currentTime < new Date(r.graceEndsAt).getTime();
+          if ((r.status === 'Ready to Publish' || r.status === 'Grace Period (Locked)') && !isLocked) return 1;
           if (isLocked) return 2;
           if (r.status === 'Published') return 3;
           return 4;
@@ -249,7 +284,7 @@ export const PublishLedger: React.FC = () => {
 
         return (a.caseId || '').localeCompare(b.caseId || '', undefined, { numeric: true });
       });
-  }, [rows, searchQuery]);
+  }, [rows, searchQuery, currentTime]);
 
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
@@ -378,17 +413,37 @@ export const PublishLedger: React.FC = () => {
                       ? row.id
                       : `BCN-${row.caseId}-${row.milestone || (activeTab === 'm2' ? 'M2' : 'M1')}`;
 
+                  const isGraceLocked =
+                    activeTab === 'm1' &&
+                    !!row.graceEndsAt &&
+                    currentTime < new Date(row.graceEndsAt).getTime();
+                  const remainingMs = isGraceLocked && row.graceEndsAt
+                    ? new Date(row.graceEndsAt as string | number).getTime() - currentTime
+                    : 0;
+                  const countdown = isGraceLocked ? formatGraceCountdown(remainingMs) : '';
+                  const effectiveStatus = isGraceLocked
+                    ? 'Grace Period (Locked)'
+                    : (row.status === 'Grace Period (Locked)' ? 'Ready to Publish' : (row.status || 'Ready to Publish'));
+                  const effectiveRow: LedgerRow = {
+                    ...row,
+                    status: effectiveStatus,
+                  };
+                  const lock = lockFor(row);
+                  const claimElapsed = lock.claimedAt
+                    ? Math.max(0, currentTime - new Date(lock.claimedAt).getTime())
+                    : 0;
+
                   return (
                     <tr
                       key={row.id}
                       className={`row-clickable${deepLink === row.caseId ? ' bg-md-secondary-container/40' : ''}`}
-                      onClick={() => setModal({ type: 'view', row })}
+                      onClick={() => setModal({ type: 'view', row: effectiveRow })}
                     >
                       <td onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1.5 cursor-pointer">
                           <span
                             className="font-mono font-bold text-xs text-md-primary hover:underline"
-                            onClick={() => setModal({ type: 'view', row })}
+                            onClick={() => setModal({ type: 'view', row: effectiveRow })}
                             title="View Ledger Details"
                           >
                             {blockchainId}
@@ -417,14 +472,7 @@ export const PublishLedger: React.FC = () => {
                       </td>
                       <td style={{ paddingRight: '20px' }}>
                         {(() => {
-                          const graceLocked =
-                            activeTab === 'm1' &&
-                            !!row.graceEndsAt &&
-                            Date.now() < new Date(row.graceEndsAt).getTime();
-                          const countdown = graceLocked
-                            ? formatGraceCountdown(new Date(row.graceEndsAt as string | number).getTime() - Date.now())
-                            : '';
-                          if (graceLocked) {
+                          if (isGraceLocked) {
                             return (
                               <span
                                 className="payment-badge status-locked whitespace-nowrap"
@@ -432,6 +480,17 @@ export const PublishLedger: React.FC = () => {
                               >
                                 <span className="dot" />
                                 Locked ({countdown} Left)
+                              </span>
+                            );
+                          }
+                          if (lock.heldByOther) {
+                            return (
+                              <span
+                                className="payment-badge info whitespace-nowrap"
+                                title={`${lock.adminName || 'Another government administrator'} is publishing this record to Sepolia · ${formatClaimElapsed(claimElapsed)} elapsed. The lock clears when they finish, or automatically if their session drops.`}
+                              >
+                                <span className="dot" />
+                                Publishing · {lock.adminName || 'Gov Admin'}
                               </span>
                             );
                           }
@@ -443,7 +502,7 @@ export const PublishLedger: React.FC = () => {
                               </span>
                             );
                           }
-                          return ledgerBadge(row.status || 'Ready to Publish');
+                          return ledgerBadge(effectiveStatus);
                         })()}
                       </td>
                     </tr>
@@ -470,8 +529,15 @@ export const PublishLedger: React.FC = () => {
         row={modal?.type === 'view' ? modal.row : null}
         onClose={closeModal}
         onAction={(act, r) => setModal({ type: act, row: r })}
+        lock={modal ? lockFor(modal.row) : undefined}
       />
-      <PublishModal row={modal?.type === 'publish' ? modal.row : null} onClose={closeModal} onDone={() => { closeModal(); loadData(); }} />
+      <PublishModal
+        row={modal?.type === 'publish' ? modal.row : null}
+        onClose={closeModal}
+        lock={modal ? lockFor(modal.row) : undefined}
+        onLocksChanged={refreshClaims}
+        onDone={() => { closeModal(); loadData(); refreshClaims(); }}
+      />
       <CaseDetailsModal caseId={caseDetailsId} onClose={() => setCaseDetailsId(null)} />
     </div>
   );

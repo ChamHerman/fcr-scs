@@ -39,7 +39,7 @@ import { CASE_STATUS_CLASS_MAP, CASE_STATUS_LABEL_MAP } from '../../constants/la
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { useAuth } from '../../context/AuthContext';
-import { formatActionLabel, formatReasonLabel, isRejectionAction, normalizePaymentStatus, paymentStatusClassMap } from './statusMaps';
+import { formatActionLabel, formatReasonLabel, isRejectionAction, normalizePaymentStatus, paymentStatusClassMap, isCategory1BankFailure } from './statusMaps';
 import { formatDateTime } from '../../utils/dateFormat';
 
 export type PaymentRowActionType =
@@ -89,6 +89,8 @@ export interface PaymentRow {
   isM1Published?: boolean;
   /** Statutory case status from Land Acquisition (e.g. OFFER_ACCEPTED, OFFER_ISSUED). */
   caseStatus?: string;
+  /** Calculated target execution datetime for SCHEDULED transfers. */
+  scheduledFor?: string | null;
 }
 
 export const PRE_TRANSFER_STATUSES = [
@@ -108,6 +110,17 @@ export const PRE_TRANSFER_STATUSES = [
 export const hasBankDetails = (pc: PaymentRow) =>
   Boolean(pc.bankName && pc.accountNumber && pc.accountHolderName);
 
+export const formatLocalPhoneDisplay = (raw?: string | null): string => {
+  if (!raw) return '—';
+  let cleaned = String(raw).trim().replace(/[\s-]/g, '');
+  if (cleaned.startsWith('+60')) cleaned = cleaned.slice(3);
+  else if (cleaned.startsWith('+6')) cleaned = cleaned.slice(2);
+  else if (cleaned.startsWith('60')) cleaned = cleaned.slice(2);
+  if (!cleaned.startsWith('0') && cleaned.length > 0) cleaned = `0${cleaned}`;
+  cleaned = cleaned.replace(/\D/g, '');
+  return cleaned || '—';
+};
+
 export const isReadyToInitiate = (pc: PaymentRow) => {
   const norm = normalizePaymentStatus(pc.status);
   return (
@@ -119,14 +132,14 @@ export const isReadyToInitiate = (pc: PaymentRow) => {
 
 export const formatAdminDisplay = (adminId?: string | null, adminName?: string | null): string => {
   if (adminName && adminName.trim()) return adminName;
-  if (!adminId) return 'Gov Admin 1';
+  if (!adminId) return 'Unknown Admin';
   if (/^Gov(ernment)?\s*Admin/i.test(adminId)) return adminId;
   const gaMatch = adminId.match(/^ga(\d+)/i);
   if (gaMatch) return `Gov Admin ${gaMatch[1]}`;
   const emailMatch = adminId.match(/^ga(\d+)@/i);
   if (emailMatch) return `Gov Admin ${emailMatch[1]}`;
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(adminId)) {
-    return 'Gov Admin 1';
+    return 'Unknown Admin';
   }
   return adminId;
 };
@@ -202,6 +215,12 @@ export const maskMyKad = (n?: string | null) =>
   n && n.length >= 10 ? `${n.slice(0, 2)}••••-••-••${n.slice(-2)}` : n || '—';
 
 export const fmtDate = (d?: string | null) => formatDateTime(d);
+
+/** GA audit entries must stack chronologically. The API already returns them in
+ *  created order; this sort keeps the log correct for rows cached from an older
+ *  response, where the relation came back in arbitrary physical order. */
+export const byCreatedAtAsc = <T extends { createdAt: string }>(rows: T[]): T[] =>
+  [...rows].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
 /** Machine code prefixes (e.g. "RECIPIENT_ACCOUNT_INVALID_OR_NOT_FOUND: ...")
  *  must never surface in the UI — keep the human sentence only. */
@@ -312,12 +331,60 @@ export const CaseTimestamps: React.FC<{ pc: PaymentRow; caseData?: any }> = ({ p
   );
 };
 
-export const paymentBadge = (status: string, currentSigs?: number, requiredSigs?: number) => {  const s = normalizePaymentStatus(status);
+export const formatScheduledSubtitle = (scheduledFor?: string | Date | null): string => {
+  let targetDate: Date;
+  if (scheduledFor) {
+    targetDate = new Date(scheduledFor);
+  } else {
+    const mytOffsetMs = 8 * 60 * 60 * 1000;
+    const myt = new Date(Date.now() + mytOffsetMs);
+    myt.setUTCDate(myt.getUTCDate() + 1);
+    if (myt.getUTCDay() === 6) myt.setUTCDate(myt.getUTCDate() + 2);
+    else if (myt.getUTCDay() === 0) myt.setUTCDate(myt.getUTCDate() + 1);
+    myt.setUTCHours(9, 0, 0, 0);
+    targetDate = new Date(myt.getTime() - mytOffsetMs);
+  }
+
+  const formatted = targetDate.toLocaleString('en-GB', {
+    timeZone: 'Asia/Kuala_Lumpur',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+
+  return `Next Working Day · ${formatted}`;
+};
+
+export const paymentBadge = (
+  status: string,
+  currentSigs?: number,
+  requiredSigs?: number,
+  scheduledFor?: string | Date | null
+) => {
+  const s = normalizePaymentStatus(status);
   const cls = paymentStatusClassMap[s] ?? 'status-pending-approval';
   let label = s;
   if (s === 'Pending Approval') {
     label = `Pending Approval (${currentSigs || 0}/${requiredSigs || 1})`;
   }
+
+  if (s === 'Scheduled') {
+    return (
+      <div className="inline-flex flex-col items-start gap-1">
+        <span className={`payment-badge ${cls}`}>
+          <span className="dot" />
+          {label}
+        </span>
+        <span className="text-[11px] font-mono text-sky-700 dark:text-sky-300 font-medium whitespace-nowrap">
+          {formatScheduledSubtitle(scheduledFor)}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <span className={`payment-badge ${cls}`}>
       <span className="dot" />
@@ -383,11 +450,11 @@ export const useMilestone1Record = (caseId?: string) => {
     };
   }, [caseId]);
 
-  // Tick clock every 10s to keep countdown active
+  // Tick clock every 1s to keep countdown active
   useEffect(() => {
     const timer = setInterval(() => {
       setNow(Date.now());
-    }, 10_000);
+    }, 1_000);
     return () => clearInterval(timer);
   }, []);
 
@@ -902,19 +969,13 @@ export const ViewDetailsModal: React.FC<{
           </Button>
         );
 
-      case 'Transfer Failed':
-        return (
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outlined"
-              size="md"
-              onClick={() => {
-                onClose();
-                onAction?.('schedule', pc);
-              }}
-            >
-              <span>Schedule Tomorrow</span>
-            </Button>
+      case 'Transfer Failed': {
+        const latestFt = pc.failedTransactions?.[pc.failedTransactions.length - 1];
+        const isCat1 = isCategory1BankFailure(latestFt?.errorLog);
+
+        if (isCat1) {
+          // Category 1: Recipient account fault -> only Request New Bank Details
+          return (
             <Button
               variant="filled"
               size="md"
@@ -925,8 +986,23 @@ export const ViewDetailsModal: React.FC<{
             >
               <span>Request New Bank Details</span>
             </Button>
-          </div>
+          );
+        }
+
+        // Category 2: Bank / Gateway / Network fault -> only Schedule Next Working Day
+        return (
+          <Button
+            variant="filled"
+            size="md"
+            onClick={() => {
+              onClose();
+              onAction?.('schedule', pc);
+            }}
+          >
+            <span>Schedule Next Working Day</span>
+          </Button>
         );
+      }
 
       case 'Transfer Succeed':
         // FR lock: at Transfer Succeed, no main action button.
@@ -1047,7 +1123,7 @@ export const ViewDetailsModal: React.FC<{
               <div className="value mono font-mono">
                 {norm === 'Bank Details Pending' || norm === 'New Bank Details Pending'
                   ? '—'
-                  : pc.phoneNumber || '—'}
+                  : formatLocalPhoneDisplay(pc.phoneNumber)}
               </div>
             </div>
             <div className="payment-detail-item">
@@ -1072,7 +1148,7 @@ export const ViewDetailsModal: React.FC<{
             </div>
             <div className="payment-detail-item">
               <div className="label">Payment Status</div>
-              <div className="value">{paymentBadge(norm, pc.currentSignatures, pc.requiredSignatures)}</div>
+              <div className="value">{paymentBadge(norm, pc.currentSignatures, pc.requiredSignatures, pc.scheduledFor)}</div>
             </div>
           </div>
         </div>
@@ -1134,7 +1210,7 @@ export const ViewDetailsModal: React.FC<{
               const cycles = Array.from(new Set(auths.map((a) => a.cycle ?? 1))).sort((x, y) => y - x);
               return cycles.map((cycleNum) => {
                 const isSuperseded = cycleNum !== activeCycle;
-                const cycleAuths = auths.filter((a) => (a.cycle ?? 1) === cycleNum);
+                const cycleAuths = byCreatedAtAsc(auths.filter((a) => (a.cycle ?? 1) === cycleNum));
                 return (
                   <div
                     key={cycleNum}
@@ -1648,7 +1724,7 @@ export const AuthoriseTransferModal: React.FC<MutatingModalProps> = ({ pc, onClo
             </div>
 
             <div className="space-y-1.5 text-sm">
-              {pc.authorisations?.map((a, i) => {
+              {byCreatedAtAsc(pc.authorisations ?? []).map((a, i) => {
                 const isRejection = isRejectionAction(a.action);
                 return (
                   <div key={i} className="flex items-center gap-2">
@@ -1709,12 +1785,11 @@ export const AuthoriseTransferModal: React.FC<MutatingModalProps> = ({ pc, onClo
 
 /* ------------------------------- Cancellation / Rejection Reasons ------------------------------- */
 
+/* Cancel is irreversible (status CANCELLED has no exit path), so the list is
+ * restricted to reasons that mean "this case is no longer needed / must be
+ * refiled". A landowner bank-account change goes through the non-destructive
+ * Request New Bank Details flow instead. */
 export const CANCELLATION_REASONS = [
-  {
-    value: 'LANDOWNER_REQUESTED_ACCOUNT_CHANGE',
-    label: 'Landowner requested bank account change / account closed',
-    solution: 'Request Landowner to Update Bank Details',
-  },
   {
     value: 'LEGAL_DISPUTE_OR_INJUNCTION',
     label: 'Land parcel ownership dispute or court injunction received',
@@ -2138,7 +2213,7 @@ export const RequestDetailsUpdateModal: React.FC<MutatingModalProps> = ({ pc, on
   );
 };
 
-/* ------------------------------ Schedule Tomorrow ------------------------------ */
+/* ------------------------------ Schedule Next Working Day ------------------------------ */
 
 export const ScheduleTomorrowModal: React.FC<MutatingModalProps> = ({ pc, onClose, onDone }) => {
   const { loading, setLoading, notify } = useMutationState();
@@ -2148,7 +2223,7 @@ export const ScheduleTomorrowModal: React.FC<MutatingModalProps> = ({ pc, onClos
     setLoading(true);
     try {
       await paymentApi.scheduleTomorrow(pc.caseId);
-      notify({ type: 'success', title: 'Scheduled', message: `Case ${pc.caseId} will auto-execute 00:01 next business day (Asia/Kuala_Lumpur).` });
+      notify({ type: 'success', title: 'Scheduled', message: `Case ${pc.caseId} scheduled for next working day (09:00 AM MYT).` });
       onClose();
       onDone();
     } catch (e: any) {
@@ -2162,10 +2237,10 @@ export const ScheduleTomorrowModal: React.FC<MutatingModalProps> = ({ pc, onClos
     <Modal
       isOpen={Boolean(pc)}
       onClose={onClose}
-      title="Schedule Tomorrow"
+      title="Schedule Next Working Day"
       subtitle={pc ? `Case ${pc.caseId} · ${fmtAmount(pc.amount)}` : ''}
       cancelText="Cancel"
-      confirmText="Schedule Tomorrow"
+      confirmText="Schedule Next Working Day"
       confirmLoading={loading}
       onConfirm={confirm}
     >
@@ -2175,9 +2250,12 @@ export const ScheduleTomorrowModal: React.FC<MutatingModalProps> = ({ pc, onClos
             <div className="label">Record</div>
             <div className="value">{pc.accountHolderName || pc.beneficiaryId} · {fmtAmount(pc.amount)}</div>
           </div>
+          <div className="p-3 bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/40 rounded-lg text-sm text-sky-900 dark:text-sky-200">
+            <div className="font-semibold mb-1">Execution Schedule</div>
+            <div>{formatScheduledSubtitle(pc.scheduledFor)}</div>
+          </div>
           <p className="text-sm text-md-on-surface-variant">
-            Records the decision to auto-execute at <strong className="text-md-on-surface">00:01 next business day (Asia/Kuala_Lumpur)</strong>.
-            This is a recorded decision — no real scheduler exists yet (simulation).
+            Transfer will automatically execute on the next Malaysian bank working day (09:00 AM Asia/Kuala_Lumpur) and return to the Bank Portal approval queue.
           </p>
 
           <CaseTimestamps pc={pc} />
@@ -2186,6 +2264,8 @@ export const ScheduleTomorrowModal: React.FC<MutatingModalProps> = ({ pc, onClos
     </Modal>
   );
 };
+
+export const ScheduleNextWorkingDayModal = ScheduleTomorrowModal;
 
 /* -------------------------------- Mark Resolved -------------------------------- */
 

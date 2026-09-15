@@ -77,7 +77,8 @@ export default function InitiateTransfer() {
     loadData();
   }, [loadData]);
 
-  const normalizeStatusKey = (s?: string) => (s || '').toUpperCase().replace(/\s+/g, '_');
+  const normalizeStatusKey = (s?: string) =>
+    (s || '').toUpperCase().replace(/&/g, 'AND').replace(/\s+/g, '_');
 
   const isInInitiationQueue = (c: PaymentRow) => {
     const raw = (c.caseStatus || '').toUpperCase().replace(/\s+/g, '_');
@@ -87,20 +88,19 @@ export default function InitiateTransfer() {
     const k = normalizeStatusKey(c.status);
     return (
       k === 'READY_TO_INITIATE' ||
-      k === 'BANK_DETAILS_PENDING' ||
       k === 'AWARD_NOTARIZATION_PENDING' ||
       k === 'BANK_DETAILS_AND_M1_PENDING' ||
-      k === 'NEW_BANK_DETAILS_PENDING'
+      k === 'NEW_BANK_DETAILS_PENDING' ||
+      k === 'BANK_DETAILS_PENDING'
     );
   };
 
   const INITIATION_STATUS_RANK: Record<string, number> = {
     'READY_TO_INITIATE': 1,
-    'PENDING_APPROVAL': 2,
+    'AWARD_NOTARIZATION_PENDING': 2,
     'BANK_DETAILS_AND_M1_PENDING': 3,
-    'AWARD_NOTARIZATION_PENDING': 4,
+    'NEW_BANK_DETAILS_PENDING': 4,
     'BANK_DETAILS_PENDING': 5,
-    'NEW_BANK_DETAILS_PENDING': 6,
   };
 
   const queueCases = useMemo(() => {
