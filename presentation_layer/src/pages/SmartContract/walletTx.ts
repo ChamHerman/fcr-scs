@@ -1,21 +1,20 @@
 import { ethers } from 'ethers';
 
 /**
- * MetaMask transaction helpers for the blockchain module. Publish/void are
+ * MetaMask transaction helpers for the blockchain module. Transactions are
  * signed by the ADMIN WALLET in MetaMask (eth_sendTransaction) — the backend
  * never signs; it only verifies the resulting receipt and records it.
  */
 
 const getEthereum = () => (window as any).ethereum;
 
-// Human-readable ABI fragment — just the two functions the admin wallet calls.
+// Human-readable ABI fragment for publication.
 // NOTE: the contract declares publishRecord(string, bytes32) — a string/string
 // ABI here would encode a selector the contract does not have, the estimate
 // would revert, and MetaMask would fall back to a 21,000,000 gas default that
 // Infura rejects (cap 16,777,216).
 const COMPENSATION_LEDGER_ABI = [
   'function publishRecord(string caseId, bytes32 documentHash)',
-  'function voidRecord(string caseId, string reason)',
 ];
 
 /** Normalises a document hash to an exact 32-byte hex value (bytes32). */
@@ -73,7 +72,7 @@ export async function ensureChain(chainId: number): Promise<void> {
 /** Prompts MetaMask to sign + send a CompensationLedger call; resolves with the tx hash. */
 export async function sendLedgerTransaction(params: {
   from: string;
-  functionName: 'publishRecord' | 'voidRecord';
+  functionName?: 'publishRecord';
   args: string[];
   network: { chainId: number; contractAddress: string };
 }): Promise<string> {
@@ -83,9 +82,8 @@ export async function sendLedgerTransaction(params: {
   await ensureChain(params.network.chainId);
 
   const iface = new ethers.Interface(COMPENSATION_LEDGER_ABI);
-  const args =
-    params.functionName === 'publishRecord' ? [params.args[0], toBytes32(params.args[1])] : params.args;
-  const data = iface.encodeFunctionData(params.functionName, args);
+  const args = [params.args[0], toBytes32(params.args[1])];
+  const data = iface.encodeFunctionData('publishRecord', args);
   const request: Record<string, string> = { from: params.from, to: params.network.contractAddress, data };
 
   // Estimate gas up front and pass it explicitly. MetaMask's 21,000,000 default

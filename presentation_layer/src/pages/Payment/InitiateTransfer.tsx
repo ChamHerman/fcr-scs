@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, CheckCircle2, Loader2, Eye, ShieldAlert, Lock, RefreshCw, Activity } from 'lucide-react';
+import { Clock, User, CheckCircle2, Loader2, Eye, ShieldAlert, Lock, RefreshCw, Activity, Send } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
@@ -60,7 +60,12 @@ export default function InitiateTransfer() {
     setError('');
     try {
       const res = await paymentApi.getAllCases();
-      setCases(res.cases || []);
+      const rawCases = res.cases || [];
+      const eligible = rawCases.filter((c: any) => {
+        const raw = (c.caseStatus || '').toUpperCase().replace(/\s+/g, '_');
+        return raw !== 'OFFER_ISSUED' && raw !== 'OFFER_REJECTED' && raw !== 'CASE_REGISTERED' && c.status !== 'Offer Issued';
+      });
+      setCases(eligible);
     } catch (err: any) {
       setError(err.message || 'Failed to load cases');
     } finally {
@@ -75,6 +80,10 @@ export default function InitiateTransfer() {
   const normalizeStatusKey = (s?: string) => (s || '').toUpperCase().replace(/\s+/g, '_');
 
   const isInInitiationQueue = (c: PaymentRow) => {
+    const raw = (c.caseStatus || '').toUpperCase().replace(/\s+/g, '_');
+    if (raw === 'OFFER_ISSUED' || raw === 'OFFER_REJECTED' || raw === 'CASE_REGISTERED' || c.status === 'Offer Issued') {
+      return false;
+    }
     const k = normalizeStatusKey(c.status);
     return (
       k === 'READY_TO_INITIATE' ||
@@ -104,6 +113,11 @@ export default function InitiateTransfer() {
       if (rankA !== rankB) {
         return rankA - rankB;
       }
+      // Secondary sort: Payment ID using natural numerical ordering
+      const pmtA = a.paymentId || a.id || '';
+      const pmtB = b.paymentId || b.id || '';
+      const pmtCmp = pmtA.localeCompare(pmtB, undefined, { numeric: true, sensitivity: 'base' });
+      if (pmtCmp !== 0) return pmtCmp;
       // Oldest updated/created at the top
       const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
       const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
@@ -230,7 +244,7 @@ export default function InitiateTransfer() {
 
       <div className="action-bar">
         <div className="left">
-          <Activity size={18} />
+          <Send size={18} />
           <span className="count">Initiation queue ({filtered.length})</span>
         </div>
         <div className="right">

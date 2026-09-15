@@ -20,6 +20,7 @@ import {
   ExternalLink,
   Eye,
   UploadCloud,
+  ArrowUpRight,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Modal } from '../../components/ui/Modal';
@@ -31,6 +32,8 @@ import { Checkbox } from '../../components/ui/Checkbox';
 import { paymentApi } from '../../services/paymentApi';
 import { landAcquisitionApi } from '../../services/landAcquisitionApi';
 import { blockchainApi } from '../../services/blockchainApi';
+import { compensationApi } from '../../services/compensationApi';
+import { formatGraceCountdown } from '../SmartContract/PublishLedger';
 import { BASE_URL } from '../../services/api';
 import { CASE_STATUS_CLASS_MAP, CASE_STATUS_LABEL_MAP } from '../../constants/landAcquisition';
 import { useNotification } from '../../components/ui/NotificationSystem';
@@ -84,6 +87,8 @@ export interface PaymentRow {
   disputeUploadedAt?: string | null;
   /** Whether Milestone 1 (Statutory Award) is notarized on-chain (FR-019). */
   isM1Published?: boolean;
+  /** Statutory case status from Land Acquisition (e.g. OFFER_ACCEPTED, OFFER_ISSUED). */
+  caseStatus?: string;
 }
 
 export const PRE_TRANSFER_STATUSES = [
@@ -266,16 +271,46 @@ export const bankBeneficiaryEvents = (pc: PaymentRow): BankBeneficiaryEvent[] =>
 };
 
 /** Case created / updated timestamps — shown in every payment-related modal. */
-export const CaseTimestamps: React.FC<{ pc: PaymentRow }> = ({ pc }) => (
-  <div className="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-md-on-surface-variant">
-    <span>
-      <span className="font-semibold">Case Created:</span> {fmtDate(pc.createdAt)}
-    </span>
-    <span>
-      <span className="font-semibold">Last Updated:</span> {fmtDate(pc.updatedAt)}
-    </span>
-  </div>
-);
+export const CaseTimestamps: React.FC<{ pc: PaymentRow; caseData?: any }> = ({ pc, caseData: propCaseData }) => {
+  const [fetchedCase, setFetchedCase] = useState<any>(null);
+
+  useEffect(() => {
+    if (propCaseData || !pc?.caseId) return;
+    let isMounted = true;
+    landAcquisitionApi
+      .getCaseById(pc.caseId)
+      .then((res: any) => {
+        if (isMounted) setFetchedCase(res?.data || res?.case || res);
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [pc?.caseId, propCaseData]);
+
+  const caseObj = propCaseData || fetchedCase;
+  const caseCreated = caseObj?.createdAt || caseObj?.registrationDate || pc.createdAt;
+  const caseUpdated = caseObj?.updatedAt || pc.updatedAt;
+  const acceptedAt =
+    caseObj?.offerLetters?.find((o: any) => o.status === 'ACCEPTED' || o.acceptedAt)?.acceptedAt ||
+    caseObj?.offerLetters?.[0]?.acceptedAt;
+
+  return (
+    <div className="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-md-on-surface-variant">
+      <span>
+        <span className="font-semibold">Case Created:</span> {fmtDate(caseCreated)}
+      </span>
+      {acceptedAt && (
+        <span>
+          <span className="font-semibold">Offer Accepted:</span> {fmtDate(acceptedAt)}
+        </span>
+      )}
+      <span>
+        <span className="font-semibold">Last Updated:</span> {fmtDate(caseUpdated)}
+      </span>
+    </div>
+  );
+};
 
 export const paymentBadge = (status: string, currentSigs?: number, requiredSigs?: number) => {  const s = normalizePaymentStatus(status);
   const cls = paymentStatusClassMap[s] ?? 'status-pending-approval';
@@ -301,51 +336,92 @@ export const etherscanTxUrl = (txHash?: string | null, chainId?: number) => {
 
 const fmtHash = (h?: string | null) => (h ? `${h.slice(0, 10)}…${h.slice(-6)}` : '');
 
-/** Fetches the Milestone 1 (Statutory Award) blockchain record for a case. */
+const ACCEPTANCE_GRACE_PERIOD_MS = 24 * 60 * 60 * 1000;
+
+/** Fetches the Milestone 1 (Statutory Award) blockchain record for a case and its grace status. */
 export const useMilestone1Record = (caseId?: string) => {
   const [record, setRecord] = useState<any | null | 'loading'>(caseId ? 'loading' : null);
+  const [acceptedAt, setAcceptedAt] = useState<string | null>(null);
+  const [now, setNow] = useState<number>(Date.now());
 
   useEffect(() => {
     if (!caseId) {
       setRecord(null);
+      setAcceptedAt(null);
       return;
     }
     let isMounted = true;
     setRecord('loading');
-    blockchainApi
-      .getRecords()
-      .then((res: any) => {
+
+    Promise.all([
+      blockchainApi.getRecords().catch(() => ({ records: [] })),
+      compensationApi.getAllOfferLetters({ limit: 200 } as any).catch(() => ({ offers: [], offerLetters: [] })),
+      landAcquisitionApi.getCaseById(caseId).catch(() => null),
+    ])
+      .then(([recordsRes, offersRes, caseRes]: [any, any, any]) => {
         if (!isMounted) return;
-        const list: any[] = res?.records || [];
-        setRecord(list.find((r) => r.caseId === caseId && (r.milestone ?? 'AWARD') === 'AWARD') ?? null);
+        const list: any[] = recordsRes?.records || [];
+        const m1Rec = list.find((r) => r.caseId === caseId && (r.milestone ?? 'AWARD') === 'AWARD') ?? null;
+        setRecord(m1Rec);
+
+        const offers: any[] = offersRes?.offers || offersRes?.offerLetters || [];
+        const foundOffer = offers.find((o: any) => o.caseId === caseId);
+        const caseObj = caseRes?.data || caseRes?.case || caseRes;
+        const caseOffer = caseObj?.offerLetters?.find((o: any) => o.status === 'ACCEPTED' || o.acceptedAt);
+        const accTime = foundOffer?.acceptedAt || caseOffer?.acceptedAt || null;
+        setAcceptedAt(accTime);
       })
       .catch(() => {
-        if (isMounted) setRecord(null);
+        if (isMounted) {
+          setRecord(null);
+          setAcceptedAt(null);
+        }
       });
+
     return () => {
       isMounted = false;
     };
   }, [caseId]);
 
+  // Tick clock every 10s to keep countdown active
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(Date.now());
+    }, 10_000);
+    return () => clearInterval(timer);
+  }, []);
+
   const loaded = record !== 'loading';
   const rawStatus = String((record as any)?.status || '').toUpperCase().replace(/[\s_]+/g, '_');
+  const isM1Published = loaded && !!record && rawStatus === 'PUBLISHED';
+
+  const acceptedAtMs = acceptedAt ? new Date(acceptedAt).getTime() : null;
+  const graceEndsAtMs = acceptedAtMs != null ? acceptedAtMs + ACCEPTANCE_GRACE_PERIOD_MS : null;
+  const isGraceLocked = !isM1Published && graceEndsAtMs != null && now < graceEndsAtMs;
+  const remainingMs = isGraceLocked && graceEndsAtMs != null ? Math.max(0, graceEndsAtMs - now) : 0;
+  const countdown = isGraceLocked ? formatGraceCountdown(remainingMs) : '';
+
   return {
     record: loaded ? (record as any) : null,
     loading: !loaded,
-    isM1Published: loaded && !!record && rawStatus === 'PUBLISHED',
-    isVoidPending: loaded && !!record && rawStatus === 'VOID_PENDING',
+    isM1Published,
+    isGraceLocked,
+    remainingMs,
+    countdown,
+    graceEndsAt: graceEndsAtMs,
+    acceptedAt,
   };
 };
 
 /**
  * Blockchain status banner for Milestone 1 (Statutory Award notarization).
  * Green tonal when the award is anchored on-chain (with an Etherscan link),
- * amber tonal while notarization is pending, red outline when the record is
- * awaiting on-chain void after cancellation (VOID_PENDING).
+ * amber tonal when locked during statutory 24-hour acceptance cancellation grace period,
+ * and Electric Sky tonal when grace period has concluded and award is ready to publish.
  */
 export const Milestone1Banner: React.FC<{ caseId: string }> = ({ caseId }) => {
   const navigate = useNavigate();
-  const { record, loading, isM1Published, isVoidPending } = useMilestone1Record(caseId);
+  const { record, loading, isM1Published, isGraceLocked, countdown } = useMilestone1Record(caseId);
 
   if (loading || !caseId) return null;
 
@@ -377,45 +453,50 @@ export const Milestone1Banner: React.FC<{ caseId: string }> = ({ caseId }) => {
     );
   }
 
-  if (isVoidPending) {
+  if (isGraceLocked) {
     return (
-      <div className="bg-red-500/10 border-2 border-red-500/30 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="bg-amber-500/15 dark:bg-amber-500/25 border-2 border-amber-500/50 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
         <div className="flex items-start gap-2.5 min-w-0">
-          <ShieldAlert size={20} className="text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+          <Lock size={20} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
           <div className="text-xs">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider bg-red-600 text-white">Void Required</span>
-              <span className="font-bold text-red-700 dark:text-red-300">Milestone 1 On-Chain Void Pending</span>
+              <span className="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider bg-amber-500 text-white dark:bg-amber-400 dark:text-gray-900 shadow-2xs">
+                LOCKED
+              </span>
+              <span className="font-bold text-amber-900 dark:text-amber-200 text-xs sm:text-sm">
+                Milestone 1 Pending On-Chain Notarization
+              </span>
             </div>
             <div className="text-md-on-surface-variant mt-1 leading-relaxed">
-              This case was cancelled after award notarization. Must be voided on-chain before any further action.
+              Disbursement initiation is locked. The statutory award (Form H) is within its 24-hour acceptance cancellation grace period{countdown ? ` (${countdown} left)` : ''} before on-chain notarization can proceed.
             </div>
           </div>
         </div>
         <Button
           size="sm"
           variant="filled"
-          className="shrink-0 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm self-start sm:self-center cursor-pointer"
-          onClick={() => navigate(`/admin/blockchain/void?caseId=${encodeURIComponent(caseId)}`)}
+          disabled
+          title={`Milestone 1 unlocks when the statutory 24-hour acceptance grace period ends (${countdown} left)`}
+          className="shrink-0 !bg-amber-600 !text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm self-start sm:self-center"
         >
-          <Ban size={14} />
-          <span>Void Milestone 1</span>
+          <Lock size={14} />
+          <span>Locked ({countdown || 'Grace Period'})</span>
         </Button>
       </div>
     );
   }
 
   return (
-    <div className="bg-amber-500/15 dark:bg-amber-500/25 border-2 border-amber-500/50 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+    <div className="bg-sky-500/10 dark:bg-sky-500/20 border-2 border-sky-500/40 dark:border-sky-500/50 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
       <div className="flex items-start gap-2.5 min-w-0">
-        <AlertTriangle size={20} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+        <UploadCloud size={20} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
         <div className="text-xs">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider bg-amber-500 text-white dark:bg-amber-400 dark:text-gray-900 shadow-2xs">
-              LOCKED
+            <span className="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider bg-sky-600 text-white dark:bg-sky-500 dark:text-gray-900 shadow-2xs">
+              READY
             </span>
-            <span className="font-bold text-amber-900 dark:text-amber-200 text-xs sm:text-sm">
-              Milestone 1 Pending On-Chain Notarization
+            <span className="font-bold text-sky-950 dark:text-sky-200 text-xs sm:text-sm">
+              Milestone 1 Ready for On-Chain Notarization
             </span>
           </div>
           <div className="text-md-on-surface-variant mt-1 leading-relaxed">
@@ -426,11 +507,127 @@ export const Milestone1Banner: React.FC<{ caseId: string }> = ({ caseId }) => {
       <Button
         size="sm"
         variant="filled"
-        className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm self-start sm:self-center cursor-pointer"
+        className="shrink-0 !bg-sky-600 hover:!bg-sky-700 !text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm self-start sm:self-center cursor-pointer"
         onClick={() => navigate(`/admin/blockchain/publish?caseId=${encodeURIComponent(caseId)}`)}
       >
         <UploadCloud size={14} />
         <span>Publish Milestone 1</span>
+      </Button>
+    </div>
+  );
+};
+
+/** Fetches the Milestone 2 (Statutory Settlement) blockchain record for a case. */
+export const useMilestone2Record = (caseId?: string) => {
+  const [record, setRecord] = useState<any | null | 'loading'>(caseId ? 'loading' : null);
+
+  useEffect(() => {
+    if (!caseId) {
+      setRecord(null);
+      return;
+    }
+    let isMounted = true;
+    setRecord('loading');
+
+    blockchainApi
+      .getRecords()
+      .then((recordsRes: any) => {
+        if (!isMounted) return;
+        const list: any[] = recordsRes?.records || [];
+        const m2Rec = list.find((r) => r.caseId === caseId && ((r.milestone ?? 'SETTLEMENT') === 'SETTLEMENT' || r.milestone === 'M2')) ?? null;
+        setRecord(m2Rec);
+      })
+      .catch(() => {
+        if (isMounted) setRecord(null);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [caseId]);
+
+  const loaded = record !== 'loading';
+  const rawStatus = String((record as any)?.status || '').toUpperCase().replace(/[\s_]+/g, '_');
+  const isM2Published = loaded && !!record && rawStatus === 'PUBLISHED';
+
+  return {
+    record: loaded ? (record as any) : null,
+    loading: !loaded,
+    isM2Published,
+  };
+};
+
+/**
+ * Blockchain status banner for Milestone 2 (Statutory Settlement notarization).
+ * Displayed directly under Milestone 1 banner on top of the payment modal.
+ * Green tonal when anchored on-chain with an Etherscan link,
+ * Electric Sky tonal with [Publish Milestone 2] button when ready to publish.
+ */
+export const Milestone2Banner: React.FC<{ caseId: string; status?: string }> = ({ caseId, status }) => {
+  const navigate = useNavigate();
+  const { record, loading, isM2Published } = useMilestone2Record(caseId);
+
+  if (loading || !caseId) return null;
+
+  if (isM2Published) {
+    const url = etherscanTxUrl(record.transactionHash);
+    return (
+      <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3 flex items-start gap-2.5">
+        <CheckCircle2 size={18} className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+        <div className="min-w-0 text-xs">
+          <div className="font-bold text-emerald-700 dark:text-emerald-300">
+            Statutory Settlement Notarized on Blockchain (Milestone 2)
+          </div>
+          <div className="text-md-on-surface-variant mt-0.5 flex items-center gap-2 flex-wrap">
+            <span>Settlement receipt anchored on Sepolia · {new Date(record.publishedAt || record.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+            {url && (
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono inline-flex items-center gap-1.5 text-md-primary font-semibold hover:underline"
+              >
+                {fmtHash(record.transactionHash)}
+                <ExternalLink size={12} className="shrink-0" />
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const norm = normalizePaymentStatus(status || '');
+  const isReady = norm === 'Transfer Succeed' || norm === 'Paid';
+
+  if (!isReady) return null;
+
+  return (
+    <div className="bg-sky-500/10 dark:bg-sky-500/20 border-2 border-sky-500/40 dark:border-sky-500/50 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+      <div className="flex items-start gap-2.5 min-w-0">
+        <UploadCloud size={20} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
+        <div className="text-xs">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider bg-sky-600 text-white dark:bg-sky-500 dark:text-gray-900 shadow-2xs">
+              READY
+            </span>
+            <span className="font-bold text-sky-950 dark:text-sky-200 text-xs sm:text-sm">
+              Milestone 2 Ready for On-Chain Notarization
+            </span>
+          </div>
+          <div className="text-md-on-surface-variant mt-1 leading-relaxed">
+            Disbursement completed via RENTAS RTGS. The statutory settlement receipt is ready to be permanently notarized on the blockchain.
+          </div>
+        </div>
+      </div>
+      <Button
+        size="sm"
+        variant="filled"
+        className="shrink-0 !bg-sky-600 hover:!bg-sky-700 !text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm self-start sm:self-center cursor-pointer"
+        onClick={() => navigate(`/admin/blockchain/publish?caseId=${encodeURIComponent(caseId)}`)}
+      >
+        <UploadCloud size={14} />
+        <span>Publish Milestone 2</span>
       </Button>
     </div>
   );
@@ -447,7 +644,12 @@ export const ViewDetailsModal: React.FC<{
   const { notify } = useNotification();
   const { user } = useAuth();
   const [caseData, setCaseData] = useState<any>(null);
-  const { isM1Published } = useMilestone1Record(pc?.caseId);
+  const { isM1Published, isGraceLocked, countdown } = useMilestone1Record(pc?.caseId);
+  const hasAutoTriggeredRef = useRef(false);
+
+  useEffect(() => {
+    hasAutoTriggeredRef.current = false;
+  }, [pc?.caseId]);
 
   useEffect(() => {
     if (!pc?.caseId) {
@@ -468,9 +670,40 @@ export const ViewDetailsModal: React.FC<{
     };
   }, [pc?.caseId]);
 
+  const norm = pc ? normalizePaymentStatus(pc.status) : '';
+  const transferSucceedDate =
+    norm === 'Transfer Succeed' && pc ? pc.receipt?.generatedAt || pc.updatedAt || pc.createdAt : null;
+  const succeedDateMs = transferSucceedDate ? new Date(transferSucceedDate).getTime() : Date.now();
+  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+  const autoConfirmAtMs = succeedDateMs + SEVEN_DAYS_MS;
+  const nowMs = Date.now();
+  const remainingMs = Math.max(0, autoConfirmAtMs - nowMs);
+  const remainingDays = Math.max(0, Math.ceil(remainingMs / (1000 * 60 * 60 * 24)));
+  const remainingHours = Math.max(0, Math.floor((remainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)));
+  const isAutoConfirmEligible = transferSucceedDate != null && nowMs >= autoConfirmAtMs;
+
+  useEffect(() => {
+    if (!pc) return;
+    if (norm === 'Transfer Succeed' && isAutoConfirmEligible && !hasAutoTriggeredRef.current) {
+      hasAutoTriggeredRef.current = true;
+      paymentApi
+        .confirmReceipt({ caseId: pc.caseId, isAutoOrAdminOverride: true })
+        .then(() => {
+          notify({
+            type: 'success',
+            title: 'Payment Auto-Confirmed',
+            message: `7-day statutory window elapsed for Case ${pc.caseId}. System auto-confirmed receipt and marked as Paid.`,
+          });
+          onAction?.('confirm-receipt', pc);
+        })
+        .catch((err: any) => {
+          console.error('[paymentModals] Auto-confirm error:', err);
+        });
+    }
+  }, [norm, isAutoConfirmEligible, pc?.caseId, notify, onAction, pc]);
+
   if (!pc) return null;
 
-  const norm = normalizePaymentStatus(pc.status);
   const signed = hasSignedOrInitiated(pc, identityId);
   const left = signaturesLeft(pc);
   const isSysAdmin = user?.role === 'SYSTEM_ADMINISTRATOR';
@@ -485,15 +718,6 @@ export const ViewDetailsModal: React.FC<{
   const hasDisputeStatement = norm === 'Disputed' && Boolean(pc.disputeDocumentPath);
 
   const bankEvents = bankBeneficiaryEvents(pc);
-
-  // 7-day rule (FR-005): admin manual confirmation unlocks 7 days after the
-  // bank transfer cleared, unless the member confirms first.
-  const transferSucceedDate =
-    norm === 'Transfer Succeed' ? pc.receipt?.generatedAt || pc.updatedAt || pc.createdAt : null;
-  const succeedDaysElapsed = transferSucceedDate
-    ? Math.floor((Date.now() - new Date(transferSucceedDate).getTime()) / (1000 * 60 * 60 * 24))
-    : 0;
-  const confirmReceiptEligible = succeedDaysElapsed >= 7;
 
   const downloadDisputeStatement = async () => {
     try {
@@ -560,7 +784,9 @@ export const ViewDetailsModal: React.FC<{
               !hasBankDetails(pc)
                 ? 'Awaiting beneficiary bank details before transfer can be initiated'
                 : !isM1Published
-                ? 'Initiation is locked: Milestone 1 (Statutory Award) must be published on the blockchain first'
+                ? isGraceLocked
+                  ? `Initiation is locked: 24-hour acceptance cancellation grace period active (${countdown} left)`
+                  : 'Initiation is locked: Milestone 1 (Statutory Award) must be published on the blockchain first'
                 : undefined
             }
             onClick={() => {
@@ -703,36 +929,9 @@ export const ViewDetailsModal: React.FC<{
         );
 
       case 'Transfer Succeed':
-        return (
-          <Button
-            variant="filled"
-            size="md"
-            disabled={!confirmReceiptEligible}
-            className={!confirmReceiptEligible ? '!opacity-50 !cursor-not-allowed' : '!bg-emerald-600 !text-white hover:!bg-emerald-700'}
-            onClick={async () => {
-              try {
-                await paymentApi.confirmReceipt({ caseId: pc.caseId, isAutoOrAdminOverride: true });
-                notify({
-                  type: 'success',
-                  title: 'Payment Confirmed',
-                  message: `Case ${pc.caseId} marked as Paid. Now eligible for blockchain publishing.`,
-                });
-                onClose();
-                onAction?.('confirm-receipt', pc);
-              } catch (err: unknown) {
-                const e = err as Error;
-                notify({
-                  type: 'error',
-                  title: 'Confirmation Failed',
-                  message: e.message || 'Could not mark payment as Paid.',
-                });
-              }
-            }}
-          >
-            <CheckCircle2 size={15} />
-            <span>Confirm Receipt (Mark Paid)</span>
-          </Button>
-        );
+        // FR lock: at Transfer Succeed, no main action button.
+        // Auto-triggers confirm receipt after 7 days; modal shows remaining days/hours.
+        return null;
 
       case 'Disputed':
       case 'Payment Disputed':
@@ -751,16 +950,8 @@ export const ViewDetailsModal: React.FC<{
         );
 
       case 'Paid':
-        return (
-          <Button
-            variant="tonal"
-            size="md"
-            onClick={() => downloadReceipt(pc, notify)}
-          >
-            <Download size={15} />
-            <span>Download Official Receipt</span>
-          </Button>
-        );
+        // Once Paid, settlement is recorded; receipt is accessible via clickable bank reference in Transfer Successful card.
+        return null;
 
       default:
         return null;
@@ -786,6 +977,9 @@ export const ViewDetailsModal: React.FC<{
       <div className="space-y-5 text-sm">
         {/* FR-019: Milestone 1 statutory-award blockchain banner */}
         <Milestone1Banner caseId={pc.caseId} />
+
+        {/* Milestone 2 statutory-settlement blockchain banner */}
+        <Milestone2Banner caseId={pc.caseId} status={pc.status} />
 
         {/* Case Details Above */}
         <div className="bg-md-surface-container-low rounded-xl p-4 border border-md-outline/10 space-y-3">
@@ -827,7 +1021,7 @@ export const ViewDetailsModal: React.FC<{
             </div>
           </div>
 
-          <CaseTimestamps pc={pc} />
+          <CaseTimestamps pc={pc} caseData={caseData} />
         </div>
 
         {/* Operational Payment Details */}
@@ -1002,41 +1196,103 @@ export const ViewDetailsModal: React.FC<{
             <div className="label" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--md-on-surface-variant)', marginBottom: 8 }}>
               From Bank / Beneficiary
             </div>
-            <div className="space-y-2">
-              {bankEvents.map((ev, i) => (
-                <div key={i} className="bg-md-surface-container-low rounded-xl px-4 py-2.5 border border-md-outline/10 text-xs">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    {ev.kind === 'success' ? (
-                      <CheckCircle2 size={13} className="text-md-success-text shrink-0" />
-                    ) : ev.kind === 'dispute' ? (
-                      <AlertTriangle size={13} className="text-amber-600 shrink-0" />
-                    ) : (
-                      <XCircle size={13} className="text-md-error shrink-0" />
-                    )}
-                    <span className="font-semibold text-md-on-surface">{ev.title}</span>
-                    <span className="text-[11px] text-md-on-surface-variant">· {fmtDate(ev.date)}</span>
-                  </div>
-                  <div className="text-md-on-surface break-words">{ev.detail}</div>
-                  {ev.resolved && (
-                    <div className="text-[11px] text-md-on-success mt-1">
-                      Resolution: {formatResolutionLabel(ev.resolved)}
+            <div className="space-y-2.5">
+              {bankEvents.map((ev, i) => {
+                if (ev.kind === 'success') {
+                  const bankRef = pc.receipt?.bankReferenceNumber || `BNK-${pc.caseId.replace(/[^A-Z0-9]/gi, '')}`;
+                  return (
+                    <div
+                      key={i}
+                      className="bg-emerald-500/10 dark:bg-emerald-500/20 border-2 border-emerald-500/30 rounded-xl p-4 shadow-2xs space-y-2.5"
+                    >
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 size={18} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <span className="font-bold text-sm text-emerald-950 dark:text-emerald-100">
+                            Transfer Successful
+                          </span>
+                          <span className="text-xs text-md-on-surface-variant font-medium">
+                            · {fmtDate(ev.date)}
+                          </span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-emerald-600 text-white dark:bg-emerald-500 dark:text-gray-900 shadow-2xs">
+                          RENTAS RTGS
+                        </span>
+                      </div>
+
+                      <div className="text-xs text-md-on-surface space-y-1.5 pt-1.5 border-t border-emerald-500/20">
+                        <div className="text-emerald-900 dark:text-emerald-200 font-medium">
+                          Bank cleared the fund release · Settlement Reference:
+                        </div>
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() => viewReceiptInNewTab(pc, notify)}
+                            className="font-mono text-sm sm:text-base font-bold text-md-primary underline underline-offset-4 inline-flex items-center gap-1.5 hover:text-md-primary/80 transition-colors cursor-pointer group"
+                            title="Click to view official payment receipt in a new tab"
+                          >
+                            <span>{bankRef}</span>
+                            <ArrowUpRight size={16} className="text-md-primary group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                          </button>
+                        </div>
+                        <div className="text-[11px] text-emerald-800/80 dark:text-emerald-300/80">
+                          Click reference above to inspect the official statutory settlement receipt PDF in a new browser tab.
+                        </div>
+                      </div>
                     </div>
-                  )}
-                </div>
-              ))}
+                  );
+                }
+
+                return (
+                  <div key={i} className="bg-md-surface-container-low rounded-xl px-4 py-2.5 border border-md-outline/10 text-xs">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      {ev.kind === 'dispute' ? (
+                        <AlertTriangle size={13} className="text-amber-600 shrink-0" />
+                      ) : (
+                        <XCircle size={13} className="text-md-error shrink-0" />
+                      )}
+                      <span className="font-semibold text-md-on-surface">{ev.title}</span>
+                      <span className="text-[11px] text-md-on-surface-variant">· {fmtDate(ev.date)}</span>
+                    </div>
+                    <div className="text-md-on-surface break-words">{ev.detail}</div>
+                    {ev.resolved && (
+                      <div className="text-[11px] text-md-on-success mt-1">
+                        Resolution: {formatResolutionLabel(ev.resolved)}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
 
-        {/* 7-day rule note (FR-005) — lives in the body so the footer buttons
-            stay on one aligned row instead of being pushed by the caption. */}
-        {norm === 'Transfer Succeed' && !confirmReceiptEligible && (
-          <div className="flex items-center gap-2 text-[11px] text-md-on-surface-variant bg-md-surface-container-low rounded-lg px-3 py-2 border border-md-outline/10">
-            <Clock size={13} className="shrink-0 text-md-primary" />
-            <span>
-              Member confirmation window active. Admin manual confirmation unlocks in{' '}
-              {7 - succeedDaysElapsed} day(s) (7-day rule).
-            </span>
+        {/* High-visibility 7-day statutory window banner (FR-005) */}
+        {norm === 'Transfer Succeed' && (
+          <div className="bg-amber-500/10 dark:bg-amber-500/20 border-2 border-amber-500/40 dark:border-amber-500/50 rounded-xl p-4 shadow-xs space-y-2.5">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-500 text-white dark:bg-amber-400 dark:text-gray-900 shadow-2xs">
+                  7-DAY STATUTORY WINDOW
+                </span>
+                <span className="font-bold text-amber-950 dark:text-amber-100 text-xs sm:text-sm">
+                  Member confirmation window active. Admin manual confirmation unlocks in {remainingDays} day(s) (7-day rule).
+                </span>
+              </div>
+              <span className="text-xs font-mono font-bold text-amber-900 dark:text-amber-300 bg-amber-500/20 dark:bg-amber-500/30 px-2.5 py-1 rounded-lg border border-amber-500/30">
+                {isAutoConfirmEligible ? 'Auto-Confirming Now...' : `${remainingDays} day(s) remaining (${remainingHours}h)`}
+              </span>
+            </div>
+            <p className="text-xs text-md-on-surface-variant leading-relaxed">
+              Displaced community member confirmation is active. Funds were successfully transmitted via RENTAS RTGS.
+            </p>
+            <div className="pt-2 border-t border-amber-500/20 flex items-start gap-2 text-xs text-amber-900 dark:text-amber-200 font-medium">
+              <Clock size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <span>
+                <strong className="font-bold text-amber-950 dark:text-amber-100">Next for Government Admin: </strong>
+                No action required. If the member does not confirm within 7 days, the system automatically triggers receipt confirmation, transitions the case to <strong className="font-semibold text-emerald-700 dark:text-emerald-300">Paid</strong>, and unlocks Milestone 2 blockchain notarization.
+              </span>
+            </div>
           </div>
         )}
 
@@ -1773,8 +2029,7 @@ export const CancelPaymentModal: React.FC<MutatingModalProps> = ({ pc, onClose, 
           <div className="flex items-start gap-2 text-[11px] text-md-on-surface-variant bg-md-surface-container-low rounded-lg px-3 py-2 border border-md-outline/10">
             <ShieldAlert size={13} className="shrink-0 mt-0.5 text-md-warning-text" />
             <span>
-              If the statutory award was already notarized on the blockchain (Milestone 1), the on-chain record is flagged
-              and must be revoked via Publish Ledger — Void on Sepolia.
+              Cancellation halts this payment transfer disbursement instruction. The underlying statutory Form H award and land acquisition terms remain permanent and immutable.
             </span>
           </div>
 
@@ -2020,7 +2275,17 @@ export const ResolveDisputeModal: React.FC<MutatingModalProps> = ({ pc, onClose,
   );
 };
 
-/* ------------------------------- Download Receipt ------------------------------- */
+/* ------------------------------- Download & View Receipt ------------------------------- */
+
+export const viewReceiptInNewTab = async (pc: PaymentRow, notify: (n: { type: 'success' | 'error'; title: string; message?: string }) => void) => {
+  try {
+    const blob = await paymentApi.downloadReceipt(pc.caseId);
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+  } catch (e: any) {
+    notify({ type: 'error', title: 'Receipt unavailable', message: e.message || 'Receipt preview failed. Missing bank reference. Please contact support.' });
+  }
+};
 
 export const downloadReceipt = async (pc: PaymentRow, notify: (n: { type: 'success' | 'error'; title: string; message?: string }) => void) => {
   try {

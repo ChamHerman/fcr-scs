@@ -78,7 +78,7 @@ export const Modal: React.FC<ModalProps> = ({
     return () => cancelAnimationFrame(frame);
   }, [isOpen, measureBody]);
   useEffect(() => {
-    if (!isOpen || preventBackdropClose) return;
+    if (!isOpen || preventBackdropClose || confirmLoading) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         onClose();
@@ -86,7 +86,7 @@ export const Modal: React.FC<ModalProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, preventBackdropClose, onClose]);
+  }, [isOpen, preventBackdropClose, confirmLoading, onClose]);
 
 
   useGSAP(() => {
@@ -138,7 +138,7 @@ export const Modal: React.FC<ModalProps> = ({
   if (!hasOpened) return null;
 
   const handleOverlayClick = (e: React.MouseEvent) => {
-    if (preventBackdropClose) return;
+    if (preventBackdropClose || confirmLoading) return;
     if (e.target === overlayRef.current) {
       onClose();
     }
@@ -203,8 +203,16 @@ export const Modal: React.FC<ModalProps> = ({
             {showCloseButton && (
               <button
                 type="button"
-                onClick={onClose}
-                className="text-md-on-surface-variant hover:text-md-on-surface p-1 rounded-full hover:bg-md-primary/10 transition-colors"
+                onClick={confirmLoading ? undefined : onClose}
+                disabled={confirmLoading}
+                className={classNames(
+                  'p-1 rounded-full transition-colors',
+                  confirmLoading
+                    ? 'opacity-20 cursor-not-allowed text-md-on-surface-variant'
+                    : 'text-md-on-surface-variant hover:text-md-on-surface hover:bg-md-primary/10'
+                )}
+                title={confirmLoading ? 'Operation in progress — modal cannot be closed' : 'Close'}
+                aria-label={confirmLoading ? 'Operation in progress' : 'Close'}
               >
                 <X size={20} />
               </button>

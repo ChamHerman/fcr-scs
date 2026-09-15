@@ -13,9 +13,14 @@ import {
   Lock,
   ExternalLink,
   ShieldCheck,
-  Check
+  Check,
+  AlertTriangle,
+  Clock,
+  FileQuestion
 } from 'lucide-react';
 import { blockchainApi } from '../../services/blockchainApi';
+import { useRole } from '../../hooks/useRole';
+import { landAcquisitionApi } from '../../services/landAcquisitionApi';
 import { Button } from '../../components/ui/Button';
 import { CopyButton } from '../../components/ui/CopyButton';
 import { formatDateTime } from '../../utils/dateFormat';
@@ -28,6 +33,50 @@ export default function VerifyAuditTrail() {
   const [result, setResult] = useState<any>(null);
   
   const inputRef = useRef<HTMLInputElement>(null);
+  const { user } = useRole();
+  const [memberCases, setMemberCases] = useState<any[]>([]);
+
+  React.useEffect(() => {
+    if (!user) return;
+    let isMounted = true;
+    landAcquisitionApi.getAllCases({
+      limit: 100,
+      userRole: user.role,
+      userId: user.userId,
+      ownerNric: user.identificationNumber,
+    }).then((res: any) => {
+      if (!isMounted) return;
+      const all: any[] = res?.cases || [];
+      const cleanIc = (user.identificationNumber || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      const userNameClean = (user.name || '').toLowerCase();
+      const userEmailClean = (user.email || '').toLowerCase();
+
+      const userCases = all.filter((c: any) => {
+        if (c.createdById === user.userId) return true;
+        const owners = c.landParcel?.ownerships?.map((o: any) => o.landOwner).filter(Boolean) || [];
+        return owners.some((ow: any) => {
+          const owIc = (ow.nric || ow.icNumber || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+          return (
+            (cleanIc && owIc === cleanIc) ||
+            ow.ownerId === user.userId ||
+            (ow.email && ow.email.toLowerCase() === userEmailClean) ||
+            (ow.name && ow.name.toLowerCase() === userNameClean)
+          );
+        });
+      });
+      setMemberCases(userCases);
+    }).catch(() => {
+      // Non-blocking fallback
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
+
+  const isMyCase = Boolean(
+    result?.caseId && memberCases.some((c) => c.caseId === result.caseId)
+  );
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -230,20 +279,133 @@ export default function VerifyAuditTrail() {
               <div className="w-16 h-16 bg-md-surface-container-low rounded-full flex items-center justify-center mx-auto mb-3.5 shadow-sm">
                 {result.verified ? (
                   <CheckCircle2 size={38} className="text-emerald-600 dark:text-emerald-400" />
-                ) : result.status === 'Voided' ? (
-                  <XCircle size={38} className="text-amber-500" />
+                ) : result.status === 'Not Found' ? (
+                  <Clock size={38} className="text-md-primary" />
                 ) : (
                   <XCircle size={38} className="text-red-500" />
                 )}
               </div>
               
-              <h3 className={`text-xl sm:text-2xl font-bold ${result.verified ? 'text-emerald-700 dark:text-emerald-400' : result.status === 'Voided' ? 'text-amber-600' : 'text-red-600'}`}>
-                {result.verified ? 'Cryptographically Verified on Ethereum' : result.status === 'Voided' ? 'Document Voided on Blockchain' : 'Certificate Altered / Unverified'}
+              <h3 className={`text-xl sm:text-2xl font-bold ${
+                result.verified
+                  ? 'text-emerald-700 dark:text-emerald-400'
+                  : result.status === 'Not Found'
+                  ? 'text-md-on-surface'
+                  : 'text-red-600'
+              }`}>
+                {result.verified
+                  ? 'Cryptographically Verified on Ethereum'
+                  : result.status === 'Not Found'
+                  ? 'Document Not Published on Blockchain'
+                  : 'Certificate Altered / Unverified'}
               </h3>
               <p className="text-xs sm:text-sm text-md-on-surface-variant mt-1.5 font-medium">
                 {result.message}
               </p>
             </div>
+
+            {/* Guidance Advisory Card for Unverified / Altered / Not Found Documents */}
+            {!result.verified && (
+              <div className={`p-5 rounded-2xl bg-md-surface-container-low border ${
+                result.status === 'Altered'
+                  ? 'border-red-500/30'
+                  : 'border-md-outline/25'
+              } text-xs sm:text-sm space-y-3.5 shadow-sm`}>
+                <div className="flex items-start gap-3">
+                  {result.status === 'Altered' ? (
+                    <AlertTriangle size={24} className="shrink-0 text-red-600 dark:text-red-400 mt-0.5" />
+                  ) : (
+                    <Clock size={24} className="shrink-0 text-md-primary mt-0.5" />
+                  )}
+                  <div className="space-y-1 flex-1 min-w-0">
+                    <div className={`font-bold text-xs uppercase tracking-wider ${
+                      result.status === 'Altered'
+                        ? 'text-red-700 dark:text-red-300'
+                        : 'text-md-primary'
+                    }`}>
+                      {result.status === 'Altered'
+                        ? 'Cryptographic Mismatch Detected (Document Altered)'
+                        : 'Record Not Found (Awaiting Milestone Notarization)'}
+                    </div>
+                    <p className="text-xs leading-relaxed text-md-on-surface-variant font-medium">
+                      {result.status === 'Altered' ? (
+                        <>
+                          The cryptographic SHA-256 fingerprint of your uploaded PDF does not match the official record{' '}
+                          {result.isPublished ? (
+                            <strong className="text-md-on-surface font-semibold">(published on Ethereum Sepolia)</strong>
+                          ) : (
+                            <strong className="text-md-on-surface font-semibold">(stored in the statutory registry awaiting on-chain publication after the 24-hour grace period)</strong>
+                          )}.
+                          Any alteration—including re-saving, PDF editing, text modification, or scanner compression—breaks cryptographic verification.
+                          Please ensure you uploaded the genuine, unmodified official Form H or payment receipt.
+                        </>
+                      ) : (
+                        <>
+                          This document has not been anchored on Ethereum yet. If this offer was accepted recently, remember that official compensation awards undergo a statutory <strong>24-hour cooling grace period</strong> before the Government Administrator publishes Milestone 1 on-chain.
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-md-outline/10">
+                  <Link to="/contact">
+                    <Button variant="filled" size="sm" className="text-xs inline-flex items-center gap-1.5">
+                      <span>Contact Authority Support</span>
+                      <ExternalLink size={12} />
+                    </Button>
+                  </Link>
+                  <Link to="/member">
+                    <Button variant="outlined" size="sm" className="text-xs">
+                      Return to Member Dashboard
+                    </Button>
+                  </Link>
+                  <Link to="/member/offer-letter">
+                    <Button variant="tonal" size="sm" className="text-xs">
+                      View Official Offer Letters
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            {/* Contextual Ownership Banner */}
+            {result.verified && result.caseId && (
+              isMyCase ? (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-900 dark:text-emerald-200">
+                  <div className="flex items-start sm:items-center gap-3">
+                    <ShieldCheck size={24} className="shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5 sm:mt-0" />
+                    <div className="space-y-0.5">
+                      <div className="font-bold text-xs uppercase tracking-wider text-emerald-900 dark:text-emerald-300">
+                        Personal Case Document Confirmed
+                      </div>
+                      <p className="text-xs text-emerald-950/80 dark:text-emerald-200/80">
+                        This verified on-chain document is officially registered under your citizen profile ({result.caseId}).
+                      </p>
+                    </div>
+                  </div>
+                  <Link
+                    to={`/member?caseId=${result.caseId}`}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shrink-0 transition-colors shadow-xs self-start sm:self-auto"
+                  >
+                    <span>View Case in Dashboard</span>
+                    <ExternalLink size={13} />
+                  </Link>
+                </div>
+              ) : (
+                <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200">
+                  <AlertTriangle size={24} className="shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <div className="font-bold text-xs uppercase tracking-wider text-amber-950 dark:text-amber-300">
+                      Authentic On-Chain Record (External Case)
+                    </div>
+                    <p className="text-xs leading-relaxed text-amber-900/90 dark:text-amber-200/90">
+                      This document cryptographically matches the immutable Ethereum ledger, but belongs to case <strong className="font-mono font-bold text-amber-950 dark:text-amber-200">{result.caseId}</strong>. It is not registered under your citizen profile.
+                    </p>
+                  </div>
+                </div>
+              )
+            )}
             
             {/* Full Details Container */}
             <div className="bg-md-surface-container-low rounded-2xl p-5 sm:p-7 text-left border border-md-outline/15 space-y-3.5 text-xs sm:text-sm">
@@ -252,13 +414,27 @@ export default function VerifyAuditTrail() {
                 <span className={`font-bold px-3 py-1 rounded-full text-xs ${
                   result.verified
                     ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30'
-                    : result.status === 'Voided'
-                    ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30'
+                    : result.status === 'Not Found'
+                    ? 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border border-slate-500/30'
                     : 'bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/30'
                 }`}>
                   {result.status || (result.verified ? 'AUTHENTIC' : 'INVALID')}
                 </span>
               </div>
+
+              {result.caseId && (
+                <div className="flex justify-between items-center pb-3 border-b border-md-outline/10">
+                  <span className="text-md-on-surface-variant font-semibold">Account Ownership</span>
+                  <span className={`font-bold px-2.5 py-1 rounded-full text-xs inline-flex items-center gap-1.5 ${
+                    isMyCase
+                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30'
+                      : 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${isMyCase ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                    {isMyCase ? 'Your Citizen Account' : 'External Landowner Record'}
+                  </span>
+                </div>
+              )}
 
               {result.milestone && (
                 <div className="pb-3 border-b border-md-outline/10">
@@ -304,14 +480,26 @@ export default function VerifyAuditTrail() {
                   </div>
                   {result.onChainHash && (
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                      <span className="text-md-on-surface-variant font-semibold">On-Chain Registered Hash</span>
+                      <span className="text-md-on-surface-variant font-semibold">
+                        {result.expectedSource ? `Expected Hash (${result.expectedSource})` : 'Registered Anchor Hash'}
+                      </span>
                       <div className="flex items-center gap-1.5">
-                        <span className="font-mono text-xs text-emerald-700 dark:text-emerald-400 truncate max-w-[220px] sm:max-w-md font-semibold">
+                        <span className={`font-mono text-xs truncate max-w-[220px] sm:max-w-md font-semibold ${
+                          result.localHash.toLowerCase() === result.onChainHash.toLowerCase()
+                            ? 'text-emerald-700 dark:text-emerald-400'
+                            : 'text-red-600 dark:text-red-400'
+                        }`}>
                           {result.onChainHash}
                         </span>
-                        <span className="inline-flex items-center text-xs text-emerald-700 dark:text-emerald-400 font-bold ml-1">
-                          <Check size={12} className="mr-0.5" /> {result.localHash.toLowerCase() === result.onChainHash.toLowerCase() ? 'Direct Match' : 'Verified Anchor'}
-                        </span>
+                        {result.localHash.toLowerCase() === result.onChainHash.toLowerCase() ? (
+                          <span className="inline-flex items-center text-xs text-emerald-700 dark:text-emerald-400 font-bold ml-1">
+                            <Check size={12} className="mr-0.5" /> Direct Match
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center text-xs text-red-600 dark:text-red-400 font-bold ml-1">
+                            <XCircle size={12} className="mr-0.5" /> Hash Mismatch
+                          </span>
+                        )}
                       </div>
                     </div>
                   )}
@@ -372,15 +560,6 @@ export default function VerifyAuditTrail() {
                   <span className="font-mono text-md-on-surface text-xs sm:text-sm font-medium">
                     {formatDateTime(result.timestamp * 1000)}
                   </span>
-                </div>
-              )}
-
-              {result.voidReason && (
-                <div className="pt-3 border-t border-red-500/20 text-red-600">
-                  <div className="flex justify-between items-start">
-                    <span className="font-bold">Void Reason</span>
-                    <span className="text-right max-w-sm font-medium">{result.voidReason}</span>
-                  </div>
                 </div>
               )}
             </div>

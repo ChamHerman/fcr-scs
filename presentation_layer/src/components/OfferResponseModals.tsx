@@ -4,6 +4,7 @@ import {
   XCircle,
   AlertTriangle,
   FileCheck,
+  Clock,
 } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
@@ -32,6 +33,7 @@ export interface OfferResponseModalsProps {
   onCloseCancelModal: () => void;
   onCancelApproval: () => void;
   cancellingApproval: boolean;
+  graceCountdown?: string;
 
   // --- Active Objection Modal ---
   showObjectionPrompt: boolean;
@@ -64,6 +66,7 @@ export const OfferResponseModals: React.FC<OfferResponseModalsProps> = ({
   onCloseCancelModal,
   onCancelApproval,
   cancellingApproval,
+  graceCountdown,
 
   showObjectionPrompt,
   activeObjection,
@@ -80,12 +83,12 @@ export const OfferResponseModals: React.FC<OfferResponseModalsProps> = ({
 }) => {
   return (
     <>
-      {/* Accept Modal */}
+      {/* Accept Award Confirmation Modal */}
       <Modal
         isOpen={showAcceptConfirmModal}
         onClose={onCloseAcceptModal}
-        title="Confirm Formal Acceptance"
-        subtitle="1-Day Grace Period Policy Notice"
+        title="Confirm Acceptance of Statutory Award"
+        subtitle="Form H Award Acceptance Declaration"
         footer={
           <div className="flex items-center justify-end gap-3">
             <Button variant="text" onClick={onCloseAcceptModal}>
@@ -132,7 +135,7 @@ export const OfferResponseModals: React.FC<OfferResponseModalsProps> = ({
         isOpen={showCancelApprovalModal}
         onClose={onCloseCancelModal}
         title="Cancel Compensation Approval"
-        subtitle="Withdraw your formal acceptance within the 1-day grace period"
+        subtitle="Withdraw your formal acceptance within the 24-hour statutory grace period"
         footer={
           <div className="flex items-center justify-end gap-3">
             <Button variant="text" onClick={onCloseCancelModal}>
@@ -144,9 +147,23 @@ export const OfferResponseModals: React.FC<OfferResponseModalsProps> = ({
           </div>
         }
       >
-        <p className="text-sm text-md-on-surface-variant py-2">
-          Are you sure you want to cancel your previous acceptance of this compensation offer? Status will be reset to Pending.
-        </p>
+        <div className="space-y-3 py-2 text-sm text-md-on-surface-variant">
+          <p>
+            Are you sure you want to cancel your previous acceptance of this compensation offer? Status will be reset to Pending, and your signed document will be retained as draft.
+          </p>
+
+          {graceCountdown && (
+            <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock size={15} className="text-amber-600 dark:text-amber-400 animate-pulse" />
+                <span className="font-semibold">Time Remaining to Cancel:</span>
+              </div>
+              <span className="font-mono font-bold text-amber-800 dark:text-amber-200 text-sm">
+                {graceCountdown}
+              </span>
+            </div>
+          )}
+        </div>
       </Modal>
 
       {/* Active Objection Warning Modal */}

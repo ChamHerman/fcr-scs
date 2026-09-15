@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, Activity, Wallet, Loader2, RefreshCw, FilePlus2, Undo2, Lock, Upload, Ban, CheckCircle2, Folder } from 'lucide-react';
+import { Clock, User, Activity, Wallet, Loader2, Lock, CheckCircle2, Folder } from 'lucide-react';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { blockchainApi } from '../../services/blockchainApi';
@@ -21,13 +21,12 @@ import type { NetworkInfo } from './NetworkSelector';
 import { RefreshButton } from '../Payment/RefreshButton';
 import { Pagination } from '../../components/ui/Pagination';
 import { formatGraceCountdown } from './PublishLedger';
+import { normalizePaymentStatus } from '../Payment/statusMaps';
 import '../LandAcquisition/case_management.css';
 import '../Payment/payment.css';
 import {
   ViewLedgerModal,
   PublishModal,
-  VoidModal,
-  FOLLOW_UP_CHOICES,
   ledgerBadge,
   fmtTx,
   fmtDate,
@@ -38,7 +37,6 @@ import type { LedgerRow } from './blockchainModals';
 type ModalState =
   | { type: 'view'; row: LedgerRow }
   | { type: 'publish'; row: LedgerRow }
-  | { type: 'void'; row: LedgerRow }
   | null;
 
 export const BlockchainDashboard: React.FC = () => {
@@ -55,7 +53,6 @@ export const BlockchainDashboard: React.FC = () => {
   const [error, setError] = useState('');
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
-  const [followUps, setFollowUps] = useState<Record<string, string>>({});
   const containerRef = useRef<HTMLDivElement>(null);
 
   useGSAP(() => {
@@ -79,35 +76,35 @@ export const BlockchainDashboard: React.FC = () => {
       const offersList: any[] = offersRes.offers || offersRes.offerLetters || [];
       const offerMap = new Map(offersList.map((o: any) => [o.caseId, o]));
 
-      const ledger: LedgerRow[] = (recData.records || []).map((r: any) => {
-        const pmt: any = paidMap.get(r.caseId);
-        const off: any = offerMap.get(r.caseId);
-        const ben = r.beneficiary || pmt?.beneficiary || pmt?.accountHolderName || off?.landOwnership?.landOwner?.name;
-        const amt = r.amount || pmt?.amount || off?.offerAmount;
-        return {
-          id: r.id,
-          caseId: r.caseId,
-          // The record id is the canonical BCN-YYYY-MM-#### stored on publish
-          publicId: r.id,
-          milestone: (r.milestone ?? 'AWARD') === 'AWARD' ? ('M1' as const) : ('M2' as const),
-          onChainKey: r.onChainKey || `${r.caseId}#${(r.milestone ?? 'AWARD') === 'AWARD' ? 'M1' : 'M2'}`,
-          transactionHash: r.transactionHash,
-          documentHash: r.documentHash,
-          beneficiary: ben,
-          amount: amt,
-          status:
-            r.status === 'Published' || r.status === 'PUBLISHED'
-              ? 'Published'
-              : r.status === 'Void Pending' || r.status === 'VOID_PENDING'
-              ? 'Void Pending'
-              : 'Voided',
-          voidReason: r.voidReason,
-          voidTransactionHash: r.voidTransactionHash,
-          publishedAt: r.publishedAt ?? r.createdAt,
-          voidedAt: r.voidedAt,
-          createdAt: r.createdAt,
-          recordType: 'Original',
-        };
+      const publishedRecords: LedgerRow[] = [];
+      const readyRecordsMap = new Map<string, any>();
+
+      (recData.records || []).forEach((r: any) => {
+        const s = String(r.status || '').toUpperCase().replace(/[\s_]+/g, '_');
+        const isM1 = (r.milestone ?? 'AWARD') === 'AWARD';
+        if (s === 'READY_TO_PUBLISH') {
+          readyRecordsMap.set(`${r.caseId}#${isM1 ? 'M1' : 'M2'}`, r);
+        } else {
+          const pmt: any = paidMap.get(r.caseId);
+          const off: any = offerMap.get(r.caseId);
+          const ben = r.beneficiary || pmt?.beneficiary || pmt?.accountHolderName || off?.landOwnership?.landOwner?.name;
+          const amt = r.amount || pmt?.amount || off?.offerAmount;
+          publishedRecords.push({
+            id: r.id,
+            caseId: r.caseId,
+            publicId: r.id,
+            milestone: isM1 ? ('M1' as const) : ('M2' as const),
+            onChainKey: r.onChainKey || `${r.caseId}#${isM1 ? 'M1' : 'M2'}`,
+            transactionHash: r.transactionHash,
+            documentHash: r.documentHash,
+            beneficiary: ben,
+            amount: amt,
+            status: 'Published',
+            publishedAt: r.publishedAt ?? r.createdAt,
+            createdAt: r.createdAt,
+            recordType: 'Original',
+          });
+        }
       });
 
       // FR-019 dual-milestone "Ready to Publish" derivation:
@@ -118,10 +115,10 @@ export const BlockchainDashboard: React.FC = () => {
       const ACCEPTANCE_GRACE_PERIOD_MS = 24 * 60 * 60 * 1000;
       const now = Date.now();
       const m1Published = new Set(
-        ledger.filter((r) => r.milestone === 'M1').map((r) => r.caseId)
+        publishedRecords.filter((r) => r.milestone === 'M1').map((r) => r.caseId)
       );
       const m2Published = new Set(
-        ledger.filter((r) => r.milestone === 'M2').map((r) => r.caseId)
+        publishedRecords.filter((r) => r.milestone === 'M2').map((r) => r.caseId)
       );
 
       const nowYear = new Date().getFullYear();
@@ -129,7 +126,7 @@ export const BlockchainDashboard: React.FC = () => {
       const bcnPrefix = `BCN-${nowYear}-${nowMonth}-`;
 
       let maxSeq = 0;
-      ledger.forEach((r) => {
+      (recData.records || []).forEach((r: any) => {
         const idToCheck = r.publicId || r.id || '';
         if (idToCheck.startsWith(bcnPrefix)) {
           const parts = idToCheck.split('-');
@@ -146,47 +143,73 @@ export const BlockchainDashboard: React.FC = () => {
           if (!o.caseId || m1Published.has(o.caseId)) return false;
           return Boolean(o.acceptedAt);
         })
-        .sort((a, b) => (a.caseId || '').localeCompare(b.caseId || ''));
+        .sort((a, b) => {
+          const timeA = a.acceptedAt ? new Date(a.acceptedAt).getTime() : 0;
+          const timeB = b.acceptedAt ? new Date(b.acceptedAt).getTime() : 0;
+          if (timeA !== timeB) return timeA - timeB;
+          return (a.caseId || '').localeCompare(b.caseId || '');
+        });
 
       const awardReady: LedgerRow[] = awardOffers.map((o) => {
-        currentSeq += 1;
-        const bcnId = `${bcnPrefix}${String(currentSeq).padStart(4, '0')}`;
+        const existingRec = readyRecordsMap.get(`${o.caseId}#M1`);
+        let bcnId = existingRec?.id;
+        if (!bcnId) {
+          currentSeq += 1;
+          bcnId = `${bcnPrefix}${String(currentSeq).padStart(4, '0')}`;
+        }
         const acceptedAtMs = o.acceptedAt ? new Date(o.acceptedAt).getTime() : null;
         const graceEndsAtMs = acceptedAtMs != null ? acceptedAtMs + ACCEPTANCE_GRACE_PERIOD_MS : null;
         const graceLocked = graceEndsAtMs != null && now < graceEndsAtMs;
+        const m1Sec = Math.floor((acceptedAtMs || now) / 1000);
         return {
           id: bcnId,
           publicId: bcnId,
           caseId: o.caseId,
           milestone: 'M1' as const,
-          onChainKey: `${o.caseId}#M1`,
+          onChainKey: existingRec?.onChainKey || `${o.caseId}#M1-${m1Sec}`,
           status: graceLocked ? 'Grace Period (Locked)' : 'Ready to Publish',
           beneficiary: o.landOwnership?.landOwner?.name,
           amount: o.offerAmount,
-          documentHash: o.blockchainHash || null,
+          documentHash: o.blockchainHash || existingRec?.documentHash || null,
           recordType: 'Original' as const,
           publishedAt: null,
           graceEndsAt: graceEndsAtMs,
           acceptedAt: o.acceptedAt || null,
+          createdAt: existingRec?.createdAt || o.createdAt || undefined,
+          caseCreatedAt: o.case?.createdAt || o.case?.registrationDate || undefined,
         };
       });
 
       const paid = (paidRes.cases || [])
-        .filter((c: any) => c.status === 'Paid' || c.status === 'PAID')
-        .sort((a: any, b: any) => (a.caseId || '').localeCompare(b.caseId || ''));
+        .filter((c: any) => {
+          const s = normalizePaymentStatus(c.status);
+          return s === 'Paid' || s === 'Transfer Succeed';
+        })
+        .sort((a: any, b: any) => {
+          const timeA = a.updatedAt || a.paidAt ? new Date(a.updatedAt || a.paidAt).getTime() : 0;
+          const timeB = b.updatedAt || b.paidAt ? new Date(b.updatedAt || b.paidAt).getTime() : 0;
+          if (timeA !== timeB) return timeA - timeB;
+          return (a.caseId || '').localeCompare(b.caseId || '');
+        });
 
       const settlementReady: LedgerRow[] = await Promise.all(
         paid
           .filter((c: any) => !m2Published.has(c.caseId))
           .map(async (c: any) => {
-            currentSeq += 1;
-            const bcnId = `${bcnPrefix}${String(currentSeq).padStart(4, '0')}`;
+            const existingRec = readyRecordsMap.get(`${c.caseId}#M2`);
+            let bcnId = existingRec?.id;
+            if (!bcnId) {
+              currentSeq += 1;
+              bcnId = `${bcnPrefix}${String(currentSeq).padStart(4, '0')}`;
+            }
+            const paidAtMs = c.receipt?.generatedAt || c.updatedAt ? new Date(c.receipt?.generatedAt || c.updatedAt).getTime() : now;
+            const m2Sec = Math.floor(paidAtMs / 1000);
             return {
               id: bcnId,
               publicId: bcnId,
               caseId: c.caseId,
               milestone: 'M2' as const,
-              onChainKey: `${c.caseId}#M2`,
+              onChainKey: existingRec?.onChainKey || `${c.caseId}#M2-${m2Sec}`,
               status: 'Ready to Publish',
               documentHash: c.receipt?.documentHash || (await computeSettlementHash(c.caseId, c.amount)),
               certificateVersion: 1,
@@ -194,11 +217,13 @@ export const BlockchainDashboard: React.FC = () => {
               amount: c.amount,
               recordType: 'Original' as const,
               publishedAt: null,
+              graceEndsAt: null,
+              acceptedAt: null,
             };
           })
       );
 
-      setRecords(ledger);
+      setRecords(publishedRecords);
       setReadyRows([...awardReady, ...settlementReady]);
       setNetworkInfo(netData);
     } catch (err: any) {
@@ -234,7 +259,7 @@ export const BlockchainDashboard: React.FC = () => {
     const readyM2 = allRows.filter((r) => r.status === 'Ready to Publish' && r.milestone === 'M2').length;
     const locked = allRows.filter((r) => r.status === 'Grace Period (Locked)').length;
     const published = allRows.filter((r) => r.status === 'Published').length;
-    const voided = allRows.filter((r) => r.status === 'Voided' || r.status === 'Void Pending').length;
+    const settledM2 = allRows.filter((r) => r.status === 'Published' && r.milestone === 'M2').length;
     return [
       {
         label: 'Ready to Publish',
@@ -242,13 +267,36 @@ export const BlockchainDashboard: React.FC = () => {
         icon: Activity,
         iconColor: 'text-amber-500',
       },
-      { label: 'Published', value: published, icon: Wallet, iconColor: 'text-emerald-500' },
-      { label: 'Voided', value: voided, icon: Lock, iconColor: 'text-red-500' },
+      { label: 'Published (All)', value: published, icon: Wallet, iconColor: 'text-emerald-500' },
+      { label: 'Settled (M2)', value: settledM2, icon: CheckCircle2, iconColor: 'text-blue-500' },
     ];
   }, [allRows]);
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
+
+    // Identify cases that currently have an M2 milestone ready to publish
+    const casesWithM2Ready = new Set<string>();
+    allRows.forEach((r) => {
+      if ((r.milestone === 'M2' || (r as any).milestone === 'SETTLEMENT') && r.status === 'Ready to Publish') {
+        casesWithM2Ready.add(r.caseId);
+      }
+    });
+
+    // Determine the representative/earliest blockchain ID for each case
+    const caseBcnMap = new Map<string, string>();
+    allRows.forEach((r) => {
+      const bcn = r.publicId?.startsWith('BCN-')
+        ? r.publicId
+        : r.id?.startsWith('BCN-')
+        ? r.id
+        : (r.publicId || r.id || '');
+      const existing = caseBcnMap.get(r.caseId);
+      if (!existing || bcn.localeCompare(existing, undefined, { numeric: true, sensitivity: 'base' }) < 0) {
+        caseBcnMap.set(r.caseId, bcn);
+      }
+    });
+
     return allRows
       .filter((r) => {
         const mStatus = statusFilter === 'All' || r.status === statusFilter;
@@ -261,10 +309,37 @@ export const BlockchainDashboard: React.FC = () => {
         return mStatus && mSearch;
       })
       .sort((a, b) => {
-        const caseCmp = (a.caseId || '').localeCompare(b.caseId || '');
-        if (caseCmp !== 0) return caseCmp;
-        const mRank = (m?: string) => (m === 'M1' ? 1 : m === 'M2' ? 2 : 3);
-        return mRank(a.milestone) - mRank(b.milestone);
+        // Tier 1: Cases with M2 ready to publish are put on top
+        const aHasM2Ready = casesWithM2Ready.has(a.caseId);
+        const bHasM2Ready = casesWithM2Ready.has(b.caseId);
+        if (aHasM2Ready !== bHasM2Ready) {
+          return aHasM2Ready ? -1 : 1;
+        }
+
+        // Tier 2: Between different cases, sort by Blockchain ID
+        if (a.caseId !== b.caseId) {
+          const bcnA = caseBcnMap.get(a.caseId) || a.caseId;
+          const bcnB = caseBcnMap.get(b.caseId) || b.caseId;
+          const bcnCmp = bcnA.localeCompare(bcnB, undefined, { numeric: true, sensitivity: 'base' });
+          if (bcnCmp !== 0) return bcnCmp;
+          return a.caseId.localeCompare(b.caseId, undefined, { numeric: true });
+        }
+
+        // Tier 3: Within the same case, put M2 Ready on top, then M1 Ready, then published
+        const getMilestoneRank = (r: LedgerRow) => {
+          if (r.milestone === 'M2' && r.status === 'Ready to Publish') return 1;
+          if (r.milestone === 'M1' && r.status === 'Ready to Publish') return 2;
+          if (r.milestone === 'M2') return 3;
+          if (r.milestone === 'M1') return 4;
+          return 5;
+        };
+        const mRankA = getMilestoneRank(a);
+        const mRankB = getMilestoneRank(b);
+        if (mRankA !== mRankB) return mRankA - mRankB;
+
+        const bcnIdA = a.publicId?.startsWith('BCN-') ? a.publicId : a.id?.startsWith('BCN-') ? a.id : (a.publicId || a.id || '');
+        const bcnIdB = b.publicId?.startsWith('BCN-') ? b.publicId : b.id?.startsWith('BCN-') ? b.id : (b.publicId || b.id || '');
+        return bcnIdA.localeCompare(bcnIdB, undefined, { numeric: true, sensitivity: 'base' });
       });
   }, [allRows, searchQuery, statusFilter]);
 
@@ -280,31 +355,7 @@ export const BlockchainDashboard: React.FC = () => {
     setCurrentPage(1);
   }, [searchQuery, statusFilter]);
 
-  const handleFollowUp = async (row: LedgerRow, key: string) => {
-    const choice = FOLLOW_UP_CHOICES.find((c) => c.key === key);
-    if (!choice) return;
-    try {
-      await blockchainApi.recordVoidFollowUp(row.caseId, identityId, key);
-      setFollowUps((prev) => ({ ...prev, [row.caseId]: choice.label }));
-      if (key === 'CREATE_CORRECTED_CERTIFICATE') {
-        notify({ type: 'success', title: 'Corrected certificate queued', message: 'A corrected certificate is Ready to Publish (Replacement).' });
-      } else if (key === 'REOPEN_PAYMENT') {
-        notify({ type: 'success', title: 'Payment reopened', message: 'Settlement re-enters the payment flow (simulated).' });
-      } else {
-        notify({ type: 'general', title: 'Decision recorded', message: 'Kept voided — no further action.' });
-      }
-    } catch (e: any) {
-      notify({ type: 'error', title: 'Action failed', message: e.message });
-    }
-  };
-
   const closeModal = () => setModal(null);
-
-  const followUpIcons = {
-    CREATE_CORRECTED_CERTIFICATE: FilePlus2,
-    REOPEN_PAYMENT: Undo2,
-    KEEP_VOIDED: CheckCircle2,
-  } as const;
 
   return (
     <div className="main" ref={containerRef}>
@@ -312,7 +363,7 @@ export const BlockchainDashboard: React.FC = () => {
         <div className="topbar-left">
           <h1>Blockchain Overview</h1>
           <div className="sub">
-            Full view of the ledger — publish, void and reconcile records.
+            Full view of the ledger — notarize awards, publish settlements, and audit immutable on-chain records.
           </div>
         </div>
         <div className="topbar-right flex items-center gap-3">
@@ -384,12 +435,12 @@ export const BlockchainDashboard: React.FC = () => {
             <thead>
               <tr>
                 <th style={{ width: '135px' }}>Blockchain ID</th>
-                <th style={{ width: '140px' }}>Case ID</th>
-                <th style={{ width: '110px' }}>Milestone</th>
-                <th style={{ width: '110px' }}>Document Hash</th>
+                <th style={{ width: '135px' }}>Case ID</th>
+                <th style={{ width: '90px' }}>Milestone</th>
+                <th style={{ width: '100px' }}>Document Hash</th>
                 <th style={{ width: '110px' }}>Transaction Hash</th>
-                <th style={{ width: '140px' }}>Published Date</th>
-                <th style={{ width: '125px' }}>Status</th>
+                <th style={{ width: '120px' }}>Published Date</th>
+                <th style={{ width: '130px', paddingRight: '10px' }}>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -408,8 +459,8 @@ export const BlockchainDashboard: React.FC = () => {
                   const blockchainId = row.publicId?.startsWith('BCN-')
                     ? row.publicId
                     : row.id?.startsWith('BCN-')
-                    ? row.id
-                    : (row.publicId || row.id);
+                      ? row.id
+                      : (row.publicId || row.id);
                   const isFirstInGroup = idx === 0 || row.caseId !== arr[idx - 1].caseId;
                   const isLastInGroup = idx === arr.length - 1 || row.caseId !== arr[idx + 1].caseId;
                   const sameCaseRecords = allRows.filter((r) => r.caseId === row.caseId);
@@ -434,11 +485,10 @@ export const BlockchainDashboard: React.FC = () => {
                         </tr>
                       )}
                       <tr
-                        className={`row-clickable bg-white dark:bg-slate-900/80 ${
-                          isLastInGroup
-                            ? 'border-b border-md-outline/25 dark:border-md-outline/30'
-                            : 'border-b border-md-outline/10 dark:border-md-outline/10'
-                        }`}
+                        className={`row-clickable bg-white dark:bg-slate-900/80 ${isLastInGroup
+                          ? 'border-b border-md-outline/25 dark:border-md-outline/30'
+                          : 'border-b border-md-outline/10 dark:border-md-outline/10'
+                          }`}
                         onClick={() => setModal({ type: 'view', row })}
                       >
                         <td>
@@ -457,8 +507,8 @@ export const BlockchainDashboard: React.FC = () => {
                             {row.milestone === 'M1'
                               ? 'Award (M1)'
                               : row.milestone === 'M2'
-                              ? 'Settlement (M2)'
-                              : row.recordType ?? 'Original'}
+                                ? 'Settlement (M2)'
+                                : row.recordType ?? 'Original'}
                           </span>
                         </td>
                         <td className="font-mono text-xs text-md-on-surface-variant">
@@ -482,7 +532,7 @@ export const BlockchainDashboard: React.FC = () => {
                           )}
                         </td>
                         <td>{fmtDate(row.publishedAt)}</td>
-                        <td>
+                        <td style={{ paddingRight: '20px' }}>
                           {(() => {
                             const graceLocked =
                               row.status === 'Grace Period (Locked)' ||
@@ -529,7 +579,6 @@ export const BlockchainDashboard: React.FC = () => {
         onAction={(type, r) => setModal({ type, row: r })}
       />
       <PublishModal row={modal?.type === 'publish' ? modal.row : null} onClose={closeModal} onDone={() => { closeModal(); loadData(); }} />
-      <VoidModal row={modal?.type === 'void' ? modal.row : null} onClose={closeModal} onDone={() => { closeModal(); loadData(); }} />
       <CaseDetailsModal caseId={caseDetailsId} onClose={() => setCaseDetailsId(null)} />
     </div>
   );

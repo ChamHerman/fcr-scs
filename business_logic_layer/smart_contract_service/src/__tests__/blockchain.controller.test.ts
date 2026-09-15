@@ -31,19 +31,6 @@ describe("POST /api/smart-contract/publish — input validation", () => {
   });
 });
 
-describe("POST /api/smart-contract/void — input validation", () => {
-  it("400 when voidReason is missing", async () => {
-    const r = await request(app).post("/api/smart-contract/void")
-      .send({ caseId: "CASE-001", transactionHash: "0xtx", walletAddress: "0xAdminWallet123" });
-    expect(r.status).toBe(400);
-  });
-  it("400 when transactionHash is missing", async () => {
-    const r = await request(app).post("/api/smart-contract/void")
-      .send({ caseId: "CASE-001", voidReason: "wrong case", walletAddress: "0xAdminWallet123" });
-    expect(r.status).toBe(400);
-    expect(r.body.error).toMatch(/transactionHash/i);
-  });
-});
 
 describe("POST /api/smart-contract/verify — input validation", () => {
   it("400 when no file uploaded", async () => {
@@ -78,11 +65,4 @@ describe("POST /api/smart-contract/publish — dual milestone handling", () => {
   });
 });
 
-describe("POST /api/smart-contract/void — dual milestone handling", () => {
-  it("400 when caseId is missing", async () => {
-    const r = await request(app).post("/api/smart-contract/void")
-      .send({ milestone: "M1", voidReason: "duplicate", transactionHash: "0xtx", walletAddress: "0xAdminWallet123" });
-    expect(r.status).toBe(400);
-    expect(r.body.error).toMatch(/caseId/i);
-  });
-});
+

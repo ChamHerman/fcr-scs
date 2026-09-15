@@ -53,7 +53,7 @@ export async function newRecordId(): Promise<string> {
 }
 
 /**
- * Publish/void transactions are signed by the ADMIN WALLET in MetaMask (the
+ * Publication transactions are signed by the ADMIN WALLET in MetaMask (the
  * frontend sends them via eth_sendTransaction). The backend never signs: it
  * verifies the supplied transaction hash on the active network (mined,
  * successful, targeted the CompensationLedger contract) and only then records
@@ -94,9 +94,11 @@ export function normalizeMilestone(milestone?: string | null): Milestone {
   throw new Error(`Unknown milestone "${milestone}". Valid: AWARD, SETTLEMENT`);
 }
 
-/** On-chain mapping key: LAC-2026-03-0001#M1 / LAC-2026-03-0001#M2 */
-export function toOnChainKey(caseId: string, milestone: Milestone): string {
-  return `${caseId}#${milestone === "AWARD" ? "M1" : "M2"}`;
+/** On-chain mapping key: LAC-2026-03-0001#M1-1726309800 / LAC-2026-03-0001#M2-1726309800 */
+export function toOnChainKey(caseId: string, milestone: Milestone, timestamp?: number | Date): string {
+  const m = milestone === "AWARD" ? "M1" : "M2";
+  const sec = Math.floor((timestamp ? new Date(timestamp).getTime() : Date.now()) / 1000);
+  return `${caseId}#${m}-${sec}`;
 }
 
 /** FR-012 grace policy: a member may withdraw acceptance within 24 hours, so
@@ -127,7 +129,6 @@ export async function publishRecord(params: {
 }) {
   const { caseId, documentHash, transactionHash } = params;
   const milestone = normalizeMilestone(params.milestone);
-  const onChainKey = params.onChainKey || toOnChainKey(caseId, milestone);
 
   if (milestone === "AWARD") {
     await assertM1GracePeriodElapsed(caseId);
@@ -136,6 +137,8 @@ export async function publishRecord(params: {
   const existing = await prisma.blockchainRecord.findUnique({
     where: { caseId_milestone: { caseId, milestone } },
   });
+  const onChainKey = params.onChainKey || existing?.onChainKey || toOnChainKey(caseId, milestone);
+  let record;
   if (existing) {
     // Idempotent: re-submitting the same mined transaction (e.g. after a
     // network blip between on-chain confirmation and this call) returns the
@@ -143,24 +146,38 @@ export async function publishRecord(params: {
     if (existing.transactionHash?.toLowerCase() === transactionHash.toLowerCase()) {
       return existing;
     }
-    throw new Error(
-      `Record already published for this case (${milestone === "AWARD" ? "Milestone 1 Award" : "Milestone 2 Settlement"})`
-    );
+    if (existing.status === BlockchainStatus.READY_TO_PUBLISH) {
+      await assertRecordedOnChain(transactionHash);
+      record = await prisma.blockchainRecord.update({
+        where: { id: existing.id },
+        data: {
+          status: BlockchainStatus.PUBLISHED,
+          transactionHash,
+          documentHash,
+          onChainKey,
+          publishedAt: new Date(),
+          deletedAt: null,
+        },
+      });
+    } else {
+      throw new Error(
+        `Record already published for this case (${milestone === "AWARD" ? "Milestone 1 Award" : "Milestone 2 Settlement"})`
+      );
+    }
+  } else {
+    await assertRecordedOnChain(transactionHash);
+    record = await prisma.blockchainRecord.create({
+      data: {
+        id: await newRecordId(),
+        caseId,
+        milestone,
+        onChainKey,
+        documentHash,
+        transactionHash,
+        status: BlockchainStatus.PUBLISHED,
+      },
+    });
   }
-
-  await assertRecordedOnChain(transactionHash);
-
-  const record = await prisma.blockchainRecord.create({
-    data: {
-      id: await newRecordId(),
-      caseId,
-      milestone,
-      onChainKey,
-      documentHash,
-      transactionHash,
-      status: BlockchainStatus.PUBLISHED,
-    },
-  });
 
   if (milestone === "AWARD") {
     try {
@@ -197,34 +214,6 @@ export async function publishRecord(params: {
   return record;
 }
 
-export async function voidRecord(params: {
-  caseId: string;
-  milestone?: string;
-  voidReason: string;
-  transactionHash: string;
-}) {
-  const { caseId, voidReason, transactionHash } = params;
-  const milestone = normalizeMilestone(params.milestone);
-
-  const r = await prisma.blockchainRecord.findUnique({
-    where: { caseId_milestone: { caseId, milestone } },
-  });
-  if (!r) throw new Error("Record not found");
-  if (r.status === BlockchainStatus.VOIDED) throw new Error("Record already voided");
-
-  await assertRecordedOnChain(transactionHash);
-
-  return prisma.blockchainRecord.update({
-    where: { id: r.id },
-    data: {
-      status: BlockchainStatus.VOIDED,
-      voidReason,
-      voidTransactionHash: transactionHash,
-      voidedAt: new Date(),
-    },
-  });
-}
-
 export async function getRecords(status?: string) {
   let enumStatus: BlockchainStatus | undefined;
   if (status) {
@@ -233,8 +222,29 @@ export async function getRecords(status?: string) {
       enumStatus = s as BlockchainStatus;
     }
   }
+
+  // Only return records for cases whose statutory status is at or after OFFER_ACCEPTED
+  const eligibleCases = await prisma.acquisitionCase.findMany({
+    where: {
+      status: {
+        in: [
+          CaseStatus.OFFER_ACCEPTED,
+          CaseStatus.PAYMENT_IN_PROGRESS,
+          CaseStatus.PAYMENT_COMPLETED,
+          CaseStatus.CASE_CLOSED,
+        ],
+      },
+    },
+    select: { caseId: true },
+  });
+  const eligibleCaseIds = Array.from(new Set(eligibleCases.map((c) => c.caseId)));
+
   return prisma.blockchainRecord.findMany({
-    where: enumStatus ? { status: enumStatus } : {},
+    where: {
+      deletedAt: null,
+      caseId: { in: eligibleCaseIds },
+      ...(enumStatus ? { status: enumStatus } : {}),
+    },
     orderBy: { createdAt: "desc" },
   });
 }
@@ -244,17 +254,17 @@ export async function getRecord(caseId: string, milestone?: string) {
     // Backward compatibility: no milestone specified returns the award (M1)
     // record, falling back to settlement for legacy settlement-only rows.
     return (
-      (await prisma.blockchainRecord.findUnique({
-        where: { caseId_milestone: { caseId, milestone: "AWARD" } },
+      (await prisma.blockchainRecord.findFirst({
+        where: { caseId, milestone: "AWARD", deletedAt: null },
       })) ??
-      (await prisma.blockchainRecord.findUnique({
-        where: { caseId_milestone: { caseId, milestone: "SETTLEMENT" } },
+      (await prisma.blockchainRecord.findFirst({
+        where: { caseId, milestone: "SETTLEMENT", deletedAt: null },
       }))
     );
   }
   const m = normalizeMilestone(milestone);
-  return prisma.blockchainRecord.findUnique({
-    where: { caseId_milestone: { caseId, milestone: m } },
+  return prisma.blockchainRecord.findFirst({
+    where: { caseId, milestone: m, deletedAt: null },
   });
 }
 
@@ -298,10 +308,90 @@ export async function verifyDocument(fileBuffer: Buffer) {
   }
 
   if (!record) {
+    const rawBufferStr = fileBuffer.toString('utf-8');
+    const caseMatch = rawBufferStr.match(/LAC-\d{4}-\d{2}-\d{4}/);
+    if (caseMatch) {
+      const detectedCaseId = caseMatch[0];
+
+      // 1. Check if an on-chain published record exists for this case in current database
+      const publishedAward = await prisma.blockchainRecord.findFirst({
+        where: { caseId: detectedCaseId, milestone: "AWARD", status: BlockchainStatus.PUBLISHED },
+      });
+      const publishedSettlement = await prisma.blockchainRecord.findFirst({
+        where: { caseId: detectedCaseId, milestone: "SETTLEMENT", status: BlockchainStatus.PUBLISHED },
+      });
+
+      const publishedRec = publishedAward || publishedSettlement;
+      if (publishedRec?.documentHash) {
+        return {
+          verified: false,
+          status: "Altered",
+          message: `Verification Failed: Document has been altered. SHA-256 fingerprint does not match the immutable on-chain record published on Sepolia for case ${detectedCaseId}.`,
+          localHash,
+          onChainHash: publishedRec.documentHash,
+          caseId: detectedCaseId,
+          milestone: publishedRec.milestone === "SETTLEMENT" ? "M2" : "M1",
+          onChainKey: publishedRec.onChainKey || `${detectedCaseId}#${publishedRec.milestone === "SETTLEMENT" ? "M2" : "M1"}`,
+          isPublished: true,
+          expectedSource: "Ethereum Sepolia On-Chain Record",
+        };
+      }
+
+      // 2. Check if a statutory Form H offer letter exists in database (awaiting on-chain publication after 24h grace period)
+      const dbOffer = await prisma.offerLetter.findFirst({
+        where: { caseId: detectedCaseId },
+      });
+      if (dbOffer?.blockchainHash) {
+        return {
+          verified: false,
+          status: "Altered",
+          message: `Verification Failed: Document has been altered. SHA-256 fingerprint does not match the official signed Form H stored in the statutory database registry for case ${detectedCaseId} (awaiting on-chain publication after statutory 24-hour grace period).`,
+          localHash,
+          onChainHash: dbOffer.blockchainHash,
+          caseId: detectedCaseId,
+          milestone: "M1",
+          isPublished: false,
+          expectedSource: "Statutory Case Registry (Pre-Notarized / Grace Period)",
+        };
+      }
+
+      // 3. Check if a payment receipt exists in database
+      const dbReceipt = await prisma.paymentReceipt.findFirst({
+        where: { paymentCase: { caseId: detectedCaseId } },
+      });
+      if (dbReceipt?.documentHash) {
+        return {
+          verified: false,
+          status: "Altered",
+          message: `Verification Failed: Document has been altered. SHA-256 fingerprint does not match the canonical payment receipt stored in the settlement database for case ${detectedCaseId}.`,
+          localHash,
+          onChainHash: dbReceipt.documentHash,
+          caseId: detectedCaseId,
+          milestone: "M2",
+          isPublished: false,
+          expectedSource: "Settlement Payment Receipt Registry",
+        };
+      }
+    }
+
     return {
       verified: false,
       status: "Not Found",
       message: "Record Not Found. This document has not been published to the blockchain ledger yet.",
+      localHash,
+    };
+  }
+
+  // If the record in the current database is NOT published yet, it cannot be verified on-chain
+  if (record.status !== BlockchainStatus.PUBLISHED) {
+    return {
+      verified: false,
+      status: "Not Found",
+      message: "Record Not Found. This document has not been published to the blockchain ledger yet.",
+      localHash,
+      caseId: record.caseId,
+      milestone: record.milestone === "SETTLEMENT" ? "M2" : "M1",
+      onChainKey: record.onChainKey || record.caseId,
     };
   }
 
@@ -311,24 +401,16 @@ export async function verifyDocument(fileBuffer: Buffer) {
   const contractAddress = net.contractAddress;
   const etherscanBase = net.chainId === 11155111 ? "https://sepolia.etherscan.io" : "https://etherscan.io";
 
-  if (chain.isVoided) {
+  // If the on-chain contract has not recorded this key (publishedAt == 0)
+  if (!chain.publishedAt || chain.publishedAt === 0) {
     return {
       verified: false,
-      status: "Voided",
-      message: "Warning: This settlement record was legally voided on-chain. Reason: " + chain.voidReason,
-      voidReason: chain.voidReason,
-      timestamp: chain.publishedAt,
+      status: "Not Found",
+      message: "Record Not Found. This document has not been published to the blockchain ledger yet.",
       localHash,
-      onChainHash: chain.documentHash,
       caseId: record.caseId,
       milestone: record.milestone === "SETTLEMENT" ? "M2" : "M1",
       onChainKey,
-      transactionHash: record.voidTransactionHash || record.transactionHash,
-      contractAddress,
-      network: net.label,
-      chainId: net.chainId,
-      etherscanUrl: (record.voidTransactionHash || record.transactionHash) ? `${etherscanBase}/tx/${record.voidTransactionHash || record.transactionHash}` : null,
-      contractUrl: contractAddress ? `${etherscanBase}/address/${contractAddress}` : null,
     };
   }
 

@@ -17,7 +17,7 @@ export function statusStyle(status: string) {
   if (['PAID', 'PUBLISHED', 'APPROVED', 'COMPLETED', 'CASE CLOSED', 'COMPENSATION APPROVED'].includes(s)) {
     return STATUS_STYLES.green;
   }
-  if (['VOIDED', 'FAILED', 'REJECTED'].includes(s)) return STATUS_STYLES.red;
+  if (['FAILED', 'REJECTED'].includes(s)) return STATUS_STYLES.red;
   if (['CASE REGISTERED', 'REGISTERED', 'NOTARIZED'].includes(s)) return STATUS_STYLES.blue;
   return STATUS_STYLES.amber;
 }
@@ -56,7 +56,7 @@ export const ReportSummaryCards: React.FC<{ data: ReportGeneratedResponse }> = (
     cards = [
       { label: 'Total Ledger Records', value: s.totalRecords ?? 0 },
       { label: 'Published On-Chain', value: s.publishedRecords ?? 0 },
-      { label: 'Voided Records', value: s.voidedRecords ?? 0 },
+      { label: 'Ready to Publish', value: s.readyToPublishRecords ?? 0 },
       { label: 'Cryptographic Integrity', value: s.integrityStatus ?? 'Verified' },
     ];
   }

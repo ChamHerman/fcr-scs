@@ -17,7 +17,7 @@ export interface DashboardOverviewData {
     totalPaidAmount: number;
     totalBlockchainRecords: number;
     publishedBlockchainRecords: number;
-    voidedBlockchainRecords: number;
+    readyToPublishBlockchainRecords: number;
     completedCases: number;
     pendingValuation: number;
     pendingCompensation: number;

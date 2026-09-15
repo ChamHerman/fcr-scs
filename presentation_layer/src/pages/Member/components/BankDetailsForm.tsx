@@ -45,6 +45,21 @@ export interface BankDetailsFormProps {
  * member's saved default payout account (FR-016) or a fresh entry, and gates
  * the actual submission behind a second confirmation (FR-017).
  */
+// Normalizes Malaysian contact number by stripping leading +60, 60, or 0
+export const normalizeContactNumber = (raw?: string | null): string => {
+  if (!raw) return '';
+  let cleaned = String(raw).trim().replace(/[\s-]/g, '');
+  if (cleaned.startsWith('+60')) {
+    cleaned = cleaned.slice(3);
+  } else if (cleaned.startsWith('60')) {
+    cleaned = cleaned.slice(2);
+  }
+  if (cleaned.startsWith('0')) {
+    cleaned = cleaned.slice(1);
+  }
+  return cleaned.replace(/\D/g, '');
+};
+
 export const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ caseId, caseInfo, onSubmitted }) => {
   const { user } = useAuth();
   const { notify } = useNotification();
@@ -86,7 +101,7 @@ export const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ caseId, caseIn
   // Pre-fill user profile fields
   useEffect(() => {
     if (user?.name) setAccountHolderName((prev) => prev || user.name || '');
-    if (user?.contactNumber) setPhoneNumber((prev) => prev || user.contactNumber || '');
+    if (user?.contactNumber) setPhoneNumber((prev) => prev || normalizeContactNumber(user.contactNumber));
   }, [user]);
 
   const applySaved = (acc: any) => {
@@ -94,7 +109,7 @@ export const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ caseId, caseIn
     setBankName(acc.bankName || 'Maybank');
     setAccountNumber(acc.accountNumber || '');
     if (acc.accountHolderName) setAccountHolderName(acc.accountHolderName);
-    if (acc.phoneNumber) setPhoneNumber(acc.phoneNumber);
+    if (acc.phoneNumber) setPhoneNumber(normalizeContactNumber(acc.phoneNumber));
   };
 
   const isFormValid = Boolean(
@@ -141,13 +156,16 @@ export const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ caseId, caseIn
   const handleConfirmedSubmit = async () => {
     setSubmitting(true);
     try {
+      const cleanPhone = normalizeContactNumber(phoneNumber);
+      const phoneToSubmit = cleanPhone ? `+60${cleanPhone}` : '';
+
       await paymentApi.submitBankDetails({
         caseId,
         bankName,
         accountNumber: accountNumber.trim(),
         accountHolderName: accountHolderName.trim(),
         myKadNumber: effectiveMyKad,
-        phoneNumber: phoneNumber.trim(),
+        phoneNumber: phoneToSubmit,
       });
 
       // FR-016 flow 1: keep the default payout account in sync (backend also
@@ -158,7 +176,7 @@ export const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ caseId, caseIn
           accountNumber: accountNumber.trim(),
           accountHolderName: accountHolderName.trim(),
           myKadNumber: effectiveMyKad,
-          phoneNumber: phoneNumber.trim(),
+          phoneNumber: phoneToSubmit,
         })
         .catch(() => {});
 
@@ -348,9 +366,13 @@ export const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ caseId, caseIn
           label="Contact Mobile Number (For SMS Notification)"
           name="phoneNumber"
           type="tel"
+          inputMode="numeric"
+          autoComplete="tel-national"
           value={phoneNumber}
-          onChange={(e) => setPhoneNumber(e.target.value)}
-          placeholder="e.g. +60123456789"
+          onChange={(e) => setPhoneNumber(normalizeContactNumber(e.target.value))}
+          placeholder="172178475"
+          prefix="+60"
+          aria-label="Contact Mobile Number, country code +60"
           disabled={submitting || accountChoice === 'saved'}
           readOnly={accountChoice === 'saved'}
           className="font-mono"
@@ -407,7 +429,13 @@ export const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ caseId, caseIn
             />
             <ConfirmRow label="Account Holder" value={accountHolderName.trim()} />
             <ConfirmRow label="MyKad" value={effectiveMyKad} mono />
-            {phoneNumber.trim() && <ConfirmRow label="Phone" value={phoneNumber.trim()} mono />}
+            {phoneNumber.trim() && (
+              <ConfirmRow
+                label="Phone"
+                value={`+60 ${normalizeContactNumber(phoneNumber)}`}
+                mono
+              />
+            )}
           </>
         }
       />

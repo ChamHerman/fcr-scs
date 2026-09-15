@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, Wallet, Loader2, UploadCloud, RefreshCw, Ban } from 'lucide-react';
+import { Clock, User, Wallet, Loader2, UploadCloud, RefreshCw } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
@@ -24,7 +24,6 @@ import { normalizePaymentStatus } from '../Payment/statusMaps';
 import {
   ViewLedgerModal,
   PublishModal,
-  VoidModal,
   ledgerBadge,
   fmtDate,
   fmtAmount,
@@ -33,13 +32,12 @@ import {
 } from './blockchainModals';
 import type { LedgerRow } from './blockchainModals';
 
-type ModalState = { type: 'view'; row: LedgerRow } | { type: 'publish'; row: LedgerRow } | { type: 'void'; row: LedgerRow } | null;
-type TabKey = 'm1' | 'm2' | 'void';
+type ModalState = { type: 'view'; row: LedgerRow } | { type: 'publish'; row: LedgerRow } | null;
+type TabKey = 'm1' | 'm2';
 
 const TABS: Array<{ key: TabKey; label: string; short: string }> = [
   { key: 'm1', label: 'Milestone 1 — Statutory Award (Form H)', short: 'Award (M1)' },
   { key: 'm2', label: 'Milestone 2 — Disbursement Settlement (Receipt)', short: 'Settlement (M2)' },
-  { key: 'void', label: 'Void Required — Cancelled Cases on Chain', short: 'Void Required' },
 ];
 
 /** "5m left" / "3h 20m left" countdown for grace-locked award rows. */
@@ -56,7 +54,6 @@ export const PublishLedger: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabKey>('m1');
   const [m1Rows, setM1Rows] = useState<LedgerRow[]>([]);
   const [m2Rows, setM2Rows] = useState<LedgerRow[]>([]);
-  const [voidRows, setVoidRows] = useState<LedgerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState(deepLink || '');
@@ -64,7 +61,7 @@ export const PublishLedger: React.FC = () => {
   const [caseDetailsId, setCaseDetailsId] = useState<string | null>(null);
   const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
   const pageRef = useRef<HTMLDivElement>(null);
-  const tabRefs = useRef<Record<TabKey, HTMLButtonElement | null>>({ m1: null, m2: null, void: null });
+  const tabRefs = useRef<Record<TabKey, HTMLButtonElement | null>>({ m1: null, m2: null });
   const sliderRef = useRef<HTMLDivElement>(null);
   const isFirstTabRender = useRef(true);
 
@@ -127,11 +124,18 @@ export const PublishLedger: React.FC = () => {
       setNetworkInfo(netData);
 
       const records: any[] = recordsRes.records || [];
-      const m1Map = new Map<string, any>();
-      const m2Map = new Map<string, any>();
+      const m1Published = new Set<string>();
+      const m2Published = new Set<string>();
+      const readyRecordsMap = new Map<string, any>();
       records.forEach((r) => {
-        if ((r.milestone ?? 'AWARD') === 'AWARD') m1Map.set(r.caseId, r);
-        else m2Map.set(r.caseId, r);
+        const isM1 = (r.milestone ?? 'AWARD') === 'AWARD';
+        const s = String(r.status || '').toUpperCase().replace(/[\s_]+/g, '_');
+        if (s === 'READY_TO_PUBLISH') {
+          readyRecordsMap.set(`${r.caseId}#${isM1 ? 'M1' : 'M2'}`, r);
+        } else if (s === 'PUBLISHED') {
+          if (isM1) m1Published.add(r.caseId);
+          else m2Published.add(r.caseId);
+        }
       });
 
       // ----- Tab 1: Milestone 1 Award queue, built from ACCEPTED offers —
@@ -143,22 +147,27 @@ export const PublishLedger: React.FC = () => {
       const awardQueue: LedgerRow[] = [];
       for (const offer of offers) {
         const caseId: string | undefined = offer.caseId;
-        if (!caseId || m1Map.has(caseId)) continue;
+        if (!caseId || m1Published.has(caseId)) continue;
+        const existingRec = readyRecordsMap.get(`${caseId}#M1`);
+        const bcnId = existingRec?.id || caseId;
         const acceptedAtMs = offer.acceptedAt ? new Date(offer.acceptedAt).getTime() : null;
         const graceEndsAtMs = acceptedAtMs != null ? acceptedAtMs + ACCEPTANCE_GRACE_PERIOD_MS : null;
         const graceLocked = graceEndsAtMs != null && now < graceEndsAtMs;
+        const m1Sec = Math.floor((acceptedAtMs || now) / 1000);
         awardQueue.push({
-          id: `M1-${caseId}`,
+          id: existingRec?.id || `M1-${caseId}`,
           caseId,
           milestone: 'M1',
-          onChainKey: `${caseId}#M1`,
-          publicId: caseId,
+          onChainKey: existingRec?.onChainKey || `${caseId}#M1-${m1Sec}`,
+          publicId: bcnId,
           beneficiary: offer.landOwnership?.landOwner?.name || undefined,
           amount: offer.offerAmount,
           status: graceLocked ? 'Grace Period (Locked)' : 'Ready to Publish',
-          documentHash: offer.blockchainHash || null,
+          documentHash: offer.blockchainHash || existingRec?.documentHash || null,
           graceEndsAt: graceEndsAtMs,
           acceptedAt: offer.acceptedAt || null,
+          createdAt: existingRec?.createdAt || offer.createdAt || undefined,
+          caseCreatedAt: offer.case?.createdAt || offer.case?.registrationDate || undefined,
         });
       }
       setM1Rows(awardQueue);
@@ -168,16 +177,19 @@ export const PublishLedger: React.FC = () => {
       // rows without a persisted hash fall back to the deterministic computed one.
       const settlementQueue: LedgerRow[] = [];
       for (const pc of (allCases.cases || [])) {
-        if (normalizePaymentStatus(pc.status) !== 'Paid') continue;
-        if (m2Map.has(pc.caseId)) continue;
+        const norm = normalizePaymentStatus(pc.status);
+        if (norm !== 'Paid' && norm !== 'Transfer Succeed') continue;
+        if (m2Published.has(pc.caseId)) continue;
+        const existingRec = readyRecordsMap.get(`${pc.caseId}#M2`);
         const docHash = pc.receipt?.documentHash || (await computeSettlementHash(pc.caseId, pc.amount));
+        const paidAtMs = pc.receipt?.generatedAt || pc.updatedAt ? new Date(pc.receipt?.generatedAt || pc.updatedAt).getTime() : now;
+        const m2Sec = Math.floor(paidAtMs / 1000);
         settlementQueue.push({
-          id: pc.id || `M2-${pc.caseId}`,
+          id: existingRec?.id || pc.id || `M2-${pc.caseId}`,
           caseId: pc.caseId,
           milestone: 'M2',
-          onChainKey: `${pc.caseId}#M2`,
-          // No M1 record exists yet — show the payment's PMT-XXXXXXXX id
-          publicId: pc.paymentId || pc.id,
+          onChainKey: existingRec?.onChainKey || `${pc.caseId}#M2-${m2Sec}`,
+          publicId: existingRec?.id || pc.paymentId || pc.id,
           beneficiary: pc.accountHolderName || pc.beneficiaryId,
           amount: pc.amount,
           status: 'Ready to Publish',
@@ -190,22 +202,6 @@ export const PublishLedger: React.FC = () => {
         });
       }
       setM2Rows(settlementQueue);
-
-      // ----- Void Required: published records parked for on-chain revocation
-      // after a post-notarization cancellation.
-      setVoidRows(
-        records
-          .filter((r) => {
-            const s = String(r.status || '').toUpperCase().replace(/[\s_]+/g, '_');
-            return s === 'VOID_PENDING';
-          })
-          .map((r) => ({
-            ...r,
-            milestone: (r.milestone ?? 'AWARD') === 'AWARD' ? ('M1' as const) : ('M2' as const),
-            onChainKey: r.onChainKey || `${r.caseId}#${(r.milestone ?? 'AWARD') === 'AWARD' ? 'M1' : 'M2'}`,
-            status: 'Void Pending',
-          }))
-      );
     } catch (err: any) {
       setError(err.message || 'Failed to load publish queue');
     } finally {
@@ -226,11 +222,33 @@ export const PublishLedger: React.FC = () => {
     return () => clearInterval(interval);
   }, [activeTab, modal, loadData]);
 
-  const rows = activeTab === 'm1' ? m1Rows : activeTab === 'm2' ? m2Rows : voidRows;
+  const rows = activeTab === 'm1' ? m1Rows : m2Rows;
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return rows.filter((r) => !q || r.caseId.toLowerCase().includes(q) || (r.beneficiary ?? '').toLowerCase().includes(q));
+    return rows
+      .filter((r) => !q || r.caseId.toLowerCase().includes(q) || (r.beneficiary ?? '').toLowerCase().includes(q))
+      .sort((a, b) => {
+        const getPriority = (r: LedgerRow) => {
+          const isLocked =
+            r.status === 'Grace Period (Locked)' ||
+            (!!r.graceEndsAt && Date.now() < new Date(r.graceEndsAt).getTime());
+          if (r.status === 'Ready to Publish' && !isLocked) return 1;
+          if (isLocked) return 2;
+          if (r.status === 'Published') return 3;
+          return 4;
+        };
+        const pA = getPriority(a);
+        const pB = getPriority(b);
+        if (pA !== pB) return pA - pB;
+
+        const bcnIdA = a.publicId?.startsWith('BCN-') ? a.publicId : a.id?.startsWith('BCN-') ? a.id : (a.publicId || a.id || '');
+        const bcnIdB = b.publicId?.startsWith('BCN-') ? b.publicId : b.id?.startsWith('BCN-') ? b.id : (b.publicId || b.id || '');
+        const bcnCmp = bcnIdA.localeCompare(bcnIdB, undefined, { numeric: true, sensitivity: 'base' });
+        if (bcnCmp !== 0) return bcnCmp;
+
+        return (a.caseId || '').localeCompare(b.caseId || '', undefined, { numeric: true });
+      });
   }, [rows, searchQuery]);
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -291,11 +309,10 @@ export const PublishLedger: React.FC = () => {
             ref={(el) => { tabRefs.current[t.key] = el; }}
             type="button"
             onClick={() => setActiveTab(t.key)}
-            className={`relative z-10 shrink-0 whitespace-nowrap px-4 py-2 rounded-full text-xs font-semibold transition-colors duration-200 cursor-pointer ${
-              activeTab === t.key
-                ? 'text-white font-bold'
-                : 'text-md-on-surface-variant hover:text-md-on-surface'
-            }`}
+            className={`relative z-10 shrink-0 whitespace-nowrap px-4 py-2 rounded-full text-xs font-semibold transition-colors duration-200 cursor-pointer ${activeTab === t.key
+              ? 'text-white font-bold'
+              : 'text-md-on-surface-variant hover:text-md-on-surface'
+              }`}
             title={t.label}
           >
             <span className="hidden sm:inline">{t.label}</span>
@@ -315,20 +332,11 @@ export const PublishLedger: React.FC = () => {
 
       <div className="action-bar">
         <div className="left">
-          {activeTab === 'void' ? (
-            <>
-              <Ban size={18} />
-              <span className="count">{filtered.length} record{filtered.length === 1 ? '' : 's'} awaiting on-chain void</span>
-            </>
-          ) : (
-            <>
-              <UploadCloud size={18} />
-              <span className="count">
-                {filtered.length} record{filtered.length === 1 ? '' : 's'} ready to publish
-                {activeTab === 'm1' ? ' (Milestone 1)' : ' (Milestone 2)'}
-              </span>
-            </>
-          )}
+          <UploadCloud size={18} />
+          <span className="count">
+            {filtered.length} record{filtered.length === 1 ? '' : 's'} ready to publish
+            {activeTab === 'm1' ? ' (Milestone 1)' : ' (Milestone 2)'}
+          </span>
         </div>
         <div className="right flex items-center gap-2">
           <NetworkStatusBadge networkInfo={networkInfo} />
@@ -341,12 +349,12 @@ export const PublishLedger: React.FC = () => {
           <table>
             <thead>
               <tr>
-                <th style={{ width: '160px' }}>Blockchain ID</th>
-                <th style={{ width: '140px' }}>Case ID</th>
-                <th style={{ width: '150px' }}>Beneficiary</th>
-                <th style={{ width: '120px' }}>Amount</th>
-                <th style={{ width: '150px' }}>Document Hash</th>
-                <th style={{ width: '160px' }}>Status</th>
+                <th style={{ width: '135px' }}>Blockchain ID</th>
+                <th style={{ width: '120px' }}>Case ID</th>
+                <th style={{ width: '140px' }}>Beneficiary</th>
+                <th style={{ width: '115px' }}>Amount</th>
+                <th style={{ width: '135px' }}>Document Hash</th>
+                <th style={{ width: '130px', paddingRight: '10px' }}>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -359,9 +367,7 @@ export const PublishLedger: React.FC = () => {
               ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center text-gray-500 py-8">
-                    {activeTab === 'void'
-                      ? 'No records awaiting on-chain void.'
-                      : 'Nothing ready to publish right now.'}
+                    Nothing ready to publish right now.
                   </td>
                 </tr>
               ) : (
@@ -369,8 +375,8 @@ export const PublishLedger: React.FC = () => {
                   const blockchainId = row.publicId?.startsWith('BCN-')
                     ? row.publicId
                     : row.id?.startsWith('BCN-')
-                    ? row.id
-                    : `BCN-${row.caseId}-${row.milestone || (activeTab === 'm2' ? 'M2' : 'M1')}`;
+                      ? row.id
+                      : `BCN-${row.caseId}-${row.milestone || (activeTab === 'm2' ? 'M2' : 'M1')}`;
 
                   return (
                     <tr
@@ -409,7 +415,7 @@ export const PublishLedger: React.FC = () => {
                           )}
                         </div>
                       </td>
-                      <td>
+                      <td style={{ paddingRight: '20px' }}>
                         {(() => {
                           const graceLocked =
                             activeTab === 'm1' &&
@@ -437,7 +443,7 @@ export const PublishLedger: React.FC = () => {
                               </span>
                             );
                           }
-                          return ledgerBadge(row.status || (activeTab === 'void' ? 'Void Pending' : 'Ready to Publish'));
+                          return ledgerBadge(row.status || 'Ready to Publish');
                         })()}
                       </td>
                     </tr>
@@ -466,7 +472,6 @@ export const PublishLedger: React.FC = () => {
         onAction={(act, r) => setModal({ type: act, row: r })}
       />
       <PublishModal row={modal?.type === 'publish' ? modal.row : null} onClose={closeModal} onDone={() => { closeModal(); loadData(); }} />
-      <VoidModal row={modal?.type === 'void' ? modal.row : null} onClose={closeModal} onDone={() => { closeModal(); loadData(); }} />
       <CaseDetailsModal caseId={caseDetailsId} onClose={() => setCaseDetailsId(null)} />
     </div>
   );

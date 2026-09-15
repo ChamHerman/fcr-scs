@@ -62,7 +62,7 @@ export const generatePdfBuffer = async (reportTitle: string, reportData: any): P
         } else if (reportData.reportType === "Payment Report") {
           summaryText = `Total Disbursement: ${reportData.summary.totalDisbursement ?? 'RM 0.00'}  |  Success Rate: ${reportData.summary.successRate ?? '100%'}  |  Paid: ${reportData.summary.successfulPayments ?? 0}  |  Pending: ${reportData.summary.pendingPayments ?? 0}`;
         } else if (reportData.reportType === "Blockchain Audit Report") {
-          summaryText = `Total Records: ${reportData.summary.totalRecords ?? 0}  |  Published On-chain: ${reportData.summary.publishedRecords ?? 0}  |  Voided: ${reportData.summary.voidedRecords ?? 0}  |  Ledger Status: ${reportData.summary.integrityStatus ?? 'Verified'}`;
+          summaryText = `Total Records: ${reportData.summary.totalRecords ?? 0}  |  Published On-chain: ${reportData.summary.publishedRecords ?? 0}  |  Ready to Publish: ${reportData.summary.readyToPublishRecords ?? 0}  |  Ledger Status: ${reportData.summary.integrityStatus ?? 'Verified'}`;
         } else {
           summaryText = JSON.stringify(reportData.summary);
         }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, Hourglass, Fingerprint, Loader2, ShieldAlert, Activity, RefreshCw } from 'lucide-react';
+import { Clock, User, Hourglass, Fingerprint, Loader2, ShieldAlert, Activity, RefreshCw, PenLine } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
@@ -169,7 +169,7 @@ export default function PendingAuthorisations() {
 
       <div className="action-bar">
         <div className="left">
-          <Activity size={18} />
+          <PenLine size={18} />
           <span className="count">Authorisation queue ({filtered.length})</span>
         </div>
         <div className="right">

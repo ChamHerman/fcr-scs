@@ -1,10 +1,11 @@
 """
 Bootstrap launcher for the AI valuation sidecar.
 
-`npm run dev` must never crash just because the system Python lacks flask.
-Fast path: system Python already has the requirements -> run app.py directly.
-Slow path (first run only): create a local .venv, pip install requirements.txt,
-then run app.py with the venv interpreter.
+Always uses the dedicated isolated virtual environment (.venv) to run the AI
+valuation sidecar, completely ignoring the user's global/base Python packages
+to prevent version conflicts.
+
+Targeted for Windows (.venv/Scripts/python.exe), with fallback for Unix.
 """
 
 import os
@@ -18,39 +19,63 @@ REQUIREMENTS = os.path.join(BASE, "requirements.txt")
 
 
 def venv_python() -> str:
+    # Dedicated isolated environment interpreter (Windows priority)
     if os.name == "nt":
         return os.path.join(VENV_DIR, "Scripts", "python.exe")
     return os.path.join(VENV_DIR, "bin", "python")
 
 
-def interpreter_has_deps(python: str) -> bool:
+def interpreter_has_deps(python_exe: str) -> bool:
     probe = "import flask, joblib, numpy, pandas, sklearn"
-    result = subprocess.run([python, "-c", probe], capture_output=True)
+    result = subprocess.run([python_exe, "-c", probe], capture_output=True)
     return result.returncode == 0
 
 
 def ensure_venv() -> str:
     py = venv_python()
     if not os.path.exists(py):
-        print("[ai] System Python missing dependencies; creating .venv (one-time setup)...")
-        venv.create(VENV_DIR, with_pip=True)
+        print(f"[ai] Dedicated .venv not found. Creating isolated environment at: {VENV_DIR}")
+        try:
+            venv.create(VENV_DIR, with_pip=True)
+        except Exception as exc:
+            print(f"[ai] venv.create encountered an error ({exc}); retrying with '{sys.executable} -m venv'...")
+            subprocess.run([sys.executable, "-m", "venv", VENV_DIR], check=True)
+
     if not interpreter_has_deps(py):
-        print("[ai] Installing AI service dependencies into .venv (one-time setup)...")
-        subprocess.run([py, "-m", "pip", "install", "--disable-pip-version-check", "-r", REQUIREMENTS], check=True)
+        print("[ai] Installing AI service dependencies into .venv from requirements.txt...")
+        subprocess.run(
+            [py, "-m", "pip", "install", "--disable-pip-version-check", "-r", REQUIREMENTS],
+            check=True,
+        )
     return py
 
 
 def main() -> int:
-    system_python = sys.executable
-    if interpreter_has_deps(system_python):
-        return subprocess.call([system_python, os.path.join(BASE, "app.py")])
     try:
         py = ensure_venv()
     except Exception as exc:  # noqa: BLE001 - report and let the rest of dev keep running
-        print(f"[ai] Could not prepare the AI service environment: {exc}")
-        print("[ai] Start backend/frontend remain available; AI valuation endpoints are offline.")
+        print(f"[ai] Could not prepare the AI service .venv environment: {exc}")
+        print("[ai] Backend and frontend remain available; AI valuation endpoints are offline.")
         return 0
-    return subprocess.call([py, os.path.join(BASE, "app.py")])
+
+    # Determine script or command to run (default: app.py)
+    if len(sys.argv) > 1 and sys.argv[1].endswith(".py"):
+        target_script = sys.argv[1]
+        extra_args = sys.argv[2:]
+        script_path = os.path.join(BASE, target_script)
+        cmd = [py, script_path, *extra_args]
+        print(f"[ai] Launching {target_script} using isolated .venv Python: {py}")
+    elif len(sys.argv) > 1 and sys.argv[1].startswith("-"):
+        cmd = [py, *sys.argv[1:]]
+        print(f"[ai] Executing command in isolated .venv Python: {py}")
+    else:
+        target_script = "app.py"
+        extra_args = sys.argv[1:]
+        script_path = os.path.join(BASE, target_script)
+        cmd = [py, script_path, *extra_args]
+        print(f"[ai] Launching {target_script} using isolated .venv Python: {py}")
+
+    return subprocess.call(cmd)
 
 
 if __name__ == "__main__":

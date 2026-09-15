@@ -23,7 +23,6 @@ export const ADMIN_PAGES: AdminPageInfo[] = [
 
   { path: '/admin/blockchain', name: 'Blockchain Overview', category: 'Finance & Ledger' },
   { path: '/admin/blockchain/publish', name: 'Publish to Ledger', category: 'Finance & Ledger' },
-  { path: '/admin/blockchain/void', name: 'Void Ledger', category: 'Finance & Ledger' },
 
   { path: '/admin/prediction', name: 'Generate AI Valuation', category: 'AI Valuation' },
   { path: '/admin/prediction/retrain', name: 'Retrain Model', category: 'AI Valuation' },

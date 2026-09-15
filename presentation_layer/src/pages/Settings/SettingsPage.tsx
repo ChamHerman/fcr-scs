@@ -133,7 +133,7 @@ export const SettingsPage: React.FC = () => {
               <div className="flex items-start gap-2 text-sm bg-md-secondary-container/40 border border-md-outline/20 rounded-xl px-4 py-3 text-md-on-surface">
                 <Info size={16} className="shrink-0 mt-0.5 text-md-primary" />
                 <span>
-                  The blockchain service publishes and voids records on the selected network at runtime
+                  The blockchain service publishes records on the selected network at runtime
                   (in-memory switch — it resets when the service restarts). Publishing requires the
                   authorised admin wallet to be connected in MetaMask on the blockchain pages.
                 </span>

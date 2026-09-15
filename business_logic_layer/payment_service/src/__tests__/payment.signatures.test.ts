@@ -14,10 +14,21 @@ describe("Signature model & Final Execution Confirmation", () => {
   let ga2Token: string;
   let ga3Token: string;
 
+  let testLandOwnerId: string;
+  let testProjectId: string;
+  let testCreatedById: string;
+
   beforeAll(async () => {
     ga1Token = await getTestSessionToken(UserRole.GOVERNMENT_ADMINISTRATOR, 1, "sig");
     ga2Token = await getTestSessionToken(UserRole.GOVERNMENT_ADMINISTRATOR, 2, "sig");
     ga3Token = await getTestSessionToken(UserRole.GOVERNMENT_ADMINISTRATOR, 3, "sig");
+
+    const existingAc = await prisma.acquisitionCase.findFirst();
+    testProjectId = existingAc!.projectId;
+    testCreatedById = existingAc!.createdById;
+
+    const lo = await prisma.landOwner.findFirst();
+    testLandOwnerId = lo!.ownerId;
   });
 
   afterAll(async () => {
@@ -25,11 +36,23 @@ describe("Signature model & Final Execution Confirmation", () => {
   });
 
   const makeCase = async (amount: number) => {
+    const caseId = `SIG-TEST-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    await prisma.acquisitionCase.create({
+      data: {
+        caseId,
+        projectId: testProjectId,
+        createdById: testCreatedById,
+        caseTitle: "Signature Test Acquisition Case",
+        status: "OFFER_ACCEPTED",
+        registrationDate: new Date(),
+        remarks: "Test case for signatures",
+      },
+    });
     const pc = await prisma.paymentCase.create({
       data: {
         id: await newPaymentId(),
-        caseId: `SIG-TEST-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        beneficiaryId: "BEN-TEST",
+        caseId,
+        beneficiaryId: testLandOwnerId,
         amount,
         bankName: "Maybank",
         accountHolderName: "Test Beneficiary",
@@ -69,6 +92,9 @@ describe("Signature model & Final Execution Confirmation", () => {
         where: { paymentCase: { caseId: createdCaseId } },
       });
       await prisma.paymentCase.deleteMany({
+        where: { caseId: createdCaseId },
+      });
+      await prisma.acquisitionCase.deleteMany({
         where: { caseId: createdCaseId },
       });
       createdCaseId = "";

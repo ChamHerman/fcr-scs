@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, DollarSign, User, XCircle, Hourglass, Loader2, Eye, ShieldAlert, Activity, RefreshCw } from 'lucide-react';
+import { Clock, DollarSign, User, XCircle, Hourglass, Loader2, Eye, ShieldAlert, Activity, RefreshCw, CreditCard } from 'lucide-react';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { paymentApi } from '../../services/paymentApi';
@@ -118,7 +118,12 @@ export default function PaymentDashboard() {
     setError('');
     try {
       const allRes = await paymentApi.getAllCases();
-      setAllCases(allRes.cases || []);
+      const rawCases = allRes.cases || [];
+      const eligible = rawCases.filter((c: any) => {
+        const raw = (c.caseStatus || '').toUpperCase().replace(/\s+/g, '_');
+        return raw !== 'OFFER_ISSUED' && raw !== 'OFFER_REJECTED' && raw !== 'CASE_REGISTERED' && c.status !== 'Offer Issued';
+      });
+      setAllCases(eligible);
       if (!preservePage) setCurrentPage(1);
     } catch (err: any) {
       setError(err.message || 'Failed to load payment data');
@@ -166,6 +171,10 @@ export default function PaymentDashboard() {
   const filteredCases = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return allCases.filter((c) => {
+      const raw = (c.caseStatus || '').toUpperCase().replace(/\s+/g, '_');
+      if (raw === 'OFFER_ISSUED' || raw === 'OFFER_REJECTED' || raw === 'CASE_REGISTERED' || c.status === 'Offer Issued') {
+        return false;
+      }
       const detailed = getDetailedPaymentStatus(c);
       const matchesStatus =
         statusFilter === 'All' ||
@@ -182,16 +191,32 @@ export default function PaymentDashboard() {
   }, [allCases, searchQuery, statusFilter]);
 
   const sortedCases = useMemo(() => {
+    const getPmtId = (r: PaymentRow) => r.paymentId || r.id || `PMT-${r.caseId}`;
+    const byPmtIdAsc = (a: PaymentRow, b: PaymentRow) =>
+      getPmtId(a).localeCompare(getPmtId(b), undefined, { numeric: true, sensitivity: 'base' });
     const byTimeDesc = (a: PaymentRow, b: PaymentRow) =>
       new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime();
+
     const rows = [...filteredCases];
     switch (sortKey) {
       case 'recent':
-        return rows.sort(byTimeDesc);
+        return rows.sort((a, b) => {
+          const tCmp = byTimeDesc(a, b);
+          if (tCmp !== 0) return tCmp;
+          return byPmtIdAsc(a, b);
+        });
       case 'amount-desc':
-        return rows.sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0));
+        return rows.sort((a, b) => {
+          const diff = Number(b.amount || 0) - Number(a.amount || 0);
+          if (diff !== 0) return diff;
+          return byPmtIdAsc(a, b);
+        });
       case 'amount-asc':
-        return rows.sort((a, b) => Number(a.amount || 0) - Number(b.amount || 0));
+        return rows.sort((a, b) => {
+          const diff = Number(a.amount || 0) - Number(b.amount || 0);
+          if (diff !== 0) return diff;
+          return byPmtIdAsc(a, b);
+        });
       case 'priority':
       default:
         return rows.sort((a, b) => {
@@ -200,12 +225,9 @@ export default function PaymentDashboard() {
           const ra = STATUS_PRIORITY_RANK[detA.paymentStatus] ?? 50;
           const rb = STATUS_PRIORITY_RANK[detB.paymentStatus] ?? 50;
           if (ra !== rb) return ra - rb;
-          if (ra === 1) {
-            return (
-              new Date(a.updatedAt || a.createdAt || 0).getTime() -
-              new Date(b.updatedAt || b.createdAt || 0).getTime()
-            );
-          }
+          // Secondary sort: Payment ID using natural numerical ordering
+          const pmtCmp = byPmtIdAsc(a, b);
+          if (pmtCmp !== 0) return pmtCmp;
           return byTimeDesc(a, b);
         });
     }
@@ -305,7 +327,7 @@ export default function PaymentDashboard() {
 
       <div className="action-bar">
         <div className="left">
-          <Activity size={18} />
+          <CreditCard size={18} />
           <span className="count">Disbursement activity ({totalCount})</span>
         </div>
         <div className="right">
@@ -324,7 +346,7 @@ export default function PaymentDashboard() {
                 <th style={{ width: '150px' }}>Bank</th>
                 <th style={{ width: '130px' }}>Amount</th>
                 <th style={{ width: '150px' }}>Updated</th>
-                <th style={{ width: '180px' }}>Status</th>
+                <th style={{ width: '200px' }}>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -360,9 +382,9 @@ export default function PaymentDashboard() {
                       <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
                       <td>
                         {detailed.paymentStatus !== 'Bank Details Pending' &&
-                        detailed.paymentStatus !== 'New Bank Details Pending' &&
-                        pc.bankName &&
-                        pc.accountNumber ? (
+                          detailed.paymentStatus !== 'New Bank Details Pending' &&
+                          pc.bankName &&
+                          pc.accountNumber ? (
                           <div className="flex items-center gap-1.5">
                             <span>{pc.bankName}</span>
                             <span className="font-mono text-xs text-md-on-surface-variant">{maskAccount(pc.accountNumber)}</span>

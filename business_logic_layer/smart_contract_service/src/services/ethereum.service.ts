@@ -172,13 +172,10 @@ export async function getNetworkInfo(): Promise<{ name: string; label: string; c
 }
 
 export async function getRecordFromBlockchain(caseId: string) {
-  const [documentHash, publishedAt, isVoided, voidReason, voidedAt] =
+  const [documentHash, publishedAt] =
     await getContract().getRecord(caseId);
   return {
     documentHash: documentHash as string,
     publishedAt: Number(publishedAt),
-    isVoided: isVoided as boolean,
-    voidReason: voidReason as string,
-    voidedAt: Number(voidedAt),
   };
 }

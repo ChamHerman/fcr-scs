@@ -49,33 +49,6 @@ export async function publish(req: Request, res: Response): Promise<void> {
   }
 }
 
-export async function voidLedger(req: Request, res: Response): Promise<void> {
-  const { caseId, milestone, voidReason, transactionHash } = req.body as {
-    caseId?: string;
-    milestone?: string;
-    voidReason?: string;
-    transactionHash?: string;
-  };
-  if (!caseId) {
-    res.status(400).json({ error: "caseId is required" });
-    return;
-  }
-  if (!voidReason) {
-    res.status(400).json({ error: "Void reason is required" });
-    return;
-  }
-  if (!transactionHash) {
-    res.status(400).json({ error: "transactionHash is required — send the void transaction from the admin wallet in MetaMask first" });
-    return;
-  }
-  try {
-    const r = await svc.voidRecord({ caseId, milestone, voidReason, transactionHash });
-    res.json({ transactionHash: r.voidTransactionHash, record: r });
-  } catch (e: unknown) {
-    res.status(400).json({ error: (e as Error).message });
-  }
-}
-
 export async function getRecords(req: Request, res: Response): Promise<void> {
   try {
     res.json({ records: await svc.getRecords(req.query.status as string | undefined) });

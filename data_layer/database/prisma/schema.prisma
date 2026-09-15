@@ -121,29 +121,25 @@ enum PaymentStatus {
 enum BlockchainStatus {
   READY_TO_PUBLISH
   PUBLISHED
-  VOID_PENDING
-  VOIDED
-  REPLACEMENT
 }
 
 // id is a short human-readable record id (FCR-XXXXXXXX), assigned by the application
 // Dual-milestone notarization (FR-019): one case carries up to two records —
 // Milestone 1 (AWARD, Form H hash) and Milestone 2 (SETTLEMENT, receipt hash).
 model BlockchainRecord {
-  id                  String           @id
-  caseId              String
-  milestone           String           @default("AWARD")
-  onChainKey          String?          @unique
-  transactionHash     String?
-  documentHash        String
-  status              BlockchainStatus @default(PUBLISHED)
-  voidReason          String?
-  voidTransactionHash String?
-  publishedAt         DateTime         @default(now())
-  voidedAt            DateTime?
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
-  deletedAt           DateTime?        @map("deleted_at")
+  id              String           @id
+  caseId          String           @map("case_id") @db.VarChar(255)
+  milestone       String           @default("AWARD")
+  onChainKey      String?          @unique @map("on_chain_key")
+  transactionHash String?          @map("transaction_hash")
+  documentHash    String           @map("document_hash")
+  status          BlockchainStatus @default(PUBLISHED)
+  publishedAt     DateTime         @default(now()) @map("published_at")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  deletedAt       DateTime?        @map("deleted_at")
+
+  acquisitionCase AcquisitionCase  @relation(fields: [caseId], references: [caseId], onDelete: Restrict)
 
   @@unique([caseId, milestone])
   @@map("blockchain_record")
@@ -152,27 +148,30 @@ model BlockchainRecord {
 // id is a short human-readable payment id (PMT-XXXXXXXX), assigned by the application
 model PaymentCase {
   id                   String                 @id
-  caseId               String                 @unique
-  beneficiaryId        String
+  caseId               String                 @unique @map("case_id") @db.VarChar(255)
+  beneficiaryId        String                 @db.Uuid @map("beneficiary_id")
   amount               Decimal
-  bankName             String?
-  accountNumber        String?
-  accountHolderName    String?
-  phoneNumber          String?
-  encryptedBankDetails String?
-  myKadNumber          String?
+  bankName             String?                @map("bank_name")
+  accountNumber        String?                @map("account_number")
+  accountHolderName    String?                @map("account_holder_name")
+  phoneNumber          String?                @map("phone_number")
+  encryptedBankDetails String?                @map("encrypted_bank_details")
+  myKadNumber          String?                @map("my_kad_number")
   status               PaymentStatus          @default(BANK_DETAILS_PENDING)
-  requiredSignatures   Int                    @default(1)
-  currentSignatures     Int                    @default(0)
+  requiredSignatures   Int                    @default(1) @map("required_signatures")
+  currentSignatures     Int                    @default(0) @map("current_signatures")
   // Multi-sig cycle (FR-020): incremented when bank details are replaced after
   // a rejection — prior-cycle signatures stay in history but authorize nothing.
   cycle                 Int                    @default(1)
   disputeDocumentPath  String?                @map("dispute_document_path")
   disputeDocumentName  String?                @map("dispute_document_name")
   disputeUploadedAt    DateTime?              @map("dispute_uploaded_at")
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime               @updatedAt
+  createdAt            DateTime               @default(now()) @map("created_at")
+  updatedAt            DateTime               @updatedAt @map("updated_at")
   deletedAt            DateTime?              @map("deleted_at")
+
+  acquisitionCase      AcquisitionCase        @relation(fields: [caseId], references: [caseId], onDelete: Restrict)
+  beneficiary          LandOwner              @relation(fields: [beneficiaryId], references: [ownerId], onDelete: Restrict)
   authorisations       PaymentAuthorisation[]
   receipt              PaymentReceipt?
   failedTransactions   FailedTransaction[]
@@ -183,58 +182,63 @@ model PaymentCase {
 
 model PaymentAuthorisation {
   id            String      @id @default(uuid())
-  paymentCase   PaymentCase @relation(fields: [paymentCaseId], references: [id])
-  paymentCaseId String
-  adminId       String
+  paymentCaseId String      @map("payment_case_id")
+  adminId       String      @db.Uuid @map("admin_id")
   action        String
   reason        String?
   // Cycle this signature belongs to (FR-020): SoD checks scope to the active cycle.
   cycle         Int         @default(1)
-  createdAt     DateTime    @default(now())
+  createdAt     DateTime    @default(now()) @map("created_at")
   deletedAt     DateTime?   @map("deleted_at")
+
+  paymentCase   PaymentCase @relation(fields: [paymentCaseId], references: [id], onDelete: Cascade)
+  admin         User        @relation("AdminPaymentAuthorisations", fields: [adminId], references: [userId], onDelete: Restrict)
 
   @@map("payment_authorisation")
 }
 
 model PaymentReceipt {
   id                  String      @id @default(uuid())
-  paymentCase         PaymentCase @relation(fields: [paymentCaseId], references: [id])
-  paymentCaseId       String      @unique
-  bankReferenceNumber String
+  paymentCaseId       String      @unique @map("payment_case_id")
+  bankReferenceNumber String      @map("bank_reference_number")
   // Binary SHA-256 of the canonical receipt PDF generated once at
   // TRANSFER_SUCCEED (FR-019): matches the downloaded file byte-for-byte.
-  documentHash        String?
-  documentPath        String?
-  generatedAt         DateTime    @default(now())
+  documentHash        String?     @map("document_hash")
+  documentPath        String?     @map("document_path")
+  generatedAt         DateTime    @default(now()) @map("generated_at")
   deletedAt           DateTime?   @map("deleted_at")
+
+  paymentCase         PaymentCase @relation(fields: [paymentCaseId], references: [id], onDelete: Restrict)
 
   @@map("payment_receipt")
 }
 
 model FailedTransaction {
   id            String      @id @default(uuid())
-  paymentCase   PaymentCase @relation(fields: [paymentCaseId], references: [id])
-  paymentCaseId String
-  errorLog      String
+  paymentCaseId String      @map("payment_case_id")
+  errorLog      String      @map("error_log")
   resolution    String?
-  resolvedAt    DateTime?
-  createdAt     DateTime    @default(now())
+  resolvedAt    DateTime?   @map("resolved_at")
+  createdAt     DateTime    @default(now()) @map("created_at")
   deletedAt     DateTime?   @map("deleted_at")
+
+  paymentCase   PaymentCase @relation(fields: [paymentCaseId], references: [id], onDelete: Restrict)
 
   @@map("failed_transaction")
 }
 
 model ReceiverBankDetails {
   id                   String      @id @default(uuid())
-  bankName             String
-  accountNumber        String
-  accountHolderName    String
-  phoneNumber          String
-  myKadNumber          String
-  encryptedBankDetails String
-  paymentCaseId        String      @unique
-  paymentCase          PaymentCase @relation(fields: [paymentCaseId], references: [id])
+  bankName             String      @map("bank_name")
+  accountNumber        String      @map("account_number")
+  accountHolderName    String      @map("account_holder_name")
+  phoneNumber          String      @map("phone_number")
+  myKadNumber          String      @map("my_kad_number")
+  encryptedBankDetails String      @map("encrypted_bank_details")
+  paymentCaseId        String      @unique @map("payment_case_id")
   deletedAt            DateTime?   @map("deleted_at")
+
+  paymentCase          PaymentCase @relation(fields: [paymentCaseId], references: [id], onDelete: Restrict)
 
   @@map("receiver_bank_details")
 }
@@ -296,6 +300,8 @@ model AcquisitionCase {
   offerLetters        OfferLetter[]
   caseDocuments       CaseDocument[]
   objections          Objection[]
+  paymentCase         PaymentCase?
+  blockchainRecords   BlockchainRecord[]
   createdAt           DateTime             @default(now()) @map("created_at")
   updatedAt           DateTime             @updatedAt @map("updated_at")
   deletedAt           DateTime?            @map("deleted_at")
@@ -363,6 +369,7 @@ model LandOwner {
   email          String?               @db.VarChar(255)
   ownerships     LandOwnership[]
   offerResponses OfferMemberResponse[]
+  paymentCases   PaymentCase[]
   createdAt      DateTime              @default(now()) @map("created_at")
   updatedAt      DateTime              @updatedAt @map("updated_at")
   deletedAt      DateTime?             @map("deleted_at")
@@ -638,6 +645,7 @@ model User {
   alerts                  SystemAlert[]
   createdEmailTemplates   EmailTemplate[]
   payoutDetail            MemberPayoutDetail?
+  paymentAuthorisations   PaymentAuthorisation[] @relation("AdminPaymentAuthorisations")
 
   createdAt               DateTime              @default(now()) @map("created_at")
   updatedAt               DateTime              @updatedAt @map("updated_at")

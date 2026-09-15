@@ -5,6 +5,7 @@ import * as path from "path";
 import { CaseStatus, OfferStatus, ObjectionStatus, Prisma, PaymentStatus, BlockchainStatus } from "@prisma/client";
 import { buildNricConditions } from "../utils/nric.utils";
 import { newPaymentId } from "../../../payment_service/src/services/payment.service";
+import { newRecordId } from "../../../smart_contract_service/src/services/blockchain.service";
 
 export interface OfferLetterFilters {
   caseId?: string;
@@ -464,9 +465,19 @@ export async function acceptOffer(
       });
 
       // Dynamically ingest payment case
-      const primaryOwner = allOwners[0];
+      let primaryOwner: any = allOwners[0];
+      if (!primaryOwner) {
+        primaryOwner = await tx.landOwner.findFirst({
+          where: { ownerships: { some: { landParcel: { caseId: offer.caseId } } } },
+        });
+      }
+      if (!primaryOwner) {
+        primaryOwner = await tx.landOwner.findFirst();
+      }
+
       const existingPmt = await tx.paymentCase.findUnique({
         where: { caseId: offer.caseId },
+        include: { receiverBankDetails: true },
       });
       if (!existingPmt) {
         const m1 = await tx.blockchainRecord.findFirst({
@@ -476,7 +487,7 @@ export async function acceptOffer(
           data: {
             id: await newPaymentId(),
             caseId: offer.caseId,
-            beneficiaryId: primaryOwner?.ownerId || `BEN-${offer.caseId}`,
+            beneficiaryId: primaryOwner?.ownerId || offer.ownershipId,
             amount: Number(offer.offerAmount),
             accountHolderName: primaryOwner?.name || null,
             phoneNumber: primaryOwner?.contact || null,
@@ -484,6 +495,62 @@ export async function acceptOffer(
             status: m1 ? PaymentStatus.BANK_DETAILS_PENDING : PaymentStatus.BANK_DETAILS_AND_M1_PENDING,
             requiredSignatures: 0,
             currentSignatures: 0,
+          },
+        });
+      } else {
+        // Reuse existing PaymentCase record (same PMT ID)
+        // Restore from soft-delete if it was previously cancelled during grace period
+        const m1 = await tx.blockchainRecord.findFirst({
+          where: { caseId: offer.caseId, milestone: "AWARD", status: BlockchainStatus.PUBLISHED },
+        });
+        const hasBank = Boolean(
+          existingPmt.bankName ||
+          existingPmt.accountNumber ||
+          existingPmt.receiverBankDetails?.accountNumber
+        );
+
+        let initialStatus: PaymentStatus;
+        if (!hasBank) {
+          initialStatus = m1 ? PaymentStatus.BANK_DETAILS_PENDING : PaymentStatus.BANK_DETAILS_AND_M1_PENDING;
+        } else {
+          // Bank details were preserved from prior submission
+          initialStatus = m1 ? PaymentStatus.READY_TO_INITIATE : PaymentStatus.AWARD_NOTARIZATION_PENDING;
+        }
+
+        await tx.paymentCase.update({
+          where: { id: existingPmt.id },
+          data: {
+            deletedAt: null,
+            amount: Number(offer.offerAmount),
+            status: initialStatus,
+          },
+        });
+      }
+
+      // Dynamically ingest or restore blockchain record for Milestone 1 (AWARD)
+      const existingBcn = await tx.blockchainRecord.findUnique({
+        where: { caseId_milestone: { caseId: offer.caseId, milestone: "AWARD" } },
+      });
+      if (!existingBcn) {
+        const bcnId = await newRecordId();
+        await tx.blockchainRecord.create({
+          data: {
+            id: bcnId,
+            caseId: offer.caseId,
+            milestone: "AWARD",
+            onChainKey: `${offer.caseId}#M1`,
+            documentHash: formHHash || "0x0000000000000000000000000000000000000000000000000000000000000000",
+            status: BlockchainStatus.READY_TO_PUBLISH,
+            createdAt: new Date(),
+          },
+        });
+      } else if (existingBcn.deletedAt != null) {
+        await tx.blockchainRecord.update({
+          where: { id: existingBcn.id },
+          data: {
+            deletedAt: null,
+            documentHash: formHHash || existingBcn.documentHash,
+            status: existingBcn.status === BlockchainStatus.PUBLISHED ? BlockchainStatus.PUBLISHED : BlockchainStatus.READY_TO_PUBLISH,
           },
         });
       }
@@ -641,11 +708,13 @@ export async function cancelAcceptance(
   }
 
   const now = new Date();
-  const diffHours = (now.getTime() - new Date(acceptanceTime).getTime()) / (1000 * 60 * 60);
+  const GRACE_PERIOD_MS = 24 * 60 * 60 * 1000;
+  const NETWORK_LATENCY_BUFFER_MS = 60 * 1000; // 60s network tolerance buffer for requests submitted near 0s
+  const elapsedMs = now.getTime() - new Date(acceptanceTime).getTime();
 
-  if (diffHours > 24) {
+  if (elapsedMs > (GRACE_PERIOD_MS + NETWORK_LATENCY_BUFFER_MS)) {
     throw new Error(
-      "The 1-day cancellation period has expired. Approvals cannot be cancelled or modified after 24 hours."
+      "The 24-hour statutory cancellation period has expired. Approvals cannot be cancelled or modified after the grace window."
     );
   }
 
@@ -690,6 +759,22 @@ export async function cancelAcceptance(
       await tx.acquisitionCase.update({
         where: { caseId: offer.caseId },
         data: { status: CaseStatus.OFFER_ISSUED },
+      });
+
+      // Soft-delete the associated payment case so it disappears from the active payment dashboard
+      // while retaining its sequential PMT-XXXX id and submitted bank details
+      await tx.paymentCase.updateMany({
+        where: { caseId: offer.caseId },
+        data: { deletedAt: new Date() },
+      });
+
+      // Soft-delete the associated milestone 1 blockchain record so it disappears from queues
+      await tx.blockchainRecord.updateMany({
+        where: {
+          caseId: offer.caseId,
+          milestone: "AWARD",
+        },
+        data: { deletedAt: new Date() },
       });
     }
 

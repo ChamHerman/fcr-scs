@@ -39,7 +39,10 @@ The application uses standard `react-router-dom` routing. All pages are rendered
 1. **Auto-hiding Navbar**: A sticky `<Navbar />` with SVG Logo mark and "Smart Contract Resettlement" wordmark that listens to scroll direction.
 2. **Global Footer**: A `<Footer />` consistently applied at the bottom of every page.
 3. **Notification Provider**: Root-level state for triggering MD3-compliant toast notifications from any page or component.
-4. **Toast Stacking Rule (LOCKED)**: The right-hand toast stack (`NotificationSystem`) always renders at the very front of the screen — `z-index: 100000`, above every modal overlay (`md-modal-overlay` sits at `99999`) and above any page content. Success, error, warning, and info toasts must never be hidden behind a modal. **Toast duration rule (LOCKED 2026-09-12)**: success auto-dismisses after 5s, general/info after 8s, and **errors never auto-dismiss** — an error toast stays on screen until the user closes it manually (industry standard: transient confirmations are brief, failures persist until acknowledged). Every toast keeps a visible close button.
+4. **Toast Stacking & Duration Rule (LOCKED 2026-09-12, ENHANCED 2026-09-14)**: The right-hand toast stack (`NotificationSystem`) always renders at the very front of the screen — `z-index: 100000`, above every modal overlay (`md-modal-overlay` sits at `99999`) and above any page content. Success, error, warning, and info toasts must never be hidden behind a modal.
+   - **Duration**: success auto-dismisses after 5s, general/info after 8s, and **errors never auto-dismiss** — an error toast stays on screen until the user closes it manually (industry standard: transient confirmations are brief, failures persist until acknowledged).
+   - **Guaranteed Non-Overflow Architecture**: Toast content uses `min-w-0 flex-1` and `break-words` with `line-clamp-3` for message text, guaranteeing that long technical payloads, URLs, or JSON dumps never expand the flex container or push the close button off-screen. The dismiss (`X`) button is strictly pinned as `flex-shrink-0` at the top right.
+   - **GA-Friendly Normalization**: Uncaught exceptions or RPC rejections (e.g. Infura 401 Unauthorized) are automatically intercepted by `parseAppError` into polite, human-readable explanations accompanied by an actionable guidance card (e.g., setup `.env`) and an `[Error Details]` button linking to a full diagnostics modal.
 
 ## Design Tokens
 
@@ -182,14 +185,19 @@ Standard Material Design 3 responsive pagination bar for all data tables:
   - When `currentPage` is in the middle: Displays `1, ..., currentPage - 1, currentPage, currentPage + 1, ..., totalPages`.
 - **Navigation Controls**: Left `<ChevronLeft />` and right `<ChevronRight />` arrow buttons with proper disabled states on boundaries (`currentPage === 1` and `currentPage === totalPages`).
 - **Visual Styling**: Active page button rendered in `bg-md-primary text-md-on-primary` with subtle shadow (`shadow-sm`); hover state on inactive numbers uses `hover:bg-md-primary/8` with smooth bouncy scale (`scale-105`); ellipsis rendered as non-interactive muted dots `…`.
-- **Record Summary**: Left section displays `Showing {start}–{end} of {totalCount} {itemLabel}`.
+### 9. Notification & Error Diagnostics System (`NotificationSystem.tsx`, `errorParser.ts`)
+Comprehensive MD3 alerting and error diagnostic framework designed for high-stakes administrative workflows:
+- **Automatic Exception Normalization (`parseAppError`)**: Raw technical errors (e.g. Infura/Alchemy JSON-RPC 401 Unauthorized, MetaMask user rejections, out-of-gas, contract reverts, or server 500s) are automatically parsed into human-friendly language rather than intimidating code dumps.
+- **Actionable Guidance Card**: Every recognized error automatically displays an advisory tip (e.g., "Please configure a valid SEPOLIA_RPC_URL in your root .env file and restart the development server") directly inside the toast and diagnostic modal.
+- **Guaranteed Pinned Dismiss & Non-Overflow**: The toast layout pairs `min-w-0 flex-1` and `break-words` with `line-clamp-3` for error summaries, strictly preventing horizontal overflow and ensuring the `[ X ]` dismiss button (`flex-shrink-0`) remains pinned at the top-right and immediately clickable.
+- **Full Diagnostics Modal (`ErrorDetailsModal`)**: Clicking `[ View Error Details ]` on any error toast opens a dedicated MD3 modal displaying the category, friendly guidance, and the complete, unclipped technical payload inside a syntax-styled monospace code container with a one-click `Copy Payload` button for IT support and developer triage.
 
 ## Admin List & Row-Action Patterns
 
-Admin list pages (Payments Overview, Initiate, Pending Authorisations, Failed Transactions, Blockchain Overview, Publish, Void) follow these interaction standards.
+Admin list pages (Payments Overview, Initiate, Pending Authorisations, Failed Transactions, Blockchain Overview, Publish) follow these interaction standards.
 
 ### Table Row Actions: Main Action Button + View Icon + 3-Dots Menu
-- **Main Action Button**: Every record row on an admin table/queue must render its primary page action as an explicit button with an `.svg` icon on the left and the action label on the right (e.g., `[ <Send> Initiate ]`, `[ <PenLine> Authorise ]`, `[ <RotateCcw> Retry ]`, `[ <Upload> Publish ]`, `[ <Ban> Void ]`).
+- **Main Action Button**: Every record row on an admin table/queue must render its primary page action as an explicit button with an `.svg` icon on the left and the action label on the right (e.g., `[ <Send> Initiate ]`, `[ <PenLine> Authorise ]`, `[ <RotateCcw> Retry ]`, `[ <Upload> Publish ]`).
 - **Icon & Button Spacing**:
   - Always maintain `gap-2` (8px) between the `.svg` icon (`shrink-0`) and the button label text within action buttons.
   - Maintain `gap-2` (8px) spacing between sibling action buttons/icons in `.row-actions`.
@@ -198,9 +206,9 @@ Admin list pages (Payments Overview, Initiate, Pending Authorisations, Failed Tr
 - **Segregation of Duties (SoD) Disabled Button**: When an admin is blocked by Segregation of Duties from authorising a transfer they initiated or already signed, render a compact disabled button `[ <Lock> Self-Signed ]` (`variant="tonal"`, `disabled`) with hover tooltip `title="You cannot authorise a transfer you initiated or previously signed (Segregation of Duties)"` rather than wide multi-line text wrapping across the table row.
 - **Color & Contrast Standards**:
   - Primary actions (Initiate, Authorise, Publish, Retry) use filled `md-primary` button skin (`animated-primary`).
-  - Destructive actions (Reject, Void, Cancel) use high-contrast red (`text-red-600 dark:text-red-400` / `bg-red-600 hover:bg-red-700 text-white`).
+  - Destructive actions (Reject, Cancel) use high-contrast red (`text-red-600 dark:text-red-400` / `bg-red-600 hover:bg-red-700 text-white`).
   - Neutral / View actions use `neutral` (`text-md-on-surface-variant`).
-- Canonical action icons: Eye = view details, Send = initiate, PenLine = authorise/sign, XCircle = reject, Ban = cancel/void, RotateCcw = retry, PencilLine = request details update, CalendarClock = schedule, Download = receipt, BadgeCheck = resolve, Upload = publish to blockchain, FilePlus2 = create corrected certificate, Undo2 = reopen payment, Lock = self-signed / SoD restricted.
+- Canonical action icons: Eye = view details, Send = initiate, PenLine = authorise/sign, XCircle = reject, Ban = cancel, RotateCcw = retry, PencilLine = request details update, CalendarClock = schedule, Download = receipt, BadgeCheck = resolve, Upload = publish to blockchain, FilePlus2 = create corrected certificate, Undo2 = reopen payment, Lock = self-signed / SoD restricted.
 
 ### Payment & Blockchain Identifier Columns
 - **Dedicated PAYMENT ID Column**: Every payment module table (`/admin/payment`, `/admin/payment/initiate`, `/admin/payment/pending`, `/admin/payment/failed`, `/bank-portal`) renders a dedicated `PAYMENT ID` column displaying the canonical `PMT-YYYY-MM-####` id assigned by the payment service (e.g. `PMT-2026-09-0042`) with monospace bold styling alongside the `CASE ID` column. The `PMT-${caseId}` string is only a last-resort display fallback and is never the stored id.
@@ -208,7 +216,7 @@ Admin list pages (Payments Overview, Initiate, Pending Authorisations, Failed Tr
   - The case ID renders as a link-styled span (`cursor: pointer`, underline on hover) that opens the row's detail modal directly — no separate menu step.
   - A copy icon sits beside every case ID (`CaseIdCell`), writing the ID to the clipboard with a success toast.
 
-### 16 Unique Status Color Matrix (11 Payment + 5 Blockchain)
+### 13 Unique Status Color Matrix (11 Payment + 2 Blockchain)
 Every status in the Payment and Blockchain modules is mapped to a dedicated CSS badge class (`.payment-badge .status-*`) with unique light and dark mode colors:
 
 | # | Status | Domain | CSS Class | Light Mode (Bg / Text / Dot) | Dark Mode (Bg / Text / Dot) |
@@ -226,9 +234,6 @@ Every status in the Payment and Blockchain modules is mapped to a dedicated CSS 
 | 11 | **Pending New Bank Details** | Payment | `.status-pending-details` | `#FEF9C3` / `#854D0E` / `#CA8A04` (Warm Honey) | `rgba(202,138,4,0.22)` / `#FEF08A` / `#FACC15` |
 | 12 | **Ready to Publish** | Blockchain | `.status-ready-publish` | `#E0F2FE` / `#075985` / `#0284C7` (Electric Sky) | `rgba(2,132,199,0.22)` / `#7DD3FC` / `#38BDF8` |
 | 13 | **Published** | Blockchain | `.status-published` | `#DCFCE7` / `#166534` / `#16A34A` (Mint Green) | `rgba(22,163,74,0.22)` / `#86EFAC` / `#4ADE80` |
-| 14 | **Void Pending** | Blockchain | `.status-void-pending` | `#FFF1E7` / `#9A3412` / `#EA580C` (Burnt Sienna) | `rgba(234,88,12,0.25)` / `#FED7AA` / `#FB923C` |
-| 15 | **Voided** | Blockchain | `.status-voided` | `#FFE4E6` / `#9F1239` / `#E11D48` (Deep Crimson) | `rgba(225,29,72,0.25)` / `#FECDD3` / `#FB7185` |
-| 16 | **Replacement** | Blockchain | `.status-replacement` | `#F3E8FF` / `#6B21A8` / `#9333EA` (Purple Lilac) | `rgba(147,51,234,0.25)` / `#E9D5FF` / `#C084FC` |
 
 *Note: All statuses use canonical Title Case strings (e.g. `Cancelled`, `Paid`, `Offer Accepted`).*
 
@@ -236,7 +241,7 @@ Every status in the Payment and Blockchain modules is mapped to a dedicated CSS 
 - Selecting a status (or bank) applies the filter instantly — no Apply button, no draft/applied state. Clear resets the filter.
 
 ### Sidebar icons
-- Each sidebar item within a module gets a distinct icon (Initiate = Send, Pending = PenLine, Failed = AlertTriangle, Publish = Upload, Void = Ban); sibling items never share an icon.
+- Each sidebar item within a module gets a distinct icon (Initiate = Send, Pending = PenLine, Failed = AlertTriangle, Publish = Upload); sibling items never share an icon.
 
 ### Signature progress
 - Lists show signatures as `current/required` (e.g. `1/3`); action modals show how many remain ("2 left").
@@ -244,12 +249,12 @@ Every status in the Payment and Blockchain modules is mapped to a dedicated CSS 
 - Authorise/sign actions are offered only while signatures are outstanding (`current < required`); once the total is met the transfer is already in process.
 
 ### Dual-Milestone Blockchain UX (LOCKED 2026-09-13, FR-019 / NFR-011)
-- **Milestone 1 banner**: `ViewDetailsModal`, `InitiateTransferModal` and `AuthoriseModal` open with a full-width tonal banner above the particulars — success (`bg-md-success/10 border-md-success/30`, `CheckCircle2`) when the award is notarized, with a clickable Etherscan tx link in `font-mono`; warning (`bg-md-warning/10 border-md-warning/30`, `AlertTriangle`) while pending; error (`bg-md-error/10 border-md-error/30`, `ShieldAlert`) when an on-chain void is required after cancellation.
+- **Milestone 1 banner**: `ViewDetailsModal`, `InitiateTransferModal` and `AuthoriseModal` open with a full-width tonal banner above the particulars — success (`bg-md-success/10 border-md-success/30`, `CheckCircle2`) when the award is notarized, with a clickable Etherscan tx link in `font-mono`; warning (`bg-md-warning/10 border-md-warning/30`, `AlertTriangle`) while pending.
 - **Initiation gate**: with M1 unpublished, the Initiate button renders in the drained disabled state labelled `Initiate Transfer (Awaiting M1 Notarization)` — never a grey replacement box (guideline 5).
-- **Publish Ledger tabs**: three segmented pill tabs (scrollable pill row on mobile) — `Milestone 1 — Statutory Award (Form H)`, `Milestone 2 — Disbursement Settlement (Receipt)`, `Void Required`. M1 rows carry the `Form H Hash` column with a `Form H Hash missing` warning chip and a disabled Publish button when the accepted offer has no frozen fingerprint; M2 rows carry the `Receipt Hash` (the frozen canonical receipt binary SHA-256). Within the 24-hour acceptance grace window the M1 row renders a `Grace Period (Locked)` status chip plus an `unlocks in Xm` countdown beside a drained disabled `[ <Lock> Locked (Grace Period) ]` button (FR-019 rule 9); the tab polls once per minute so the unlock appears live.
+- **Publish Ledger tabs**: two segmented pill tabs (scrollable pill row on mobile) — `Milestone 1 — Statutory Award (Form H)` and `Milestone 2 — Disbursement Settlement (Receipt)`. M1 rows carry the `Form H Hash` column with a `Form H Hash missing` warning chip and a disabled Publish button when the accepted offer has no frozen fingerprint; M2 rows carry the `Receipt Hash` (the frozen canonical receipt binary SHA-256). Within the 24-hour acceptance grace window the M1 row renders a `Grace Period (Locked)` status chip plus an `unlocks in Xm` countdown beside a drained disabled `[ <Lock> Locked (Grace Period) ]` button (FR-019 rule 9); the tab polls once per minute so the unlock appears live.
 - **Superseded multi-sig cycles**: the governance audit groups authorisations by cycle; the active cycle renders in full color, superseded cycles sit in a muted container (`opacity-60 grayscale-[0.35]`) headed `Cycle N (Superseded — bank details replaced)`. The section header shows `(x/y Signatures · Cycle N)`.
 - **Member on-chain badges**: the 5-step member stepper and the Track timeline keep their length and gain pill badge chips only — emerald clickable `Notarized on Sepolia` (with `ShieldCheck` + `ExternalLink`) when the milestone is published, muted `notarization pending` otherwise. Never expand the stepper to expose blockchain internals.
-- **Danger Zone cancel**: `CancelPaymentModal` requires selecting a statutory reason AND retyping the Payment ID (`PMT-...`); a static advisory beneath the input reminds the GA of the M1 void obligation when the award was already notarized.
+- **Danger Zone cancel**: `CancelPaymentModal` requires selecting a statutory reason AND retyping the Payment ID (`PMT-...`); a static advisory beneath the input reminds the GA that Form H statutory award records on-chain remain permanent and immutable while disbursement is placed on hold or cancelled.
 
 ## Usage Guidelines
 1. **Never use pure white or pure black backgrounds**: Always utilize `md-background` or `md-surface-container`.
@@ -258,7 +263,7 @@ Every status in the Payment and Blockchain modules is mapped to a dedicated CSS 
 4. **Action Button Alignment**: Place the confirm/accept button at the right side of the container, preceded by the cancel/reject button to its left (`| Cancel   Confirm |`).
 5. **Disabled means drained, not replaced**: never swap a component's variant classes out for a grey block. Keep the skin and apply `grayscale opacity-60 cursor-not-allowed`, withholding hover classes rather than overriding them.
 6. **Scrollable regions**: any container that can overflow uses `.md-scroll-thin` for the scrollbar, and pins its own header/footer rather than letting the whole panel scroll.
-7. **Row actions standard**: Main action is a button `[ <svg> Action Label ]` with `gap-2` internal icon-label spacing, followed by `<Eye />` view icon, and 3-dots `ActionMenuPortal` if more than 2 secondary actions exist. Always provide high-contrast `danger` colors for reject/void/cancel actions in both light & dark modes.
+7. **Row actions standard**: Main action is a button `[ <svg> Action Label ]` with `gap-2` internal icon-label spacing, followed by `<Eye />` view icon, and 3-dots `ActionMenuPortal` if more than 2 secondary actions exist. Always provide high-contrast `danger` colors for reject/cancel actions in both light & dark modes.
 8. **Segregation of Duties UX**: When an action is restricted by Segregation of Duties, display a disabled `[ <Lock> Self-Signed ]` button with tooltip rather than expanding cell text.
 9. **Dedicated Payment ID column**: Always display `PAYMENT ID` (`PMT-${caseId}`) alongside `CASE ID` across payment views.
 10. **Case IDs are interactive**: clicking the case ID opens its detail modal, and a copy icon sits beside every case ID.
@@ -280,3 +285,9 @@ Every status in the Payment and Blockchain modules is mapped to a dedicated CSS 
 17. **Payment Timestamps (LOCKED 2026-09-12)**: every payment-related modal shows the case **Created** and **Last Updated** datetimes (`CaseTimestamps`); payment tables label their datetime column **Updated** (never the ambiguous "Date & Time").
 18. **Dispute Statement Review (LOCKED 2026-09-12)**: a member-uploaded dispute PDF is reviewed via **Open PDF in New Tab** or **Download** from the record modal — never embedded as an iframe inside the modal (the modal is too small for a PDF reader).
 19. **Fullscreen Modal Overlay (LOCKED 2026-09-12)**: every modal in every portal uses the shared `Modal` component (portal to `<body>`, `.md-modal-overlay` fixed inset-0, z-index 99999). Hand-rolled `fixed z-50` overlays are forbidden — inside GSAP-transformed containers they lose viewport anchoring and leave the topbar un-covered.
+20. **Operational Locking & Transaction Protection (LOCKED 2026-09-14)**:
+    - **Modal Lock During Active Operations**: When an asynchronous statutory action is executing (`loading = true`, such as publishing on-chain records), modal close controls are strictly locked. The top-right close `[ X ]` button is visually drained (`opacity-20`) and disabled, backdrop clicks are blocked (`preventBackdropClose = true`), the Escape key is silenced, and the Cancel button is disabled. Administrators cannot dismiss the modal until a definitive blockchain response (success or failure) is received.
+    - **Tab Unload Protection (`beforeunload`)**: If an administrator attempts to refresh the page, close the browser tab, or navigate away while a blockchain transaction is in progress, the browser immediately halts with a `beforeunload` warning prompt alerting them that leaving will cancel the publishment.
+    - **Immediate Cancellation on Unload**: If the browser tab is closed or refreshed, the frontend runtime immediately triggers cancellation guards (`isCancelledRef`), terminating downstream database recording and preventing orphaned record state.
+    - **Error Transparency & Diagnostics**: Any transaction failure surfaces an error toast with normalized, human-friendly wording and actionable guidance. Raw stack traces are never dumped directly into toasts; instead, a dedicated `[ Error Details ]` action opens the `ErrorDetailsModal` providing full technical output with one-click copy functionality.
+

@@ -222,33 +222,114 @@ async function main() {
 
   // ===========================================================================
   // 1b. Seed Role Permissions (page-level RBAC matrix)
-  // Government Admins: full Finance & Ledger pages (actions still endpoint-enforced).
-  // Government Officers: view-only page access (backend blocks CUD).
-  // SYSTEM_ADMINISTRATOR needs no rows (code bypass, view-only in payment/blockchain).
-  // BANK_OPERATOR has no admin pages (the bank portal is a standalone route).
+  // Government Admins: all admin portal pages EXCEPT /admin/role-management.
+  // Finance & Ledger pages are strictly for Government Admins (actions endpoint-enforced).
+  // Government Officers: operational pages only; Finance & Ledger strictly removed.
+  // SYSTEM_ADMINISTRATOR needs no rows (implicit code bypass to all pages).
   // ===========================================================================
   console.log('\n--- 1b. Seeding Role Permissions ---');
 
-  const FINANCE_LEDGER_PAGES = [
+  const ALL_ADMIN_PAGES = [
+    // Main
+    '/admin',
+    '/admin/valuers',
+    '/admin/forms',
+
+    // Land Acquisition
+    '/admin/case',
+    '/admin/case/valuation',
+
+    // Compensation
+    '/admin/compensation/report',
+    '/admin/compensation/offer',
+    '/admin/compensation/objection',
+
+    // Finance & Ledger (GA only)
     '/admin/payment',
     '/admin/payment/initiate',
     '/admin/payment/pending',
     '/admin/payment/failed',
     '/admin/blockchain',
     '/admin/blockchain/publish',
-    '/admin/blockchain/void',
+
+    // AI Valuation
+    '/admin/prediction',
+    '/admin/prediction/retrain',
+
+    // Reporting
+    '/admin/reports',
+    '/admin/reports/case-status',
+    '/admin/reports/payment',
+    '/admin/reports/blockchain-audit',
+
+    // System
+    '/admin/profile',
+    '/admin/users',
+    '/admin/role-management',
+    '/admin/audit-logs',
+    '/admin/alerts',
+    '/admin/settings',
   ];
 
-  for (const role of [UserRole.GOVERNMENT_ADMINISTRATOR, UserRole.GOVERNMENT_OFFICER]) {
-    for (const pagePath of FINANCE_LEDGER_PAGES) {
-      await prisma.rolePermission.upsert({
-        where: { role_pagePath: { role, pagePath } },
-        update: { canAccess: true },
-        create: { role, pagePath, canAccess: true },
-      });
-    }
+  const OFFICER_ALLOWED_PAGES = new Set([
+    '/admin',
+    '/admin/valuers',
+    '/admin/forms',
+    '/admin/case',
+    '/admin/case/valuation',
+    '/admin/compensation/report',
+    '/admin/compensation/offer',
+    '/admin/compensation/objection',
+    '/admin/prediction',
+    '/admin/prediction/retrain',
+    '/admin/reports',
+    '/admin/reports/case-status',
+    '/admin/profile',
+    '/admin/audit-logs',
+    '/admin/alerts',
+  ]);
+
+  const VALUER_ALLOWED_PAGES = new Set([
+    '/admin',
+    '/admin/case',
+    '/admin/case/valuation',
+    '/admin/prediction',
+    '/admin/profile',
+  ]);
+
+  // Seed Government Administrator permissions:
+  // Allowed to access all admin portal pages EXCEPT for role management page only.
+  for (const pagePath of ALL_ADMIN_PAGES) {
+    const canAccess = pagePath !== '/admin/role-management';
+    await prisma.rolePermission.upsert({
+      where: { role_pagePath: { role: UserRole.GOVERNMENT_ADMINISTRATOR, pagePath } },
+      update: { canAccess },
+      create: { role: UserRole.GOVERNMENT_ADMINISTRATOR, pagePath, canAccess },
+    });
   }
-  console.log('✅ Upserted RolePermissions (Finance & Ledger pages) for Government Admins + Officers');
+
+  // Seed Government Officer permissions:
+  // Finance & Ledger permissions removed; operational pages granted; role management & user admin denied.
+  for (const pagePath of ALL_ADMIN_PAGES) {
+    const canAccess = OFFICER_ALLOWED_PAGES.has(pagePath);
+    await prisma.rolePermission.upsert({
+      where: { role_pagePath: { role: UserRole.GOVERNMENT_OFFICER, pagePath } },
+      update: { canAccess },
+      create: { role: UserRole.GOVERNMENT_OFFICER, pagePath, canAccess },
+    });
+  }
+
+  // Seed Land Valuer permissions:
+  for (const pagePath of ALL_ADMIN_PAGES) {
+    const canAccess = VALUER_ALLOWED_PAGES.has(pagePath);
+    await prisma.rolePermission.upsert({
+      where: { role_pagePath: { role: UserRole.LAND_VALUER, pagePath } },
+      update: { canAccess },
+      create: { role: UserRole.LAND_VALUER, pagePath, canAccess },
+    });
+  }
+
+  console.log('✅ Upserted RolePermissions: Finance & Ledger strictly for Government Admins; Government Admins granted all pages except Role Management; Officers removed from Finance & Ledger');
 
   // ===========================================================================
   // 2. Seed Email Templates
@@ -1190,10 +1271,24 @@ async function main() {
     let formHArtifact: { signedDocument: string; blockchainHash: string } | null = null;
     let acceptedAt: Date | null = null;
 
+    const caseCreatedDate = new Date(seedRunNow - 7 * 24 * 60 * 60 * 1000);
+    caseCreatedDate.setHours(9, 30, 0, 0);
+
+    const valDate = new Date(seedRunNow - 5 * 24 * 60 * 60 * 1000);
+    valDate.setHours(11, 0, 0, 0);
+
+    const compDate = new Date(seedRunNow - 4 * 24 * 60 * 60 * 1000);
+    compDate.setHours(14, 15, 0, 0);
+
+    const offerIssuedDate = new Date(seedRunNow - 3 * 24 * 60 * 60 * 1000);
+    offerIssuedDate.setHours(10, 0, 0, 0);
+
     if (isAccepted) {
       formHArtifact = writeSignedFormH(caseId, primaryMember.name, amount);
-      acceptedAt = cDef.caseIndex === 15
-        ? new Date(seedRunNow - (ACCEPTANCE_GRACE_PERIOD_MS - 5 * 60_000))
+      // Cases 13, 14, 15 have exactly 10 minutes left in the 24-hour grace period (accepted 23 hours 50 minutes ago)
+      // All other accepted cases were accepted 25 hours ago (grace period elapsed, unlocked & ready to publish)
+      acceptedAt = [13, 14, 15].includes(cDef.caseIndex)
+        ? new Date(seedRunNow - (23 * 60 + 50) * 60 * 1000)
         : new Date(seedRunNow - 25 * 60 * 60 * 1000);
     } else if (isIssued) {
       const offerDir = path.resolve(__dirname, '../../document_storage/offer_letter', caseId);
@@ -1209,7 +1304,12 @@ async function main() {
     if (dbCase) {
       await prisma.acquisitionCase.update({
         where: { caseId: dbCase.caseId },
-        data: { status: cDef.status },
+        data: {
+          status: cDef.status,
+          registrationDate: caseCreatedDate,
+          createdAt: caseCreatedDate,
+          updatedAt: isAccepted && acceptedAt ? acceptedAt : caseCreatedDate,
+        },
       });
       if (isIssued) {
         await prisma.offerMemberResponse.deleteMany({
@@ -1220,9 +1320,11 @@ async function main() {
             where: { caseId: dbCase.caseId },
             data: {
               status: cDef.offerStatus || OfferStatus.PENDING,
+              offerDate: offerIssuedDate,
               signedDocument: null,
               blockchainHash: null,
               acceptedAt: null,
+              updatedAt: offerIssuedDate,
             },
           });
         }
@@ -1234,24 +1336,62 @@ async function main() {
             where: { offerId: existingOffer.offerId },
             data: {
               status: OfferStatus.ACCEPTED,
+              offerDate: offerIssuedDate,
               signedDocument: formHArtifact.signedDocument,
               blockchainHash: formHArtifact.blockchainHash,
               acceptedAt,
+              updatedAt: acceptedAt,
             },
           });
-          const owner = await prisma.landOwner.findFirst({ where: { email: primaryMember.email } });
-          if (owner) {
-            await prisma.offerMemberResponse.upsert({
-              where: { offerId_ownerId: { offerId: existingOffer.offerId, ownerId: owner.ownerId } },
-              update: { status: OfferStatus.ACCEPTED, respondedAt: acceptedAt, signedDocument: formHArtifact.signedDocument },
-              create: {
+          // Look up the land parcel and owners specific to this case
+          const parcel = await prisma.landParcel.findFirst({
+            where: { caseId: dbCase.caseId },
+            include: { ownerships: { include: { landOwner: true } } },
+          });
+          const parcelOwners = parcel?.ownerships?.map((o) => o.landOwner).filter(Boolean) || [];
+
+          if (parcelOwners.length > 0) {
+            const validOwnerIds = parcelOwners.map((o) => o.ownerId);
+            // Delete any spurious responses not belonging to this parcel's owners
+            await prisma.offerMemberResponse.deleteMany({
+              where: {
                 offerId: existingOffer.offerId,
-                ownerId: owner.ownerId,
-                status: OfferStatus.ACCEPTED,
-                signedDocument: formHArtifact.signedDocument,
-                respondedAt: acceptedAt,
+                ownerId: { notIn: validOwnerIds },
               },
             });
+
+            for (const owner of parcelOwners) {
+              await prisma.offerMemberResponse.upsert({
+                where: { offerId_ownerId: { offerId: existingOffer.offerId, ownerId: owner.ownerId } },
+                update: {
+                  status: OfferStatus.ACCEPTED,
+                  respondedAt: acceptedAt,
+                  signedDocument: formHArtifact.signedDocument,
+                },
+                create: {
+                  offerId: existingOffer.offerId,
+                  ownerId: owner.ownerId,
+                  status: OfferStatus.ACCEPTED,
+                  signedDocument: formHArtifact.signedDocument,
+                  respondedAt: acceptedAt,
+                },
+              });
+            }
+          } else {
+            const owner = await prisma.landOwner.findFirst({ where: { email: primaryMember.email } });
+            if (owner) {
+              await prisma.offerMemberResponse.upsert({
+                where: { offerId_ownerId: { offerId: existingOffer.offerId, ownerId: owner.ownerId } },
+                update: { status: OfferStatus.ACCEPTED, respondedAt: acceptedAt, signedDocument: formHArtifact.signedDocument },
+                create: {
+                  offerId: existingOffer.offerId,
+                  ownerId: owner.ownerId,
+                  status: OfferStatus.ACCEPTED,
+                  signedDocument: formHArtifact.signedDocument,
+                  respondedAt: acceptedAt,
+                },
+              });
+            }
           }
         }
       }
@@ -1264,7 +1404,9 @@ async function main() {
           caseTitle: cDef.caseTitle,
           projectId: dbProj.projectId,
           status: cDef.status,
-          registrationDate: new Date(),
+          registrationDate: caseCreatedDate,
+          createdAt: caseCreatedDate,
+          updatedAt: isAccepted && acceptedAt ? acceptedAt : caseCreatedDate,
           remarks: `Land acquisition case for ${cDef.projectName}`,
           createdById: govOfficer1.userId,
         },
@@ -1322,7 +1464,7 @@ async function main() {
             data: {
               caseId: dbCase.caseId,
               valuerId: landValuer1.userId,
-              valuationDate: new Date(),
+              valuationDate: valDate,
               valuationMethod: 'Comparison Method',
               marketValue: cDef.marketValue || 2000000,
               recommendedCompensation: cDef.recommendedCompensation || 2500000,
@@ -1330,6 +1472,8 @@ async function main() {
                 'Professional valuation report conducted according to Jabatan Penilaian.',
               reportStatus: cDef.valuationStatus,
               createdById: govOfficer1.userId,
+              createdAt: valDate,
+              updatedAt: valDate,
             },
           });
         }
@@ -1339,10 +1483,12 @@ async function main() {
           data: {
             caseId: dbCase.caseId,
             assignedToId: landValuer1.userId,
-            assignmentDate: new Date(),
-            dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+            assignmentDate: valDate,
+            dueDate: new Date(valDate.getTime() + 14 * 24 * 60 * 60 * 1000),
             remarks: 'Assigned for initial land parcel valuation.',
             createdById: govOfficer1.userId,
+            createdAt: valDate,
+            updatedAt: valDate,
             valuationReportId: valReport ? valReport.reportId : null,
           },
         });
@@ -1357,7 +1503,9 @@ async function main() {
               remarks: 'Approved compensation package.',
               status: ReportStatus.APPROVED,
               approvedById: govOfficer1.userId,
-              approvedAt: new Date(),
+              approvedAt: compDate,
+              createdAt: compDate,
+              updatedAt: compDate,
               createdById: govOfficer1.userId,
             },
           });
@@ -1372,8 +1520,8 @@ async function main() {
                 offerReferenceNo: offerRef,
                 offerType: 'Form H (Standard Award Notice)',
                 offerAmount: amount,
-                offerDate: new Date(seedRunNow - 14 * 24 * 60 * 60 * 1000),
-                expiryDate: new Date(seedRunNow + 14 * 24 * 60 * 60 * 1000),
+                offerDate: offerIssuedDate,
+                expiryDate: new Date(offerIssuedDate.getTime() + 14 * 24 * 60 * 60 * 1000),
                 acceptancePeriodDays: 14,
                 status: isAccepted ? OfferStatus.ACCEPTED : (cDef.offerStatus || OfferStatus.PENDING),
                 acceptedAt: isAccepted ? acceptedAt : null,
@@ -1383,6 +1531,8 @@ async function main() {
                   ? 'Signed Form H uploaded by the landowner; award formally accepted.'
                   : 'Official Form H award notice dispatched to landowner.',
                 createdById: govOfficer1.userId,
+                createdAt: offerIssuedDate,
+                updatedAt: isAccepted && acceptedAt ? acceptedAt : offerIssuedDate,
               },
             });
 
@@ -1516,12 +1666,17 @@ async function main() {
   await prisma.paymentCase.deleteMany({});
   await prisma.blockchainRecord.deleteMany({});
 
-  // Purge any legacy demo cases from previous runs
-  const legacyCases = await prisma.acquisitionCase.findMany({
-    where: { caseId: { startsWith: 'LAC-2026-09-100' } },
+  // Purge any non-canonical or test cases (e.g. INGEST-*, CANCEL-TEST-*, LAC-2026-09-100-*)
+  const canonicalCaseIds = Array.from({ length: 20 }, (_, i) => generateCaseId(1 + i));
+  const nonCanonicalCases = await prisma.acquisitionCase.findMany({
+    where: { caseId: { notIn: canonicalCaseIds } },
     select: { caseId: true },
   });
-  for (const lc of legacyCases) {
+  for (const lc of nonCanonicalCases) {
+    await prisma.failedTransaction.deleteMany({ where: { paymentCase: { caseId: lc.caseId } } });
+    await prisma.paymentReceipt.deleteMany({ where: { paymentCase: { caseId: lc.caseId } } });
+    await prisma.paymentAuthorisation.deleteMany({ where: { paymentCase: { caseId: lc.caseId } } });
+    await prisma.receiverBankDetails.deleteMany({ where: { paymentCase: { caseId: lc.caseId } } });
     await prisma.blockchainRecord.deleteMany({ where: { caseId: lc.caseId } });
     await prisma.paymentCase.deleteMany({ where: { caseId: lc.caseId } });
     await prisma.offerMemberResponse.deleteMany({ where: { offerLetter: { caseId: lc.caseId } } });
@@ -1541,6 +1696,10 @@ async function main() {
     if (fs.existsSync(legacyDir)) {
       fs.rmSync(legacyDir, { recursive: true, force: true });
     }
+    const legacyDocDir = path.resolve(__dirname, '../../document_storage/case_document', lc.caseId);
+    if (fs.existsSync(legacyDocDir)) {
+      fs.rmSync(legacyDocDir, { recursive: true, force: true });
+    }
   }
 
   // Refresh acceptance artifacts on Case 3 (siewfeng's untouched accepted offer)
@@ -1556,11 +1715,23 @@ async function main() {
     const primaryOwner = case3.landParcel?.ownerships?.[0]?.landOwner;
     const amount = Number(case3Offer.offerAmount) || 3200000;
     const formH = writeSignedFormH('LAC-2026-08-0003', primaryOwner?.name || 'Landowner', amount);
+    const case3Created = new Date(seedRunNow - 7 * 24 * 60 * 60 * 1000);
+    case3Created.setHours(9, 30, 0, 0);
     const acceptedAt = new Date(seedRunNow - 48 * 60 * 60 * 1000);
+    await prisma.acquisitionCase.update({
+      where: { caseId: 'LAC-2026-08-0003' },
+      data: {
+        registrationDate: case3Created,
+        createdAt: case3Created,
+        updatedAt: acceptedAt,
+      },
+    });
     await prisma.offerLetter.update({
       where: { offerId: case3Offer.offerId },
       data: {
+        offerDate: new Date(seedRunNow - 3 * 24 * 60 * 60 * 1000),
         acceptedAt,
+        updatedAt: acceptedAt,
         signedDocument: formH.signedDocument,
         blockchainHash: formH.blockchainHash,
       },
@@ -1581,12 +1752,82 @@ async function main() {
     console.log(`⛓️ Case 3 acceptance refreshed: LAC-2026-08-0003 | hash frozen | grace elapsed`);
   }
 
+  // ===========================================================================
+  // 5. Pre-seed Payment & Blockchain Records for Accepted Cases
+  // ===========================================================================
+  console.log('\n--- 5. Pre-seeding Payment & Blockchain Records for Accepted Cases ---');
+  const nowYear = new Date(seedRunNow).getFullYear();
+  const nowMonth = String(new Date(seedRunNow).getMonth() + 1).padStart(2, '0');
+  const pmtPrefix = `PMT-${nowYear}-${nowMonth}-`;
+  const bcnPrefix = `BCN-${nowYear}-${nowMonth}-`;
+
+  const acceptedCaseIds = [
+    'LAC-2026-08-0003',
+    ...Array.from({ length: 10 }, (_, i) => generateCaseId(6 + i)),
+  ];
+
+  let seq = 0;
+  for (const cId of acceptedCaseIds) {
+    seq += 1;
+    const pmtId = `${pmtPrefix}${String(seq).padStart(4, '0')}`;
+    const bcnId = `${bcnPrefix}${String(seq).padStart(4, '0')}`;
+
+    const acCase = await prisma.acquisitionCase.findUnique({
+      where: { caseId: cId },
+      include: {
+        landParcel: { include: { ownerships: { include: { landOwner: true } } } },
+        offerLetters: { where: { status: OfferStatus.ACCEPTED }, orderBy: { createdAt: 'desc' }, take: 1 },
+      },
+    });
+
+    if (!acCase) continue;
+    const primaryOwner = acCase.landParcel?.ownerships?.[0]?.landOwner;
+    if (!primaryOwner) continue;
+    const offerLetter = acCase.offerLetters?.[0];
+    const amount = offerLetter ? Number(offerLetter.offerAmount) : 2500000;
+    const recordTime = offerLetter?.acceptedAt || acCase.updatedAt || new Date(seedRunNow - 25 * 60 * 60 * 1000);
+    const docHash = offerLetter?.blockchainHash || '0x0000000000000000000000000000000000000000000000000000000000000000';
+
+    await prisma.paymentCase.create({
+      data: {
+        id: pmtId,
+        caseId: cId,
+        beneficiaryId: primaryOwner.ownerId,
+        amount,
+        accountHolderName: primaryOwner?.name || null,
+        phoneNumber: primaryOwner?.contact || null,
+        myKadNumber: primaryOwner?.nric || null,
+        status: PaymentStatus.BANK_DETAILS_AND_M1_PENDING,
+        requiredSignatures: 0,
+        currentSignatures: 0,
+        createdAt: recordTime,
+        updatedAt: recordTime,
+      },
+    });
+
+    const timestampSec = Math.floor(new Date(recordTime).getTime() / 1000);
+    await prisma.blockchainRecord.create({
+      data: {
+        id: bcnId,
+        caseId: cId,
+        milestone: 'AWARD',
+        onChainKey: `${cId}#M1-${timestampSec}`,
+        documentHash: docHash,
+        status: BlockchainStatus.READY_TO_PUBLISH,
+        createdAt: recordTime,
+        updatedAt: recordTime,
+      },
+    });
+
+    console.log(`⛓️ Pre-seeded ${cId} -> Payment: ${pmtId} | Blockchain: ${bcnId} (${recordTime.toISOString()})`);
+  }
+
   console.log(
     '\nℹ️ Seeding Summary:\n' +
     '  - LAC-2026-08-0001 to 0005: 5 Untouched baseline cases (siewfeng)\n' +
     '  - LAC-2026-08-0006 to 0015: 10 Cases at OFFER_ACCEPTED (all 4 supporting documents + signed Form H uploaded)\n' +
     '  - LAC-2026-08-0016 to 0020: 5 Cases at OFFER_ISSUED (all 4 supporting documents + Form H generated, awaiting response)\n' +
-    '  - Payment & Blockchain: 0 records pre-seeded — dynamically generated upon member offer acceptance & GA blockchain publication.'
+    '  - Payment & Blockchain: Pre-seeded PMT-2026-09-0001..0011 and BCN-2026-09-0001..0011 for 11 accepted cases.'
   );
 
   // ===========================================================================

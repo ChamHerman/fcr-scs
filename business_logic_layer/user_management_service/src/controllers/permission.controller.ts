@@ -60,6 +60,20 @@ export const updateRolePermissions = async (req: Request, res: Response): Promis
     await prisma.$transaction(async (tx) => {
       for (const perm of permissions) {
         if (!perm.pagePath || typeof perm.canAccess !== 'boolean') continue;
+
+        let effectiveCanAccess = perm.canAccess;
+        // Role Management is strictly reserved for SYSTEM_ADMINISTRATOR only
+        if (perm.pagePath === '/admin/role-management') {
+          effectiveCanAccess = false;
+        }
+
+        // Finance & Ledger pages are strictly for GOVERNMENT_ADMINISTRATOR only
+        if (
+          role !== UserRole.GOVERNMENT_ADMINISTRATOR &&
+          (perm.pagePath.startsWith('/admin/payment') || perm.pagePath.startsWith('/admin/blockchain'))
+        ) {
+          effectiveCanAccess = false;
+        }
         
         const updated = await tx.rolePermission.upsert({
           where: {
@@ -69,12 +83,12 @@ export const updateRolePermissions = async (req: Request, res: Response): Promis
             }
           },
           update: {
-            canAccess: perm.canAccess
+            canAccess: effectiveCanAccess
           },
           create: {
             role: role as UserRole,
             pagePath: perm.pagePath,
-            canAccess: perm.canAccess
+            canAccess: effectiveCanAccess
           }
         });
         updatedPermissions.push(updated);
