@@ -42,3 +42,6 @@ data_layer/ai_model_repository/datasets/uploads/
 
 # Personal notes
 /_docs/wk_notes.md
+
+# Document storage mock and generated PDFs (dynamic hash salts)
+data_layer/document_storage/

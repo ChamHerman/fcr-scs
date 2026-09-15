@@ -69,7 +69,7 @@ const generateContactNumber = (): string => `01${generateRandomDigits(8)}`;
 // 12-digit identification number
 const generateIdentificationNumber = (): string => `${generateRandomDigits(12)}`;
 
-function createMockPdfBuffer(title: string, caseId: string, salt: string | number = 'STATIC_SEED_SALT'): Buffer {
+function createMockPdfBuffer(title: string, caseId: string, salt = Date.now()): Buffer {
   const content = `%PDF-1.4
 1 0 obj
 << /Type /Catalog /Pages 2 0 R >>
