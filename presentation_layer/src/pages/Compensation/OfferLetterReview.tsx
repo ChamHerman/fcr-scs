@@ -197,6 +197,22 @@ export const OfferLetterReview: React.FC = () => {
         parcelOwners.length > 0
           ? parcelOwners.map((ow: any) => ow.nric).join(", ")
           : o.landOwnership?.landOwner?.nric || "—";
+      const matchingOwner =
+        (userIcClean
+          ? parcelOwners.find(
+              (ow: any) =>
+                (ow.nric || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase() === userIcClean.toLowerCase()
+            )
+          : null) ||
+        parcelOwners.find((ow: any) => ow.ownerId === user?.userId || ow.landOwnerId === user?.userId) ||
+        parcelOwners[0] ||
+        o.landOwnership?.landOwner;
+
+      const declarationOwnerName =
+        matchingOwner?.name || parcelOwners[0]?.name || (o.landOwnership?.landOwner?.name) || ownerName;
+      const declarationOwnerIc =
+        matchingOwner?.nric || parcelOwners[0]?.nric || (o.landOwnership?.landOwner?.nric) || ownerIc;
+
       const ownerAddress = o.landOwnership?.landOwner?.address || parcelOwners[0]?.address || "—";
       const ownerPhone =
         parcelOwners.length > 0
@@ -215,6 +231,8 @@ export const OfferLetterReview: React.FC = () => {
           c?.project?.acquiringAgency || "Department of Lands and Mines (JKPTG)",
         ownerName,
         ownerIc,
+        declarationOwnerName,
+        declarationOwnerIc,
         ownerAddress,
         ownerPhone,
         landTitle: lp?.landTitleNo || "—",
@@ -752,30 +770,19 @@ export const OfferLetterReview: React.FC = () => {
                         </p>
                       </div>
 
-                      <div className="flex items-center justify-between gap-3 flex-wrap pt-2">
-                        {/* Left Side: Submit Objection */}
-                        <div>
-                          <Button
-                            variant="outlined"
-                            onClick={() =>
-                              navigate("/member/compensation/objections/new", {
-                                state: { offerId: offer.id, caseId: offer.caseId },
-                              })
-                            }
-                          >
-                            <AlertTriangle size={16} /> Submit Objection
-                          </Button>
-                        </div>
-
-                        {/* Right Side: Reject and Accept */}
-                        <div className="flex items-center gap-3 flex-wrap">
-                          <Button variant="danger" onClick={() => setShowRejectModal(true)}>
-                            <XCircle size={16} /> Reject Offer
-                          </Button>
-                          <Button variant="filled" onClick={handleAcceptClick} isLoading={submitting}>
-                            <CheckCircle size={16} /> Accept Compensation Award
-                          </Button>
-                        </div>
+                      <div className="flex items-center justify-end gap-3 flex-wrap pt-2">
+                        <Button
+                          variant="danger"
+                          onClick={() =>
+                            navigate(`/member/offer-letter?caseId=${encodeURIComponent(offer.caseId)}&offerId=${encodeURIComponent(offer.id)}`)
+                          }
+                          className="font-bold !bg-rose-600 hover:!bg-rose-700 text-white"
+                        >
+                          <AlertTriangle size={16} /> Reject with Objection (Form N)
+                        </Button>
+                        <Button variant="filled" onClick={handleAcceptClick} isLoading={submitting} className="font-bold">
+                          <CheckCircle size={16} /> Accept Compensation Award
+                        </Button>
                       </div>
                     </div>
                   )}

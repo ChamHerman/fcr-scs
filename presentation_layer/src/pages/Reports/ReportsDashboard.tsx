@@ -10,8 +10,7 @@ import {
   ShieldCheck,
   CreditCard,
   FolderKanban,
-  RefreshCw,
-  AlertCircle
+  RefreshCw
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -33,7 +32,7 @@ import { Select } from '../../components/ui/Select';
 import { Modal } from '../../components/ui/Modal';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { STATES } from './reportConstants';
-import { StatusBadge, ReportSummaryCards, ReportDataTable } from './reportComponents';
+import { ReportSummaryCards, ReportDataTable } from './reportComponents';
 import {
   fetchDashboardOverview,
   fetchCaseStatusReport,
@@ -64,7 +63,7 @@ interface ReportsDashboardProps {
 const FALLBACK_CATEGORY_DATA: Record<string, ReportGeneratedResponse> = {
   'Case Status': {
     reportType: 'Case Status Report',
-    reportId: 'FR-RPT-015-DEMO',
+    reportId: 'RPT-DEMO-001',
     generatedAt: new Date().toISOString(),
     filterApplied: {},
     summary: { totalCases: 2, activeCases: 1, completedCases: 1, averageAgingDays: '12 days' },
@@ -75,7 +74,7 @@ const FALLBACK_CATEGORY_DATA: Record<string, ReportGeneratedResponse> = {
   },
   'Payment': {
     reportType: 'Payment Report',
-    reportId: 'FR-RPT-014-DEMO',
+    reportId: 'RPT-DEMO-002',
     generatedAt: new Date().toISOString(),
     filterApplied: {},
     summary: { totalRecords: 2, totalDisbursement: 'RM 2,450,000.00', successfulPayments: 1, pendingPayments: 1, successRate: '50%' },
@@ -86,7 +85,7 @@ const FALLBACK_CATEGORY_DATA: Record<string, ReportGeneratedResponse> = {
   },
   'Blockchain Audit': {
     reportType: 'Blockchain Audit Report',
-    reportId: 'FR-RPT-013-DEMO',
+    reportId: 'RPT-DEMO-003',
     generatedAt: new Date().toISOString(),
     filterApplied: {},
     summary: { totalRecords: 2, publishedRecords: 2, readyToPublishRecords: 0, integrityStatus: '100% Cryptographically Verified' },
@@ -324,27 +323,23 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
       return {
         title: 'Case Status & Lifecycle Report',
         subtitle: 'Real-time acquisition lifecycle tracking, statutory compliance aging, and officer assignments.',
-        code: 'FR-RPT-015'
       };
     }
     if (reportCategory === 'Payment') {
       return {
         title: 'Payment & Disbursement Report',
         subtitle: 'Comprehensive disbursement ledger, bank clearance status, and success rates.',
-        code: 'FR-RPT-014'
       };
     }
     if (reportCategory === 'Blockchain Audit') {
       return {
         title: 'Blockchain Audit & Notarization Report',
         subtitle: 'Immutable cryptographic audit trail, smart contract settlements, and notarization hashes.',
-        code: 'FR-RPT-013'
       };
     }
     return {
       title: 'Reporting & Analytics Dashboard',
       subtitle: 'Real-time analytics and statutory compliance overview.',
-      code: 'FR-RPT-001'
     };
   };
 
@@ -355,15 +350,8 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
       {/* Topbar */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl md:text-3xl font-bold">{headerInfo.title}</h1>
-            {reportCategory && (
-              <span className="px-2 py-1 rounded-lg bg-md-primary/15 text-md-primary font-bold text-xs whitespace-nowrap">
-                {headerInfo.code}
-              </span>
-            )}
-          </div>
-          <p className="text-md-on-surface-variant mt-1 max-w-2xl">{headerInfo.subtitle}</p>
+          <h1 className="text-2xl md:text-3xl font-bold">{headerInfo.title}</h1>
+          <p className="text-md-on-surface-variant mt-1 max-w-3xl">{headerInfo.subtitle}</p>
         </div>
         <div className="flex items-center gap-3">
           <Button variant="tonal" size="sm" onClick={handleRefresh}>
@@ -426,7 +414,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
           <div className="bg-md-surface-container rounded-xl p-6 shadow-sm">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-base font-semibold">Case Status Distribution</h3>
-              <span className="text-xs text-md-on-surface-variant">FR-RPT-006</span>
+              <span className="text-xs text-md-on-surface-variant">By Status</span>
             </div>
             <div className="h-60 flex items-center justify-center">
               <Doughnut data={doughnutData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }} />
@@ -535,86 +523,17 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
             </div>
           </div>
 
-          {/* Data Table */}
-          <div className="bg-md-surface-container rounded-xl shadow-sm overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr>
-                  {reportCategory === 'Case Status' ? (
-                    <>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Record ID</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Title / Description</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">State / Location</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Date</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Lifecycle Aging</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Status</th>
-                    </>
-                  ) : reportCategory === 'Payment' ? (
-                    <>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Record ID</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Payee / Title</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Bank Name</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Amount</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Bank Reference</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Date</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Status</th>
-                    </>
-                  ) : (
-                    <>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Record ID</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Transaction Hash</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Document Hash</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Date</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Status</th>
-                    </>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredDetails.length === 0 ? (
-                  <tr>
-                    <td colSpan={reportCategory === 'Payment' ? 7 : reportCategory === 'Blockchain Audit' ? 5 : 6} className="px-4 py-8 text-center text-md-on-surface-variant">
-                      <AlertCircle size={24} className="mx-auto mb-2 opacity-50" />
-                      No records found matching the selected criteria.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredDetails.map((row: any, idx) => (
-                    <tr key={idx} className="border-t border-md-outline/10 hover:bg-md-primary/5 transition-colors">
-                      {reportCategory === 'Case Status' ? (
-                        <>
-                          <td className="px-4 py-3 font-semibold text-md-primary text-[13px]">{row.caseId}</td>
-                          <td className="px-4 py-3 font-medium">{row.title}</td>
-                          <td className="px-4 py-3 text-md-on-surface-variant">{`${row.state} / ${row.district}`}</td>
-                          <td className="px-4 py-3 text-md-on-surface-variant">{row.date}</td>
-                          <td className="px-4 py-3 text-md-on-surface-variant">{row.lifecycleAging}</td>
-                          <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
-                        </>
-                      ) : reportCategory === 'Payment' ? (
-                        <>
-                          <td className="px-4 py-3 font-semibold text-md-primary text-[13px]">{row.caseId}</td>
-                          <td className="px-4 py-3 font-medium">{row.payeeName}</td>
-                          <td className="px-4 py-3 text-md-on-surface-variant">{row.bankName}</td>
-                          <td className="px-4 py-3 font-medium">{row.amount}</td>
-                          <td className="px-4 py-3 text-md-on-surface-variant">{row.bankReference}</td>
-                          <td className="px-4 py-3 text-md-on-surface-variant">{row.date}</td>
-                          <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
-                        </>
-                      ) : (
-                        <>
-                          <td className="px-4 py-3 font-semibold text-md-primary text-[13px]">{row.caseId}</td>
-                          <td className="px-4 py-3 font-mono text-xs text-md-on-surface-variant">{row.transactionHash}</td>
-                          <td className="px-4 py-3 font-mono text-xs text-md-on-surface-variant">{row.documentHash}</td>
-                          <td className="px-4 py-3 text-md-on-surface-variant">{row.publishedAt}</td>
-                          <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
-                        </>
-                      )}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          {/* Data Table — same shared component the preview modal uses */}
+          <ReportDataTable
+            data={{
+              reportType: categoryData?.reportType ?? `${reportCategory} Report`,
+              reportId: categoryData?.reportId ?? '',
+              generatedAt: categoryData?.generatedAt ?? new Date().toISOString(),
+              filterApplied: categoryData?.filterApplied ?? {},
+              summary: categoryData?.summary ?? {},
+              details: filteredDetails,
+            }}
+          />
         </>
       )}
 
@@ -624,7 +543,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
         onClose={() => !downloading && setFullReportOpen(false)}
         title={`${reportCategory ? `${reportCategory} Report` : 'Report'} — Full Preview`}
         subtitle="Complete report without filters. Review the report below, then download the PDF."
-        maxWidth="max-w-3xl"
+        maxWidth="max-w-5xl"
         footer={
           <div className="flex items-center justify-end gap-3">
             <Button variant="text" disabled={downloading} onClick={() => setFullReportOpen(false)}>

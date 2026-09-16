@@ -68,16 +68,16 @@ export const CaseCreate: React.FC = () => {
         },
         owners: data.owners.map((o) => ({
           name: o.name,
-          nric: o.icNumber,
+          nric: (o.icNumber || "").replace(/\D/g, ""),
           address: o.address,
           contact: o.phone,
           email: o.email || undefined,
-          ownershipType: data.formData.ownershipType || o.ownershipType || "Individual Citizen",
-          share: o.share || "1/1",
+          ownershipType: (data.owners.length > 1 && data.formData.ownershipType === "Individual Citizen" ? "Joint Ownership" : (data.formData.ownershipType || o.ownershipType || "Individual Citizen")),
+          share: data.owners.length === 1 ? "100" : (o.share || "50"),
         })),
         caseTitle: `${data.formData.projectName} - ${data.formData.landTitleNumber}`,
         remarks: "Case registered via online registration portal",
-        createdById: user?.userId || "00000000-0000-0000-0000-000000000001",
+        createdById: user?.userId || undefined,
       };
 
       const result = await landAcquisitionApi.createCase(payload);

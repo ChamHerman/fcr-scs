@@ -25,6 +25,7 @@ import {
   Sun,
   BrainCircuit,
   Sparkles,
+  Bell,
   Send,
   PenLine,
   AlertTriangle,
@@ -34,12 +35,13 @@ import {
   LogOut
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { FirstTimePasswordModal } from '../auth/FirstTimePasswordModal';
 
 export const AdminLayout: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout, allowedPages } = useAuth();
+  const { logout, allowedPages, user } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isDark, setIsDark] = useState<boolean>(() => {
     return localStorage.getItem('admin_theme') === 'dark';
@@ -52,7 +54,7 @@ export const AdminLayout: React.FC = () => {
   // the pointer leaves the nav (with a short grace delay). Per-section
   // mouseleave fired on every layout shift caused by the expand animation and
   // made groups oscillate open/closed forever.
-  type GroupKey = 'landAcquisition' | 'compensation' | 'finance' | 'aiValuation' | 'reports';
+  type GroupKey = 'landAcquisition' | 'compensation' | 'finance' | 'aiValuation' | 'reports' | 'userManagement';
 
   const GROUP_ROUTE_PATTERNS: Record<GroupKey, RegExp[]> = {
     landAcquisition: [/^\/admin\/case/, /^\/admin\/land-acquisition/],
@@ -60,6 +62,7 @@ export const AdminLayout: React.FC = () => {
     finance: [/^\/admin\/payment/, /^\/admin\/blockchain/],
     reports: [/^\/admin\/reports/],
     aiValuation: [/^\/admin\/prediction/],
+    userManagement: [/^\/admin\/users/, /^\/admin\/role-management/],
   };
 
   const routePinnedGroup = useMemo<GroupKey | null>(() => {
@@ -124,7 +127,7 @@ export const AdminLayout: React.FC = () => {
   useEffect(() => {
     const animate = navGroupsMountedRef.current;
     navGroupsMountedRef.current = true;
-    const groupKeys: GroupKey[] = ['landAcquisition', 'compensation', 'finance', 'aiValuation', 'reports'];
+    const groupKeys: GroupKey[] = ['landAcquisition', 'compensation', 'finance', 'aiValuation', 'reports', 'userManagement'];
 
     if (isCollapsed) {
       // Collapsed sidebar shows every group's items inline — never clipped.
@@ -390,6 +393,7 @@ export const AdminLayout: React.FC = () => {
         }
       `}</style>
       <div className="admin-layout" ref={containerRef}>
+        <FirstTimePasswordModal />
         <aside className="admin-sidebar">
           <div className="admin-sidebar-header">
             <div className="admin-sidebar-brand" style={{ display: isCollapsed ? 'none' : 'flex' }}>
@@ -399,10 +403,14 @@ export const AdminLayout: React.FC = () => {
               <span>FCR·SCS Admin</span>
             </div>
             {isCollapsed && (
-              <div className="brand-icon" style={{
-                width: 40, height: 40, background: 'var(--md-primary)', borderRadius: 12,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0
-              }}>
+              <div 
+                className="brand-icon" 
+                style={{
+                  width: 40, height: 40, background: 'var(--md-primary)', borderRadius: 12,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0
+                }}
+                title="FCR·SCS Admin"
+              >
                 <Scale size={24} />
               </div>
             )}
@@ -631,6 +639,40 @@ export const AdminLayout: React.FC = () => {
               </div>
             </div>
 
+            {user?.role === 'SYSTEM_ADMINISTRATOR' && (
+              <div className="nav-section">
+                {!isCollapsed && (
+                  <div
+                    className="nav-label"
+                    onClick={() => toggleGroup('userManagement')}
+                    onMouseEnter={() => handleGroupEnter('userManagement')}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <span>User Management</span>
+                    {isGroupExpanded('userManagement') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </div>
+                )}
+                {isCollapsed && <div className="nav-divider" />}
+                <div
+                  className="nav-group-items"
+                  ref={(el) => { navGroupRefs.current.userManagement = el; }}
+                >
+                  {(allowedPages.includes('*') || allowedPages.includes('/admin/users')) && (
+                    <NavLink to="/admin/users" className="nav-item" title={isCollapsed ? "User Admin" : ""}>
+                      <Users size={22} className="nav-icon" />
+                      {!isCollapsed && <span>User Admin</span>}
+                    </NavLink>
+                  )}
+                  {(allowedPages.includes('*') || allowedPages.includes('/admin/role-management')) && (
+                    <NavLink to="/admin/role-management" className="nav-item" title={isCollapsed ? "Role Management" : ""}>
+                      <Shield size={22} className="nav-icon" />
+                      {!isCollapsed && <span>Role Management</span>}
+                    </NavLink>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="nav-section">
               {!isCollapsed && <span className="nav-label">System</span>}
               {isCollapsed && <div className="nav-divider" />}
@@ -640,16 +682,10 @@ export const AdminLayout: React.FC = () => {
                   {!isCollapsed && <span>My Profile</span>}
                 </NavLink>
               )}
-              {(allowedPages.includes('*') || allowedPages.includes('/admin/users')) && (
-                <NavLink to="/admin/users" className="nav-item" title={isCollapsed ? "User Admin" : ""}>
-                  <Users size={22} className="nav-icon" />
-                  {!isCollapsed && <span>User Admin</span>}
-                </NavLink>
-              )}
-              {(allowedPages.includes('*') || allowedPages.includes('/admin/role-management')) && (
-                <NavLink to="/admin/role-management" className="nav-item" title={isCollapsed ? "Role Management" : ""}>
-                  <Shield size={22} className="nav-icon" />
-                  {!isCollapsed && <span>Role Management</span>}
+              {(allowedPages.includes('*') || allowedPages.includes('/admin/email-templates')) && (
+                <NavLink to="/admin/email-templates" className="nav-item" title={isCollapsed ? "Email Templates" : ""}>
+                  <Mail size={22} className="nav-icon" />
+                  {!isCollapsed && <span>Email Templates</span>}
                 </NavLink>
               )}
               {(allowedPages.includes('*') || allowedPages.includes('/admin/audit-logs')) && (
@@ -660,7 +696,7 @@ export const AdminLayout: React.FC = () => {
               )}
               {(allowedPages.includes('*') || allowedPages.includes('/admin/alerts')) && (
                 <NavLink to="/admin/alerts" className="nav-item" title={isCollapsed ? "Alerts" : ""}>
-                  <Sparkles size={22} className="nav-icon" />
+                  <Bell size={22} className="nav-icon" />
                   {!isCollapsed && <span>Alerts</span>}
                 </NavLink>
               )}

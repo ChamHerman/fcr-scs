@@ -13,24 +13,32 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useRole } from '../../hooks/useRole';
 import { Logo } from '../ui/Logo';
+import { alertService } from '../../services/alert.service';
+import { FirstTimePasswordModal } from '../auth/FirstTimePasswordModal';
+
+/** First letter of word[0] + first letter of word[1] of the name string */
+function getNameInitials(name: string | undefined | null): string {
+  if (!name) return 'AL';
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const first = words[0]?.[0] ?? '';
+  const second = words[1]?.[0] ?? '';
+  return (first + second).toUpperCase() || 'AL';
+}
 
 export const MemberLayout: React.FC = () => {
   const { logout } = useAuth();
   const { user, userName, identificationNumber, role } = useRole();
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [hasUnread, setHasUnread] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const displayName = userName || user?.name || 'Affected Landowner';
   const displayEmail = user?.email || '';
   const displayId = identificationNumber || user?.identificationNumber;
-  const initials = displayName
-    .split(' ')
-    .filter(Boolean)
-    .map((n: string) => n[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase() || 'AL';
+
+  // Use correct initials: first letter of first word + first letter of second word
+  const initials = getNameInitials(displayName);
 
   const roleLabel = role === 'DISPLACED_COMMUNITY_MEMBER'
     ? 'Affected Landowner'
@@ -62,6 +70,22 @@ export const MemberLayout: React.FC = () => {
     };
   }, [dropdownOpen]);
 
+  // Check for unread notifications on mount to drive the red dot on Bell
+  useEffect(() => {
+    let cancelled = false;
+    alertService
+      .fetchAlerts({ page: 1, limit: 1, status: 'unacknowledged' })
+      .then((res) => {
+        if (!cancelled) {
+          setHasUnread((res.pagination?.totalCount ?? 0) > 0);
+        }
+      })
+      .catch(() => {
+        // Silently ignore — red dot simply stays hidden on error
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <div className="min-h-screen bg-md-background text-md-on-surface flex flex-col font-sans antialiased">
       {/* Topbar: Member Portal on left, Notification & Profile Dropdown on right */}
@@ -87,15 +111,18 @@ export const MemberLayout: React.FC = () => {
 
           {/* Right: Notification & Profile Dropdown */}
           <div className="flex items-center gap-3 sm:gap-4">
-            {/* Notification Bell */}
-            <button
-              type="button"
-              className="p-2 rounded-full bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 relative shadow-sm transition cursor-pointer"
-              title="Notifications"
+            {/* Notification Bell → redirects to /member/notifications */}
+            <Link
+              to="/member/notifications"
+              className="p-2 rounded-full bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 relative shadow-sm transition"
+              title="View Notifications"
             >
               <Bell className="w-4 h-4" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full animate-pulse" />
-            </button>
+              {/* Red dot — only shown when there are unread notifications */}
+              {hasUnread && (
+                <span className="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full animate-pulse" />
+              )}
+            </Link>
 
             {/* Affected Landowner Profile Dropdown */}
             <div className="relative" ref={dropdownRef}>
@@ -106,7 +133,7 @@ export const MemberLayout: React.FC = () => {
                 aria-expanded={dropdownOpen}
                 aria-haspopup="true"
               >
-                {/* Avatar */}
+                {/* Avatar — initials of first letter of first two name words */}
                 <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-violet-600 to-indigo-600 text-white font-bold flex items-center justify-center text-xs shadow-sm ring-2 ring-violet-200 shrink-0">
                   {initials}
                 </div>
@@ -152,7 +179,19 @@ export const MemberLayout: React.FC = () => {
                       className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition"
                     >
                       <User size={16} className="text-md-primary" />
-                      <span>Profile & Case Overview</span>
+                      <span>Profile &amp; Case Overview</span>
+                    </Link>
+
+                    <Link
+                      to="/member/notifications"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition"
+                    >
+                      <Bell size={16} className="text-violet-600" />
+                      <span>My Notifications</span>
+                      {hasUnread && (
+                        <span className="ml-auto w-2 h-2 rounded-full bg-rose-500" />
+                      )}
                     </Link>
 
                     <Link
@@ -188,7 +227,7 @@ export const MemberLayout: React.FC = () => {
                       className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition"
                     >
                       <Settings size={16} className="text-slate-500" />
-                      <span>Settings & Payout Account</span>
+                      <span>Settings &amp; Payout Account</span>
                     </Link>
                   </div>
 
@@ -217,6 +256,9 @@ export const MemberLayout: React.FC = () => {
       <main className="flex-1 w-full">
         <Outlet />
       </main>
+
+      {/* Force Password Change Modal for new accounts */}
+      <FirstTimePasswordModal />
     </div>
   );
 };

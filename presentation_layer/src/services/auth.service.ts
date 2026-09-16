@@ -2,6 +2,22 @@ import api from './api';
 
 export interface LoginResponse {
   message: string;
+  token?: string;
+  user?: {
+    userId: string;
+    name: string;
+    email: string;
+    role: string;
+    identificationNumber?: string;
+    contactNumber?: string;
+  };
+  requiresOtp?: boolean;
+  tempToken?: string;
+  email?: string;
+}
+
+export interface VerifyOtpResponse {
+  message: string;
   token: string;
   user: {
     userId: string;
@@ -13,9 +29,24 @@ export interface LoginResponse {
   };
 }
 
+export interface ResendOtpResponse {
+  message: string;
+  resendCooldownSeconds?: number;
+}
+
 export const authService = {
   login: async (email: string, password: string): Promise<LoginResponse> => {
     const response = await api.post<LoginResponse>('/users/login', { email, password });
+    return response.data;
+  },
+
+  verifyOtp: async (tempToken: string, otp: string): Promise<VerifyOtpResponse> => {
+    const response = await api.post<VerifyOtpResponse>('/users/verify-otp', { tempToken, otp });
+    return response.data;
+  },
+
+  resendOtp: async (tempToken: string): Promise<ResendOtpResponse> => {
+    const response = await api.post<ResendOtpResponse>('/users/resend-otp', { tempToken });
     return response.data;
   },
   
@@ -44,3 +75,4 @@ export const authService = {
     return response.data;
   }
 };
+

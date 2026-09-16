@@ -117,28 +117,32 @@ export const CaseEdit: React.FC = () => {
           landArea: land.area != null ? String(land.area) : "",
           landCategory: land.category === "AGRICULTURE" ? "Agriculture" : land.category === "BUILDING" ? "Building" : land.category === "INDUSTRY" ? "Industry" : (land.category || "Agriculture"),
           tenureType: land.tenureType === "FREEHOLD" ? "Freehold" : land.tenureType === "LEASEHOLD" ? "Leasehold" : land.tenureType === "MALAY_RESERVE" ? "Malay Reserve" : (land.tenureType || "Freehold"),
-          ownershipType: ownerships[0]?.ownershipType
-            ? (ownerships[0].ownershipType === "JOINT_OWNERSHIP"
-                ? "Joint Ownership"
-                : ownerships[0].ownershipType === "CORPORATE_ENTITY"
-                ? "Corporate Entity"
-                : ownerships[0].ownershipType === "ESTATE_OF_DECEASED"
-                ? "Estate of Deceased"
-                : ownerships[0].ownershipType === "TRUSTEE"
+          ownershipType: ownerships.length > 1
+            ? (ownerships[0]?.ownershipType === "TRUSTEE"
                 ? "Trustee"
-                : "Individual Citizen")
-            : "Individual Citizen",
+                : ownerships[0]?.ownershipType === "ESTATE_OF_DECEASED"
+                ? "Estate of Deceased"
+                : ownerships[0]?.ownershipType === "CORPORATE_ENTITY"
+                ? "Corporate Entity"
+                : "Joint Ownership")
+            : (ownerships[0]?.ownershipType === "CORPORATE_ENTITY"
+                ? "Corporate Entity"
+                : ownerships[0]?.ownershipType === "ESTATE_OF_DECEASED"
+                ? "Estate of Deceased"
+                : ownerships[0]?.ownershipType === "TRUSTEE"
+                ? "Trustee"
+                : "Individual Citizen"),
         };
 
         const owners: Owner[] = ownerships.length > 0
           ? ownerships.map((o: any, idx: number) => ({
-              id: o.landOwner?.ownerId || String(idx + 1),
+              id: o.ownershipId ? String(o.ownershipId) : (o.landOwner?.ownerId ? `${o.landOwner.ownerId}_${idx}` : `owner_${idx + 1}`),
               name: o.landOwner?.name || "",
               icNumber: o.landOwner?.nric || "",
               address: o.landOwner?.address || "",
               phone: o.landOwner?.contact || "",
               email: o.landOwner?.email || "",
-              share: o.share || "100",
+              share: o.share ? String(o.share).replace(/%/g, "") : (ownerships.length === 1 ? "100" : String(Math.floor(100 / ownerships.length))),
               ownershipType: o.ownershipType || "Individual Citizen",
             }))
           : [{ id: "1", name: "", icNumber: "", address: "", phone: "", email: "", share: "100" }];
@@ -216,14 +220,17 @@ export const CaseEdit: React.FC = () => {
       tenureType: data.formData.tenureType,
     };
 
+    const resolvedOwnershipType =
+      data.formData.ownershipType || (data.owners.length > 1 ? "Joint Ownership" : "Individual Citizen");
+
     const ownersPayload = data.owners.map((o) => ({
       name: o.name,
-      nric: o.icNumber,
+      nric: (o.icNumber || "").replace(/\D/g, ""),
       address: o.address,
       contact: o.phone,
       email: o.email || undefined,
-      ownershipType: data.formData.ownershipType || o.ownershipType || "Individual Citizen",
-      share: o.share || "1/1",
+      ownershipType: resolvedOwnershipType || o.ownershipType || "Individual Citizen",
+      share: data.owners.length === 1 ? "100" : (o.share || "50"),
     }));
 
     try {

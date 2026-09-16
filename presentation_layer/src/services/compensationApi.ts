@@ -192,7 +192,26 @@ export const compensationApi = {
     objectionReason: string;
     requestedAmount: number;
     createdById?: string;
+    files?: File[];
   }) => {
+    if (payload.files && payload.files.length > 0) {
+      const formData = new FormData();
+      formData.append("offerId", payload.offerId);
+      formData.append("caseId", payload.caseId);
+      formData.append("objectionReason", payload.objectionReason);
+      formData.append("requestedAmount", String(payload.requestedAmount));
+      if (payload.createdById) {
+        formData.append("createdById", payload.createdById);
+      }
+      for (const file of payload.files) {
+        formData.append("documents", file);
+      }
+      return fetchJSON(COMPENSATION_BASE + "/api/compensation/objections", {
+        method: "POST",
+        body: formData,
+      });
+    }
+
     return fetchJSON(COMPENSATION_BASE + "/api/compensation/objections", {
       method: "POST",
       body: JSON.stringify(payload),

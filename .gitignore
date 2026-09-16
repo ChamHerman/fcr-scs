@@ -39,6 +39,10 @@ data_layer/ai_model_repository/datasets/uploads/
 /.claude
 
 /_herman-only
+
+# Personal notes
+/_docs/wk_notes.md
+
 /.wolf
 GEMINI.md
 /data_layer/document_storage

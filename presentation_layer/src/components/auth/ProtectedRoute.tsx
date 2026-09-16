@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
@@ -9,10 +9,57 @@ interface ProtectedRouteProps {
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) => {
   const { isAuthenticated, user, allowedPages, isLoadingPermissions } = useAuth();
   const location = useLocation();
+  const lastLoggedRef = useRef<string | null>(null);
 
-  if (!isAuthenticated || !user) {
+  // Active synchronization check: ensure localStorage token and user are present
+  const storedToken = localStorage.getItem('auth_token');
+  const storedUserRaw = localStorage.getItem('user_data');
+
+  if (!isAuthenticated || !user || !storedToken || !storedUserRaw) {
     return <Navigate to="/login" replace />;
   }
+
+  // Cross-tab safety: if localStorage user was switched in another tab, use active stored user
+  let activeUser = user;
+  try {
+    const parsedStored = JSON.parse(storedUserRaw);
+    if (parsedStored && (parsedStored.userId !== user.userId || parsedStored.role !== user.role)) {
+      activeUser = parsedStored;
+    }
+  } catch {
+    // fallback to context user
+  }
+
+  const reportUnauthorized = (reason: string) => {
+    const logKey = `${location.pathname}:${reason}:${activeUser.userId}`;
+    if (lastLoggedRef.current === logKey) return;
+    lastLoggedRef.current = logKey;
+
+    const token = localStorage.getItem('auth_token') || storedToken;
+    fetch('http://localhost:3030/api/audit-logs/record', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        activityType: 'UNAUTHORIZED_PAGE_ACCESS',
+        moduleName: 'ACCESS_CONTROL',
+        severity: 'SECURITY',
+        systemResponse: 'FORBIDDEN (403)',
+        activityDetails: {
+          attemptedPath: location.pathname,
+          reason,
+          userRole: activeUser.role,
+          userId: activeUser.userId,
+          email: activeUser.email,
+          userName: activeUser.name,
+        },
+      }),
+    }).catch((err) => {
+      console.error('Failed to log unauthorized page access:', err);
+    });
+  };
 
   if (isLoadingPermissions) {
     return (
@@ -21,7 +68,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
       </div>
     );
   }
-  const userRole = (user.role || '').toUpperCase();
+
+  const userRole = (activeUser.role || '').toUpperCase();
   const isMember = userRole === 'DISPLACED_COMMUNITY_MEMBER' || userRole.includes('MEMBER');
   const isAdmin = !isMember && (
     userRole === 'SYSTEM_ADMINISTRATOR' ||
@@ -33,6 +81,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
 
   // Members can NEVER access /admin routes under any circumstances
   if (isMember && (location.pathname === '/admin' || location.pathname.startsWith('/admin/'))) {
+    reportUnauthorized('Community member attempted access to administrative route');
     return <Navigate to="/unauthorized" replace />;
   }
 
@@ -46,10 +95,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
     userRole !== 'SYSTEM_ADMINISTRATOR' &&
     (location.pathname === '/admin/role-management' || location.pathname.startsWith('/admin/role-management/'))
   ) {
+    reportUnauthorized('Non-system administrator attempted access to Role Management');
     return <Navigate to="/unauthorized" replace />;
   }
 
-  // Finance & Ledger pages (/admin/payment*, /admin/blockchain*) are strictly for GOVERNMENT_ADMINISTRATOR only
+  // Finance & Ledger pages (/admin/payment*, /admin/blockchain*) are strictly for GOVERNMENT_ADMINISTRATOR and SYSTEM_ADMINISTRATOR
   const isFinanceLedgerRoute =
     location.pathname === '/admin/payment' ||
     location.pathname.startsWith('/admin/payment/') ||
@@ -61,6 +111,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
     userRole !== 'GOVERNMENT_ADMINISTRATOR' &&
     userRole !== 'SYSTEM_ADMINISTRATOR'
   ) {
+    reportUnauthorized('User attempted access to restricted Finance / Ledger portal without proper administrative role');
     return <Navigate to="/unauthorized" replace />;
   }
 
@@ -83,7 +134,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
   const hasAccess = hasRoleAccess && hasPageAccess;
 
   if (!hasAccess) {
+    reportUnauthorized(`Insufficient role permissions for route (activeRole: ${userRole})`);
     return <Navigate to="/unauthorized" replace />;
   }
+
   return <Outlet />;
 };
+
+export default ProtectedRoute;

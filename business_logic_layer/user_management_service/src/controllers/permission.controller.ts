@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { prisma } from '../prisma';
 import { UserRole } from '@prisma/client';
+import { logAudit } from '../services/audit.service';
+import { generateCustomId } from '../utils/idGenerator';
 
 /**
  * Get permissions for a specific role
@@ -85,6 +87,7 @@ export const updateRolePermissions = async (req: Request, res: Response): Promis
             canAccess: effectiveCanAccess
           },
           create: {
+            id: await generateCustomId('rolePermission', tx),
             role: role as UserRole,
             pagePath: perm.pagePath,
             canAccess: effectiveCanAccess
@@ -92,6 +95,21 @@ export const updateRolePermissions = async (req: Request, res: Response): Promis
         });
         updatedPermissions.push(updated);
       }
+    });
+
+    logAudit({
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'ROLE_PERMISSIONS_UPDATED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'CRITICAL',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: {
+        targetRole: role,
+        updatedCount: updatedPermissions.length,
+        permissions: permissions.map(p => ({ page: p.pagePath, allowed: p.canAccess })),
+      },
+      systemResponse: 'SUCCESS (200)',
     });
 
     res.status(200).json({

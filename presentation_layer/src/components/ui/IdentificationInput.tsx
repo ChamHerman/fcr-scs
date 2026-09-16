@@ -248,13 +248,15 @@ export const IdentificationInput: React.FC<IdentificationInputProps> = ({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           className={classNames(
-            "bg-md-surface-container-low text-md-on-surface w-full h-14 pt-5 pb-1 rounded-xl border transition-colors duration-200 focus:outline-none text-sm placeholder:text-md-on-surface-variant/60 font-normal",
+            "w-full h-14 pt-5 pb-1 rounded-xl border transition-all duration-200 focus:outline-none text-sm placeholder:text-gray-400 font-normal",
+            props.disabled || props.readOnly
+              ? "bg-slate-200/95 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-slate-300 dark:border-gray-700 cursor-not-allowed select-none"
+              : "bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100",
             prefix ? "pl-11" : "px-5",
             suffix ? "pr-24" : "px-5",
             error
-              ? "border-md-error focus:border-md-error ring-1 ring-md-error/50"
-              : "border-md-outline/30 focus:border-md-primary",
-            props.disabled ? "grayscale opacity-60 cursor-not-allowed" : ""
+              ? "border-md-error focus:ring-2 focus:ring-md-error"
+              : "border-gray-300/80 dark:border-gray-700 focus:ring-2 focus:ring-md-primary focus:border-transparent"
           )}
         />
 

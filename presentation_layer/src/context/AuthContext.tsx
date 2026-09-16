@@ -1,12 +1,17 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 export interface User {
+  id?: string;
   userId: string;
   name: string;
   email: string;
   role: string;
   identificationNumber?: string;
   contactNumber?: string;
+  address?: string;
+  status?: string;
+  pendingEmail?: string | null;
+  mustChangePassword?: boolean;
 }
 
 interface AuthContextType {
@@ -15,6 +20,7 @@ interface AuthContextType {
   allowedPages: string[];
   login: (token: string, userData: User) => void;
   logout: () => void;
+  updateUser: (fields: Partial<User>) => void;
   refreshPermissions: () => Promise<void>;
   isLoadingPermissions: boolean;
 }
@@ -89,7 +95,69 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.removeItem('auth_token');
       localStorage.removeItem('user_data');
     }
+
+    // Cross-tab synchronization via storage event
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'auth_token' || e.key === 'user_data') {
+        const currentToken = localStorage.getItem('auth_token');
+        const currentUserData = localStorage.getItem('user_data');
+
+        if (!currentToken || !currentUserData) {
+          setUser(null);
+          setIsAuthenticated(false);
+          setAllowedPages([]);
+        } else {
+          try {
+            const parsed = JSON.parse(currentUserData);
+            setUser(parsed);
+            setIsAuthenticated(true);
+          } catch {
+            setUser(null);
+            setIsAuthenticated(false);
+            setAllowedPages([]);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
+
+  // Sync state when tab gains focus or becomes visible
+  useEffect(() => {
+    const handleSyncOnFocus = () => {
+      if (document.visibilityState === 'visible') {
+        const currentToken = localStorage.getItem('auth_token');
+        const currentUserData = localStorage.getItem('user_data');
+
+        if (!currentToken || !currentUserData) {
+          if (isAuthenticated) {
+            setUser(null);
+            setIsAuthenticated(false);
+            setAllowedPages([]);
+          }
+        } else {
+          try {
+            const parsed = JSON.parse(currentUserData);
+            if (!user || user.userId !== parsed.userId || user.role !== parsed.role) {
+              setUser(parsed);
+              setIsAuthenticated(true);
+            }
+          } catch {
+            // Ignore invalid JSON in localStorage
+          }
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleSyncOnFocus);
+    window.addEventListener('focus', handleSyncOnFocus);
+    return () => {
+      document.removeEventListener('visibilitychange', handleSyncOnFocus);
+      window.removeEventListener('focus', handleSyncOnFocus);
+    };
+  }, [isAuthenticated, user]);
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -112,8 +180,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAllowedPages([]);
   };
 
+  const updateUser = (fields: Partial<User>) => {
+    setUser(prev => {
+      if (!prev) return null;
+      const updated = { ...prev, ...fields };
+      localStorage.setItem('user_data', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, allowedPages, login, logout, refreshPermissions, isLoadingPermissions }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, allowedPages, login, logout, updateUser, refreshPermissions, isLoadingPermissions }}>
       {children}
     </AuthContext.Provider>
   );

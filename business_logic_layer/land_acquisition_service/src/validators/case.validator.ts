@@ -28,6 +28,10 @@ export function validateCreateCasePayload(body: any): string | null {
     return "Land area must be a positive number";
   }
 
+  const seenNrics = new Set<string>();
+  const seenEmails = new Set<string>();
+  const seenContacts = new Set<string>();
+
   for (let i = 0; i < owners.length; i++) {
     const owner = owners[i];
     if (!owner.name || !owner.nric || !owner.address || !owner.contact || !owner.email || !owner.share) {
@@ -40,6 +44,24 @@ export function validateCreateCasePayload(body: any): string | null {
     if (phoneErr) {
       return `Owner #${i + 1}: ${phoneErr}`;
     }
+
+    const pureNric = String(owner.nric).replace(/\D/g, "");
+    if (seenNrics.has(pureNric)) {
+      return `Duplicate identification number (NRIC) detected across multiple owners. Each owner must have a unique NRIC.`;
+    }
+    seenNrics.add(pureNric);
+
+    const normEmail = String(owner.email).trim().toLowerCase();
+    if (seenEmails.has(normEmail)) {
+      return `Duplicate email address '${owner.email}' detected across multiple owners. Each owner must have a unique email address.`;
+    }
+    seenEmails.add(normEmail);
+
+    const normContact = String(owner.contact).replace(/[\s\-+]/g, "");
+    if (seenContacts.has(normContact)) {
+      return `Duplicate phone number '${owner.contact}' detected across multiple owners. Each owner must have a unique phone number.`;
+    }
+    seenContacts.add(normContact);
   }
 
   return null;

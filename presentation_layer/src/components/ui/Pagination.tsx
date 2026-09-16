@@ -10,6 +10,7 @@ export interface PaginationProps {
   itemLabel?: string;
   className?: string;
   showInfo?: boolean;
+  showPageJump?: boolean;
 }
 
 /**
@@ -41,13 +42,29 @@ export const Pagination: React.FC<PaginationProps> = ({
   itemLabel = 'records',
   className = '',
   showInfo = true,
+  showPageJump = true,
 }) => {
+  const [jumpInput, setJumpInput] = React.useState('');
+  const [jumpError, setJumpError] = React.useState(false);
+
   if (totalPages <= 1 && (!totalCount || totalCount <= pageSize)) {
     return null;
   }
 
   const safePage = Math.max(1, Math.min(currentPage, totalPages));
   const pages = getPageNumbers(safePage, totalPages);
+
+  const handleJump = (e: React.FormEvent) => {
+    e.preventDefault();
+    const pageNum = parseInt(jumpInput, 10);
+    if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+      setJumpError(false);
+      onPageChange(pageNum);
+      setJumpInput('');
+    } else {
+      setJumpError(true);
+    }
+  };
 
   const startItem = totalCount !== undefined ? (safePage - 1) * pageSize + 1 : undefined;
   const endItem = totalCount !== undefined ? Math.min(safePage * pageSize, totalCount) : undefined;
@@ -104,6 +121,26 @@ export const Pagination: React.FC<PaginationProps> = ({
           <ChevronRight size={16} className="shrink-0" />
         </button>
       </div>
+
+      {showPageJump && totalPages > 1 && (
+        <form onSubmit={handleJump} className="jump-to-page flex items-center gap-2 ml-4 text-sm text-md-on-surface-variant relative">
+          <span>Go to page:</span>
+          <input 
+            type="text" 
+            value={jumpInput}
+            onChange={(e) => { setJumpInput(e.target.value.replace(/\D/g, '')); setJumpError(false); }}
+            placeholder={safePage.toString()}
+            className={`w-12 h-8 px-2 py-1 text-center bg-md-surface-container border rounded-lg text-md-on-surface outline-none focus:ring-1 ${jumpError ? 'border-md-error focus:ring-md-error' : 'border-md-outline/30 focus:border-md-primary focus:ring-md-primary'}`}
+          />
+          <span>of {totalPages}</span>
+          <button type="submit" className="hidden">Go</button>
+          {jumpError && (
+            <span className="absolute -bottom-5 left-0 w-max text-xs text-md-error">
+              Invalid page range
+            </span>
+          )}
+        </form>
+      )}
     </div>
   );
 };

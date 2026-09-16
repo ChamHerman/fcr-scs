@@ -13,8 +13,9 @@ import { FileUpload } from "./ui/FileUpload";
 import { useNotification } from "./ui/NotificationSystem";
 import { useAuth } from "../context/AuthContext";
 import { landAcquisitionApi } from "../services/landAcquisitionApi";
-import { BASE_URL } from "../services/api";
+import api, { BASE_URL } from "../services/api";
 import { formatCurrencyWithDecimals, formatLiveCurrency } from "../utils/currency";
+import { resolveMalaysianIdentity, parseRawIc } from "../utils/malaysianIdentity";
 import "../index.css";
 import "../pages/LandAcquisition/case_management.css";
 
@@ -27,6 +28,7 @@ export type Owner = {
   email: string;
   share: string;
   ownershipType?: string;
+  isLocked?: boolean;
 };
 
 export type Document = {
@@ -284,21 +286,47 @@ export const CaseForm: React.FC<CaseFormProps> = ({
     setSelectedProjectId(projectId);
   };
 
-  const [owners, setOwners] = useState<Owner[]>(
-    initialValues?.owners && initialValues.owners.length > 0
-      ? initialValues.owners
-      : [
-          {
-            id: "1",
-            name: "",
-            icNumber: "",
-            address: "",
-            phone: "",
-            email: "",
-            share: "100",
-          },
-        ]
-  );
+  const sanitizeOwnerList = (list: Owner[]): Owner[] => {
+    const seen = new Set<string>();
+    return list.map((o, idx) => {
+      let uid = o.id || `owner_${idx + 1}`;
+      if (seen.has(uid)) {
+        uid = `${uid}_${idx}_${Date.now()}`;
+      }
+      seen.add(uid);
+      return { ...o, id: uid };
+    });
+  };
+
+  const [owners, setOwners] = useState<Owner[]>(() => {
+    if (initialValues?.owners && initialValues.owners.length > 0) {
+      return sanitizeOwnerList(initialValues.owners);
+    }
+    return [
+      {
+        id: "1",
+        name: "",
+        icNumber: "",
+        address: "",
+        phone: "",
+        email: "",
+        share: "100",
+      },
+    ];
+  });
+
+  const [lockedOwnerIds, setLockedOwnerIds] = useState<Record<string, boolean>>(() => {
+    if (mode === "edit" && initialValues?.owners) {
+      const initialLocked: Record<string, boolean> = {};
+      initialValues.owners.forEach((o) => {
+        if (o.icNumber || o.name) {
+          initialLocked[o.id] = true;
+        }
+      });
+      return initialLocked;
+    }
+    return {};
+  });
 
   const [documents, setDocuments] = useState<Document[]>(() => {
     return MANDATORY_DOCUMENT_TYPES.map((mDoc, idx) => {
@@ -341,12 +369,47 @@ export const CaseForm: React.FC<CaseFormProps> = ({
       }
     }
     if (initialValues?.owners && initialValues.owners.length > 0) {
-      setOwners(initialValues.owners);
+      const sanitized = sanitizeOwnerList(initialValues.owners);
+      setOwners(sanitized);
+
+      // Verify and lock owners found in database
+      const toCheck = sanitized.filter((o) => (o.icNumber || "").replace(/\D/g, "").length === 12);
+      if (toCheck.length > 0) {
+        Promise.all(
+          toCheck.map(async (o) => {
+            const rawIc = o.icNumber.replace(/\D/g, "");
+            try {
+              const res = await api.get(`/users/lookup-by-ic/${rawIc}`);
+              if (res.data?.found) {
+                setLockedOwnerIds((prev) => ({ ...prev, [o.id]: true }));
+                lastLookedUpIcRef.current[o.id] = rawIc;
+              } else {
+                setLockedOwnerIds((prev) => ({ ...prev, [o.id]: false }));
+                // If name or address is not set, auto-generate based on IC
+                const identity = res.data?.data || resolveMalaysianIdentity(rawIc);
+                setOwners((prev) =>
+                  prev.map((cur) =>
+                    cur.id === o.id
+                      ? {
+                          ...cur,
+                          name: cur.name || identity.name || "",
+                          address: cur.address || identity.address || "",
+                        }
+                      : cur
+                  )
+                );
+              }
+            } catch {
+              // keep as is
+            }
+          })
+        );
+      }
     }
     if (initialValues?.documents && initialValues.documents.length > 0) {
       setDocuments(initialValues.documents);
     }
-  }, [initialValues]);
+  }, [initialValues, mode]);
 
   const handleFieldChange = (name: keyof CaseFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -418,9 +481,9 @@ export const CaseForm: React.FC<CaseFormProps> = ({
   const handleOwnershipTypeChange = (val: string) => {
     handleFieldChange("ownershipType", val);
     if (val === "Individual Citizen" || val === "Corporate Entity") {
-      setOwners((prev) => [
-        { ...(prev[0] || {}), share: "100" }
-      ]);
+      if (owners.length === 1) {
+        setOwners([{ ...(owners[0] || {}), share: "100" }]);
+      }
       setErrors((prev) => {
         const next = { ...prev };
         delete next.ownersShareTotal;
@@ -429,67 +492,31 @@ export const CaseForm: React.FC<CaseFormProps> = ({
         });
         return next;
       });
-    } else if (val === "Trustee") {
-      if (owners.length > 4) {
-        setOwners((prev) => prev.slice(0, 4));
-      }
     } else if (val === "Joint Ownership") {
-      setOwners((prev) => {
-        const owner1 = prev[0] || {
-          id: Date.now().toString(),
+      if (owners.length === 1) {
+        const secondOwner: Owner = {
+          id: `${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
           name: "",
           icNumber: "",
           address: "",
           phone: "",
           email: "",
-          share: "100",
+          share: "50",
         };
-
-        const rawShare1 = parseFloat(owner1.share);
-        let share1 = "50";
-        let share2 = "50";
-
-        if (!isNaN(rawShare1) && rawShare1 > 0 && rawShare1 < 100) {
-          share1 = String(rawShare1);
-          share2 = String(Number((100 - rawShare1).toFixed(2)));
-        }
-
-        const updatedOwner1 = { ...owner1, share: share1 };
-
-        if (prev.length >= 2) {
-          const updatedOwner2 = { ...prev[1], share: share2 };
-          return [updatedOwner1, updatedOwner2, ...prev.slice(2)];
-        } else {
-          const secondOwner: Owner = {
-            id: (Date.now() + 1).toString(),
-            name: "",
-            icNumber: "",
-            address: "",
-            phone: "",
-            email: "",
-            share: share2,
-          };
-          return [updatedOwner1, secondOwner];
-        }
-      });
+        setOwners([{ ...owners[0], share: "50" }, secondOwner]);
+      }
     }
   };
 
   const canAddOwner = () => {
-    const type = formData.ownershipType || "Individual Citizen";
-    if (type === "Individual Citizen" || type === "Corporate Entity") {
-      return false;
-    }
-    if (type === "Trustee" && owners.length >= 4) {
-      return false;
-    }
-    return true;
+    return owners.length < 20;
   };
 
   const addOwner = () => {
     if (!canAddOwner()) return;
+    const newOwnerId = `${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
     const newOwner: Owner = {
-      id: Date.now().toString(),
+      id: newOwnerId,
       name: "",
       icNumber: "",
       address: "",
@@ -497,13 +524,32 @@ export const CaseForm: React.FC<CaseFormProps> = ({
       email: "",
       share: "",
     };
-    setOwners([...owners, newOwner]);
+
+    setLockedOwnerIds((prev) => ({ ...prev, [newOwnerId]: false }));
+
+    if (owners.length === 1 && (formData.ownershipType === "Individual Citizen" || !formData.ownershipType)) {
+      handleFieldChange("ownershipType", "Joint Ownership");
+      setOwners([
+        { ...owners[0], share: "50" },
+        { ...newOwner, share: "50" },
+      ]);
+    } else {
+      setOwners([...owners, newOwner]);
+    }
   };
 
   const removeOwner = (id: string) => {
-    const minOwners = formData.ownershipType === "Joint Ownership" ? 2 : 1;
-    if (owners.length <= minOwners) return;
+    if (owners.length <= 1) return;
+    delete lastLookedUpIcRef.current[id];
+    setLockedOwnerIds((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
     const updated = owners.filter((o) => o.id !== id);
+    if (updated.length === 1) {
+      updated[0] = { ...updated[0], share: "100" };
+    }
     setOwners(updated);
 
     // Recheck total share after owner removal
@@ -523,11 +569,137 @@ export const CaseForm: React.FC<CaseFormProps> = ({
   };
 
   const handleOwnerChange = (id: string, field: keyof Owner, value: string) => {
-    const updated = owners.map((o) => (o.id === id ? { ...o, [field]: value } : o));
+    let icChanged = false;
+    const updated = owners.map((o) => {
+      if (o.id !== id) return o;
+      if (field === "icNumber") {
+        const prevDigits = o.icNumber.replace(/\D/g, "");
+        const newDigits = value.replace(/\D/g, "");
+        if (prevDigits !== newDigits) {
+          icChanged = true;
+          delete lastLookedUpIcRef.current[id];
+          setLockedOwnerIds((prev) => ({ ...prev, [id]: false }));
+
+          // Do not auto-generate while typing. Wait for blur (cursor leave) or Enter key press.
+          return {
+            ...o,
+            icNumber: value,
+            name: "",
+            address: "",
+            phone: "",
+            email: "",
+          };
+        }
+      }
+      return { ...o, [field]: value };
+    });
+
     setOwners(updated);
     clearError(`owner_${id}_${field}`);
+    if (icChanged) {
+      clearError(`owner_${id}_name`);
+      clearError(`owner_${id}_address`);
+      clearError(`owner_${id}_phone`);
+      clearError(`owner_${id}_email`);
+    }
     clearError("owners");
     clearError("ownersShareTotal");
+    clearError("duplicateIc");
+    clearError("duplicatePhone");
+    clearError("duplicateEmail");
+
+    if (field === "icNumber") {
+      const seenIcs: Record<string, string[]> = {};
+      updated.forEach((o) => {
+        const raw = o.icNumber.replace(/\D/g, "");
+        if (raw.length === 12) {
+          if (!seenIcs[raw]) seenIcs[raw] = [];
+          seenIcs[raw].push(o.id);
+        }
+      });
+
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.duplicateIc;
+        updated.forEach((o) => {
+          if (next[`owner_${o.id}_icNumber`]?.includes("Duplicate")) {
+            delete next[`owner_${o.id}_icNumber`];
+          }
+        });
+        Object.entries(seenIcs).forEach(([icDigits, ownerIds]) => {
+          if (ownerIds.length > 1) {
+            ownerIds.forEach((oid) => {
+              next[`owner_${oid}_icNumber`] =
+                "Duplicate Identification Number. Each owner must have a unique NRIC.";
+            });
+            next.duplicateIc = `Duplicate Identification Number detected across multiple owners. Each owner must have a unique NRIC.`;
+          }
+        });
+        return next;
+      });
+    }
+
+    if (field === "phone") {
+      const seenPhones: Record<string, string[]> = {};
+      updated.forEach((o) => {
+        const raw = o.phone.replace(/[\s\-+]/g, "");
+        if (raw.length >= 9) {
+          if (!seenPhones[raw]) seenPhones[raw] = [];
+          seenPhones[raw].push(o.id);
+        }
+      });
+
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.duplicatePhone;
+        updated.forEach((o) => {
+          if (next[`owner_${o.id}_phone`]?.includes("Duplicate")) {
+            delete next[`owner_${o.id}_phone`];
+          }
+        });
+        Object.entries(seenPhones).forEach(([phoneDigits, ownerIds]) => {
+          if (ownerIds.length > 1) {
+            ownerIds.forEach((oid) => {
+              next[`owner_${oid}_phone`] =
+                "Duplicate phone number. Each owner must have a unique phone number.";
+            });
+            next.duplicatePhone = "Duplicate phone number detected across multiple owners. Each owner must have a unique phone number.";
+          }
+        });
+        return next;
+      });
+    }
+
+    if (field === "email") {
+      const seenEmails: Record<string, string[]> = {};
+      updated.forEach((o) => {
+        const norm = o.email.trim().toLowerCase();
+        if (norm.length > 3) {
+          if (!seenEmails[norm]) seenEmails[norm] = [];
+          seenEmails[norm].push(o.id);
+        }
+      });
+
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.duplicateEmail;
+        updated.forEach((o) => {
+          if (next[`owner_${o.id}_email`]?.includes("Duplicate")) {
+            delete next[`owner_${o.id}_email`];
+          }
+        });
+        Object.entries(seenEmails).forEach(([normEmail, ownerIds]) => {
+          if (ownerIds.length > 1) {
+            ownerIds.forEach((oid) => {
+              next[`owner_${oid}_email`] =
+                "Duplicate email address. Each owner must have a unique email address.";
+            });
+            next.duplicateEmail = "Duplicate email address detected across multiple owners. Each owner must have a unique email address.";
+          }
+        });
+        return next;
+      });
+    }
 
     if (field === "share") {
       const valNum = parseFloat(value);
@@ -561,6 +733,108 @@ export const CaseForm: React.FC<CaseFormProps> = ({
           return next;
         });
       }
+    }
+  };
+
+  const lastLookedUpIcRef = React.useRef<Record<string, string>>({});
+  const [lookingUpOwnerId, setLookingUpOwnerId] = useState<string | null>(null);
+
+  const handleOwnerIcBlurOrLeave = async (ownerId: string, overrideIc?: string) => {
+    const owner = owners.find((o) => o.id === ownerId);
+    if (!owner && !overrideIc) return;
+
+    const icStr = (overrideIc && overrideIc.trim() !== "") ? overrideIc : (owner?.icNumber || "");
+    const rawIc = icStr.replace(/\D/g, "");
+    if (rawIc.length !== 12) return;
+
+    if (lastLookedUpIcRef.current[ownerId] === rawIc) return;
+    lastLookedUpIcRef.current[ownerId] = rawIc;
+
+    setLookingUpOwnerId(ownerId);
+
+    try {
+      // Query backend to look up user in database by IC
+      const response = await api.get(`/users/lookup-by-ic/${rawIc}`);
+      const resData = response.data;
+
+      if (resData?.found && resData?.data) {
+        const userData = resData.data;
+        setLockedOwnerIds((prev) => ({ ...prev, [ownerId]: true }));
+        setOwners((prev) =>
+          prev.map((o) =>
+            o.id === ownerId
+              ? {
+                  ...o,
+                  name: userData.name || o.name || "",
+                  address: userData.address || o.address || "",
+                  phone: userData.contactNumber || o.phone || "",
+                  email: userData.email || o.email || "",
+                }
+              : o
+          )
+        );
+        clearError(`owner_${ownerId}_name`);
+        clearError(`owner_${ownerId}_address`);
+        if (userData.contactNumber) clearError(`owner_${ownerId}_phone`);
+        if (userData.email) clearError(`owner_${ownerId}_email`);
+
+        notify({
+          type: "success",
+          title: "Owner Details Found",
+          message: `Retrieved ${userData.name} from database. Citizen details are locked.`,
+        });
+        return;
+      }
+
+      // If not found in database: auto-generate full name and address based on IC number
+      const generated = (resData?.data?.name && resData?.data?.address)
+        ? resData.data
+        : resolveMalaysianIdentity(rawIc);
+
+      setLockedOwnerIds((prev) => ({ ...prev, [ownerId]: false }));
+      setOwners((prev) =>
+        prev.map((o) =>
+          o.id === ownerId
+            ? {
+                ...o,
+                name: generated.name || "",
+                address: generated.address || "",
+                phone: o.phone || "",
+                email: o.email || "",
+              }
+            : o
+        )
+      );
+      clearError(`owner_${ownerId}_name`);
+      clearError(`owner_${ownerId}_address`);
+
+      notify({
+        type: "success",
+        title: "Owner Details Generated",
+        message: `Generated ${generated.name || "Land Owner"}. Name and address are locked.`,
+      });
+    } catch (err) {
+      console.warn("Backend IC lookup failed:", err);
+      // On error, auto-generate from IC locally
+      const identity = resolveMalaysianIdentity(rawIc);
+      setLockedOwnerIds((prev) => ({ ...prev, [ownerId]: false }));
+      setOwners((prev) =>
+        prev.map((o) =>
+          o.id === ownerId
+            ? {
+                ...o,
+                name: identity.name || "",
+                address: identity.address || "",
+                phone: o.phone || "",
+                email: o.email || "",
+              }
+            : o
+        )
+      );
+      clearError(`owner_${ownerId}_name`);
+      clearError(`owner_${ownerId}_address`);
+    } finally {
+      setLookingUpOwnerId(null);
     }
   };
 
@@ -630,16 +904,37 @@ export const CaseForm: React.FC<CaseFormProps> = ({
         (owner) =>
           owner.name.trim() &&
           owner.icNumber.trim() &&
+          owner.icNumber.replace(/\D/g, "").length === 12 &&
           owner.address.trim() &&
           owner.phone.trim() &&
           !validatePhoneNumber(owner.phone) &&
           owner.email.trim() &&
           !validateEmailFormat(owner.email) &&
-          owner.share.trim()
+          (owners.length === 1 || Boolean(owner.share.trim() && parseFloat(owner.share) > 0))
       );
       if (!allFilled) return false;
-      const total = calculateTotalShare(owners);
-      if (total !== 100) return false;
+      if (owners.length > 1) {
+        const cleanIcs = owners
+          .map((o) => o.icNumber.replace(/\D/g, ""))
+          .filter((ic) => ic.length === 12);
+        const uniqueIcs = new Set(cleanIcs);
+        if (uniqueIcs.size !== cleanIcs.length) return false;
+
+        const cleanPhones = owners
+          .map((o) => o.phone.replace(/[\s\-+]/g, ""))
+          .filter(Boolean);
+        const uniquePhones = new Set(cleanPhones);
+        if (uniquePhones.size !== cleanPhones.length) return false;
+
+        const cleanEmails = owners
+          .map((o) => o.email.trim().toLowerCase())
+          .filter(Boolean);
+        const uniqueEmails = new Set(cleanEmails);
+        if (uniqueEmails.size !== cleanEmails.length) return false;
+
+        const total = calculateTotalShare(owners);
+        if (Math.abs(total - 100) >= 0.01) return false;
+      }
       return true;
     } else if (stepIndex === 3) {
       return MANDATORY_DOCUMENT_TYPES.every((mDoc) => {
@@ -710,6 +1005,10 @@ export const CaseForm: React.FC<CaseFormProps> = ({
         stepErrors.owners = "Please add at least one owner.";
       } else {
         let totalShare = 0;
+        const seenIcs: Record<string, string> = {};
+        const seenPhones: Record<string, string> = {};
+        const seenEmails: Record<string, string> = {};
+
         for (const owner of owners) {
           if (!owner.name.trim()) stepErrors[`owner_${owner.id}_name`] = "Full name is required.";
           
@@ -719,6 +1018,18 @@ export const CaseForm: React.FC<CaseFormProps> = ({
             const rawDigits = owner.icNumber.replace(/\D/g, "");
             if (rawDigits.length !== 12) {
               stepErrors[`owner_${owner.id}_icNumber`] = "Identification number must be exactly 12 digits (e.g. 900101-14-5532).";
+            } else {
+              if (seenIcs[rawDigits]) {
+                const prevOwnerId = seenIcs[rawDigits];
+                stepErrors[`owner_${owner.id}_icNumber`] =
+                  "Duplicate Identification Number. Each owner must have a unique NRIC.";
+                stepErrors[`owner_${prevOwnerId}_icNumber`] =
+                  "Duplicate Identification Number. Each owner must have a unique NRIC.";
+                stepErrors.duplicateIc =
+                  `Duplicate Identification Number (${owner.icNumber}) detected across multiple owners. Each owner must have a unique NRIC.`;
+              } else {
+                seenIcs[rawDigits] = owner.id;
+              }
             }
           }
 
@@ -730,6 +1041,19 @@ export const CaseForm: React.FC<CaseFormProps> = ({
             const phoneErr = validatePhoneNumber(owner.phone);
             if (phoneErr) {
               stepErrors[`owner_${owner.id}_phone`] = phoneErr;
+            } else {
+              const rawPhone = owner.phone.replace(/[\s\-+]/g, "");
+              if (seenPhones[rawPhone]) {
+                const prevOwnerId = seenPhones[rawPhone];
+                stepErrors[`owner_${owner.id}_phone`] =
+                  "Duplicate phone number. Each owner must have a unique phone number.";
+                stepErrors[`owner_${prevOwnerId}_phone`] =
+                  "Duplicate phone number. Each owner must have a unique phone number.";
+                stepErrors.duplicatePhone =
+                  `Duplicate phone number (${owner.phone}) detected across multiple owners. Each owner must have a unique phone number.`;
+              } else {
+                seenPhones[rawPhone] = owner.id;
+              }
             }
           }
 
@@ -739,23 +1063,40 @@ export const CaseForm: React.FC<CaseFormProps> = ({
             const emailErr = validateEmailFormat(owner.email);
             if (emailErr) {
               stepErrors[`owner_${owner.id}_email`] = emailErr;
+            } else {
+              const normEmail = owner.email.trim().toLowerCase();
+              if (seenEmails[normEmail]) {
+                const prevOwnerId = seenEmails[normEmail];
+                stepErrors[`owner_${owner.id}_email`] =
+                  "Duplicate email address. Each owner must have a unique email address.";
+                stepErrors[`owner_${prevOwnerId}_email`] =
+                  "Duplicate email address. Each owner must have a unique email address.";
+                stepErrors.duplicateEmail =
+                  `Duplicate email address (${owner.email}) detected across multiple owners. Each owner must have a unique email address.`;
+              } else {
+                seenEmails[normEmail] = owner.id;
+              }
             }
           }
 
-          if (!owner.share.trim()) {
-            stepErrors[`owner_${owner.id}_share`] = "Ownership share (%) is required.";
+          if (owners.length === 1) {
+            totalShare = 100;
           } else {
-            const shareNum = parseFloat(owner.share);
-            if (isNaN(shareNum) || shareNum <= 0) {
-              stepErrors[`owner_${owner.id}_share`] = "Ownership share cannot be 0%. Each owner must have a share greater than 0%.";
-            } else if (shareNum > 100) {
-              stepErrors[`owner_${owner.id}_share`] = "Share cannot exceed 100%.";
+            if (!owner.share.trim()) {
+              stepErrors[`owner_${owner.id}_share`] = "Ownership share (%) is required.";
+            } else {
+              const shareNum = parseFloat(owner.share);
+              if (isNaN(shareNum) || shareNum <= 0) {
+                stepErrors[`owner_${owner.id}_share`] = "Ownership share cannot be 0%. Each owner must have a share greater than 0%.";
+              } else if (shareNum > 100) {
+                stepErrors[`owner_${owner.id}_share`] = "Share cannot exceed 100%.";
+              }
+              totalShare += isNaN(shareNum) ? 0 : shareNum;
             }
-            totalShare += isNaN(shareNum) ? 0 : shareNum;
           }
         }
 
-        if (totalShare !== 100) {
+        if (owners.length > 1 && Math.abs(totalShare - 100) >= 0.01) {
           const formattedTotal = Number(totalShare.toFixed(2)).toString();
           if (totalShare > 100) {
             for (const owner of owners) {
@@ -795,11 +1136,32 @@ export const CaseForm: React.FC<CaseFormProps> = ({
       if (showAlert) {
         const firstKey = Object.keys(stepErrors)[0];
         const firstMessage = stepErrors[firstKey];
-        notify({
-          type: "error",
-          title: "Incomplete Form Details",
-          message: firstMessage,
-        });
+
+        if (stepErrors.duplicateIc) {
+          notify({
+            type: "error",
+            title: "Duplicate Identification Number",
+            message: stepErrors.duplicateIc,
+          });
+        } else if (stepErrors.duplicatePhone) {
+          notify({
+            type: "error",
+            title: "Duplicate Phone Number",
+            message: stepErrors.duplicatePhone,
+          });
+        } else if (stepErrors.duplicateEmail) {
+          notify({
+            type: "error",
+            title: "Duplicate Email Address",
+            message: stepErrors.duplicateEmail,
+          });
+        } else {
+          notify({
+            type: "error",
+            title: "Incomplete Form Details",
+            message: firstMessage,
+          });
+        }
 
         // Automatically focus and scroll into view the first invalid input
         setTimeout(() => {
@@ -899,13 +1261,20 @@ export const CaseForm: React.FC<CaseFormProps> = ({
       };
     }
 
+    const resolvedOwnershipType =
+      formData.ownershipType || (owners.length > 1 ? "Joint Ownership" : "Individual Citizen");
+
     const resolvedOwners = owners.map((o) => ({
       ...o,
-      ownershipType: formData.ownershipType || "Individual Citizen",
-      share: o.share || "1/1",
+      ownershipType: resolvedOwnershipType,
+      share: owners.length === 1 ? "100" : (o.share || "50"),
     }));
 
-    await onSubmit({ formData: finalFormData, owners: resolvedOwners, documents });
+    await onSubmit({
+      formData: { ...finalFormData, ownershipType: resolvedOwnershipType },
+      owners: resolvedOwners,
+      documents,
+    });
   };
 
   const getUserInitials = (name?: string) => {
@@ -1306,28 +1675,23 @@ export const CaseForm: React.FC<CaseFormProps> = ({
             </div>
 
             {/* Total Share Summary Banner */}
-            {(() => {
-              if (
-                formData.ownershipType === "Individual Citizen" ||
-                formData.ownershipType === "Corporate Entity"
-              ) {
-                return null;
-              }
+            {owners.length > 1 && (() => {
               const currentTotal = calculateTotalShare(owners);
+              const isExact = Math.abs(currentTotal - 100) < 0.01;
               const isOver = currentTotal > 100;
               const isUnder = currentTotal < 100;
               const formatted = Number(currentTotal.toFixed(2)).toString();
               return (
                 <div
                   className={`p-4 rounded-xl border flex items-center justify-between gap-2 transition-colors ${
-                    isOver || isUnder
+                    !isExact
                       ? "bg-md-error/10 border-md-error/40 text-md-error"
                       : "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
                   }`}
                 >
                   <div className="flex items-center gap-2 font-medium text-xs sm:text-sm">
                     <span>Total Ownership Share Allocated:</span>
-                    <span className={`font-bold ${isOver || isUnder ? "text-md-error" : ""}`}>
+                    <span className={`font-bold ${!isExact ? "text-md-error" : ""}`}>
                       {formatted}% / 100%
                     </span>
                     {isOver && (
@@ -1352,18 +1716,35 @@ export const CaseForm: React.FC<CaseFormProps> = ({
             )}
 
             <div className="space-y-6">
-              {owners.map((owner, index) => (
+              {owners.map((owner, index) => {
+                const isOwnerLocked = !!lockedOwnerIds[owner.id];
+                const hasValidIc = (owner.icNumber || "").replace(/\D/g, "").length === 12;
+                const isNameLocked = isOwnerLocked || Boolean(owner.name && hasValidIc);
+                const isAddressLocked = isOwnerLocked || Boolean(owner.address && hasValidIc);
+
+                return (
                 <div
                   key={owner.id}
                   className="p-6 bg-md-surface-container rounded-2xl border border-md-outline/10 relative space-y-5"
                 >
                   <div className="flex items-center justify-between">
-                    <div className="text-sm font-bold text-md-primary">
-                      Owner #{index + 1}
+                    <div className="flex items-center gap-2.5">
+                      <div className="text-sm font-bold text-md-primary">
+                        Owner #{index + 1}
+                      </div>
+                      {isOwnerLocked ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                          <Lucide.Lock size={12} />
+                          Verified Citizen (Details Locked)
+                        </span>
+                      ) : isNameLocked && isAddressLocked ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-500/10 text-brand-700 dark:text-brand-300 border border-brand-500/30">
+                          <Lucide.Lock size={12} />
+                          Name & Address Locked
+                        </span>
+                      ) : null}
                     </div>
-                    {(formData.ownershipType === "Joint Ownership"
-                      ? owners.length > 2 && index >= 2
-                      : owners.length > 1) && (
+                    {owners.length > 1 && (
                       <IconButton
                         title="Remove Owner"
                         size="sm"
@@ -1378,19 +1759,6 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                   {/* Row 1: Full Name | Identification Number */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <Input
-                        id={`owner_${owner.id}_name`}
-                        name={`owner_${owner.id}_name`}
-                        label="Full Name *"
-                        value={owner.name}
-                        error={errors[`owner_${owner.id}_name`]}
-                        onChange={(e) =>
-                          handleOwnerChange(owner.id, "name", e.target.value)
-                        }
-                        placeholder="e.g., Tan Ah Kow / Syarikat ABC Sdn Bhd"
-                      />
-                    </div>
-                    <div>
                       <IdentificationInput
                         id={`owner_${owner.id}_icNumber`}
                         name={`owner_${owner.id}_icNumber`}
@@ -1400,7 +1768,46 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                         onChange={(e) =>
                           handleOwnerChange(owner.id, "icNumber", e.target.value)
                         }
+                        onBlur={(e) => handleOwnerIcBlurOrLeave(owner.id, e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleOwnerIcBlurOrLeave(owner.id, (e.target as HTMLInputElement).value);
+                          }
+                        }}
                         placeholder="e.g., 800101-10-1234"
+                      />
+                      {lookingUpOwnerId === owner.id && (
+                        <p className="text-xs text-brand-600 dark:text-brand-400 mt-1 animate-pulse">
+                          Checking user registry...
+                        </p>
+                      )}
+                      {isOwnerLocked && lookingUpOwnerId !== owner.id ? (
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1 font-medium">
+                          <CheckCircle2 size={13} />
+                          Citizen found in database. Personal details are locked.
+                        </p>
+                      ) : isNameLocked && isAddressLocked && lookingUpOwnerId !== owner.id ? (
+                        <p className="text-xs text-brand-600 dark:text-brand-400 mt-1 flex items-center gap-1 font-medium">
+                          <CheckCircle2 size={13} />
+                          Name and address generated from IC and locked.
+                        </p>
+                      ) : null}
+                    </div>
+                    <div>
+                      <Input
+                        id={`owner_${owner.id}_name`}
+                        name={`owner_${owner.id}_name`}
+                        label="Full Name *"
+                        value={owner.name}
+                        disabled={isNameLocked}
+                        readOnly={isNameLocked}
+                        suffix={isNameLocked ? <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium"><Lucide.Lock size={12} /> Locked</span> : undefined}
+                        error={errors[`owner_${owner.id}_name`]}
+                        onChange={(e) =>
+                          handleOwnerChange(owner.id, "name", e.target.value)
+                        }
+                        placeholder="e.g., Tan Ah Kow / Syarikat ABC Sdn Bhd"
                       />
                     </div>
                   </div>
@@ -1412,6 +1819,9 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                       name={`owner_${owner.id}_address`}
                       label="Address *"
                       value={owner.address}
+                      disabled={isAddressLocked}
+                      readOnly={isAddressLocked}
+                      suffix={isAddressLocked ? <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium"><Lucide.Lock size={12} /> Locked</span> : undefined}
                       error={errors[`owner_${owner.id}_address`]}
                       onChange={(e) =>
                         handleOwnerChange(owner.id, "address", e.target.value)
@@ -1429,6 +1839,9 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                         label="Phone Number *"
                         type="tel"
                         value={owner.phone}
+                        disabled={isOwnerLocked}
+                        readOnly={isOwnerLocked}
+                        suffix={isOwnerLocked ? <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium"><Lucide.Lock size={12} /> Locked</span> : undefined}
                         error={errors[`owner_${owner.id}_phone`]}
                         onChange={(e) =>
                           handleOwnerChange(owner.id, "phone", e.target.value)
@@ -1443,6 +1856,9 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                         label="Email *"
                         type="email"
                         value={owner.email}
+                        disabled={isOwnerLocked}
+                        readOnly={isOwnerLocked}
+                        suffix={isOwnerLocked ? <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium"><Lucide.Lock size={12} /> Locked</span> : undefined}
                         error={errors[`owner_${owner.id}_email`]}
                         onChange={(e) =>
                           handleOwnerChange(owner.id, "email", e.target.value)
@@ -1463,26 +1879,19 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                         min="0"
                         max="100"
                         step="any"
-                        disabled={
-                          formData.ownershipType === "Individual Citizen" ||
-                          formData.ownershipType === "Corporate Entity"
-                        }
-                        value={
-                          formData.ownershipType === "Individual Citizen" ||
-                          formData.ownershipType === "Corporate Entity"
-                            ? "100"
-                            : owner.share
-                        }
+                        disabled={owners.length === 1}
+                        value={owners.length === 1 ? "100" : owner.share}
                         error={errors[`owner_${owner.id}_share`]}
                         onChange={(e) =>
                           handleOwnerChange(owner.id, "share", e.target.value)
                         }
-                        placeholder="e.g., 50 or 100"
+                        placeholder={owners.length === 1 ? "100" : "e.g., 50"}
                       />
                     </div>
                   </div>
                 </div>
-              ))}
+              );
+            })}
             </div>
           </div>
         );
