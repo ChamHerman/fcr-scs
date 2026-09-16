@@ -40,10 +40,15 @@ import type {
 
 const SUPPORTED_TYPES = ['Case Status Report', 'Payment Report', 'Blockchain Audit Report'];
 
-const REPORT_CODE: Record<string, string> = {
-  'Case Status Report': 'FR-RPT-015',
-  'Payment Report': 'FR-RPT-014',
-  'Blockchain Audit Report': 'FR-RPT-013',
+/* One description per report function, mirroring the per-report subtitles on the
+   reporting dashboard so every report type explains what it covers. */
+const REPORT_DESCRIPTIONS: Record<string, string> = {
+  'Case Status Report':
+    'Filter the acquisition lifecycle by state, status and registration date range to review case aging and statutory progress.',
+  'Payment Report':
+    'Filter the disbursement ledger by status and date range to review bank clearance, settlement outcomes and success rates.',
+  'Blockchain Audit Report':
+    'Filter the notarization ledger by status and publication date range to review on-chain publication and document integrity.',
 };
 
 export const GenerateReports: React.FC = () => {
@@ -177,11 +182,11 @@ export const GenerateReports: React.FC = () => {
             <div className="flex items-center gap-3">
               <h1 className="text-2xl md:text-3xl font-bold">Generate Filtering Reports</h1>
               <span className="px-2 py-1 rounded-lg bg-md-primary/15 text-md-primary font-bold text-xs whitespace-nowrap">
-                {REPORT_CODE[category]}
+                {category}
               </span>
             </div>
-            <p className="text-md-on-surface-variant mt-1 max-w-2xl">
-              Configure filter parameters for the {category}. The preview updates in real time as you change the filters.
+            <p className="text-md-on-surface-variant mt-1 max-w-3xl">
+              {REPORT_DESCRIPTIONS[category]} The preview updates in real time as you change the filters.
             </p>
           </div>
         </div>
@@ -199,7 +204,7 @@ export const GenerateReports: React.FC = () => {
           <div className="md:col-span-2 flex items-center gap-2 px-4 py-3 rounded-xl bg-md-secondary-container text-md-on-secondary-container text-sm">
             <FileText size={16} />
             <span>
-              Generating: <strong>{category}</strong> ({REPORT_CODE[category]})
+              Generating: <strong>{category}</strong>
             </span>
           </div>
 

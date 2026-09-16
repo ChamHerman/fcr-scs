@@ -116,54 +116,93 @@ export const ReportSummaryCards: React.FC<{ data: ReportGeneratedResponse }> = (
 
 /* ─────────────────────── Record preview table ─────────────────────── */
 
-/* Renders the details rows with design-system styling: the status column gets a
-   colored pill badge, long hashes/addresses are truncated. */
+/* Preferred column order per report type, so every preview lines up with the
+   dashboard tables that use the same design-system tokens. */
+const PREFERRED_COLUMNS: Record<string, string[]> = {
+  'Case Status Report': ['caseId', 'title', 'state', 'district', 'status', 'date', 'lifecycleAging'],
+  'Payment Report': ['caseId', 'payeeName', 'bankName', 'amount', 'bankReference', 'status', 'date'],
+  'Blockchain Audit Report': ['caseId', 'milestone', 'transactionHash', 'documentHash', 'status', 'publishedAt'],
+};
+
+const COLUMN_LABELS: Record<string, string> = {
+  caseId: 'Case Ref',
+  title: 'Case Title',
+  state: 'State',
+  district: 'District',
+  status: 'Status',
+  date: 'Date',
+  lifecycleAging: 'Lifecycle Aging',
+  payeeName: 'Payee',
+  bankName: 'Bank Name',
+  amount: 'Amount',
+  bankReference: 'Bank Reference',
+  milestone: 'Milestone',
+  transactionHash: 'Transaction Hash',
+  documentHash: 'Document Hash',
+  publishedAt: 'Published Date',
+};
+
+const columnLabel = (key: string) =>
+  COLUMN_LABELS[key] ?? key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
+
+/* Renders every record with design-system styling: status columns get a coloured
+   pill badge and hash/address values keep their full length in monospace. */
 export const ReportDataTable: React.FC<{ data: ReportGeneratedResponse }> = ({ data }) => {
+  const rows: Record<string, any>[] = data.details ?? [];
+
+  const columns = React.useMemo(() => {
+    if (rows.length === 0) return [] as string[];
+    const present = new Set(Object.keys(rows[0]));
+    const preferred = (PREFERRED_COLUMNS[data.reportType] ?? []).filter((k) => present.has(k));
+    const remaining = Object.keys(rows[0]).filter((k) => !preferred.includes(k));
+    return [...preferred, ...remaining];
+  }, [rows, data.reportType]);
+
   return (
     <div className="bg-md-surface-container rounded-xl shadow-sm overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr>
-            {data.details && data.details.length > 0 ? (
-              Object.keys(data.details[0]).map((key) => (
-                <th key={key} className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant whitespace-nowrap">
-                  {key.replace(/([A-Z])/g, ' $1').toUpperCase()}
-                </th>
-              ))
-            ) : (
-              <>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Case ID</th>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Title</th>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Status</th>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Date</th>
-              </>
-            )}
+            {columns.map((key) => (
+              <th
+                key={key}
+                className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant whitespace-nowrap"
+              >
+                {columnLabel(key)}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
-          {data.details && data.details.length > 0 ? (
-            data.details.slice(0, 25).map((row: Record<string, any>, idx) => (
-              <tr key={idx} className="border-t border-md-outline/10 hover:bg-md-primary/5 transition-colors">
-                {Object.entries(row).map(([key, val]) => (
-                  <td key={key} className="px-4 py-3">
-                    {key.toLowerCase() === 'status' ? (
-                      <StatusBadge status={String(val)} />
-                    ) : typeof val === 'string' && (val.startsWith('0x') || val.length > 30) ? (
-                      <span className="font-medium font-mono text-xs text-md-on-surface-variant">{val.slice(0, 16)}...</span>
-                    ) : (
-                      <span className="text-md-on-surface-variant">{String(val ?? '-')}</span>
-                    )}
-                  </td>
-                ))}
-              </tr>
-            ))
-          ) : (
+          {rows.length === 0 || columns.length === 0 ? (
             <tr>
-              <td colSpan={6} className="px-4 py-8 text-center text-md-on-surface-variant">
+              <td colSpan={Math.max(columns.length, 1)} className="px-4 py-8 text-center text-md-on-surface-variant">
                 <AlertCircle size={24} className="mx-auto mb-2 opacity-50" />
                 No preview records found. Adjust your filters.
               </td>
             </tr>
+          ) : (
+            rows.map((row, idx) => (
+              <tr key={idx} className="border-t border-md-outline/10 hover:bg-md-primary/5 transition-colors">
+                {columns.map((key) => {
+                  const value = row[key];
+                  if (key.toLowerCase() === 'status') {
+                    return (
+                      <td key={key} className="px-4 py-3">
+                        <StatusBadge status={String(value)} />
+                      </td>
+                    );
+                  }
+                  const text = String(value ?? '-');
+                  const isHash = key.toLowerCase().includes('hash') || text.startsWith('0x');
+                  return (
+                    <td key={key} className="px-4 py-3 text-md-on-surface-variant">
+                      {isHash ? <span className="font-mono text-xs break-all">{text}</span> : text}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))
           )}
         </tbody>
       </table>
