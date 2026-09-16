@@ -491,12 +491,19 @@ export async function lookupByIc(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    // 3. If not found in either table, return found: false with null data so fields remain empty
+    // 3. If not found in either table, auto-generate name and address based on the IC number
+    // using the resolveMalaysianIdentity function from the user registration module
+    const identity = resolveMalaysianIdentity(rawIc);
     res.json({
       success: true,
       found: false,
-      source: 'database',
-      data: null,
+      source: 'generated',
+      data: {
+        name: identity.name,
+        address: identity.address,
+        email: '',
+        contactNumber: '',
+      },
     });
   } catch (error) {
     console.error('[Lookup By IC Error]', error);
