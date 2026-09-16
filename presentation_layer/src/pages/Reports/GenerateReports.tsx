@@ -67,7 +67,6 @@ export const GenerateReports: React.FC = () => {
   };
 
   const [state, setState] = useState<string>('All');
-  const [location, setLocation] = useState<string>('All');
   const [status, setStatus] = useState<string>('All');
   const [startDate, setStartDate] = useState<string>('2026-01-01');
   const [endDate, setEndDate] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -79,8 +78,6 @@ export const GenerateReports: React.FC = () => {
   const [downloading, setDownloading] = useState<boolean>(false);
 
   const seqRef = useRef(0);
-
-  const locationOptions = useMemo(() => (state === 'All' ? [] : (STATES[state] ?? [])), [state]);
 
   /* Values are real enum members; labels come from the owning module's map. */
   const currentStatusOptions = useMemo<SelectOption[]>(() => {
@@ -101,9 +98,8 @@ export const GenerateReports: React.FC = () => {
       endDate,
       state: state === 'All' ? undefined : state,
       status: status === 'All' ? undefined : status,
-      location: location === 'All' ? undefined : location,
     };
-  }, [startDate, endDate, state, status, location]);
+  }, [startDate, endDate, state, status]);
 
   const loadPreview = useCallback(async () => {
     const seq = ++seqRef.current;
@@ -208,29 +204,15 @@ export const GenerateReports: React.FC = () => {
           </div>
 
           {category === 'Case Status Report' && (
-            <>
-              <Select
-                label="State / Territory"
-                value={state}
-                onChange={(v) => {
-                  setState(v);
-                  setLocation('All');
-                }}
-                options={[
-                  { value: 'All', label: 'All States' },
-                  ...Object.keys(STATES).map((s) => ({ value: s, label: s })),
-                ]}
-              />
-              <Select
-                label="District / Location"
-                value={location}
-                onChange={setLocation}
-                options={[
-                  { value: 'All', label: 'All Districts' },
-                  ...locationOptions.map((loc) => ({ value: loc, label: loc })),
-                ]}
-              />
-            </>
+            <Select
+              label="State / Territory"
+              value={state}
+              onChange={setState}
+              options={[
+                { value: 'All', label: 'All States' },
+                ...Object.keys(STATES).map((s) => ({ value: s, label: s })),
+              ]}
+            />
           )}
 
           <Select
