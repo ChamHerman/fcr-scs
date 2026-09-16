@@ -56,9 +56,27 @@ export const MemberDashboard: React.FC = () => {
   // Modals & Navigation state
   const [showOfferModal, setShowOfferModal] = useState<boolean>(false);
   const [expandedStep, setExpandedStep] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<'workflow' | 'objections' | 'documents' | 'officer'>('workflow');
+  const [activeTab, setActiveTab] = useState<'workflow' | 'objections' | 'documents' | 'officer'>(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam && ['workflow', 'objections', 'documents', 'officer'].includes(tabParam)) {
+      return tabParam as 'workflow' | 'objections' | 'documents' | 'officer';
+    }
+    return 'workflow';
+  });
   const [tabDropdownOpen, setTabDropdownOpen] = useState<boolean>(false);
   const tabDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Synchronize state when URL search params change
+  useEffect(() => {
+    const caseIdFromUrl = searchParams.get('caseId');
+    if (caseIdFromUrl && caseIdFromUrl !== selectedCaseId) {
+      setSelectedCaseId(caseIdFromUrl);
+    }
+    const tabFromUrl = searchParams.get('tab');
+    if (tabFromUrl && ['workflow', 'objections', 'documents', 'officer'].includes(tabFromUrl)) {
+      setActiveTab(tabFromUrl as 'workflow' | 'objections' | 'documents' | 'officer');
+    }
+  }, [searchParams]);
 
   // Close mobile tab dropdown on outside click
   useEffect(() => {
@@ -133,7 +151,10 @@ export const MemberDashboard: React.FC = () => {
         setSelectedCaseId(paramCaseId);
       } else if (userCases.length > 0) {
         setSelectedCaseId(userCases[0].caseId);
-        setSearchParams({ caseId: userCases[0].caseId }, { replace: true });
+        const newParams: Record<string, string> = { caseId: userCases[0].caseId };
+        const tab = searchParams.get('tab');
+        if (tab && tab !== 'workflow') newParams.tab = tab;
+        setSearchParams(newParams, { replace: true });
       } else {
         setSelectedCaseId('');
       }
@@ -295,7 +316,24 @@ export const MemberDashboard: React.FC = () => {
   // Handle Case Switcher
   const handleCaseChange = (newCaseId: string) => {
     setSelectedCaseId(newCaseId);
-    setSearchParams({ caseId: newCaseId }, { replace: true });
+    const newParams: Record<string, string> = { caseId: newCaseId };
+    if (activeTab && activeTab !== 'workflow') {
+      newParams.tab = activeTab;
+    }
+    setSearchParams(newParams, { replace: true });
+  };
+
+  // Handle Tab Switcher
+  const handleTabChange = (newTab: 'workflow' | 'objections' | 'documents' | 'officer') => {
+    setActiveTab(newTab);
+    const newParams: Record<string, string> = {};
+    if (selectedCaseId) {
+      newParams.caseId = selectedCaseId;
+    }
+    if (newTab !== 'workflow') {
+      newParams.tab = newTab;
+    }
+    setSearchParams(newParams, { replace: true });
   };
 
   // ---------------------------------------------------------------------------
@@ -587,7 +625,7 @@ export const MemberDashboard: React.FC = () => {
                   role="option"
                   aria-selected={activeTab === 'workflow'}
                   onClick={() => {
-                    setActiveTab('workflow');
+                    handleTabChange('workflow');
                     setTabDropdownOpen(false);
                   }}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer text-left ${
@@ -610,7 +648,7 @@ export const MemberDashboard: React.FC = () => {
                   role="option"
                   aria-selected={activeTab === 'objections'}
                   onClick={() => {
-                    setActiveTab('objections');
+                    handleTabChange('objections');
                     setTabDropdownOpen(false);
                   }}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer text-left ${
@@ -646,7 +684,7 @@ export const MemberDashboard: React.FC = () => {
                   role="option"
                   aria-selected={activeTab === 'documents'}
                   onClick={() => {
-                    setActiveTab('documents');
+                    handleTabChange('documents');
                     setTabDropdownOpen(false);
                   }}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer text-left ${
@@ -669,7 +707,7 @@ export const MemberDashboard: React.FC = () => {
                   role="option"
                   aria-selected={activeTab === 'officer'}
                   onClick={() => {
-                    setActiveTab('officer');
+                    handleTabChange('officer');
                     setTabDropdownOpen(false);
                   }}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer text-left ${
@@ -704,7 +742,7 @@ export const MemberDashboard: React.FC = () => {
         {/* Desktop Tab Selector (Pills) */}
         <div className="flex bg-md-surface-container-low p-1.5 rounded-2xl text-xs font-semibold overflow-x-auto no-scrollbar gap-1.5 border border-md-outline/15 shadow-xs">
           <button
-            onClick={() => setActiveTab('workflow')}
+            onClick={() => handleTabChange('workflow')}
             className={`flex-1 min-w-[100px] py-2 px-3.5 rounded-xl transition text-center flex items-center justify-center gap-2 cursor-pointer ${
               activeTab === 'workflow'
                 ? 'bg-md-surface text-md-primary shadow-sm font-bold ring-1 ring-md-outline/10'
@@ -716,7 +754,7 @@ export const MemberDashboard: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab('objections')}
+            onClick={() => handleTabChange('objections')}
             className={`flex-1 min-w-[100px] py-2 px-3.5 rounded-xl transition text-center flex items-center justify-center gap-2 cursor-pointer ${
               activeTab === 'objections'
                 ? 'bg-md-surface text-md-primary shadow-sm font-bold ring-1 ring-md-outline/10'
@@ -735,7 +773,7 @@ export const MemberDashboard: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab('documents')}
+            onClick={() => handleTabChange('documents')}
             className={`flex-1 min-w-[100px] py-2 px-3.5 rounded-xl transition text-center flex items-center justify-center gap-2 cursor-pointer ${
               activeTab === 'documents'
                 ? 'bg-md-surface text-md-primary shadow-sm font-bold ring-1 ring-md-outline/10'
@@ -747,7 +785,7 @@ export const MemberDashboard: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab('officer')}
+            onClick={() => handleTabChange('officer')}
             className={`flex-1 min-w-[100px] py-2 px-3.5 rounded-xl transition text-center flex items-center justify-center gap-2 cursor-pointer ${
               activeTab === 'officer'
                 ? 'bg-md-surface text-md-primary shadow-sm font-bold ring-1 ring-md-outline/10'

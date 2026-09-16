@@ -37,6 +37,8 @@ export type OfferDetail = {
   acquiringAuthority: string;
   ownerName: string;
   ownerIc: string;
+  declarationOwnerName?: string;
+  declarationOwnerIc?: string;
   ownerAddress: string;
   ownerPhone: string;
   landTitle: string;
@@ -793,14 +795,14 @@ export const OfferLetterPreview = React.forwardRef<OfferLetterPreviewHandle, Off
         <div>
           <span className="text-[15px] font-bold text-slate-900 block mb-1">Name:</span>
           <div className="border-b border-slate-400 pb-2 text-slate-700 text-[15px]">
-            {offer.ownerName}
+            {offer.declarationOwnerName || offer.ownerName}
           </div>
         </div>
 
         <div>
           <span className="text-[15px] font-bold text-slate-900 block mb-1">NRIC:</span>
           <div className="border-b border-slate-400 pb-2 text-slate-700 text-[15px]">
-            {offer.ownerIc}
+            {offer.declarationOwnerIc || offer.ownerIc}
           </div>
         </div>
 

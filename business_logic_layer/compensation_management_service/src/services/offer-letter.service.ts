@@ -178,7 +178,13 @@ export async function getOfferLetterById(offerId: string) {
         },
       },
       landOwnership: { include: { landOwner: true, landParcel: true } },
-      objections: true,
+      objections: {
+        include: {
+          objectionDocuments: true,
+          createdBy: true,
+          reviewedBy: true,
+        },
+      },
       memberResponses: {
         include: {
           landOwner: true,
@@ -221,7 +227,13 @@ export async function getOfferLetterByCaseId(caseId: string) {
         },
       },
       landOwnership: { include: { landOwner: true, landParcel: true } },
-      objections: true,
+      objections: {
+        include: {
+          objectionDocuments: true,
+          createdBy: true,
+          reviewedBy: true,
+        },
+      },
       memberResponses: {
         include: {
           landOwner: true,
