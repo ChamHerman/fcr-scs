@@ -36,6 +36,7 @@ export async function getTestSessionToken(
 
   await prisma.userSession.create({
     data: {
+      sessionId: `SES-TEST-${crypto.randomBytes(6).toString("hex")}`,
       userId: user.userId,
       sessionToken: token,
       ipAddress: "127.0.0.1",

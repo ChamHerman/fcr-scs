@@ -1103,9 +1103,12 @@ export const AlertMonitoring: React.FC = () => {
 
             {/* Target Audience */}
             <div>
-              <label className="block text-xs font-semibold text-md-on-surface mb-1">
-                Target Recipient Role
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-md-on-surface">
+                  Target Recipient Role
+                </label>
+                <span className="text-[10px] text-md-primary font-medium">Case-Contextual Routing Active</span>
+              </div>
               <select
                 className="w-full px-3.5 py-2 text-sm rounded-xl border border-md-outline/30 bg-md-surface focus:outline-none focus:border-md-primary text-xs"
                 value={ruleForm.targetRole}
@@ -1117,6 +1120,9 @@ export const AlertMonitoring: React.FC = () => {
                   </option>
                 ))}
               </select>
+              <p className="text-[11px] text-md-on-surface-variant mt-1.5 leading-relaxed bg-md-surface-variant/30 p-2 rounded-lg border border-md-outline/10">
+                💡 <strong>Dynamic Stakeholder Routing:</strong> When an event carries a <code>Case Reference</code> (e.g. <em>LAC-2026-08-0001</em>), notifications route specifically to the involved landowner, assigned officer, or valuer for that case. Events without a case reference broadcast to all users in the selected role.
+              </p>
             </div>
 
             {/* Enable toggle */}

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MD3Card, MD3Button } from '../MD3Components';
-import { ArrowLeft, User, Mail, Phone, CreditCard, Calendar, Shield, AlertTriangle, Key, Edit, Power, PowerOff, MapPin } from 'lucide-react';
+import { ArrowLeft, User, Mail, Phone, CreditCard, Calendar, Shield, AlertTriangle, Key, Edit, Power, PowerOff, MapPin, Copy, Check, CheckCircle } from 'lucide-react';
 import { useNotification } from '../../components/ui/NotificationSystem';
+import { Modal } from '../../components/ui/Modal';
 import '../LandAcquisition/case_management.css';
 
 export const UserDetails: React.FC = () => {
@@ -12,6 +13,10 @@ export const UserDetails: React.FC = () => {
   const [user, setUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [isConfirmResetModalOpen, setIsConfirmResetModalOpen] = useState(false);
+  const [tempPasswordResult, setTempPasswordResult] = useState<string | null>(null);
+  const [copiedPass, setCopiedPass] = useState(false);
 
   const roleFormatMap: Record<string, string> = {
     SYSTEM_ADMINISTRATOR: 'System Administrator',
@@ -79,6 +84,43 @@ export const UserDetails: React.FC = () => {
     } finally {
       setIsTogglingStatus(false);
     }
+  };
+
+  const handleResetPassword = async () => {
+    if (!user) return;
+    try {
+      setIsResettingPassword(true);
+      const res = await fetch(`http://localhost:3030/api/users/${id}/admin-reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setIsConfirmResetModalOpen(false);
+        setTempPasswordResult(json.temporaryPassword);
+        notify({
+          type: 'success',
+          title: 'Password Reset Successful',
+          message: 'A temporary password has been generated and dispatched to the user\'s email.',
+        });
+      } else {
+        notify({
+          type: 'error',
+          title: 'Password Reset Failed',
+          message: json.error || 'Failed to reset password.',
+        });
+      }
+    } catch (e) {
+      notify({ type: 'error', title: 'Network Error', message: 'Could not contact server to reset password.' });
+    } finally {
+      setIsResettingPassword(false);
+    }
+  };
+
+  const copyTemporaryPassword = (password: string) => {
+    navigator.clipboard.writeText(password);
+    setCopiedPass(true);
+    setTimeout(() => setCopiedPass(false), 2000);
   };
 
   if (isLoading) {
@@ -231,13 +273,94 @@ export const UserDetails: React.FC = () => {
             <MD3Button 
               variant="tonal" 
               className="hover:shadow-md border border-transparent hover:border-md-primary hover:text-[1.05rem] transition-all duration-200" 
-              onClick={() => notify({ type: 'general', title: 'Coming Soon', message: 'Password reset functionality is under development.'})}
+              onClick={() => setIsConfirmResetModalOpen(true)}
+              disabled={user.role === 'SYSTEM_ADMINISTRATOR'}
             >
               Send Password Reset
             </MD3Button>
           </div>
         </div>
       </MD3Card>
+
+      {/* Confirmation Modal */}
+      <Modal
+        isOpen={isConfirmResetModalOpen}
+        onClose={() => setIsConfirmResetModalOpen(false)}
+        title="Confirm Password Reset"
+        footer={
+          <div className="flex gap-3">
+            <MD3Button variant="text" onClick={() => setIsConfirmResetModalOpen(false)}>
+              Cancel
+            </MD3Button>
+            <MD3Button 
+              onClick={handleResetPassword}
+              disabled={isResettingPassword}
+            >
+              {isResettingPassword ? 'Resetting...' : 'Confirm & Reset'}
+            </MD3Button>
+          </div>
+        }
+      >
+        <div className="space-y-3 py-2 text-sm text-md-on-surface">
+          <p>
+            Are you sure you want to reset the password for <strong>{user.name}</strong> ({user.email})?
+          </p>
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-900 dark:text-amber-200">
+            A new policy-compliant temporary password will be generated and dispatched to the user's email. 
+            The user will be required to change this temporary password upon their next login.
+          </div>
+        </div>
+      </Modal>
+
+      {/* Temporary Password Result Modal */}
+      <Modal
+        isOpen={!!tempPasswordResult}
+        onClose={() => setTempPasswordResult(null)}
+        title="Temporary Password Generated"
+        footer={
+          <div className="flex justify-end">
+            <MD3Button onClick={() => setTempPasswordResult(null)}>
+              Done
+            </MD3Button>
+          </div>
+        }
+      >
+        <div className="space-y-4 py-2">
+          <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm font-medium">
+            <CheckCircle size={18} />
+            <span>Credentials dispatched to <strong>{user.email}</strong></span>
+          </div>
+
+          <p className="text-xs text-md-on-surface-variant">
+            You may also provide the temporary password directly to the user if they cannot access their email:
+          </p>
+
+          <div className="flex items-center justify-between p-3.5 bg-md-surface-container rounded-xl border border-md-outline/20 font-mono text-sm">
+            <span className="font-bold tracking-wider text-md-primary select-all">
+              {tempPasswordResult}
+            </span>
+            <MD3Button 
+              variant="outlined" 
+              className="h-8 text-xs px-3"
+              onClick={() => tempPasswordResult && copyTemporaryPassword(tempPasswordResult)}
+            >
+              {copiedPass ? (
+                <>
+                  <Check size={14} className="mr-1 text-green-500" /> Copied
+                </>
+              ) : (
+                <>
+                  <Copy size={14} className="mr-1" /> Copy
+                </>
+              )}
+            </MD3Button>
+          </div>
+
+          <div className="text-[11px] text-md-on-surface-variant/70">
+            Note: The account has been flagged with first-login password rotation enforcement.
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

@@ -182,9 +182,25 @@ export async function exportAuditLogsCsv(req: Request, res: Response): Promise<v
       return `"${str}"`;
     };
 
+    const formatMytDate = (date: Date) => {
+      const formatter = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Kuala_Lumpur',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      });
+      const parts = formatter.formatToParts(date);
+      const getPart = (type: string) => parts.find((p) => p.type === type)?.value || '';
+      return `${getPart('year')}-${getPart('month')}-${getPart('day')} ${getPart('hour')}:${getPart('minute')}:${getPart('second')}`;
+    };
+
     const headers = [
       'Log ID',
-      'Timestamp (UTC)',
+      'Timestamp (MYT)',
       'Severity',
       'Module',
       'Activity Type',
@@ -213,7 +229,7 @@ export async function exportAuditLogsCsv(req: Request, res: Response): Promise<v
 
       return [
         escapeCsv(log.logId),
-        escapeCsv(log.createdAt.toISOString()),
+        escapeCsv(formatMytDate(log.createdAt)),
         escapeCsv(log.severity),
         escapeCsv(log.moduleName),
         escapeCsv(log.activityType),
@@ -285,5 +301,63 @@ export async function archiveOldLogs(req: Request, res: Response): Promise<void>
   } catch (error) {
     console.error('[AuditController] Error archiving logs:', error);
     res.status(500).json({ error: 'Failed to archive audit logs' });
+  }
+}
+
+export async function recordClientAuditLog(req: Request, res: Response): Promise<void> {
+  try {
+    const { activityType, moduleName, severity, caseReference, activityDetails, systemResponse } = req.body;
+    if (!activityType) {
+      res.status(400).json({ success: false, error: 'activityType is required' });
+      return;
+    }
+
+    const authHeader = req.headers.authorization;
+    let userId: string | null = null;
+    let userRole: string | null = null;
+    let actorName: string | null = null;
+    let actorEmail: string | null = null;
+
+    if (authHeader) {
+      const token = authHeader.replace('Bearer ', '').trim();
+      if (token) {
+        const session = await prisma.userSession.findUnique({
+          where: { sessionToken: token },
+          include: { user: true },
+        });
+        if (session?.user) {
+          userId = session.user.userId;
+          userRole = session.user.role;
+          actorName = session.user.name;
+          actorEmail = session.user.email;
+        }
+      }
+    }
+
+    // Fallback if client passed user info in activityDetails
+    if (!userId && activityDetails?.userId) userId = activityDetails.userId;
+    if (!userRole && activityDetails?.userRole) userRole = activityDetails.userRole;
+    if (!actorName && activityDetails?.userName) actorName = activityDetails.userName;
+    if (!actorEmail && activityDetails?.email) actorEmail = activityDetails.email;
+
+    logAudit({
+      userId,
+      userRole,
+      actorName,
+      actorEmail,
+      activityType,
+      moduleName: moduleName || 'ACCESS_CONTROL',
+      severity: severity || 'SECURITY',
+      caseReference: caseReference || null,
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: activityDetails || {},
+      systemResponse: systemResponse || 'ACCESS_DENIED (403)',
+    });
+
+    res.json({ success: true, message: 'Audit event recorded' });
+  } catch (error) {
+    console.error('[recordClientAuditLog Error]', error);
+    res.status(500).json({ success: false, error: 'Internal server error recording audit event' });
   }
 }

@@ -875,6 +875,82 @@ export async function toggleUserStatus(req: Request, res: Response): Promise<voi
   }
 }
 
+export async function adminResetPassword(req: Request, res: Response): Promise<void> {
+  try {
+    const id = req.params.id as string;
+    if (!id) {
+      res.status(400).json({ success: false, error: 'User ID is required' });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({ where: { userId: id } });
+    if (!user) {
+      res.status(404).json({ success: false, error: 'User not found' });
+      return;
+    }
+
+    if (user.role === 'SYSTEM_ADMINISTRATOR') {
+      res.status(403).json({ success: false, error: 'Cannot reset password for a System Administrator account.' });
+      return;
+    }
+
+    // Generate a secure temporary password satisfying policy
+    const temporaryPassword = generateTemporaryPassword();
+    const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
+
+    await prisma.user.update({
+      where: { userId: id },
+      data: {
+        passwordHash: hashedPassword,
+        mustChangePassword: true, // Enforce password change upon next login
+      },
+    });
+
+    // Send credentials email to user
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    try {
+      await sendTemplatedEmail(user.email, 'ADMIN_PASSWORD_RESET', {
+        name: user.name,
+        role: user.role.replace(/_/g, ' '),
+        email: user.email,
+        temporaryPassword,
+        loginUrl: `${frontendUrl}/login`,
+      });
+    } catch (emailErr) {
+      console.error('[Admin Reset Password] Failed to send email:', emailErr);
+    }
+
+    logAudit({
+      userId: user.userId,
+      userRole: user.role,
+      actorName: user.name,
+      actorEmail: user.email,
+      activityType: 'ADMIN_RESET_PASSWORD',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'SECURITY',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: {
+        targetUserId: user.userId,
+        targetEmail: user.email,
+        targetName: user.name,
+        action: 'TEMPORARY_PASSWORD_RESET',
+        mustChangePassword: true,
+      },
+      systemResponse: 'SUCCESS (200)',
+    });
+
+    res.json({
+      success: true,
+      message: 'Password reset successfully. A temporary password has been dispatched to the user\'s email.',
+      temporaryPassword,
+    });
+  } catch (error) {
+    console.error('[adminResetPassword Error]', error);
+    res.status(500).json({ success: false, error: 'Internal server error while resetting password' });
+  }
+}
+
 export async function changeInitialPassword(req: Request, res: Response): Promise<void> {
   try {
     const { email, currentPassword, newPassword } = req.body;

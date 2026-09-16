@@ -49,6 +49,21 @@ const STOCK_TEMPLATES: Record<string, { subject: string; bodyContent: string }> 
       <br><p>Regards,<br>The FCR-SCS Administration Team</p>
     </div>`,
   },
+  ADMIN_PASSWORD_RESET: {
+    subject: 'FCR-SCS: Your Password Has Been Reset',
+    bodyContent: `<div style="font-family: sans-serif; padding: 20px; color: #1f2937;">
+      <h2 style="color: #0066cc;">Password Reset By Administrator</h2>
+      <p>Dear {{name}},</p>
+      <p>An administrator has reset your password for your FCR-SCS account (Role: <strong>{{role}}</strong>).</p>
+      <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+        <p style="margin: 0 0 10px 0;"><strong>Login Email:</strong> {{email}}</p>
+        <p style="margin: 0;"><strong>Temporary Password:</strong> <code style="background: #e5e7eb; padding: 2px 6px; border-radius: 4px; font-size: 1.1em;">{{temporaryPassword}}</code></p>
+      </div>
+      <p style="color: #b91c1c; font-weight: bold;">Important: You are required to change this temporary password upon your next login.</p>
+      <a href="{{loginUrl}}" style="background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 15px 0;">Sign In to Your Account</a>
+      <br><p>Regards,<br>The FCR-SCS Administration Team</p>
+    </div>`,
+  },
   EMAIL_CHANGE_VERIFICATION: {
     subject: 'FCR-SCS: Verify Your New Email Address',
     bodyContent: `<div style="font-family: sans-serif; padding: 20px; color: #1f2937;">

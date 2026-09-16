@@ -20,7 +20,8 @@ import {
   AlertCircle,
   FileCode,
   CheckCircle2,
-  X
+  X,
+  ExternalLink
 } from 'lucide-react';
 
 interface EmailTemplate {
@@ -90,21 +91,68 @@ const TEMPLATE_METAS: Record<string, TemplateMeta> = {
 };
 
 const SAMPLE_VALUES: Record<string, string> = {
-  name: 'Ahmad bin Abdullah',
+  // Links & Buttons
+  actionUrl: 'http://localhost:5173/member/cases/LAC-2026-08-0001',
+  buttonText: 'View Case & Respond',
+  portalLink: 'http://localhost:5173/member',
+  loginUrl: 'http://localhost:5173/login',
   resetLink: 'http://localhost:5173/reset-password?token=demo_token_87234',
   activationLink: 'http://localhost:5173/activate?token=demo_activation_19482',
+  verificationLink: 'http://localhost:5173/verify-email?token=demo_verification_45892',
+
+  // Case & Property
   caseId: 'LAC-2026-08-0001',
-  amount: 'RM 385,000.00',
-  portalLink: 'http://localhost:5173/member',
-  transactionId: '0x8f2a9b4c6e1d7a3f5b8e9c0d1a2f3b4c5d6e7f8a9b0c',
+  caseTitle: 'Klang Valley Expressway Corridor Acquisition',
+  lotNo: 'Lot 4082',
+  mukim: 'Mukim Batu',
   status: 'HEARING_SCHEDULED',
   remarks: 'Statutory hearing confirmed for 28 September 2026 at Room 4B, Federal Land Office.',
+  officerName: 'Puan Siti Aminah',
+
+  // Recipient
+  name: 'Ahmad bin Abdullah',
+  email: 'ahmad@example.com',
+  role: 'Displaced Community Member',
+  timestamp: new Date().toLocaleString(),
+
+  // Financial
+  amount: 'RM 385,000.00',
+  compensationAmount: 'RM 385,000.00',
+  transactionId: '0x8f2a9b4c6e1d7a3f5b8e9c0d1a2f3b4c5d6e7f8a9b0c',
+  bankName: 'Malayan Banking Berhad (Maybank)',
+  accountNumber: '114012345678',
+
+  // Security & Alerts
   alertType: 'SECURITY_AUDIT',
   message: 'Multi-signature policy threshold has been successfully verified.',
-  timestamp: new Date().toLocaleString(),
   otp: '849201',
+  temporaryPassword: 'Tmp#Pass982',
   expiresMinutes: '5',
 };
+
+const GLOBAL_PLACEHOLDERS = [
+  'actionUrl',
+  'buttonText',
+  'caseId',
+  'caseTitle',
+  'lotNo',
+  'name',
+  'email',
+  'amount',
+  'compensationAmount',
+  'portalLink',
+  'loginUrl',
+  'status',
+  'remarks',
+  'officerName',
+  'transactionId',
+  'bankName',
+  'accountNumber',
+  'otp',
+  'temporaryPassword',
+  'expiresMinutes',
+  'timestamp',
+];
 
 export const EmailTemplates: React.FC = () => {
   const navigate = useNavigate();
@@ -232,6 +280,28 @@ export const EmailTemplates: React.FC = () => {
       setIsDirty(true);
     }
     showToast(`Inserted and copied ${placeholder} to clipboard!`, 'info');
+  };
+
+  const handleInsertButtonSnippet = () => {
+    const snippet = `\n<div style="text-align: center; margin: 24px 0;">\n  <a href="{{actionUrl}}" style="background-color: #0066cc; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">{{buttonText}}</a>\n</div>\n`;
+
+    const el = textareaRef.current;
+    if (el) {
+      const start = el.selectionStart;
+      const end = el.selectionEnd;
+      const current = el.value;
+      const next = current.substring(0, start) + snippet + current.substring(end);
+      setBodyContent(next);
+      setIsDirty(true);
+      setTimeout(() => {
+        el.focus();
+        el.setSelectionRange(start + snippet.length, start + snippet.length);
+      }, 0);
+    } else {
+      setBodyContent((prev) => prev + snippet);
+      setIsDirty(true);
+    }
+    showToast('Inserted Action Button snippet into editor!', 'success');
   };
 
   const handleSave = async () => {
@@ -736,15 +806,26 @@ const STOCK_DEFAULTS: Record<string, { subject: string; bodyContent: string }> =
 
               {/* Dynamic Variables Pill Bar */}
               <div className="flex flex-col gap-2 bg-md-surface-container/60 p-3.5 rounded-2xl border border-md-outline/15">
-                <div className="flex items-center justify-between text-xs text-md-on-surface-variant">
-                  <span className="font-semibold flex items-center gap-1.5">
-                    <Sparkles size={14} className="text-md-primary" />
-                    Available Placeholders
-                  </span>
-                  <span className="text-[11px] opacity-75">Click to insert tag at cursor position</span>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-md-on-surface-variant pb-1 border-b border-md-outline/10">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold flex items-center gap-1.5">
+                      <Sparkles size={14} className="text-md-primary" />
+                      Available Placeholders
+                    </span>
+                    <span className="text-[11px] opacity-75 hidden sm:inline">(Click to insert tag at cursor position)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleInsertButtonSnippet}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-sm"
+                    title="Insert pre-styled responsive Action Button snippet into editor"
+                  >
+                    <ExternalLink size={12} />
+                    <span>+ Insert Action Button</span>
+                  </button>
                 </div>
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {Array.from(new Set([...(currentMeta?.suggestedVariables || []), ...detectedVariables])).map(v => (
+                <div className="flex flex-wrap gap-1.5 pt-1 max-h-[140px] overflow-y-auto">
+                  {Array.from(new Set([...(currentMeta?.suggestedVariables || []), ...detectedVariables, ...GLOBAL_PLACEHOLDERS])).map(v => (
                     <button
                       key={v}
                       type="button"
@@ -754,6 +835,7 @@ const STOCK_DEFAULTS: Record<string, { subject: string; bodyContent: string }> =
                           ? 'bg-emerald-700 text-white border-emerald-600'
                           : 'bg-md-surface border-md-outline/30 text-md-on-surface hover:border-md-primary hover:text-md-primary'
                       }`}
+                      title={`Click to insert {{${v}}}`}
                     >
                       <span>{`{{${v}}}`}</span>
                       {copiedVar === v ? <Check size={11} /> : <Plus size={11} className="opacity-50 group-hover:opacity-100" />}

@@ -176,10 +176,24 @@ export const AuditLogs: React.FC = () => {
     }
   };
 
-  // Formatter for timestamp (JetBrains Mono formatting)
+  // Formatter for timestamp in Malaysia Time (Asia/Kuala_Lumpur, UTC+8)
   const formatTimestamp = (dateStr: string) => {
+    if (!dateStr) return '-';
     const d = new Date(dateStr);
-    return d.toISOString().replace('T', ' ').substring(0, 19);
+    if (isNaN(d.getTime())) return dateStr;
+    const formatter = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Kuala_Lumpur',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(d);
+    const getPart = (type: string) => parts.find((p) => p.type === type)?.value || '';
+    return `${getPart('year')}-${getPart('month')}-${getPart('day')} ${getPart('hour')}:${getPart('minute')}:${getPart('second')}`;
   };
 
   // Normalizer for IP address (clean localhost display)
@@ -518,7 +532,7 @@ export const AuditLogs: React.FC = () => {
                 </Button>
               </div>
               <div>
-                <div className="text-md-on-surface-variant font-medium">Timestamp (UTC)</div>
+                <div className="text-md-on-surface-variant font-medium">Timestamp (MYT / UTC+8)</div>
                 <div className="font-mono text-sm text-md-on-surface mt-0.5">
                   {formatTimestamp(inspectLog.createdAt)}
                 </div>
