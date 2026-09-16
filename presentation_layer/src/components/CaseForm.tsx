@@ -15,6 +15,7 @@ import { useAuth } from "../context/AuthContext";
 import { landAcquisitionApi } from "../services/landAcquisitionApi";
 import api, { BASE_URL } from "../services/api";
 import { formatCurrencyWithDecimals, formatLiveCurrency } from "../utils/currency";
+import { resolveMalaysianIdentity, parseRawIc } from "../utils/malaysianIdentity";
 import "../index.css";
 import "../pages/LandAcquisition/case_management.css";
 
@@ -382,22 +383,27 @@ export const CaseForm: React.FC<CaseFormProps> = ({
               if (res.data?.found) {
                 setLockedOwnerIds((prev) => ({ ...prev, [o.id]: true }));
                 lastLookedUpIcRef.current[o.id] = rawIc;
-              } else if (mode === "edit") {
-                setLockedOwnerIds((prev) => ({ ...prev, [o.id]: true }));
+              } else {
+                setLockedOwnerIds((prev) => ({ ...prev, [o.id]: false }));
+                // If name or address is not set, auto-generate based on IC
+                const identity = res.data?.data || resolveMalaysianIdentity(rawIc);
+                setOwners((prev) =>
+                  prev.map((cur) =>
+                    cur.id === o.id
+                      ? {
+                          ...cur,
+                          name: cur.name || identity.name || "",
+                          address: cur.address || identity.address || "",
+                        }
+                      : cur
+                  )
+                );
               }
             } catch {
-              if (mode === "edit") {
-                setLockedOwnerIds((prev) => ({ ...prev, [o.id]: true }));
-              }
+              // keep as is
             }
           })
         );
-      } else if (mode === "edit") {
-        const editLocked: Record<string, boolean> = {};
-        sanitized.forEach((o) => {
-          editLocked[o.id] = true;
-        });
-        setLockedOwnerIds((prev) => ({ ...prev, ...editLocked }));
       }
     }
     if (initialValues?.documents && initialValues.documents.length > 0) {
@@ -573,7 +579,8 @@ export const CaseForm: React.FC<CaseFormProps> = ({
           icChanged = true;
           delete lastLookedUpIcRef.current[id];
           setLockedOwnerIds((prev) => ({ ...prev, [id]: false }));
-          // If user changes the IC digits, remove the other fields
+
+          // Do not auto-generate while typing. Wait for blur (cursor leave) or Enter key press.
           return {
             ...o,
             icNumber: value,
@@ -672,7 +679,7 @@ export const CaseForm: React.FC<CaseFormProps> = ({
     const owner = owners.find((o) => o.id === ownerId);
     if (!owner && !overrideIc) return;
 
-    const icStr = overrideIc ?? owner?.icNumber ?? "";
+    const icStr = (overrideIc && overrideIc.trim() !== "") ? overrideIc : (owner?.icNumber || "");
     const rawIc = icStr.replace(/\D/g, "");
     if (rawIc.length !== 12) return;
 
@@ -715,38 +722,53 @@ export const CaseForm: React.FC<CaseFormProps> = ({
         return;
       }
 
-      // If not found in database: all remain empty and unlocked
+      // If not found in database: auto-generate full name and address based on IC number
+      const generated = (resData?.data?.name && resData?.data?.address)
+        ? resData.data
+        : resolveMalaysianIdentity(rawIc);
+
       setLockedOwnerIds((prev) => ({ ...prev, [ownerId]: false }));
       setOwners((prev) =>
         prev.map((o) =>
           o.id === ownerId
             ? {
                 ...o,
-                name: "",
-                address: "",
-                phone: "",
-                email: "",
+                name: generated.name || "",
+                address: generated.address || "",
+                phone: o.phone || "",
+                email: o.email || "",
               }
             : o
         )
       );
+      clearError(`owner_${ownerId}_name`);
+      clearError(`owner_${ownerId}_address`);
+
+      notify({
+        type: "success",
+        title: "Owner Details Generated",
+        message: `Generated ${generated.name || "Land Owner"}. Name and address are locked.`,
+      });
     } catch (err) {
       console.warn("Backend IC lookup failed:", err);
-      // On error, also leave empty and unlocked
+      // On error, auto-generate from IC locally
+      const identity = resolveMalaysianIdentity(rawIc);
       setLockedOwnerIds((prev) => ({ ...prev, [ownerId]: false }));
       setOwners((prev) =>
         prev.map((o) =>
           o.id === ownerId
             ? {
                 ...o,
-                name: "",
-                address: "",
-                phone: "",
-                email: "",
+                name: identity.name || "",
+                address: identity.address || "",
+                phone: o.phone || "",
+                email: o.email || "",
               }
             : o
         )
       );
+      clearError(`owner_${ownerId}_name`);
+      clearError(`owner_${ownerId}_address`);
     } finally {
       setLookingUpOwnerId(null);
     }
@@ -1580,6 +1602,10 @@ export const CaseForm: React.FC<CaseFormProps> = ({
             <div className="space-y-6">
               {owners.map((owner, index) => {
                 const isOwnerLocked = !!lockedOwnerIds[owner.id];
+                const hasValidIc = (owner.icNumber || "").replace(/\D/g, "").length === 12;
+                const isNameLocked = isOwnerLocked || Boolean(owner.name && hasValidIc);
+                const isAddressLocked = isOwnerLocked || Boolean(owner.address && hasValidIc);
+
                 return (
                 <div
                   key={owner.id}
@@ -1590,12 +1616,17 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                       <div className="text-sm font-bold text-md-primary">
                         Owner #{index + 1}
                       </div>
-                      {isOwnerLocked && (
+                      {isOwnerLocked ? (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
                           <Lucide.Lock size={12} />
                           Verified Citizen (Details Locked)
                         </span>
-                      )}
+                      ) : isNameLocked && isAddressLocked ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-500/10 text-brand-700 dark:text-brand-300 border border-brand-500/30">
+                          <Lucide.Lock size={12} />
+                          Name & Address Locked
+                        </span>
+                      ) : null}
                     </div>
                     {owners.length > 1 && (
                       <IconButton
@@ -1635,12 +1666,17 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                           Checking user registry...
                         </p>
                       )}
-                      {isOwnerLocked && lookingUpOwnerId !== owner.id && (
+                      {isOwnerLocked && lookingUpOwnerId !== owner.id ? (
                         <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1 font-medium">
                           <CheckCircle2 size={13} />
                           Citizen found in database. Personal details are locked.
                         </p>
-                      )}
+                      ) : isNameLocked && isAddressLocked && lookingUpOwnerId !== owner.id ? (
+                        <p className="text-xs text-brand-600 dark:text-brand-400 mt-1 flex items-center gap-1 font-medium">
+                          <CheckCircle2 size={13} />
+                          Name and address generated from IC and locked.
+                        </p>
+                      ) : null}
                     </div>
                     <div>
                       <Input
@@ -1648,9 +1684,9 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                         name={`owner_${owner.id}_name`}
                         label="Full Name *"
                         value={owner.name}
-                        disabled={isOwnerLocked}
-                        readOnly={isOwnerLocked}
-                        suffix={isOwnerLocked ? <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium"><Lucide.Lock size={12} /> Locked</span> : undefined}
+                        disabled={isNameLocked}
+                        readOnly={isNameLocked}
+                        suffix={isNameLocked ? <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium"><Lucide.Lock size={12} /> Locked</span> : undefined}
                         error={errors[`owner_${owner.id}_name`]}
                         onChange={(e) =>
                           handleOwnerChange(owner.id, "name", e.target.value)
@@ -1667,9 +1703,9 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                       name={`owner_${owner.id}_address`}
                       label="Address *"
                       value={owner.address}
-                      disabled={isOwnerLocked}
-                      readOnly={isOwnerLocked}
-                      suffix={isOwnerLocked ? <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium"><Lucide.Lock size={12} /> Locked</span> : undefined}
+                      disabled={isAddressLocked}
+                      readOnly={isAddressLocked}
+                      suffix={isAddressLocked ? <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium"><Lucide.Lock size={12} /> Locked</span> : undefined}
                       error={errors[`owner_${owner.id}_address`]}
                       onChange={(e) =>
                         handleOwnerChange(owner.id, "address", e.target.value)
