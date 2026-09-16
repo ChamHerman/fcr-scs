@@ -68,7 +68,7 @@ export const CaseCreate: React.FC = () => {
         },
         owners: data.owners.map((o) => ({
           name: o.name,
-          nric: o.icNumber,
+          nric: (o.icNumber || "").replace(/\D/g, ""),
           address: o.address,
           contact: o.phone,
           email: o.email || undefined,
