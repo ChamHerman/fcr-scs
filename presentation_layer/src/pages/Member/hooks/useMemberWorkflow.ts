@@ -195,7 +195,7 @@ export const useMemberWorkflow = ({
     if (offerStat === 'REJECTED' || rawStatus === 'OFFER_REJECTED') {
       return { daysRemaining: null, offerStatusBadge: 'Award Rejected' };
     }
-    if (rawStatus === 'OBJECTION_FILED' || (caseDetails?.objections && caseDetails.objections.length > 0)) {
+    if (rawStatus === 'OBJECTION_FILED' || hasPendingObjection) {
       return { daysRemaining: null, offerStatusBadge: 'Objection In Review' };
     }
     if (rawStatus.includes('VALUATION')) {
@@ -209,7 +209,7 @@ export const useMemberWorkflow = ({
       daysRemaining: null,
       offerStatusBadge: CASE_STATUS_LABEL_MAP[rawStatus] || rawStatus || 'In Progress',
     };
-  }, [caseDetails, activeOffer]);
+  }, [caseDetails, activeOffer, hasPendingObjection]);
 
   // Dynamic 6-Stage Progress Tracker
   const { currentStageNum, progressPercent, progressBadge } = useMemo(() => {

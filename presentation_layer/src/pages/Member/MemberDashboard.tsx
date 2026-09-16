@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
   AlertCircle,
   Building2,
@@ -367,6 +367,21 @@ export const MemberDashboard: React.FC = () => {
     selectedCaseId,
   });
 
+  // Filter objections specifically belonging to the selected case
+  const caseObjections = useMemo(() => {
+    if (!selectedCaseId) return allMemberObjections;
+    return allMemberObjections.filter((o) => {
+      const matchCaseId =
+        o.caseId === selectedCaseId ||
+        o.raw?.caseId === selectedCaseId ||
+        o.raw?.acquisitionCase?.caseId === selectedCaseId;
+      const matchOfferId =
+        activeOffer?.offerId &&
+        (o.offerId === activeOffer.offerId || o.raw?.offerId === activeOffer.offerId);
+      return Boolean(matchCaseId || matchOfferId);
+    });
+  }, [allMemberObjections, selectedCaseId, activeOffer]);
+
   // Automatically expand only the current active step on load
   useEffect(() => {
     if (currentStageNum) {
@@ -465,7 +480,7 @@ export const MemberDashboard: React.FC = () => {
 
       {activeTab === 'objections' && (
         <MemberObjectionsTab
-          objections={allMemberObjections}
+          objections={caseObjections}
           loading={loadingObjections}
           canCreateObjection={canCreateObjection}
           objectionDisabledReason={objectionDisabledReason}
@@ -603,9 +618,9 @@ export const MemberDashboard: React.FC = () => {
                 {activeTab === 'documents' && 'Forms & Documents'}
                 {activeTab === 'officer' && 'Assigned Officer'}
               </span>
-              {activeTab === 'objections' && allMemberObjections.length > 0 && (
+              {activeTab === 'objections' && caseObjections.length > 0 && (
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-800">
-                  {allMemberObjections.length}
+                  {caseObjections.length}
                 </span>
               )}
             </div>
@@ -662,7 +677,7 @@ export const MemberDashboard: React.FC = () => {
                     <span className="truncate">Objections</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 ml-2">
-                    {allMemberObjections.length > 0 && (
+                    {caseObjections.length > 0 && (
                       <span
                         className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
                           activeTab === 'objections'
@@ -670,7 +685,7 @@ export const MemberDashboard: React.FC = () => {
                             : 'bg-slate-100 text-slate-600'
                         }`}
                       >
-                        {allMemberObjections.length}
+                        {caseObjections.length}
                       </span>
                     )}
                     {activeTab === 'objections' && (
@@ -763,11 +778,11 @@ export const MemberDashboard: React.FC = () => {
           >
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>Objections</span>
-            {allMemberObjections.length > 0 && (
+            {caseObjections.length > 0 && (
               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
                 activeTab === 'objections' ? 'bg-md-primary/15 text-md-primary' : 'bg-md-surface-container-highest text-md-on-surface-variant'
               }`}>
-                {allMemberObjections.length}
+                {caseObjections.length}
               </span>
             )}
           </button>

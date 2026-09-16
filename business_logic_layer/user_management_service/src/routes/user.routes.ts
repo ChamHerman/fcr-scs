@@ -13,6 +13,7 @@ import {
   toggleUserStatus, 
   adminResetPassword,
   resolveIc,
+  lookupByIc,
   changeInitialPassword,
   getProfile,
   updateProfile,
@@ -29,6 +30,7 @@ router.post('/resend-otp', resendOtp);
 router.post('/register', register);
 router.get('/', getAllUsers);
 router.get('/resolve-ic/:ic', resolveIc);
+router.get('/lookup-by-ic/:ic', lookupByIc);
 router.post('/activate', activateAccount);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
