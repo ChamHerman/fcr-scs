@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNotification } from '../components/ui/NotificationSystem';
 
 const getEthereum = () => (window as any).ethereum;
 
@@ -11,6 +12,7 @@ const getEthereum = () => (window as any).ethereum;
  */
 export const useWallet = () => {
   const adminAddress = import.meta.env.VITE_ADMIN_WALLET_ADDRESS || '0x8F66b4902858b8Dc6cb1bdD4C3cF040101CcC409';
+  const { notify } = useNotification();
   const [walletAddress, setWalletAddress] = useState<string>('');
   const [walletConnected, setWalletConnected] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
@@ -41,7 +43,14 @@ export const useWallet = () => {
   const connectWallet = async () => {
     const ethereum = getEthereum();
     if (!ethereum) {
-      setError('MetaMask extension is required to access the blockchain module.');
+      const msg = 'MetaMask extension is required to access the blockchain module.';
+      setError(msg);
+      notify({
+        type: 'error',
+        title: 'MetaMask Required',
+        message: msg,
+        guidance: 'Please install or enable MetaMask in your browser, then refresh the page.',
+      });
       return;
     }
     try {
@@ -52,7 +61,32 @@ export const useWallet = () => {
         applyAccount(null);
       }
     } catch (err: any) {
-      setError(err?.message || 'Failed to connect wallet');
+      const isRejected =
+        err?.code === 4001 ||
+        err?.code === 'ACTION_REJECTED' ||
+        String(err?.message || '').toLowerCase().includes('user rejected') ||
+        String(err?.message || '').toLowerCase().includes('user cancelled') ||
+        String(err?.message || '').toLowerCase().includes('rejected the request');
+
+      if (isRejected) {
+        // Clear small in-card error text and trigger standard error toast notification
+        setError('');
+        notify({
+          type: 'error',
+          title: 'Connection Cancelled',
+          message: 'MetaMask connection request was cancelled. Please authorize the connection to access the blockchain module.',
+          guidance: 'Click "Connect MetaMask" and confirm the connection prompt in your MetaMask extension.',
+        });
+      } else {
+        const errorMsg = err?.message || 'Failed to connect wallet';
+        setError(errorMsg);
+        notify({
+          type: 'error',
+          title: 'Wallet Connection Failed',
+          message: errorMsg,
+          guidance: 'Check that MetaMask is unlocked and try again, or contact technical support.',
+        });
+      }
     }
   };
 

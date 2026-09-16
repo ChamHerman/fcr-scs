@@ -86,11 +86,13 @@ export const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ caseId, caseIn
   // Form State
   const [bankName, setBankName] = useState<string>('Maybank');
   const [accountNumber, setAccountNumber] = useState<string>('');
-  const [phoneNumber, setPhoneNumber] = useState<string>('');
+
+  // Contact number is locked to the registered profile — never manually entered.
+  const phoneNumber = formatLocalContactNumber(user?.contactNumber);
+  const hasProfilePhone = phoneNumber.trim().replace(/\D/g, '').length >= 9;
 
   // Interaction tracking for real-time validation responses
   const [accountTouched, setAccountTouched] = useState<boolean>(false);
-  const [phoneTouched, setPhoneTouched] = useState<boolean>(false);
   const [checkboxTouched, setCheckboxTouched] = useState<boolean>(false);
 
   // Split consent checkboxes
@@ -139,19 +141,10 @@ export const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ caseId, caseIn
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Pre-fill contact number from the profile. The holder name is deliberately not
-  // pre-filled into editable state — it is locked to the registered name.
-  useEffect(() => {
-    if (user?.contactNumber) {
-      setPhoneNumber((prev) => prev || formatLocalContactNumber(user.contactNumber));
-    }
-  }, [user]);
-
   const applySaved = (acc: any) => {
     if (!acc) return;
     setBankName(acc.bankName || 'Maybank');
     setAccountNumber(acc.accountNumber || '');
-    if (acc.phoneNumber) setPhoneNumber(formatLocalContactNumber(acc.phoneNumber));
     setServerAccountError(null);
   };
 
@@ -169,7 +162,7 @@ export const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ caseId, caseIn
   const showAccountError = !showServerAccountError && accountTouched && !accValidation.isValid;
   const showAccountSuccess = !showServerAccountError && accountTouched && accValidation.isValid;
   const showNameError = !hasProfileName;
-  const showPhoneError = phoneTouched && (!phoneNumber.trim() || phoneNumber.trim().replace(/\D/g, '').length < 9);
+  const showPhoneError = !hasProfilePhone;
   const showCheckbox1Error = checkboxTouched && !consentActiveOwned;
   const showCheckbox2Error = checkboxTouched && !consentDisbursement;
 
@@ -180,7 +173,7 @@ export const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ caseId, caseIn
       accValidation.isValid &&
       hasProfileName &&
       effectiveMyKad.length > 0 &&
-      phoneNumber.trim().replace(/\D/g, '').length >= 9 &&
+      hasProfilePhone &&
       consentActiveOwned &&
       consentDisbursement
   );
@@ -213,7 +206,6 @@ export const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ caseId, caseIn
 
   const validate = () => {
     setAccountTouched(true);
-    setPhoneTouched(true);
     setCheckboxTouched(true);
 
     let hasError = false;
@@ -225,7 +217,7 @@ export const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ caseId, caseIn
       triggerShake(nameInputRef);
       hasError = true;
     }
-    if (!phoneNumber.trim() || phoneNumber.trim().replace(/\D/g, '').length < 9) {
+    if (!hasProfilePhone) {
       triggerShake(phoneInputRef);
       hasError = true;
     }
@@ -253,7 +245,6 @@ export const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ caseId, caseIn
   const handleConfirmedSubmit = async () => {
     setSubmitting(true);
     try {
-      const cleanPhoneDigits = phoneNumber.trim().replace(/\D/g, '');
       // Submitted phone number is local format only (e.g. 011111111), no +60 or +6 in front
       const phoneToSubmit = formatLocalContactNumber(phoneNumber);
 
@@ -264,18 +255,8 @@ export const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ caseId, caseIn
         accountHolderName: effectiveHolderName,
         myKadNumber: effectiveMyKad,
         phoneNumber: phoneToSubmit,
+        isAnotherAccount: accountChoice === 'new' && savedAccounts.length > 0,
       });
-
-      // Sync default payout account
-      await paymentApi
-        .saveDefaultBankDetails({
-          bankName,
-          accountNumber: accValidation.cleanedValue,
-          accountHolderName: effectiveHolderName,
-          myKadNumber: effectiveMyKad,
-          phoneNumber: phoneToSubmit,
-        })
-        .catch(() => {});
 
       notify({
         type: 'success',
@@ -406,6 +387,7 @@ export const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ caseId, caseIn
             onChange={(val) => {
               if (accountChoice === 'saved') return;
               setBankName(val);
+              setServerAccountError(null);
             }}
             placeholder="Select your commercial bank..."
             error={errors.bankName}
@@ -566,7 +548,8 @@ export const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ caseId, caseIn
           </div>
         </div>
 
-        {/* Contact Number (Replaced label, removed +60 prefix) */}
+        {/* Contact Number — locked to the registered profile, mirroring the
+            holder name and MyKad; the backend also re-derives it from the session user. */}
         <div ref={phoneInputRef}>
           <Input
             label="Contact Number"
@@ -575,22 +558,15 @@ export const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ caseId, caseIn
             type="tel"
             inputMode="numeric"
             value={phoneNumber}
-            onFocus={() => setPhoneTouched(true)}
-            onBlur={() => setPhoneTouched(true)}
-            onChange={(e) => {
-              const val = e.target.value.replace(/[^\d-]/g, '');
-              setPhoneNumber(val);
-              setPhoneTouched(true);
-            }}
-            placeholder="0160365985"
+            placeholder="As per your registered profile"
             autoComplete="off"
             autoCorrect="off"
             spellCheck={false}
+            readOnly={true}
+            disabled={true}
             error={
               showPhoneError
-                ? !phoneNumber.trim()
-                  ? 'Contact number is required'
-                  : 'Contact number requires at least 9 digits (e.g. 0160365985)'
+                ? 'No valid contact number on your profile. Update your profile before submitting bank details.'
                 : undefined
             }
             inputClassName={
@@ -598,9 +574,8 @@ export const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ caseId, caseIn
                 ? '!border-rose-500 !ring-2 !ring-rose-500/25 !text-rose-900 dark:!text-rose-100'
                 : ''
             }
-            disabled={submitting || accountChoice === 'saved'}
-            readOnly={accountChoice === 'saved'}
             className="font-mono"
+            suffix={<Lock size={14} />}
           />
         </div>
 

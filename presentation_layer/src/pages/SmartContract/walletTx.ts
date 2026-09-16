@@ -50,18 +50,54 @@ const describeWalletError = (e: any, action: string): Error => {
   return new Error(e?.message || `${action} failed in MetaMask.`);
 };
 
+/**
+ * MetaMask does not answer every request: a dismissed popup, a locked wallet or
+ * a dropped extension port leaves `ethereum.request` pending forever. Every
+ * wallet call is therefore raced against a timeout so the publish dialog always
+ * reaches an error state instead of spinning indefinitely.
+ */
+const WALLET_PROMPT_TIMEOUT_MS = 5 * 60_000;
+const WALLET_RPC_TIMEOUT_MS = 30_000;
+
+const withTimeout = async <T,>(promise: Promise<T>, ms: number, message: string): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
+
 /** Ensures MetaMask is on the target chain, switching (or adding Sepolia) if needed. */
 export async function ensureChain(chainId: number): Promise<void> {
   const ethereum = getEthereum();
+  if (!ethereum) throw new Error('MetaMask extension is required.');
   const target = '0x' + chainId.toString(16);
-  const current: string = await ethereum.request({ method: 'eth_chainId' });
+  const current: string = await withTimeout(
+    ethereum.request({ method: 'eth_chainId' }),
+    WALLET_RPC_TIMEOUT_MS,
+    'MetaMask did not respond while checking the active network. Open the MetaMask extension and try again.',
+  );
   if (current?.toLowerCase() === target.toLowerCase()) return;
   try {
-    await ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: target }] });
+    await withTimeout(
+      ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: target }] }),
+      WALLET_PROMPT_TIMEOUT_MS,
+      'MetaMask did not respond to the network switch request. Open the MetaMask extension and try again.',
+    );
   } catch (e: any) {
     if (e?.code === 4902 || /unrecognized chain/i.test(e?.message || '')) {
       if (target === SEPOLIA_CHAIN_PARAMS.chainId) {
-        await ethereum.request({ method: 'wallet_addEthereumChain', params: [SEPOLIA_CHAIN_PARAMS] });
+        await withTimeout(
+          ethereum.request({ method: 'wallet_addEthereumChain', params: [SEPOLIA_CHAIN_PARAMS] }),
+          WALLET_PROMPT_TIMEOUT_MS,
+          'MetaMask did not respond to the add-network request. Open the MetaMask extension and try again.',
+        );
         return;
       }
     }
@@ -91,18 +127,28 @@ export async function sendLedgerTransaction(params: {
   // 16,777,216, so the broadcast would be rejected outright. If the call would
   // revert on-chain, surface the reason now instead of sending a doomed tx.
   try {
-    const estimate = await ethereum.request({ method: 'eth_estimateGas', params: [request] });
+    const estimate = await withTimeout(
+      ethereum.request({ method: 'eth_estimateGas', params: [request] }),
+      WALLET_RPC_TIMEOUT_MS,
+      'MetaMask did not respond to the gas estimation request. Open the MetaMask extension and try again.',
+    );
     const estimated = typeof estimate === 'string' ? parseInt(estimate, 16) : Number(estimate);
     const gas = Math.min(Math.floor(estimated * 1.3) + 20_000, 15_000_000);
     request.gas = '0x' + gas.toString(16);
   } catch (e: any) {
+    // A silent wallet is not a chain rejection — keep its own message intact.
+    if (/did not respond/i.test(e?.message || '')) throw e;
     throw new Error(
       `Transaction would fail on-chain: ${revertReason(e) ?? 'gas estimation failed — see MetaMask for details.'}`,
     );
   }
 
   try {
-    return await ethereum.request({ method: 'eth_sendTransaction', params: [request] });
+    return await withTimeout(
+      ethereum.request({ method: 'eth_sendTransaction', params: [request] }),
+      WALLET_PROMPT_TIMEOUT_MS,
+      'MetaMask did not answer the signature request. Open the MetaMask extension, approve or reject the transaction, then try again.',
+    );
   } catch (e: any) {
     throw describeWalletError(e, 'The transaction');
   }

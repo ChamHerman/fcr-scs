@@ -11,6 +11,7 @@ import {
 } from "../services/payment.service";
 import { prisma } from "../prisma";
 import { CaseStatus, PaymentStatus } from "@prisma/client";
+import { inflateSync } from "zlib";
 import { generateReceipt } from "../services/receipt.service";
 
 describe("formatPaymentResponse — GA audit trail ordering", () => {
@@ -242,7 +243,7 @@ describe("Bank Account Uniqueness & Decoupled Profile Storage", () => {
     expect(res.status).toBe(PaymentStatus.AWARD_NOTARIZATION_PENDING);
   });
 
-  it("rejects Member 2 when attempting to register Member 1's bank account number", async () => {
+  it("rejects Member 2 when attempting to register Member 1's bank account number at the SAME bank", async () => {
     await expect(
       submitBankDetails({
         caseId: testCaseId2,
@@ -255,6 +256,19 @@ describe("Bank Account Uniqueness & Decoupled Profile Storage", () => {
     ).rejects.toThrow(
       "This bank account number is already registered by another beneficiary. Bank accounts must be unique to the registered MyKad holder."
     );
+  });
+
+  it("allows Member 2 to register the same account number at a DIFFERENT bank institution", async () => {
+    const res = await submitBankDetails({
+      caseId: testCaseId2,
+      bankName: "Alliance Bank Malaysia Berhad",
+      accountNumber: uniqueAcc,
+      accountHolderName: "Member 2",
+      phoneNumber: "0198765432",
+      myKadNumber: member2MyKad,
+    });
+    expect(res.accountNumber).toBe(uniqueAcc);
+    expect(res.bankName).toBe("Alliance Bank Malaysia Berhad");
   });
 
   it("allows Member 1 to reuse the same bank account on Case 3", async () => {
@@ -320,6 +334,54 @@ describe("Bank Account Uniqueness & Decoupled Profile Storage", () => {
       await prisma.acquisitionCase.deleteMany({ where: { caseId: pendingCaseId } });
     }
   });
+
+  it("does NOT overwrite saved default account when member submits another case using Enter Another Bank Account", async () => {
+    const member = await prisma.user.findUnique({ where: { email: "m1@fcrscs.gov.my" } });
+    expect(member).toBeDefined();
+
+    const defaultAcc = "99" + Date.now().toString().slice(-11); // 13 digits for AmBank
+    const anotherAcc = "88" + Date.now().toString().slice(-10); // 12 digits for Maybank
+
+    // 1. Establish default saved account (AmBank)
+    await saveMemberBankDetails(member!.userId, {
+      bankName: "AmBank",
+      accountNumber: defaultAcc,
+      accountHolderName: "Member 1",
+      phoneNumber: "0123456789",
+      myKadNumber: member1MyKad,
+    });
+
+    const defaultCheck = await getSavedBankDetails(member!.userId, member1MyKad, "Member 1");
+    expect(defaultCheck.length).toBeGreaterThan(0);
+    expect(defaultCheck[0].bankName).toBe("AmBank");
+    expect(defaultCheck[0].accountNumber).toBe(defaultAcc);
+
+    // 2. Submit a new case using "Enter Another Bank Account" (Maybank)
+    const subRes = await submitBankDetails({
+      caseId: testCaseId1,
+      bankName: "Maybank",
+      accountNumber: anotherAcc,
+      accountHolderName: "Member 1",
+      phoneNumber: "0123456789",
+      myKadNumber: member1MyKad,
+      userId: member!.userId,
+      isAnotherAccount: true,
+    });
+    expect(subRes.accountNumber).toBe(anotherAcc);
+    expect(subRes.bankName).toBe("Maybank");
+
+    // 3. Verify getSavedBankDetails STILL returns AmBank at index 0
+    const afterSub = await getSavedBankDetails(member!.userId, member1MyKad, "Member 1");
+    expect(afterSub[0].bankName).toBe("AmBank");
+    expect(afterSub[0].accountNumber).toBe(defaultAcc);
+
+    // 4. Verify memberPayoutDetail table STILL holds AmBank
+    const payoutDetail = await prisma.memberPayoutDetail.findUnique({
+      where: { userId: member!.userId },
+    });
+    expect(payoutDetail?.bankName).toBe("AmBank");
+    expect(payoutDetail?.accountNumber).toBe(defaultAcc);
+  });
 });
 
 describe("generateReceipt — 1-page guarantee and RENTAS RTGS branding", () => {
@@ -383,5 +445,33 @@ describe("generateReceipt — 1-page guarantee and RENTAS RTGS branding", () => 
     expect(pageMatches!.length).toBe(1);
     expect(pdfStr).toContain("/Count 1");
   });
+
+  it("no longer prints the on-chain anchor label on the receipt", async () => {
+    const buffer = await generateReceipt(receiptCaseId);
+    const text = extractReceiptText(buffer);
+    // Assert the probe works before asserting absence, or a broken extractor
+    // would make this test pass no matter what the template draws.
+    expect(text).toContain("RENTAS CRYPTOGRAPHIC SEAL");
+    expect(text).not.toContain("ETH SEPOLIA ANCHORED");
+    expect(text).not.toContain("SEPOLIA ANCHORED");
+  });
 });
+
+/**
+ * Pulls the visible text out of a PDFKit-generated PDF. The content stream is
+ * Flate-compressed and each text run is written as hex strings inside `TJ`
+ * operators, so a raw substring search on the file bytes can never match — the
+ * stream has to be inflated and each hex run decoded first.
+ */
+function extractReceiptText(buffer: Buffer): string {
+  const stream = buffer.toString("latin1").match(/stream\r?\n([\s\S]*?)\r?\nendstream/);
+  if (!stream) return "";
+  const inflated = inflateSync(Buffer.from(stream[1], "latin1")).toString("latin1");
+  const runs: string[] = [];
+  for (const block of inflated.match(/\[(.+?)\]\s*TJ/gs) ?? []) {
+    const hexes = block.match(/<([0-9A-Fa-f]+)>/g) ?? [];
+    runs.push(hexes.map((h) => Buffer.from(h.slice(1, -1), "hex").toString("latin1")).join(""));
+  }
+  return runs.join("\n");
+}
 

@@ -21,6 +21,7 @@ import {
   Eye,
   UploadCloud,
   ArrowUpRight,
+  Archive,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Modal } from '../../components/ui/Modal';
@@ -80,7 +81,21 @@ export interface PaymentRow {
   createdAt: string;
   updatedAt: string;
   authorisations?: Array<{ adminId: string; action: string; reason?: string | null; createdAt: string; cycle?: number }>;
-  receipt?: { bankReferenceNumber: string; generatedAt?: string | null; documentHash?: string | null } | null;
+  /**
+   * The frozen canonical receipt (FR-019). Present from TRANSFER_SUCCEED onward
+   * and kept regardless of later status changes, so the record modal can always
+   * show that a receipt was issued for this case.
+   */
+  receipt?: { bankReferenceNumber?: string | null; generatedAt?: string | null; documentHash?: string | null } | null;
+  /** Archived receipts from voided dispute cycles (FR-014), newest first. */
+  receiptArchives?: Array<{
+    id: string;
+    bankReferenceNumber: string;
+    documentHash?: string | null;
+    generatedAt: string;
+    archivedAt: string;
+    archiveReason?: string | null;
+  }>;
   failedTransactions?: Array<{ errorLog: string; resolution?: string | null; resolvedAt?: string | null; createdAt: string }>;
   disputeDocumentPath?: string | null;
   disputeDocumentName?: string | null;
@@ -93,19 +108,14 @@ export interface PaymentRow {
   scheduledFor?: string | null;
 }
 
-export const PRE_TRANSFER_STATUSES = [
-  'Offer Accepted',
-  'offer_accepted',
-  'Approved',
-  'Bank Details Submitted',
-  'Transfer Initiated',
-  'Authorised',
-  'Scheduled',
-  // FR-018 3-Way SOP: fatal-risk cancellation reaches rejected and bank-failed
-  // cases too — the backend widened PRE_TRANSFER_STATUSES to match.
-  'Transfer Rejected',
-  'Transfer Failed',
-];
+/**
+ * Cancel is a terminal, high-accountability action. It is offered ONLY on cases
+ * the bank or governance has already bounced (Transfer Rejected / Transfer
+ * Failed). Every earlier stage has its own non-destructive SOP (Request New
+ * Bank Details, Mark as Resolved), so the cancel entry point is hidden there to
+ * prevent accidental cancellation.
+ */
+export const CANCELLABLE_STATUSES = ['Transfer Rejected', 'Transfer Failed'];
 
 export const hasBankDetails = (pc: PaymentRow) =>
   Boolean(pc.bankName && pc.accountNumber && pc.accountHolderName);
@@ -230,13 +240,56 @@ export const stripRawLogPrefix = (log: string) =>
 const RESOLUTION_LABELS: Record<string, string> = {
   retry: 'Retried by Government Admin',
   request_details: 'New bank details requested',
+  request_new_bank_details: 'New bank details requested',
   schedule_tomorrow: 'Scheduled for next business day',
+  schedule_next_working_day: 'Scheduled for next working day',
+  auto_executed_scheduled: 'Auto-dispatched on schedule',
   mark_resolved: 'Marked as resolved',
   reinitiate_payment: 'Payment reinitiated',
+  dispute_marked_resolved: 'Dispute marked as resolved',
+  dispute_reinitiate_payment: 'Payment reinitiated',
+  dispute_request_new_bank_details: 'New bank details requested',
 };
 
-export const formatResolutionLabel = (r?: string | null) =>
-  r ? RESOLUTION_LABELS[r] ?? formatReasonLabel(r) : '';
+export const formatResolutionLabel = (r?: string | null): string => {
+  if (!r) return '';
+  const trimmed = r.trim();
+  const lower = trimmed.toLowerCase();
+
+  // Handle schedule_next_working_day:<ISO_DATE> or schedule_tomorrow:<ISO_DATE>
+  if (lower.startsWith('schedule_next_working_day:') || lower.startsWith('schedule_tomorrow:')) {
+    const rawDate = trimmed.split(':').slice(1).join(':').trim();
+    const formattedDate = rawDate ? fmtDate(rawDate) : '';
+    return formattedDate
+      ? `Scheduled for next working day (${formattedDate})`
+      : 'Scheduled for next working day';
+  }
+
+  if (RESOLUTION_LABELS[lower]) {
+    return RESOLUTION_LABELS[lower];
+  }
+
+  // Handle any other generic key:value resolution format
+  if (trimmed.includes(':')) {
+    const [action, ...rest] = trimmed.split(':');
+    const actionLabel = RESOLUTION_LABELS[action.toLowerCase()] || formatReasonLabel(action);
+    const detail = rest.join(':').trim();
+    const isIsoDate = /^\d{4}-\d{2}-\d{2}T/.test(detail);
+    const formattedDetail = isIsoDate ? fmtDate(detail) : detail;
+    return `${actionLabel} (${formattedDetail})`;
+  }
+
+  const reasonMapped = formatReasonLabel(trimmed);
+  if (reasonMapped && reasonMapped !== trimmed) {
+    return reasonMapped;
+  }
+
+  // Clean fallback for any snake_case identifier
+  return trimmed
+    .replace(/[_-]+/g, ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+};
 
 export interface BankBeneficiaryEvent {
   kind: 'success' | 'failed' | 'dispute';
@@ -255,10 +308,14 @@ export interface BankBeneficiaryEvent {
  */
 export const bankBeneficiaryEvents = (pc: PaymentRow): BankBeneficiaryEvent[] => {
   const events: BankBeneficiaryEvent[] = [];
-  if (pc.receipt?.generatedAt) {
+  // A receipt is a historical fact: once one was generated for this case it stays
+  // visible no matter what status the case later moves to (failed, disputed,
+  // cancelled, re-scheduled). Gate on the receipt existing, not on its timestamp
+  // being populated, so a row without `generatedAt` still surfaces.
+  if (pc.receipt) {
     events.push({
       kind: 'success',
-      date: pc.receipt.generatedAt,
+      date: pc.receipt.generatedAt || pc.updatedAt || pc.createdAt,
       title: 'Transfer Successful',
       detail: pc.receipt.bankReferenceNumber
         ? `Bank cleared the fund release · Reference ${pc.receipt.bankReferenceNumber}`
@@ -362,7 +419,10 @@ export const paymentBadge = (
   status: string,
   currentSigs?: number,
   requiredSigs?: number,
-  scheduledFor?: string | Date | null
+  scheduledFor?: string | Date | null,
+  // The schedule date line is opt-in: detail views show it, admin tables show
+  // the status only.
+  showScheduledFor = false
 ) => {
   const s = normalizePaymentStatus(status);
   const cls = paymentStatusClassMap[s] ?? 'status-pending-approval';
@@ -371,7 +431,7 @@ export const paymentBadge = (
     label = `Pending Approval (${currentSigs || 0}/${requiredSigs || 1})`;
   }
 
-  if (s === 'Scheduled') {
+  if (s === 'Scheduled' && showScheduledFor) {
     return (
       <div className="inline-flex flex-col items-start gap-1">
         <span className={`payment-badge ${cls}`}>
@@ -629,11 +689,17 @@ export const useMilestone2Record = (caseId?: string) => {
  * Displayed directly under Milestone 1 banner on top of the payment modal.
  * Green tonal when anchored on-chain with an Etherscan link,
  * Electric Sky tonal with [Publish Milestone 2] button when ready to publish.
+ *
+ * FR-005 / FR-019: the settlement anchor is locked until the case reaches PAID —
+ * funds confirmed received — so nothing M2-related renders at any other status,
+ * including a record published before this rule was enforced server-side.
+ * The backend `assertSettlementPaid` is the real gate; this is the mirror.
  */
 export const Milestone2Banner: React.FC<{ caseId: string; status?: string }> = ({ caseId, status }) => {
   const navigate = useNavigate();
   const { record, loading, isM2Published } = useMilestone2Record(caseId);
 
+  if (normalizePaymentStatus(status || '') !== 'Paid') return null;
   if (loading || !caseId) return null;
 
   if (isM2Published) {
@@ -663,11 +729,6 @@ export const Milestone2Banner: React.FC<{ caseId: string; status?: string }> = (
       </div>
     );
   }
-
-  const norm = normalizePaymentStatus(status || '');
-  const isReady = norm === 'Transfer Succeed' || norm === 'Paid';
-
-  if (!isReady) return null;
 
   return (
     <div className="bg-sky-500/10 dark:bg-sky-500/20 border-2 border-sky-500/40 dark:border-sky-500/50 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
@@ -774,7 +835,7 @@ export const ViewDetailsModal: React.FC<{
   const signed = hasSignedOrInitiated(pc, identityId);
   const left = signaturesLeft(pc);
   const isSysAdmin = user?.role === 'SYSTEM_ADMINISTRATOR';
-  const canCancel = PRE_TRANSFER_STATUSES.includes(norm) && !isSysAdmin;
+  const canCancel = CANCELLABLE_STATUSES.includes(norm) && !isSysAdmin;
 
   // FR-015: the member's uploaded bank statement (latest only) is reviewable
   // by the GA whenever the case is sitting in Disputed.
@@ -956,18 +1017,9 @@ export const ViewDetailsModal: React.FC<{
         );
 
       case 'Cancelled':
-        return (
-          <Button
-            variant="filled"
-            size="md"
-            onClick={() => {
-              onClose();
-              onAction?.('request-update', pc);
-            }}
-          >
-            <span>Request New Bank Details</span>
-          </Button>
-        );
+        // Cancelled is terminal: the case is dead and has no exit path, so no
+        // main action is offered. Details stay view-only.
+        return null;
 
       case 'Transfer Failed': {
         const latestFt = pc.failedTransactions?.[pc.failedTransactions.length - 1];
@@ -1148,7 +1200,7 @@ export const ViewDetailsModal: React.FC<{
             </div>
             <div className="payment-detail-item">
               <div className="label">Payment Status</div>
-              <div className="value">{paymentBadge(norm, pc.currentSignatures, pc.requiredSignatures, pc.scheduledFor)}</div>
+              <div className="value">{paymentBadge(norm, pc.currentSignatures, pc.requiredSignatures, pc.scheduledFor, true)}</div>
             </div>
           </div>
         </div>
@@ -1340,6 +1392,59 @@ export const ViewDetailsModal: React.FC<{
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {/* FR-014: archived receipts from voided dispute cycles. When a GA
+            resolves a dispute by reinitiating or requesting new bank details,
+            the disputed cycle's frozen receipt is preserved here. */}
+        {(pc.receiptArchives ?? []).length > 0 && (
+          <div className="bg-md-surface-container-low rounded-xl p-4 border border-md-outline/10 space-y-3">
+            <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-md-on-surface-variant">
+              <Archive size={15} />
+              <span>Archived Settlement Receipts ({pc.receiptArchives!.length})</span>
+            </div>
+            <div className="space-y-2">
+              {pc.receiptArchives!.map((a) => (
+                <div key={a.id} className="flex items-center justify-between gap-3 bg-md-surface-container rounded-lg px-3 py-2 border border-md-outline/10">
+                  <div className="min-w-0">
+                    <div className="font-mono text-xs font-semibold text-md-on-surface truncate">
+                      {a.bankReferenceNumber}
+                    </div>
+                    <div className="text-[11px] text-md-on-surface-variant">
+                      Frozen {fmtDate(a.generatedAt)} · superseded {fmtDate(a.archivedAt)}
+                    </div>
+                  </div>
+                  <Button
+                    variant="outlined"
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        const blob = await paymentApi.downloadArchivedReceipt(a.id);
+                        const url = URL.createObjectURL(blob);
+                        const el = document.createElement('a');
+                        el.href = url;
+                        el.download = `archived-receipt-${a.bankReferenceNumber}.pdf`;
+                        document.body.appendChild(el);
+                        el.click();
+                        document.body.removeChild(el);
+                        URL.revokeObjectURL(url);
+                        notify({ type: 'success', title: 'Archived receipt downloaded', message: `Frozen receipt ${a.bankReferenceNumber}.` });
+                      } catch (e: any) {
+                        notify({ type: 'error', title: 'Download failed', message: e.message || 'Could not download the archived receipt.' });
+                      }
+                    }}
+                  >
+                    <Download size={14} />
+                    <span>Download</span>
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-md-on-surface-variant leading-relaxed">
+              These are frozen receipts from settlement cycles voided by a dispute resolution. Their SHA-256 anchors remain
+              valid for the corresponding blockchain Milestone 2 records.
+            </p>
           </div>
         )}
 
@@ -1723,8 +1828,13 @@ export const AuthoriseTransferModal: React.FC<MutatingModalProps> = ({ pc, onClo
               </div>
             </div>
 
+            {/* Active-cycle signatures only. A superseded cycle voids prior
+                signatures (FR-020), so Cycle-1 actions must not appear here —
+                the View Details modal keeps the full cycle-grouped history. */}
             <div className="space-y-1.5 text-sm">
-              {byCreatedAtAsc(pc.authorisations ?? []).map((a, i) => {
+              {byCreatedAtAsc(
+                (pc.authorisations ?? []).filter((a) => (a.cycle ?? 1) === (pc.cycle ?? 1))
+              ).map((a, i) => {
                 const isRejection = isRejectionAction(a.action);
                 return (
                   <div key={i} className="flex items-center gap-2">
@@ -1740,7 +1850,9 @@ export const AuthoriseTransferModal: React.FC<MutatingModalProps> = ({ pc, onClo
                   </div>
                 );
               })}
-              {!pc.authorisations?.length && <p className="text-md-on-surface-variant">No signatures recorded yet.</p>}
+              {!(pc.authorisations ?? []).some((a) => (a.cycle ?? 1) === (pc.cycle ?? 1)) && (
+                <p className="text-md-on-surface-variant">No signatures recorded yet.</p>
+              )}
             </div>
 
             {isSoDBlocked ? (
@@ -1785,30 +1897,27 @@ export const AuthoriseTransferModal: React.FC<MutatingModalProps> = ({ pc, onClo
 
 /* ------------------------------- Cancellation / Rejection Reasons ------------------------------- */
 
-/* Cancel is irreversible (status CANCELLED has no exit path), so the list is
- * restricted to reasons that mean "this case is no longer needed / must be
- * refiled". A landowner bank-account change goes through the non-destructive
- * Request New Bank Details flow instead. */
+/* Cancel is terminal and irreversible (payment → Cancelled, case → Case Closed),
+ * so the list is restricted to genuine "this acquisition is dead" events. The
+ * only path forward after any of them is to open a new case and restart the
+ * whole process — there is no in-place SOP. A landowner bank-account change goes
+ * through the non-destructive Request New Bank Details flow instead. */
 export const CANCELLATION_REASONS = [
   {
-    value: 'LEGAL_DISPUTE_OR_INJUNCTION',
-    label: 'Land parcel ownership dispute or court injunction received',
-    solution: 'Hold Case Pending Legal Resolution',
+    value: 'COURT_ORDER_OR_INJUNCTION',
+    label: 'Court order or legal injunction halts the acquisition',
   },
   {
-    value: 'INCORRECT_AWARD_AMOUNT',
-    label: 'Statutory compensation award calculation error detected',
-    solution: 'Re-open Valuation Review in Land Module',
+    value: 'AWARD_OVERTURNED_ON_APPEAL',
+    label: 'Compensation award overturned or revised on appeal / objection',
   },
   {
-    value: 'SUSPECTED_FRAUD_OR_IMPERSONATION',
-    label: 'Security flag raised on beneficiary identity or banking document',
-    solution: 'Re-verify MyKad & Title with Land Office',
+    value: 'BENEFICIARY_INELIGIBLE_OR_FRAUD',
+    label: 'Beneficiary ineligibility or fraud confirmed after verification',
   },
   {
-    value: 'DUPLICATE_DISBURSEMENT_PREVENTION',
-    label: 'Duplicate payment instruction detected across system records',
-    solution: 'Cancel Duplicate Voucher',
+    value: 'ACQUISITION_DISCONTINUED',
+    label: 'Land acquisition discontinued — land no longer required',
   },
 ];
 
@@ -2001,18 +2110,47 @@ export const ResolveRejectionModal: React.FC<MutatingModalProps> = ({ pc, onClos
 };
 
 /* ------------------------------- Cancel Payment ------------------------------- */
+/**
+ * Two-step, high-accountability cancellation.
+ *
+ * Attempt 1 collects the statutory reason plus three deliberate confirmations —
+ * retype the Payment ID, retype the Case ID, and tick an accountability
+ * acknowledgement naming the GA. The destructive "Cancel Payment" button stays
+ * disabled until every field is satisfied, and pressing it only opens Attempt 2.
+ *
+ * Attempt 2 is a final "Confirm Cancel Payment" gate. Only there does the call
+ * fire. Cancelling is terminal: payment → Cancelled, statutory case → Case
+ * Closed, and the only way forward is a brand-new case. Published blockchain
+ * notarization is left untouched.
+ */
 export const CancelPaymentModal: React.FC<MutatingModalProps> = ({ pc, onClose, onDone }) => {
-  const { identityId } = useAdminIdentity();
+  const { identityId, identityLabel } = useAdminIdentity();
   const { loading, setLoading, notify } = useMutationState();
+  const [showConfirm, setShowConfirm] = useState(false);
   const [selectedReason, setSelectedReason] = useState('');
-  const [confirmationInput, setConfirmationInput] = useState('');
+  const [paymentIdInput, setPaymentIdInput] = useState('');
+  const [caseIdInput, setCaseIdInput] = useState('');
+  const [ackChecked, setAckChecked] = useState(false);
 
-  const selectedOption = CANCELLATION_REASONS.find((r) => r.value === selectedReason);
-  const paymentId = pc?.paymentId || `PMT-${pc?.caseId}`;
-  const isConfirmed = Boolean(selectedReason && confirmationInput.trim() === paymentId);
+  const paymentId = pc?.paymentId || (pc ? `PMT-${pc.caseId}` : '');
+  const reasonLabel = CANCELLATION_REASONS.find((r) => r.value === selectedReason)?.label || '';
+
+  const allValid =
+    Boolean(selectedReason) &&
+    paymentIdInput.trim() === paymentId &&
+    caseIdInput.trim() === (pc?.caseId || '') &&
+    ackChecked;
+
+  const resetForm = () => {
+    setSelectedReason('');
+    setPaymentIdInput('');
+    setCaseIdInput('');
+    setAckChecked(false);
+    setShowConfirm(false);
+  };
 
   const confirm = async () => {
-    if (!pc || !isConfirmed) return;
+    if (!pc || !allValid) return;
     setLoading(true);
     try {
       await paymentApi.cancelPayment({
@@ -2022,11 +2160,10 @@ export const CancelPaymentModal: React.FC<MutatingModalProps> = ({ pc, onClose, 
       });
       notify({
         type: 'success',
-        title: 'Payment cancelled',
-        message: `Case ${pc.caseId} cancelled and recorded in Failed Transactions for SOP resolution.`,
+        title: 'Payment Cancelled',
+        message: `Case ${pc.caseId} cancelled and closed. Open a new case to restart the process.`,
       });
-      setSelectedReason('');
-      setConfirmationInput('');
+      resetForm();
       onClose();
       onDone();
     } catch (e: any) {
@@ -2036,25 +2173,42 @@ export const CancelPaymentModal: React.FC<MutatingModalProps> = ({ pc, onClose, 
     }
   };
 
+  if (!pc) return null;
+
   return (
-    <Modal
-      isOpen={Boolean(pc)}
-      onClose={onClose}
-      title="Cancel Payment (Destructive Action)"
-      subtitle={pc ? `Case ${pc.caseId} · ${fmtAmount(pc.amount)}` : ''}
-      cancelText="Keep Payment"
-      confirmText="Confirm Cancel Payment"
-      confirmVariant="danger"
-      confirmLoading={loading}
-      confirmDisabled={!isConfirmed}
-      onConfirm={isConfirmed ? confirm : undefined}
-    >
-      {pc && (
+    <>
+      {/* Attempt 1 of 2 — reason + deliberate confirmations */}
+      <Modal
+        isOpen={!showConfirm}
+        onClose={onClose}
+        title="Cancel Payment — Attempt 1 of 2"
+        subtitle={`Case ${pc.caseId} · ${fmtAmount(pc.amount)}`}
+        preventBackdropClose={true}
+        maxWidth="max-w-lg"
+        footer={
+          <div className="flex items-center justify-between w-full gap-3">
+            <Button
+              variant="danger"
+              size="md"
+              disabled={!allValid}
+              onClick={() => setShowConfirm(true)}
+              title={allValid ? 'Proceed to final confirmation' : 'Complete every confirmation below to enable cancellation'}
+            >
+              <Ban size={15} />
+              <span>Cancel Payment</span>
+            </Button>
+            <Button variant="filled" size="md" onClick={onClose}>
+              <CheckCircle2 size={15} />
+              <span>Keep Payment</span>
+            </Button>
+          </div>
+        }
+      >
         <div className="space-y-4">
-          <div className="flex items-start gap-2 text-sm bg-md-error/10 border border-md-error/30 rounded-xl px-4 py-3 text-md-on-error-container">
+          <div className="flex items-start gap-2 text-sm bg-md-error/15 border-2 border-md-error/40 rounded-xl px-4 py-3 text-md-on-error-container">
             <AlertTriangle size={18} className="shrink-0 mt-0.5 text-md-error" />
             <span>
-              <strong>WARNING:</strong> Cancelling a payment case stops all disbursements and flags this transaction in Failed Transactions for SOP resolution.
+              <strong>Irreversible.</strong> Cancelling stops this disbursement permanently and closes the statutory case. The only way to continue is to open a new case and restart the whole process.
             </span>
           </div>
 
@@ -2081,37 +2235,105 @@ export const CancelPaymentModal: React.FC<MutatingModalProps> = ({ pc, onClose, 
               onChange={(val) => setSelectedReason(val)}
               wrapLabels
             />
-            {selectedOption && (
-              <div className="text-xs bg-md-surface-container-highest rounded-lg px-3 py-2 text-md-on-surface-variant flex items-center gap-1.5">
-                <span className="font-semibold text-md-primary">Resolution SOP:</span>
-                <span>{selectedOption.solution}</span>
-              </div>
-            )}
           </div>
 
-          <div className="pt-2 border-t border-md-outline/10 space-y-1.5">
-            <p className="text-xs text-md-on-surface-variant">
-              Type Payment ID <strong className="font-mono text-md-on-surface">{pc.paymentId || `PMT-${pc.caseId}`}</strong> to confirm cancellation:
-            </p>
-            <Input
-              label={`Confirm Payment ID`}
-              value={confirmationInput}
-              onChange={(e) => setConfirmationInput(e.target.value)}
-              placeholder={pc.paymentId || `PMT-${pc.caseId}`}
+          <div className="pt-2 border-t border-md-outline/10 space-y-3">
+            <div className="space-y-1.5">
+              <p className="text-xs text-md-on-surface-variant">
+                Type Payment ID <strong className="font-mono text-md-on-surface">{paymentId}</strong> to confirm:
+              </p>
+              <Input
+                label="Confirm Payment ID"
+                value={paymentIdInput}
+                onChange={(e) => setPaymentIdInput(e.target.value)}
+                placeholder={paymentId}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs text-md-on-surface-variant">
+                Type Case ID <strong className="font-mono text-md-on-surface">{pc.caseId}</strong> to confirm:
+              </p>
+              <Input
+                label="Confirm Case ID"
+                value={caseIdInput}
+                onChange={(e) => setCaseIdInput(e.target.value)}
+                placeholder={pc.caseId}
+              />
+            </div>
+            <Checkbox
+              id="cancel-accountability-ack"
+              label={`I, ${identityLabel || 'the Government Administrator'}, accept full accountability for this cancellation. It is recorded against my identity and any resulting dispute will be traced to me.`}
+              checked={ackChecked}
+              onChange={(e) => setAckChecked(e.target.checked)}
             />
           </div>
 
           <div className="flex items-start gap-2 text-[11px] text-md-on-surface-variant bg-md-surface-container-low rounded-lg px-3 py-2 border border-md-outline/10">
             <ShieldAlert size={13} className="shrink-0 mt-0.5 text-md-warning-text" />
             <span>
-              Cancellation halts this payment transfer disbursement instruction. The underlying statutory Form H award and land acquisition terms remain permanent and immutable.
+              Cancellation only halts this payment instruction. The underlying statutory Form H award and any published blockchain notarization remain permanent and immutable.
             </span>
           </div>
 
           <CaseTimestamps pc={pc} />
         </div>
-      )}
-    </Modal>
+      </Modal>
+
+      {/* Attempt 2 of 2 — final confirmation gate */}
+      <Modal
+        isOpen={showConfirm}
+        onClose={() => setShowConfirm(false)}
+        title="Confirm Cancel Payment"
+        subtitle={`Attempt 2 of 2 · Case ${pc.caseId}`}
+        preventBackdropClose={true}
+        maxWidth="max-w-md"
+        footer={
+          <div className="flex items-center justify-end gap-3 w-full">
+            <Button variant="text" size="md" onClick={() => setShowConfirm(false)} disabled={loading}>
+              Back
+            </Button>
+            <Button variant="danger" size="md" isLoading={loading} onClick={confirm}>
+              <Ban size={15} />
+              <span>Confirm Cancellation</span>
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-2 text-sm bg-md-error/15 border-2 border-md-error/40 rounded-xl px-4 py-3 text-md-on-error-container">
+            <ShieldAlert size={18} className="shrink-0 mt-0.5 text-md-error" />
+            <span>
+              <strong>Final confirmation.</strong> This closes the case for good. There is no undo and no re-approval — a new case must be opened to continue.
+            </span>
+          </div>
+
+          <div className="bg-md-surface-container-low rounded-xl px-4 py-3 border border-md-outline/10 space-y-2 text-xs">
+            <div className="flex justify-between gap-2">
+              <span className="text-md-on-surface-variant">Case</span>
+              <span className="font-mono font-semibold text-md-on-surface">{pc.caseId}</span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span className="text-md-on-surface-variant">Payment ID</span>
+              <span className="font-mono font-semibold text-md-on-surface">{paymentId}</span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span className="text-md-on-surface-variant">Amount</span>
+              <span className="font-bold text-md-primary">{fmtAmount(pc.amount)}</span>
+            </div>
+            <div className="pt-2 border-t border-md-outline/10">
+              <div className="text-md-on-surface-variant mb-0.5">Reason</div>
+              <div className="text-md-on-surface font-medium">{reasonLabel}</div>
+            </div>
+          </div>
+
+          <ul className="text-xs text-md-on-surface-variant space-y-1 list-disc pl-5">
+            <li>Payment status → <strong className="text-md-on-surface">Cancelled</strong></li>
+            <li>Statutory case status → <strong className="text-md-on-surface">Case Closed</strong></li>
+            <li>Blockchain notarization → <strong className="text-md-on-surface">stays published</strong></li>
+          </ul>
+        </div>
+      </Modal>
+    </>
   );
 };
 
@@ -2269,6 +2491,12 @@ export const ScheduleNextWorkingDayModal = ScheduleTomorrowModal;
 
 /* -------------------------------- Mark Resolved -------------------------------- */
 
+const DISPUTE_CONFIRM_LABELS: Record<string, string> = {
+  MARK_AS_RESOLVED: 'Mark as Resolved',
+  REINITIATE_PAYMENT: 'Reinitiate Payment',
+  REQUEST_NEW_BANK_DETAILS: 'Request New Bank Details',
+};
+
 export const ResolveDisputeModal: React.FC<MutatingModalProps> = ({ pc, onClose, onDone }) => {
   const { identityId } = useAdminIdentity();
   const { loading, setLoading, notify } = useMutationState();
@@ -2281,16 +2509,23 @@ export const ResolveDisputeModal: React.FC<MutatingModalProps> = ({ pc, onClose,
       await paymentApi.resolveDispute({
         caseId: pc.caseId,
         adminId: identityId,
-        resolution: resolution as 'MARK_AS_RESOLVED' | 'REINITIATE_PAYMENT',
+        resolution: resolution as 'MARK_AS_RESOLVED' | 'REINITIATE_PAYMENT' | 'REQUEST_NEW_BANK_DETAILS',
       });
-      notify({
-        type: 'success',
-        title: resolution === 'MARK_AS_RESOLVED' ? 'Dispute marked resolved' : 'Payment reinitiated',
-        message:
-          resolution === 'MARK_AS_RESOLVED'
-            ? `Case ${pc.caseId} returned to Transfer Succeed — the member can confirm receipt or dispute again.`
-            : `Case ${pc.caseId} re-queued to the bank gateway for a fresh transfer attempt.`,
-      });
+      const messages: Record<string, { title: string; message: string }> = {
+        MARK_AS_RESOLVED: {
+          title: 'Dispute marked resolved',
+          message: `Case ${pc.caseId} returned to Transfer Succeed — the member can confirm receipt or dispute again.`,
+        },
+        REINITIATE_PAYMENT: {
+          title: 'Payment reinitiated',
+          message: `Case ${pc.caseId} re-queued to the bank gateway for a fresh transfer attempt.`,
+        },
+        REQUEST_NEW_BANK_DETAILS: {
+          title: 'New bank details requested',
+          message: `Case ${pc.caseId} opened a fresh multi-sig cycle — the member must submit corrected bank details.`,
+        },
+      };
+      notify({ type: 'success', ...messages[resolution] });
       onClose();
       onDone();
     } catch (e: any) {
@@ -2306,7 +2541,7 @@ export const ResolveDisputeModal: React.FC<MutatingModalProps> = ({ pc, onClose,
       title="Resolve Payment Dispute"
       subtitle={pc ? `Case ${pc.caseId} · ${fmtAmount(pc.amount)}` : ''}
       cancelText="Cancel"
-      confirmText={resolution === 'MARK_AS_RESOLVED' ? 'Mark as Resolved' : 'Reinitiate Payment'}
+      confirmText={resolution ? DISPUTE_CONFIRM_LABELS[resolution] ?? 'Confirm' : 'Confirm'}
       confirmLoading={loading}
       confirmDisabled={!resolution}
       onConfirm={confirm}
@@ -2336,6 +2571,10 @@ export const ResolveDisputeModal: React.FC<MutatingModalProps> = ({ pc, onClose,
                 value: 'REINITIATE_PAYMENT',
                 label: 'Reinitiate Payment — bank cross-check confirms the member never received the funds; re-queues the transfer to the bank gateway',
               },
+              {
+                value: 'REQUEST_NEW_BANK_DETAILS',
+                label: 'Request New Bank Details — the transfer failed on bad recipient details; opens a fresh bank-details + multi-sig cycle',
+              },
             ]}
           />
           {resolution === 'REINITIATE_PAYMENT' && (
@@ -2343,7 +2582,16 @@ export const ResolveDisputeModal: React.FC<MutatingModalProps> = ({ pc, onClose,
               <AlertTriangle size={14} className="shrink-0 mt-0.5" />
               <span>
                 Reinitiating re-sends the full {fmtAmount(pc.amount)} to the beneficiary account. Existing multi-sig
-                approvals remain valid; no new signatures are required.
+                approvals remain valid; no new signatures are required. The disputed cycle's receipt is archived.
+              </span>
+            </div>
+          )}
+          {resolution === 'REQUEST_NEW_BANK_DETAILS' && (
+            <div className="px-3 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+              <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+              <span>
+                A new bank-details round voids all prior signatures — the multi-sig counter resets to 0 and the disputed
+                cycle's receipt is archived.
               </span>
             </div>
           )}

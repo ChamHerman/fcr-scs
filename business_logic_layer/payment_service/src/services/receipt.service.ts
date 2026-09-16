@@ -227,12 +227,6 @@ export async function generateReceipt(caseId: string): Promise<Buffer> {
       y + 55,
       { width: sealWidth - 16, align: "center", lineBreak: false }
     );
-    doc.font("Helvetica-Bold").fontSize(6.5).fillColor(T.success).text(
-      "ETH SEPOLIA ANCHORED (M2)",
-      pageRight - sealWidth,
-      y + 68,
-      { width: sealWidth, align: "center", lineBreak: false }
-    );
 
     // ---------------- Page 1 Footer (Fixed 1-Page Guarantee) ----------------
     const footerY = 776;
@@ -319,4 +313,63 @@ export async function getCanonicalReceiptBuffer(caseId: string): Promise<Buffer>
     return fs.readFileSync(receipt.documentPath);
   }
   return generateReceipt(caseId);
+}
+
+/**
+ * FR-014 dispute "funds never arrived" resolution: the frozen receipt from the
+ * voided settlement cycle is preserved here and the active PaymentReceipt row is
+ * cleared so the next bank-clearance cycle generates a fresh receipt. The
+ * archived row keeps the original SHA-256 anchor intact — the blockchain M2
+ * record for the voided cycle still verifies against it.
+ *
+ * The frozen bytes on disk are moved to a per-archive path so regenerating the
+ * active receipt cannot overwrite the archived file.
+ */
+export async function archiveCanonicalReceipt(caseId: string, reason: string): Promise<void> {
+  const existing = await findReceiptByCaseId(caseId);
+  if (!existing) return;
+
+  let archivePath = existing.documentPath;
+  if (existing.documentPath && fs.existsSync(existing.documentPath)) {
+    const archiveDir = path.join(path.dirname(existing.documentPath), "archive");
+    if (!fs.existsSync(archiveDir)) fs.mkdirSync(archiveDir, { recursive: true });
+    archivePath = path.join(archiveDir, `Payment_Receipt_${Date.now()}.pdf`);
+    fs.copyFileSync(existing.documentPath, archivePath);
+  }
+
+  await prisma.paymentReceiptArchive.create({
+    data: {
+      paymentCaseId: existing.paymentCaseId,
+      bankReferenceNumber: existing.bankReferenceNumber,
+      documentHash: existing.documentHash,
+      documentPath: archivePath,
+      generatedAt: existing.generatedAt,
+      archiveReason: reason,
+    },
+  });
+
+  await prisma.paymentReceipt.delete({ where: { id: existing.id } });
+}
+
+/** Lists a case's archived receipts, newest first. */
+export async function getArchivedReceipts(caseId: string) {
+  const pc = await prisma.paymentCase.findUnique({ where: { caseId } });
+  if (!pc) throw new Error("Case not found");
+  return prisma.paymentReceiptArchive.findMany({
+    where: { paymentCaseId: pc.id },
+    orderBy: { archivedAt: "desc" },
+  });
+}
+
+/** Serves the FROZEN bytes of a specific archived receipt. */
+export async function getArchivedReceiptBuffer(archiveId: string): Promise<Buffer> {
+  const archive = await prisma.paymentReceiptArchive.findUnique({ where: { id: archiveId } });
+  if (!archive) throw new Error("Archived receipt not found");
+  if (archive.documentPath && fs.existsSync(archive.documentPath)) {
+    return fs.readFileSync(archive.documentPath);
+  }
+  // Legacy archive rows without a frozen file: regenerate from the live case.
+  const pc = await prisma.paymentCase.findUnique({ where: { id: archive.paymentCaseId } });
+  if (!pc) throw new Error("Archived receipt not found");
+  return generateReceipt(pc.caseId);
 }

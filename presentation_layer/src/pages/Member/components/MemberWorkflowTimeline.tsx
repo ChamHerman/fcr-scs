@@ -20,7 +20,7 @@ import {
 import { Link } from 'react-router-dom';
 import type { WorkflowStep } from '../hooks/useMemberWorkflow';
 import { paymentApi } from '../../../services/paymentApi';
-import { getMemberDisplayStatus } from '../../Payment/statusMaps';
+import { getMemberDisplayStatus, getMemberFailureNotice } from '../../Payment/statusMaps';
 import '../../Payment/payment.css';
 import { formatCurrencyRM } from '../../../utils/currency';
 import { useNotification } from '../../../components/ui/NotificationSystem';
@@ -355,6 +355,7 @@ export const MemberWorkflowTimeline: React.FC<MemberWorkflowTimelineProps> = ({
 
                   const isPaid = rawStatus === 'PAID' || memberDisplay.label === 'Paid';
                   const isTransferSucceed = rawStatus === 'TRANSFER_SUCCEED' || memberDisplay.label === 'Payment Completed';
+                  const failureNotice = getMemberFailureNotice(paymentCase);
 
                   const isInitiated = Boolean(
                     rawStatus !== 'READY_TO_INITIATE' &&
@@ -539,6 +540,36 @@ export const MemberWorkflowTimeline: React.FC<MemberWorkflowTimelineProps> = ({
                             <span>Submit Bank Details</span>
                             <ArrowRight size={14} />
                           </Link>
+                        </div>
+                      )}
+
+                      {/* Transfer Failed / Transfer Rejected — plain-language reason */}
+                      {failureNotice && (
+                        <div
+                          className={`p-3.5 sm:p-4 rounded-2xl border flex items-start gap-2.5 ${
+                            failureNotice.category === 'rejected'
+                              ? 'bg-amber-500/10 border-amber-500/30'
+                              : 'bg-rose-500/10 border-rose-500/30'
+                          }`}
+                        >
+                          <AlertTriangle
+                            size={18}
+                            className={`shrink-0 mt-0.5 ${
+                              failureNotice.category === 'rejected'
+                                ? 'text-amber-700 dark:text-amber-400'
+                                : 'text-rose-600 dark:text-rose-400'
+                            }`}
+                          />
+                          <div className="min-w-0">
+                            <h4 className="text-xs font-bold text-md-on-surface">{failureNotice.title}</h4>
+                            <p className="text-[11px] text-md-on-surface-variant mt-0.5 leading-relaxed">
+                              {failureNotice.reason}
+                            </p>
+                            <p className="text-[11px] text-md-on-surface-variant mt-1.5 leading-relaxed">
+                              <span className="font-semibold text-md-on-surface">What happens next: </span>
+                              {failureNotice.nextStep}
+                            </p>
+                          </div>
                         </div>
                       )}
 

@@ -7,6 +7,7 @@ import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
+import { Switch } from '../../components/ui/Switch';
 import { CopyButton } from '../../components/ui/CopyButton';
 import { Pagination } from '../../components/ui/Pagination';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
@@ -118,6 +119,7 @@ const STATUS_PRIORITY_RANK: Record<string, number> = {
 export default function PaymentDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [showCancelled, setShowCancelled] = useState(false);
   const [allCases, setAllCases] = useState<PaymentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -186,11 +188,14 @@ export default function PaymentDashboard() {
   const availableStatuses = useMemo(() => {
     const set = new Set<string>();
     allCases.forEach((c) => {
+      if (!showCancelled && normalizePaymentStatus(c.status) === 'Cancelled') {
+        return;
+      }
       const detailed = getDetailedPaymentStatus(c);
       if (detailed.paymentStatus) set.add(detailed.paymentStatus);
     });
     return ['All', ...Array.from(set).sort()];
-  }, [allCases]);
+  }, [allCases, showCancelled]);
 
   useEffect(() => {
     if (statusFilter !== 'All' && !availableStatuses.includes(statusFilter)) {
@@ -203,6 +208,10 @@ export default function PaymentDashboard() {
     return allCases.filter((c) => {
       const raw = (c.caseStatus || '').toUpperCase().replace(/\s+/g, '_');
       if (raw === 'OFFER_ISSUED' || raw === 'OFFER_REJECTED' || raw === 'CASE_REGISTERED' || c.status === 'Offer Issued') {
+        return false;
+      }
+      const isCancelled = normalizePaymentStatus(c.status) === 'Cancelled';
+      if (!showCancelled && statusFilter !== 'Cancelled' && isCancelled) {
         return false;
       }
       const detailed = getDetailedPaymentStatus(c);
@@ -218,7 +227,7 @@ export default function PaymentDashboard() {
         (c.bankName ?? '').toLowerCase().includes(q);
       return matchesStatus && matchesSearch;
     });
-  }, [allCases, searchQuery, statusFilter]);
+  }, [allCases, searchQuery, statusFilter, showCancelled]);
 
   const sortedCases = useMemo(() => {
     const getPmtId = (r: PaymentRow) => r.paymentId || r.id || `PMT-${r.caseId}`;
@@ -369,6 +378,7 @@ export default function PaymentDashboard() {
             onClick={() => {
               setStatusFilter('All');
               setSearchQuery('');
+              setShowCancelled(false);
               setCurrentPage(1);
             }}
           >
@@ -382,7 +392,27 @@ export default function PaymentDashboard() {
           <CreditCard size={18} />
           <span className="count">Disbursement activity ({totalCount})</span>
         </div>
-        <div className="right">
+        <div className="right flex items-center gap-3">
+          <div className="h-9 px-3 rounded-full bg-md-surface-container-high/60 dark:bg-md-surface-container-high border border-md-outline/15 shadow-inner inline-flex items-center">
+            <Switch
+              size="sm"
+              id="dashboard-show-cancelled"
+              label={
+                <span className="inline-flex items-center gap-1.5 font-medium">
+                  <span className="text-xs text-md-on-surface-variant">Show</span>
+                  <span className="payment-badge status-cancelled !py-0.5 !px-2 !text-[11px] !h-5.5">
+                    <span className="dot" />
+                    Cancelled
+                  </span>
+                </span>
+              }
+              checked={showCancelled}
+              onChange={(e) => {
+                setShowCancelled(e.target.checked);
+                setCurrentPage(1);
+              }}
+            />
+          </div>
           <RefreshButton onClick={() => loadData()} loading={loading} />
         </div>
       </div>

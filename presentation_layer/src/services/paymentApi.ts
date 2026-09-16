@@ -7,6 +7,8 @@ export type BankDetails = {
   accountHolderName: string;
   phoneNumber: string;
   myKadNumber: string;
+  /** True when the member is submitting a non-default ("another") account. */
+  isAnotherAccount?: boolean;
 };
 
 export const paymentApi = {
@@ -30,7 +32,7 @@ export const paymentApi = {
     paymentFetch("/api/payments/request-details-update", { method: "POST", body: JSON.stringify({ caseId }) }),
   scheduleTomorrow: (caseId: string) =>
     paymentFetch("/api/payments/schedule-tomorrow", { method: "POST", body: JSON.stringify({ caseId }) }),
-  resolveDispute: (d: { caseId: string; adminId?: string; resolution: "MARK_AS_RESOLVED" | "REINITIATE_PAYMENT" }) =>
+  resolveDispute: (d: { caseId: string; adminId?: string; resolution: "MARK_AS_RESOLVED" | "REINITIATE_PAYMENT" | "REQUEST_NEW_BANK_DETAILS" }) =>
     paymentFetch("/api/payments/resolve-dispute", { method: "POST", body: JSON.stringify(d) }),
   getStatus: (caseId: string) =>
     paymentFetch("/api/payments/status/" + encodeURIComponent(caseId)),
@@ -71,6 +73,17 @@ export const paymentApi = {
     if (!res.ok) {
       const d = await res.json().catch(() => ({}));
       throw new Error(d.error ?? "Dispute statement unavailable");
+    }
+    return res.blob();
+  },
+  downloadArchivedReceipt: async (archiveId: string) => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+    const res = await fetch(PAYMENT_BASE + "/api/payments/receipt-archive/" + encodeURIComponent(archiveId), {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d.error ?? "Archived receipt unavailable");
     }
     return res.blob();
   },

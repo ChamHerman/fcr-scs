@@ -296,7 +296,7 @@ export const generateBlockchainAuditData = async (filters: ReportFilterParams) =
       transactionHash: r.transactionHash || "Pending Confirmation",
       documentHash: r.documentHash || "N/A",
       status: r.status,
-      publishedAt: r.publishedAt.toISOString().slice(0, 10),
+      publishedAt: r.publishedAt ? r.publishedAt.toISOString().slice(0, 10) : "-",
     })),
   };
 };
