@@ -179,7 +179,7 @@ export const generateCaseStatusData = async (filters: ReportFilterParams) => {
 
   return {
     reportType: "Case Status Report",
-    reportId: `FR-RPT-015-${Date.now().toString().slice(-6)}`,
+    reportId: `RPT-CASE-${Date.now().toString().slice(-6)}`,
     generatedAt: new Date().toISOString(),
     filterApplied: filters,
     summary: {
@@ -229,7 +229,7 @@ export const generatePaymentData = async (filters: ReportFilterParams) => {
 
   return {
     reportType: "Payment Report",
-    reportId: `FR-RPT-014-${Date.now().toString().slice(-6)}`,
+    reportId: `RPT-PAY-${Date.now().toString().slice(-6)}`,
     generatedAt: new Date().toISOString(),
     filterApplied: filters,
     summary: {
@@ -277,7 +277,7 @@ export const generateBlockchainAuditData = async (filters: ReportFilterParams) =
 
   return {
     reportType: "Blockchain Audit Report",
-    reportId: `FR-RPT-013-${Date.now().toString().slice(-6)}`,
+    reportId: `RPT-CHAIN-${Date.now().toString().slice(-6)}`,
     generatedAt: new Date().toISOString(),
     filterApplied: filters,
     summary: {

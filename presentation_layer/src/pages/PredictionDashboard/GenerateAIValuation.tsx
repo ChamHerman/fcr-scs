@@ -235,11 +235,16 @@ export const GenerateAIValuation: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl md:text-3xl font-bold">Generate AI Valuation</h1>
-          <span className="px-2 py-1 rounded-lg bg-md-primary/15 text-md-primary font-bold text-xs whitespace-nowrap">
-            Admin console
-          </span>
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl md:text-3xl font-bold">Generate AI Valuation</h1>
+            <span className="px-2 py-1 rounded-lg bg-md-primary/15 text-md-primary font-bold text-xs whitespace-nowrap">
+              Admin console
+            </span>
+          </div>
+          <p className="text-md-on-surface-variant mt-1 max-w-3xl">
+            Estimate statutory compensation with the live trained model.
+          </p>
         </div>
       </div>
 

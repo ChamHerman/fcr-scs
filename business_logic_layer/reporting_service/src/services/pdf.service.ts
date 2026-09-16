@@ -25,8 +25,6 @@ export const generatePdfBuffer = async (reportTitle: string, reportData: any): P
       
       doc.fontSize(9.5).font("Helvetica")
         .text("Government Administration Reporting & Audit Subsystem (FCR-SCS)", 55, doc.y + 4, { align: "left" });
-      
-      doc.fontSize(9).text(`Report ID: ${reportData.reportId || "N/A"}`, doc.page.width - 200, 78, { width: 145, align: "right" });
 
       doc.moveDown(3);
       doc.y = 130;
@@ -105,134 +103,138 @@ export const generatePdfBuffer = async (reportTitle: string, reportData: any): P
   });
 };
 
-function renderCaseStatusTable(doc: PDFKit.PDFDocument, items: any[], headerBg: string, borderColor: string, altBg: string, textCol: string) {
-  const colWidths = [75, 120, 115, 105, 55, 45];
-  const startX = 40;
+interface PdfColumn {
+  header: string;
+  width: number;
+  value: (item: any) => string;
+}
+
+const TABLE_MARGIN_X = 40;
+const CELL_PAD_X = 4;
+const CELL_PAD_Y = 4;
+const CELL_FONT_SIZE = 7.5;
+const HEADER_HEIGHT = 20;
+const FOOTER_RESERVE = 45;
+
+/**
+ * Draws a table whose row heights follow the wrapped cell content, so no value
+ * is clipped. Every row is emitted — rows flow onto new pages instead of being
+ * dropped, and the column header is redrawn on each page.
+ */
+function renderTable(
+  doc: PDFKit.PDFDocument,
+  columns: PdfColumn[],
+  items: any[],
+  headerBg: string,
+  borderColor: string,
+  altBg: string,
+  textCol: string
+) {
+  const startX = TABLE_MARGIN_X;
+  const tableWidth = doc.page.width - TABLE_MARGIN_X * 2;
   let y = doc.y;
 
-  // Table Header
-  doc.rect(startX, y, doc.page.width - 80, 20).fill(headerBg);
-  doc.rect(startX, y, doc.page.width - 80, 20).stroke(borderColor);
+  const drawHeader = () => {
+    doc.rect(startX, y, tableWidth, HEADER_HEIGHT).fill(headerBg);
+    doc.rect(startX, y, tableWidth, HEADER_HEIGHT).stroke(borderColor);
+    doc.fillColor(textCol).fontSize(8).font("Helvetica-Bold");
+    let x = startX;
+    columns.forEach((col) => {
+      doc.text(col.header, x + CELL_PAD_X, y + 6, { width: col.width - CELL_PAD_X * 2 });
+      x += col.width;
+    });
+    y += HEADER_HEIGHT;
+  };
 
-  doc.fillColor(textCol).fontSize(8).font("Helvetica-Bold");
-  doc.text("Case Ref", startX + 5, y + 6, { width: colWidths[0] });
-  doc.text("Case Title", startX + colWidths[0] + 5, y + 6, { width: colWidths[1] });
-  doc.text("Project / Location", startX + colWidths[0] + colWidths[1] + 5, y + 6, { width: colWidths[2] });
-  doc.text("Current Status", startX + colWidths[0] + colWidths[1] + colWidths[2] + 5, y + 6, { width: colWidths[3] });
-  doc.text("Reg Date", startX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, y + 6, { width: colWidths[4] });
-  doc.text("Aging", startX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4] + 5, y + 6, { width: colWidths[5] });
+  drawHeader();
 
-  y += 20;
+  items.forEach((item, idx) => {
+    doc.font("Helvetica").fontSize(CELL_FONT_SIZE);
+    let rowHeight = 0;
+    columns.forEach((col) => {
+      rowHeight = Math.max(
+        rowHeight,
+        doc.heightOfString(String(col.value(item) ?? "-"), { width: col.width - CELL_PAD_X * 2 })
+      );
+    });
+    rowHeight += CELL_PAD_Y * 2;
 
-  // Rows
-  items.slice(0, 40).forEach((item, idx) => {
-    if (y + 20 > doc.page.height - 45) {
+    if (y + rowHeight > doc.page.height - FOOTER_RESERVE) {
       doc.addPage();
-      y = 40;
+      y = TABLE_MARGIN_X;
+      drawHeader();
     }
 
-    const rowBg = idx % 2 === 0 ? "#FFFFFF" : altBg;
-    doc.rect(startX, y, doc.page.width - 80, 18).fill(rowBg);
-    doc.rect(startX, y, doc.page.width - 80, 18).stroke(borderColor);
+    doc.rect(startX, y, tableWidth, rowHeight).fill(idx % 2 === 0 ? "#FFFFFF" : altBg);
+    doc.rect(startX, y, tableWidth, rowHeight).stroke(borderColor);
 
-    doc.fillColor(textCol).fontSize(7.5).font("Helvetica");
-    doc.text(item.caseId || "-", startX + 5, y + 5, { width: colWidths[0] - 8, lineBreak: false });
-    doc.text(item.title || item.caseTitle || "-", startX + colWidths[0] + 5, y + 5, { width: colWidths[1] - 8, lineBreak: false });
-    doc.text(item.location || `${item.state || 'Selangor'} / ${item.district || 'Petaling'}`, startX + colWidths[0] + colWidths[1] + 5, y + 5, { width: colWidths[2] - 8, lineBreak: false });
-    doc.text(item.status || "-", startX + colWidths[0] + colWidths[1] + colWidths[2] + 5, y + 5, { width: colWidths[3] - 8, lineBreak: false });
-    doc.text(item.date || item.registrationDate || "-", startX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, y + 5, { width: colWidths[4] - 8, lineBreak: false });
-    doc.text(item.lifecycleAging || `${item.agingDays || 0}d`, startX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4] + 5, y + 5, { width: colWidths[5] - 8, lineBreak: false });
+    doc.fillColor(textCol).fontSize(CELL_FONT_SIZE).font("Helvetica");
+    let x = startX;
+    columns.forEach((col) => {
+      doc.text(String(col.value(item) ?? "-"), x + CELL_PAD_X, y + CELL_PAD_Y, {
+        width: col.width - CELL_PAD_X * 2,
+      });
+      x += col.width;
+    });
 
-    y += 18;
+    y += rowHeight;
   });
 
   doc.y = y + 10;
+}
+
+function renderCaseStatusTable(doc: PDFKit.PDFDocument, items: any[], headerBg: string, borderColor: string, altBg: string, textCol: string) {
+  renderTable(
+    doc,
+    [
+      { header: "Case Ref", width: 75, value: (i) => i.caseId || "-" },
+      { header: "Case Title", width: 120, value: (i) => i.title || i.caseTitle || "-" },
+      { header: "Project / Location", width: 115, value: (i) => i.location || `${i.state || "Selangor"} / ${i.district || "Petaling"}` },
+      { header: "Current Status", width: 105, value: (i) => i.status || "-" },
+      { header: "Reg Date", width: 55, value: (i) => i.date || i.registrationDate || "-" },
+      { header: "Aging", width: 45, value: (i) => i.lifecycleAging || `${i.agingDays || 0}d` },
+    ],
+    items,
+    headerBg,
+    borderColor,
+    altBg,
+    textCol
+  );
 }
 
 function renderPaymentTable(doc: PDFKit.PDFDocument, items: any[], headerBg: string, borderColor: string, altBg: string, textCol: string) {
-  const colWidths = [85, 95, 80, 110, 85, 60];
-  const startX = 40;
-  let y = doc.y;
-
-  // Header
-  doc.rect(startX, y, doc.page.width - 80, 20).fill(headerBg);
-  doc.rect(startX, y, doc.page.width - 80, 20).stroke(borderColor);
-
-  doc.fillColor(textCol).fontSize(8).font("Helvetica-Bold");
-  doc.text("Case Ref", startX + 5, y + 6, { width: colWidths[0] });
-  doc.text("Disbursement", startX + colWidths[0] + 5, y + 6, { width: colWidths[1] });
-  doc.text("Bank Details", startX + colWidths[0] + colWidths[1] + 5, y + 6, { width: colWidths[2] });
-  doc.text("Bank Reference No.", startX + colWidths[0] + colWidths[1] + colWidths[2] + 5, y + 6, { width: colWidths[3] });
-  doc.text("Status", startX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, y + 6, { width: colWidths[4] });
-  doc.text("Date", startX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4] + 5, y + 6, { width: colWidths[5] });
-
-  y += 20;
-
-  // Rows
-  items.slice(0, 40).forEach((item, idx) => {
-    if (y + 20 > doc.page.height - 45) {
-      doc.addPage();
-      y = 40;
-    }
-
-    const rowBg = idx % 2 === 0 ? "#FFFFFF" : altBg;
-    doc.rect(startX, y, doc.page.width - 80, 18).fill(rowBg);
-    doc.rect(startX, y, doc.page.width - 80, 18).stroke(borderColor);
-
-    doc.fillColor(textCol).fontSize(7.5).font("Helvetica");
-    doc.text(item.caseId || "-", startX + 5, y + 5, { width: colWidths[0] - 8, lineBreak: false });
-    doc.text(item.amount || item.formattedAmount || "-", startX + colWidths[0] + 5, y + 5, { width: colWidths[1] - 8, lineBreak: false });
-    doc.text(item.bankName || `${item.bankDetails || 'Bank Transfer'}`, startX + colWidths[0] + colWidths[1] + 5, y + 5, { width: colWidths[2] - 8, lineBreak: false });
-    doc.text(item.bankReference || "-", startX + colWidths[0] + colWidths[1] + colWidths[2] + 5, y + 5, { width: colWidths[3] - 8, lineBreak: false });
-    doc.text(item.status || "-", startX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, y + 5, { width: colWidths[4] - 8, lineBreak: false });
-    doc.text(item.date || item.createdAt || "-", startX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4] + 5, y + 5, { width: colWidths[5] - 8, lineBreak: false });
-
-    y += 18;
-  });
-
-  doc.y = y + 10;
+  renderTable(
+    doc,
+    [
+      { header: "Case Ref", width: 85, value: (i) => i.caseId || "-" },
+      { header: "Disbursement", width: 95, value: (i) => i.amount || i.formattedAmount || "-" },
+      { header: "Bank Details", width: 80, value: (i) => i.bankName || i.bankDetails || "Bank Transfer" },
+      { header: "Bank Reference No.", width: 110, value: (i) => i.bankReference || "-" },
+      { header: "Status", width: 85, value: (i) => i.status || "-" },
+      { header: "Date", width: 60, value: (i) => i.date || i.createdAt || "-" },
+    ],
+    items,
+    headerBg,
+    borderColor,
+    altBg,
+    textCol
+  );
 }
 
 function renderBlockchainTable(doc: PDFKit.PDFDocument, items: any[], headerBg: string, borderColor: string, altBg: string, textCol: string) {
-  const colWidths = [80, 135, 110, 110, 80];
-  const startX = 40;
-  let y = doc.y;
-
-  // Header
-  doc.rect(startX, y, doc.page.width - 80, 20).fill(headerBg);
-  doc.rect(startX, y, doc.page.width - 80, 20).stroke(borderColor);
-
-  doc.fillColor(textCol).fontSize(8).font("Helvetica-Bold");
-  doc.text("Case Ref", startX + 5, y + 6, { width: colWidths[0] });
-  doc.text("On-chain Transaction Hash", startX + colWidths[0] + 5, y + 6, { width: colWidths[1] });
-  doc.text("Document Hash (SHA-256)", startX + colWidths[0] + colWidths[1] + 5, y + 6, { width: colWidths[2] });
-  doc.text("Verification Status", startX + colWidths[0] + colWidths[1] + colWidths[2] + 5, y + 6, { width: colWidths[3] });
-  doc.text("Published Date", startX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, y + 6, { width: colWidths[4] });
-
-  y += 20;
-
-  // Rows
-  items.slice(0, 40).forEach((item, idx) => {
-    if (y + 20 > doc.page.height - 45) {
-      doc.addPage();
-      y = 40;
-    }
-
-    const rowBg = idx % 2 === 0 ? "#FFFFFF" : altBg;
-    doc.rect(startX, y, doc.page.width - 80, 18).fill(rowBg);
-    doc.rect(startX, y, doc.page.width - 80, 18).stroke(borderColor);
-
-    doc.fillColor(textCol).fontSize(7.5).font("Helvetica");
-    doc.text(item.caseId || "-", startX + 5, y + 5, { width: colWidths[0] - 8, lineBreak: false });
-    const tx = item.transactionHash || "-";
-    doc.text(tx.length > 25 ? `${tx.slice(0, 16)}...` : tx, startX + colWidths[0] + 5, y + 5, { width: colWidths[1] - 8, lineBreak: false });
-    const docHash = item.documentHash || "-";
-    doc.text(docHash.length > 25 ? `${docHash.slice(0, 16)}...` : docHash, startX + colWidths[0] + colWidths[1] + 5, y + 5, { width: colWidths[2] - 8, lineBreak: false });
-    doc.text(item.status || item.verificationStatus || "-", startX + colWidths[0] + colWidths[1] + colWidths[2] + 5, y + 5, { width: colWidths[3] - 8, lineBreak: false });
-    doc.text(item.publishedAt || "-", startX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, y + 5, { width: colWidths[4] - 8, lineBreak: false });
-
-    y += 18;
-  });
-
-  doc.y = y + 10;
+  renderTable(
+    doc,
+    [
+      { header: "Case Ref", width: 80, value: (i) => i.caseId || "-" },
+      { header: "On-chain Transaction Hash", width: 135, value: (i) => i.transactionHash || "-" },
+      { header: "Document Hash (SHA-256)", width: 110, value: (i) => i.documentHash || "-" },
+      { header: "Verification Status", width: 110, value: (i) => i.status || i.verificationStatus || "-" },
+      { header: "Published Date", width: 80, value: (i) => i.publishedAt || "-" },
+    ],
+    items,
+    headerBg,
+    borderColor,
+    altBg,
+    textCol
+  );
 }

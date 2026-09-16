@@ -244,8 +244,7 @@ export const RetrainAIModel: React.FC = () => {
             </span>
           </div>
           <p className="text-md-on-surface-variant mt-1 max-w-3xl">
-            Download the current training dataset, adjust it, and re-upload to train a candidate model.
-            A pop-up compares the old and new models so you can decide whether to replace the live one.
+            Retrain the valuation model on an updated dataset.
           </p>
         </div>
       </div>
