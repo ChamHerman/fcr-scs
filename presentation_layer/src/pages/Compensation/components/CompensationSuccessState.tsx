@@ -61,7 +61,7 @@ export const CompensationSuccessState: React.FC<CompensationSuccessStateProps> =
         <div className="p-4 rounded-xl bg-md-surface-container-low border border-md-outline/10 text-center">
           <span className="text-xs text-md-on-surface-variant uppercase font-semibold">Land Value Difference</span>
           <div className="text-xl font-bold text-md-on-surface mt-1">
-            RM {landDiffFromRecommended.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {formatCurrencyRM(landDiffFromRecommended)}
           </div>
           <span className="text-xs text-md-on-surface-variant/70 mt-0.5 block">
             {isLandDiffOver100k ? "Exceeds RM 100k (Requires Admin Review)" : "Within Threshold"}

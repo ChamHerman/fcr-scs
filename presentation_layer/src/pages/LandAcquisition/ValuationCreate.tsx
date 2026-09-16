@@ -507,7 +507,7 @@ export const ValuationCreate: React.FC = () => {
           <span className="text-xs text-md-on-surface-variant uppercase font-semibold">Final Market Value</span>
           <div className="text-xl font-bold text-md-on-surface mt-1">{formatCurrencyRM(savedReport?.marketValue)}</div>
           <span className="text-xs text-md-on-surface-variant/70 font-mono mt-0.5 block">
-            {savedReport?.marketRatePerSqMeter} RM/m²
+            {savedReport?.marketRatePerSqMeter ? `${formatCurrencyRM(savedReport.marketRatePerSqMeter)} /m²` : '—'}
           </span>
         </div>
         <div className="p-4 rounded-xl bg-md-surface-container-low border border-md-primary/30 text-center">
@@ -525,7 +525,7 @@ export const ValuationCreate: React.FC = () => {
             {formatCurrencyRM(savedReport?.recommendedCompensation)}
           </div>
           <span className="text-xs text-md-on-surface-variant/70 font-mono mt-0.5 block">
-            {savedReport?.compensationRatePerSqMeter} RM/m²
+            {savedReport?.compensationRatePerSqMeter ? `${formatCurrencyRM(savedReport.compensationRatePerSqMeter)} /m²` : '—'}
           </span>
         </div>
       </div>

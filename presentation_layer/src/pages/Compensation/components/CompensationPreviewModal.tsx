@@ -158,7 +158,7 @@ export const CompensationPreviewModal: React.FC<CompensationPreviewModalProps> =
             <div>
               <strong>
                 {isLandDiffOver100k
-                  ? `RM ${landDiffFromRecommended.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Difference Detected (> RM 100,000 Threshold)`
+                  ? `${formatCurrencyRM(landDiffFromRecommended)} Difference Detected (> RM 100,000 Threshold)`
                   : "Land Value within RM 100,000 threshold"}
               </strong>
               <p className="mt-0.5 opacity-80">

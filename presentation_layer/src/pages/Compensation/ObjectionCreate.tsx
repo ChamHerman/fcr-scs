@@ -15,6 +15,7 @@ import { FileUpload } from "../../components/ui/FileUpload";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
+import { formatCurrencyRM } from "../../utils/currency";
 import "../../index.css";
 import "./objection.css";
 
@@ -303,7 +304,7 @@ export const ObjectionCreate: React.FC = () => {
     { value: "", label: "— Choose an offer letter —" },
     ...offers.map((o) => ({
       value: o.offerId,
-      label: `${o.caseTitle} — ${o.ownerName} (Offered: RM ${o.offerAmount.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${
+      label: `${o.caseTitle} — ${o.ownerName} (Offered: ${formatCurrencyRM(o.offerAmount)}${
         o.isAcceptedWithinGrace ? " · Accepted (within 24h grace window)" : ""
       })`,
     })),
@@ -416,7 +417,7 @@ export const ObjectionCreate: React.FC = () => {
                 <div>
                   <span className="text-xs text-md-on-surface-variant font-medium">Form H Offered Award</span>
                   <div className="text-base font-bold text-md-primary mt-0.5">
-                    RM {selectedOffer.offerAmount.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {formatCurrencyRM(selectedOffer.offerAmount)}
                   </div>
                 </div>
               </div>
@@ -447,7 +448,7 @@ export const ObjectionCreate: React.FC = () => {
                   <div className="mt-2 text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-md-primary/5 text-md-primary font-medium">
                     <span>Variance:</span>
                     <strong>
-                      {varianceAmount >= 0 ? "+" : ""}RM {varianceAmount.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({variancePct >= 0 ? "+" : ""}{variancePct.toFixed(1)}%)
+                      {varianceAmount >= 0 ? "+" : "-"}{formatCurrencyRM(Math.abs(varianceAmount))} ({variancePct >= 0 ? "+" : ""}{variancePct.toFixed(1)}%)
                     </strong>
                   </div>
                 )}

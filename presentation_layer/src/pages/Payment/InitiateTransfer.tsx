@@ -31,9 +31,9 @@ import { normalizePaymentStatus } from './statusMaps';
 import type { PaymentRow } from './paymentModals';
 
 type ModalState =
-  | { type: 'view'; pc: PaymentRow }
-  | { type: 'initiate'; pc: PaymentRow }
-  | { type: 'cancel'; pc: PaymentRow }
+  | { type: 'view'; caseId: string }
+  | { type: 'initiate'; caseId: string }
+  | { type: 'cancel'; caseId: string }
   | null;
 
 export default function InitiateTransfer() {
@@ -55,8 +55,8 @@ export default function InitiateTransfer() {
     gsap.fromTo('.stats-grid, .filter-bar, .action-bar, .table-wrap', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.08, ease: 'back.out(1.2)', delay: 0.2 });
   }, { scope: pageRef });
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError('');
     try {
       const res = await paymentApi.getAllCases();
@@ -69,7 +69,7 @@ export default function InitiateTransfer() {
     } catch (err: any) {
       setError(err.message || 'Failed to load cases');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -187,6 +187,21 @@ export default function InitiateTransfer() {
 
   const closeModal = () => setModal(null);
 
+  const modalPc = useMemo(
+    () => (modal ? cases.find((c) => c.caseId === modal.caseId) ?? null : null),
+    [modal, cases]
+  );
+
+  // Opening a modal silently re-fetches so it renders current backend state,
+  // not the snapshot the row was rendered with.
+  const openModal = useCallback(
+    (type: Exclude<ModalState, null>['type'], caseId: string) => {
+      setModal({ type, caseId } as ModalState);
+      loadData(true);
+    },
+    [loadData]
+  );
+
   return (
     <div className="main" ref={pageRef}>
       <div className="topbar initiate-header">
@@ -283,7 +298,7 @@ export default function InitiateTransfer() {
                     <tr
                       key={pc.caseId}
                       className={`row-clickable${deepLink === pc.caseId ? ' bg-md-secondary-container/40' : ''}`}
-                      onClick={() => setModal({ type: 'view', pc })}
+                      onClick={() => openModal('view', pc.caseId)}
                     >
                       <td>
                         <div className="flex items-center gap-1.5">
@@ -335,18 +350,21 @@ export default function InitiateTransfer() {
         onClose={() => setCaseDetailsId(null)}
       />
       <ViewDetailsModal
-        pc={modal?.type === 'view' ? modal.pc : null}
+        pc={modal?.type === 'view' ? modalPc : null}
         identityId={identityId}
         onClose={closeModal}
-        onAction={(type, target) => setModal({ type, pc: target } as ModalState)}
+        onAction={(type, target) => {
+          if (type === 'confirm-execution' || type === 'confirm-receipt') return;
+          openModal(type as Exclude<ModalState, null>['type'], target.caseId);
+        }}
       />
       <InitiateTransferModal
-        pc={modal?.type === 'initiate' ? modal.pc : null}
+        pc={modal?.type === 'initiate' ? modalPc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />
       <CancelPaymentModal
-        pc={modal?.type === 'cancel' ? modal.pc : null}
+        pc={modal?.type === 'cancel' ? modalPc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />

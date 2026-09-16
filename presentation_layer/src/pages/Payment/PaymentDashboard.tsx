@@ -41,16 +41,16 @@ import { PaymentRowActions } from './PaymentRowActions';
 import { RefreshButton } from './RefreshButton';
 import type { PaymentRow } from './paymentModals';
 type ModalState =
-  | { type: 'view'; pc: PaymentRow }
-  | { type: 'initiate'; pc: PaymentRow }
-  | { type: 'authorise'; pc: PaymentRow }
-  | { type: 'reject'; pc: PaymentRow }
-  | { type: 'resolve-rejection'; pc: PaymentRow }
-  | { type: 'cancel'; pc: PaymentRow }
-  | { type: 'retry'; pc: PaymentRow }
-  | { type: 'request-update'; pc: PaymentRow }
-  | { type: 'schedule'; pc: PaymentRow }
-  | { type: 'resolve-dispute'; pc: PaymentRow }
+  | { type: 'view'; caseId: string }
+  | { type: 'initiate'; caseId: string }
+  | { type: 'authorise'; caseId: string }
+  | { type: 'reject'; caseId: string }
+  | { type: 'resolve-rejection'; caseId: string }
+  | { type: 'cancel'; caseId: string }
+  | { type: 'retry'; caseId: string }
+  | { type: 'request-update'; caseId: string }
+  | { type: 'schedule'; caseId: string }
+  | { type: 'resolve-dispute'; caseId: string }
   | null;
 
 const ITEMS_PER_PAGE = 10;
@@ -124,7 +124,7 @@ export default function PaymentDashboard() {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
   const [caseDetailsId, setCaseDetailsId] = useState<string | null>(null);
-  const [finalConfirmCase, setFinalConfirmCase] = useState<PaymentRow | null>(null);
+  const [finalConfirmCaseId, setFinalConfirmCaseId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortKey, setSortKey] = useState<SortKey>(() => {
     const stored = localStorage.getItem(SORT_STORAGE_KEY) as SortKey | null;
@@ -272,6 +272,26 @@ export default function PaymentDashboard() {
 
   const closeModal = () => setModal(null);
 
+  const modalPc = useMemo(
+    () => (modal ? allCases.find((c) => c.caseId === modal.caseId) ?? null : null),
+    [modal, allCases]
+  );
+
+  const finalConfirmPc = useMemo(
+    () => (finalConfirmCaseId ? allCases.find((c) => c.caseId === finalConfirmCaseId) ?? null : null),
+    [finalConfirmCaseId, allCases]
+  );
+
+  // Opening a modal silently re-fetches so the modal renders current backend
+  // state, not the snapshot the row was rendered with.
+  const openModal = useCallback(
+    (type: Exclude<ModalState, null>['type'], caseId: string) => {
+      setModal({ type, caseId } as ModalState);
+      loadData(true, true);
+    },
+    [loadData]
+  );
+
   return (
     <div className="main" ref={containerRef}>
       <div className="topbar">
@@ -398,7 +418,7 @@ export default function PaymentDashboard() {
               ) : (
                 pageRows.map((pc) => {
                   const detailed = getDetailedPaymentStatus(pc);
-                  const openView = () => setModal({ type: 'view', pc });
+                  const openView = () => openModal('view', pc.caseId);
                   const paymentId = pc.paymentId || `PMT-${pc.caseId}`;
                   return (
                     <tr key={pc.caseId} className="row-clickable" onClick={openView}>
@@ -453,24 +473,27 @@ export default function PaymentDashboard() {
 
       {/* Modals */}
       <ViewDetailsModal
-        pc={modal?.type === 'view' ? modal.pc : null}
+        pc={modal?.type === 'view' ? modalPc : null}
         identityId={identityId}
         onClose={closeModal}
         onAction={(type, target) => {
           if (type === 'confirm-execution') {
-            setFinalConfirmCase(target);
+            setFinalConfirmCaseId(target.caseId);
+            loadData(true, true);
+          } else if (type === 'confirm-receipt') {
+            loadData(true, true);
           } else {
-            setModal({ type, pc: target } as ModalState);
+            openModal(type as Exclude<ModalState, null>['type'], target.caseId);
           }
         }}
       />
       <InitiateTransferModal
-        pc={modal?.type === 'initiate' ? modal.pc : null}
+        pc={modal?.type === 'initiate' ? modalPc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />
       <AuthoriseTransferModal
-        pc={modal?.type === 'authorise' ? modal.pc : null}
+        pc={modal?.type === 'authorise' ? modalPc : null}
         onClose={closeModal}
         onDone={() => {
           closeModal();
@@ -478,18 +501,18 @@ export default function PaymentDashboard() {
         }}
       />
       <FinalExecutionConfirmModal
-        pc={finalConfirmCase}
-        isOpen={Boolean(finalConfirmCase)}
+        pc={finalConfirmPc}
+        isOpen={Boolean(finalConfirmCaseId)}
         onConfirm={async () => {
-          if (!finalConfirmCase) return;
-          await paymentApi.confirmExecution({ caseId: finalConfirmCase.caseId, adminId: identityId });
+          if (!finalConfirmPc) return;
+          await paymentApi.confirmExecution({ caseId: finalConfirmPc.caseId, adminId: identityId });
           setTimeout(() => {
-            setFinalConfirmCase(null);
+            setFinalConfirmCaseId(null);
             loadData();
           }, 1100);
         }}
         onHold={() => {
-          setFinalConfirmCase(null);
+          setFinalConfirmCaseId(null);
           loadData();
         }}
       />
@@ -498,37 +521,37 @@ export default function PaymentDashboard() {
         onClose={() => setCaseDetailsId(null)}
       />
       <RejectTransferModal
-        pc={modal?.type === 'reject' ? modal.pc : null}
+        pc={modal?.type === 'reject' ? modalPc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />
       <ResolveRejectionModal
-        pc={modal?.type === 'resolve-rejection' ? modal.pc : null}
+        pc={modal?.type === 'resolve-rejection' ? modalPc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />
       <CancelPaymentModal
-        pc={modal?.type === 'cancel' ? modal.pc : null}
+        pc={modal?.type === 'cancel' ? modalPc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />
       <RetryPaymentModal
-        pc={modal?.type === 'retry' ? modal.pc : null}
+        pc={modal?.type === 'retry' ? modalPc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />
       <RequestDetailsUpdateModal
-        pc={modal?.type === 'request-update' ? modal.pc : null}
+        pc={modal?.type === 'request-update' ? modalPc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />
       <ScheduleTomorrowModal
-        pc={modal?.type === 'schedule' ? modal.pc : null}
+        pc={modal?.type === 'schedule' ? modalPc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />
       <ResolveDisputeModal
-        pc={modal?.type === 'resolve-dispute' ? modal.pc : null}
+        pc={modal?.type === 'resolve-dispute' ? modalPc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />

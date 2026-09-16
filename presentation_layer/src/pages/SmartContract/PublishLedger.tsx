@@ -9,6 +9,7 @@ import { compensationApi } from '../../services/compensationApi';
 import { useWallet } from '../../hooks/useWallet';
 import { useAuth } from '../../context/AuthContext';
 import { usePublishClaims } from '../../hooks/usePublishClaims';
+import { usePollingRefresh } from '../../hooks/usePollingRefresh';
 import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { CaseDetailsModal } from '../Payment/CaseDetailsModal';
 import { SearchInput } from '../../components/ui/SearchInput';
@@ -140,9 +141,12 @@ export const PublishLedger: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, [activeTab]);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError('');
+  const loadData = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = Boolean(opts?.silent);
+    if (!silent) {
+      setLoading(true);
+      setError('');
+    }
     try {
       const [netData, allCases, recordsRes, offersRes] = await Promise.all([
         blockchainApi.getNetworkInfo().catch(() => null),
@@ -237,9 +241,11 @@ export const PublishLedger: React.FC = () => {
       }
       setM2Rows(settlementQueue);
     } catch (err: any) {
-      setError(err.message || 'Failed to load publish queue');
+      // A silent tick keeps the last good rows on screen; only an explicit
+      // load (mount, Refresh) is allowed to surface an error banner.
+      if (!silent) setError(err.message || 'Failed to load publish queue');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -247,14 +253,13 @@ export const PublishLedger: React.FC = () => {
     loadData();
   }, [loadData]);
 
-  // FR-012 grace policy: poll while the Award tab is open (and no modal blocks
-  // the view) so a grace-locked row flips to publishable the moment the
-  // 24-hour window elapses — no manual refresh needed.
-  useEffect(() => {
-    if (activeTab !== 'm1' || modal) return;
-    const interval = setInterval(loadData, 60_000);
-    return () => clearInterval(interval);
-  }, [activeTab, modal, loadData]);
+  // Records move under this page from two directions: another admin publishing
+  // (which also clears the row from this queue) and the 24-hour grace window
+  // elapsing. Polling covers both, so the 60s Award-tab grace timer is gone.
+  usePollingRefresh(
+    () => loadData({ silent: true }),
+    { intervalMs: 5_000, enabled: !modal }
+  );
 
   const rows = activeTab === 'm1' ? m1Rows : m2Rows;
 

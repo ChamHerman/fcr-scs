@@ -10,6 +10,7 @@ import { useNotification } from '../../components/ui/NotificationSystem';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { useAuth } from '../../context/AuthContext';
 import { usePublishClaims } from '../../hooks/usePublishClaims';
+import { usePollingRefresh } from '../../hooks/usePollingRefresh';
 import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { CaseDetailsModal } from '../Payment/CaseDetailsModal';
 import { SearchInput } from '../../components/ui/SearchInput';
@@ -103,9 +104,12 @@ export const BlockchainDashboard: React.FC = () => {
     gsap.fromTo('.filter-bar, .action-bar, .table-wrap', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, stagger: 0.07, ease: 'power2.out', delay: 0.45 });
   }, { scope: containerRef });
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError('');
+  const loadData = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = Boolean(opts?.silent);
+    if (!silent) {
+      setLoading(true);
+      setError('');
+    }
     try {
       const [recData, netData, paidRes, offersRes] = await Promise.all([
         blockchainApi.getRecords(),
@@ -272,15 +276,24 @@ export const BlockchainDashboard: React.FC = () => {
       setReadyRows([...awardReady, ...settlementReady]);
       setNetworkInfo(netData);
     } catch (err: any) {
-      setError(err.message || 'Failed to load ledger data');
+      // A silent tick keeps the last good rows on screen; only an explicit
+      // load (mount, Retry, Refresh) is allowed to surface an error banner.
+      if (!silent) setError(err.message || 'Failed to load ledger data');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Records change from other admins' browsers (publish, notarize), so the
+  // table refreshes on its own instead of waiting for a manual refresh.
+  usePollingRefresh(
+    () => loadData({ silent: true }),
+    { intervalMs: 5_000, enabled: !modal }
+  );
 
   const allRows = useMemo(() => [...readyRows, ...records], [readyRows, records]);
 
@@ -521,7 +534,7 @@ export const BlockchainDashboard: React.FC = () => {
       {error && (
         <div className="my-4 px-4 py-3 rounded-xl bg-md-error/10 border border-md-error/30 text-md-on-error text-sm flex items-center justify-between gap-4">
           <span>{error}</span>
-          <Button variant="text" size="sm" onClick={loadData}>Retry</Button>
+          <Button variant="text" size="sm" onClick={() => loadData()}>Retry</Button>
         </div>
       )}
       {walletError && <p className="text-red-500 my-2">{walletError}</p>}

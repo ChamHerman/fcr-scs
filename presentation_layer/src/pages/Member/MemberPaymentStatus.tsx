@@ -28,6 +28,7 @@ import { ConfirmSubmitModal, ConfirmRow } from '../../components/member/ConfirmS
 import { BankDetailsForm, formatLocalContactNumber } from './components/BankDetailsForm';
 import { formatDateTime } from '../../utils/dateFormat';
 import { CopyButton } from '../../components/ui/CopyButton';
+import { formatCurrencyRM } from '../../utils/currency';
 
 interface CaseOption {
   caseId: string;
@@ -785,7 +786,7 @@ export default function MemberPaymentStatus() {
               placeholder={loadingCases ? 'Loading your cases…' : 'Select a case…'}
               options={availableCases.map((c) => ({
                 value: c.caseId,
-                label: `${c.caseId} — ${c.projectName} · ${c.lotNo} · RM ${c.amount.toLocaleString('en-MY', { minimumFractionDigits: 2 })} [${getMemberDisplayStatus(c.status).label}]`,
+                label: `${c.caseId} — ${c.projectName} · ${c.lotNo} · ${formatCurrencyRM(c.amount)} [${getMemberDisplayStatus(c.status).label}]`,
               }))}
               value={selectedCaseId}
               onChange={(val) => {
@@ -855,7 +856,7 @@ export default function MemberPaymentStatus() {
                       Total Statutory Award
                     </span>
                     <span className="text-lg sm:text-2xl font-extrabold text-md-primary">
-                      RM {(paymentCase?.amount || activeCaseInfo?.amount || 0).toLocaleString('en-MY', { minimumFractionDigits: 2 })}
+                      {formatCurrencyRM(paymentCase?.amount || activeCaseInfo?.amount || 0)}
                     </span>
                     <span className="text-[11px] text-md-on-surface-variant block mt-0.5">
                       Form H Legal Entitlement
@@ -1012,7 +1013,7 @@ export default function MemberPaymentStatus() {
                       Total Statutory Award
                     </span>
                     <span className="text-lg sm:text-2xl font-extrabold text-md-primary">
-                      RM {(paymentCase?.amount || activeCaseInfo?.amount || 0).toLocaleString('en-MY', { minimumFractionDigits: 2 })}
+                      {formatCurrencyRM(paymentCase?.amount || activeCaseInfo?.amount || 0)}
                     </span>
                     <span className="text-[11px] text-md-on-surface-variant block mt-0.5">
                       Form H Legal Entitlement
@@ -1306,7 +1307,7 @@ export default function MemberPaymentStatus() {
             <ConfirmRow label="Case" value={selectedCaseId} mono />
             <ConfirmRow
               label="Amount"
-              value={`RM ${(paymentCase?.amount || activeCaseInfo?.amount || 0).toLocaleString('en-MY', { minimumFractionDigits: 2 })}`}
+              value={formatCurrencyRM(paymentCase?.amount || activeCaseInfo?.amount || 0)}
             />
             <ConfirmRow
               label="Effect"
