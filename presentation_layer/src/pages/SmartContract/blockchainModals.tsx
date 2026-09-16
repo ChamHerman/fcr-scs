@@ -8,6 +8,7 @@ import { Textarea } from '../../components/ui/Textarea';
 import { CopyButton } from '../../components/ui/CopyButton';
 import { blockchainApi, PublishClaimHeldError } from '../../services/blockchainApi';
 import { landAcquisitionApi } from '../../services/landAcquisitionApi';
+import { paymentApi } from '../../services/paymentApi';
 import { useWallet } from '../../hooks/useWallet';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
@@ -386,6 +387,7 @@ export const PublishModal: React.FC<{
   const [stage, setStage] = useState<'wallet' | 'mining' | 'recording'>('wallet');
   const [resultTx, setResultTx] = useState('');
   const [caseData, setCaseData] = useState<any>(null);
+  const [paymentData, setPaymentData] = useState<any>(null);
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
   // True only while THIS dialog holds the server-side claim, so release is
   // never attempted for a lock we did not take.
@@ -423,6 +425,7 @@ export const PublishModal: React.FC<{
   useEffect(() => {
     if (!row?.caseId) {
       setCaseData(null);
+      setPaymentData(null);
       return;
     }
     let isMounted = true;
@@ -434,18 +437,39 @@ export const PublishModal: React.FC<{
       .catch(() => {
         if (isMounted) setCaseData(null);
       });
+
+    if (row.milestone === 'M2') {
+      paymentApi
+        .getStatus(row.caseId)
+        .then((res: any) => {
+          if (isMounted) setPaymentData(res?.paymentCase || res);
+        })
+        .catch(() => {
+          if (isMounted) setPaymentData(null);
+        });
+    }
+
     return () => {
       isMounted = false;
     };
-  }, [row?.caseId]);
+  }, [row?.caseId, row?.milestone]);
 
   const isCancelledRef = useRef(false);
+  // Real unmount tracking. The unload effect below re-runs whenever its deps
+  // change, so its cleanup must not be mistaken for an unmount — that would
+  // leave the spinner stuck on after a publish succeeds or fails.
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // Tab unload & refresh protection: prevent accidental abandonment during statutory on-chain execution
   useEffect(() => {
     if (!loading) return;
-
-    isCancelledRef.current = false;
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
@@ -466,7 +490,6 @@ export const PublishModal: React.FC<{
     window.addEventListener('unload', handleUnload);
 
     return () => {
-      isCancelledRef.current = true;
       window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('unload', handleUnload);
     };
@@ -590,9 +613,10 @@ export const PublishModal: React.FC<{
     } finally {
       // Hand the lock back unless the publish already did or the tab is closing.
       await releaseClaim();
-      if (!isCancelledRef.current) {
-        setLoading(false);
-      }
+      // Always stop the spinner while the dialog is mounted. If the publish was
+      // abandoned the unload handler already released the claim, so nothing is
+      // still running in the background.
+      if (mountedRef.current) setLoading(false);
     }
   };
 
@@ -678,16 +702,18 @@ export const PublishModal: React.FC<{
                 <div className="payment-detail-item">
                   <div className="label">Destination Bank</div>
                   <div className="value">
-                    {row.bankName ? `${row.bankName} · ${maskAccount(row.accountNumber)}` : '—'}
+                    {(row.bankName || paymentData?.bankName)
+                      ? `${row.bankName || paymentData?.bankName} · ${maskAccount(row.accountNumber || paymentData?.accountNumber)}`
+                      : '—'}
                   </div>
                 </div>
                 <div className="payment-detail-item">
                   <div className="label">RENTAS / Bank Ref</div>
-                  <div className="value mono">{row.bankReferenceNumber || '—'}</div>
+                  <div className="value mono">{row.bankReferenceNumber || paymentData?.receipt?.bankReferenceNumber || '—'}</div>
                 </div>
                 <div className="payment-detail-item">
                   <div className="label">Settlement Paid Date</div>
-                  <div className="value">{fmtDate(row.paidAt)}</div>
+                  <div className="value">{fmtDate(row.paidAt || paymentData?.receipt?.generatedAt || paymentData?.paidAt || paymentData?.updatedAt)}</div>
                 </div>
                 <div className="payment-detail-item">
                   <div className="label">Certificate Version</div>

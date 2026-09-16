@@ -128,8 +128,10 @@ export const AdminLayout: React.FC = () => {
 
     if (isCollapsed) {
       // Collapsed sidebar shows every group's items inline — never clipped.
-      Object.values(navGroupRefs.current).forEach((el) => {
-        if (el) gsap.set(el, { height: 'auto', opacity: 1 });
+      const elements = Object.values(navGroupRefs.current).filter(Boolean);
+      gsap.killTweensOf(elements);
+      elements.forEach((el) => {
+        gsap.set(el, { height: 'auto', opacity: 1, clearProps: 'overflow' });
       });
       return;
     }
@@ -277,6 +279,15 @@ export const AdminLayout: React.FC = () => {
           gap: 2px;
           padding-top: 2px;
         }
+        ${isCollapsed ? `
+          .nav-group-items {
+            height: auto !important;
+            opacity: 1 !important;
+            overflow: visible !important;
+            display: flex !important;
+            visibility: visible !important;
+          }
+        ` : ''}
         .nav-divider {
           height: 1px;
           background: rgba(121,116,126,0.18);

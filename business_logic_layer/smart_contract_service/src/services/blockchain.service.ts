@@ -124,6 +124,24 @@ export async function assertM1GracePeriodElapsed(caseId: string) {
   }
 }
 
+/**
+ * FR-005 / FR-019: the settlement is only notarized once the funds are confirmed
+ * received (PAID). Publishing at TRANSFER_SUCCEED would anchor a settlement the
+ * member has not accepted, and the SETTLEMENT side effect below closes the
+ * acquisition case — so this must be a hard gate, not a UI-only one.
+ *
+ * Fails closed: a case with no payment case cannot prove receipt, so it is blocked.
+ */
+export async function assertSettlementPaid(caseId: string) {
+  const pCase = await prisma.paymentCase.findUnique({ where: { caseId } });
+  if (!pCase || pCase.status !== PaymentStatus.PAID) {
+    const state = pCase ? pCase.status : "no payment case";
+    throw new Error(
+      `Milestone 2 publication is locked: the case must reach PAID before the settlement can be notarized (current payment status: ${state}). The member confirms receipt, or a Government Administrator confirms after the 7-day window.`
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Cross-admin publish claim
 // ---------------------------------------------------------------------------
@@ -249,6 +267,8 @@ export async function publishRecord(params: {
 
   if (milestone === "AWARD") {
     await assertM1GracePeriodElapsed(caseId);
+  } else {
+    await assertSettlementPaid(caseId);
   }
 
   const existing = await prisma.blockchainRecord.findUnique({

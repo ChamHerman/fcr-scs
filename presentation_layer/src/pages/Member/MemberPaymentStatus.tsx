@@ -15,10 +15,11 @@ import {
   ExternalLink,
   Landmark,
   Eye,
+  FileText,
 } from 'lucide-react';
 import { paymentApi } from '../../services/paymentApi';
 import { blockchainApi } from '../../services/blockchainApi';
-import { normalizePaymentStatus, getMemberDisplayStatus } from '../Payment/statusMaps';
+import { normalizePaymentStatus, getMemberDisplayStatus, getMemberFailureNotice } from '../Payment/statusMaps';
 import { Button } from '../../components/ui/Button';
 import { Select } from '../../components/ui/Select';
 import { Modal } from '../../components/ui/Modal';
@@ -50,6 +51,11 @@ interface PaymentCaseDetails {
   myKadNumber?: string;
   currentSignatures?: number;
   requiredSignatures?: number;
+  authorisations?: Array<{ action?: string; reason?: string | null; adminId?: string; createdAt?: string }>;
+  failedTransactions?: Array<{ errorLog?: string | null; resolution?: string | null; createdAt?: string }>;
+  disputeDocumentPath?: string | null;
+  disputeDocumentName?: string | null;
+  disputeUploadedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -226,9 +232,24 @@ export default function MemberPaymentStatus() {
   const memberStatusLabel = memberDisplay.label;
   const memberBadgeClass = memberDisplay.badgeClass;
 
+  // Plain-language reason for a failed or rejected transfer, so the member is
+  // told what happened without having to ask support.
+  const memberFailureNotice = getMemberFailureNotice(paymentCase);
+
   const isPaid = memberStatusLabel === 'Paid' || rawStatus === 'PAID';
   const isTransferSucceed = memberStatusLabel === 'Payment Completed' || rawStatus === 'TRANSFER_SUCCEED';
   const isPaymentInProgress = memberStatusLabel === 'Payment In Progress';
+  const isDisputed = memberStatusLabel === 'Payment Disputed' || rawStatus === 'DISPUTED';
+
+  // The dispute evidence the member filed is stored as the case's latest dispute
+  // document plus a "DISPUTE: <remark>" failure log — surface both back to them.
+  const hasDisputeStatement = Boolean(paymentCase?.disputeDocumentPath && paymentCase?.disputeDocumentName);
+  const latestDisputeRemark = useMemo(() => {
+    const latest = [...(paymentCase?.failedTransactions ?? [])]
+      .reverse()
+      .find((f) => typeof f.errorLog === 'string' && f.errorLog.startsWith('DISPUTE'));
+    return latest?.errorLog?.replace(/^DISPUTE:\s*/, '') ?? '';
+  }, [paymentCase]);
 
   const isBankPending =
     memberStatusLabel === 'Bank Details Pending' ||
@@ -306,6 +327,43 @@ export default function MemberPaymentStatus() {
     }
   };
 
+  const handleViewDisputeStatementInNewTab = async () => {
+    if (!selectedCaseId) return;
+    try {
+      const blob = await paymentApi.downloadDisputeStatement(selectedCaseId);
+      const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+      window.open(url, '_blank', 'noopener');
+    } catch (err: any) {
+      notify({
+        type: 'error',
+        title: 'Statement Preview Failed',
+        message: err.message || 'Your submitted statement could not be opened.',
+      });
+    }
+  };
+
+  const handleDownloadDisputeStatement = async () => {
+    if (!selectedCaseId) return;
+    try {
+      const blob = await paymentApi.downloadDisputeStatement(selectedCaseId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = paymentCase?.disputeDocumentName || `dispute-statement-${selectedCaseId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      notify({ type: 'success', title: 'Statement downloaded', message: 'Your submitted bank statement was saved.' });
+    } catch (err: any) {
+      notify({
+        type: 'error',
+        title: 'Download Failed',
+        message: err.message || 'Your submitted statement could not be downloaded.',
+      });
+    }
+  };
+
   const handleDisputeSubmitClick = () => {
     if (!disputeFile) {
       notify({ type: 'error', title: 'Missing Attachment', message: 'Please upload a real bank statement or transaction record (PDF).' });
@@ -372,42 +430,23 @@ export default function MemberPaymentStatus() {
     bankFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  // 5-Step Workflow definition
+  // The five statutory stages. Notarization status deliberately does NOT live
+  // here: each milestone is anchored separately and is reported once, in the
+  // Blockchain anchors section below, so the same badge is not repeated per step.
   const steps = [
     {
       step: 1,
       title: 'Offer Accepted',
-      milestoneTag: 'Milestone 1 · Award',
-      subtitle: 'Statutory Form H award accepted by landowner',
+      subtitle: 'Statutory Form H award accepted by the landowner',
       completed: true,
-      badge: (
-        m1Record?.transactionHash ? (
-          <a
-            href={etherscanUrlFor(m1Record.transactionHash) ?? '#'}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 mt-1 hover:bg-emerald-100 transition-colors"
-          >
-            <ShieldCheck size={11} className="shrink-0 text-emerald-600" />
-            <span>On-Chain Notarized</span>
-            <ExternalLink size={10} className="shrink-0" />
-          </a>
-        ) : (
-          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 mt-1">
-            <AlertTriangle size={10} className="shrink-0 text-amber-600" />
-            <span>Notarization Pending</span>
-          </span>
-        )
-      ),
     },
     {
       step: 2,
       title: 'Bank Details Verified',
       subtitle: isBankVerified
-        ? `${paymentCase?.bankName} (•••• ${paymentCase?.accountNumber?.slice(-4)}) recorded`
+        ? `${paymentCase?.bankName} (•••• ${paymentCase?.accountNumber?.slice(-4)}) on record`
         : isBankPending
-        ? 'Awaiting beneficiary bank details submission'
+        ? 'Awaiting your bank details submission'
         : 'Bank details submission verified',
       completed: isBankVerified,
       isCurrent: isBankPending,
@@ -417,48 +456,23 @@ export default function MemberPaymentStatus() {
       step: 3,
       title: 'Multi-Signature Governance',
       subtitle: isBankPending
-        ? 'Dual administrative governance approval (Pending Step 2)'
+        ? 'Government Administrator approval'
         : paymentCase?.requiredSignatures
-        ? `Cryptographic dual authorisation (${paymentCase.currentSignatures || 0}/${paymentCase.requiredSignatures} signatures)`
-        : 'Dual administrative governance approval',
+        ? `${paymentCase.currentSignatures || 0} of ${paymentCase.requiredSignatures} administrative signatures`
+        : 'Government Administrator approval',
       completed: currentStep >= 4 || isTransferSucceed || isPaid,
     },
     {
       step: 4,
       title: 'RENTAS Clearing House',
-      subtitle: 'Real-Time Gross Settlement (RTGS) clearance by Bank Negara Malaysia',
+      subtitle: 'Interbank settlement cleared by Bank Negara Malaysia',
       completed: currentStep >= 5 || isPaid,
     },
     {
       step: 5,
       title: 'Disbursement Confirmed',
-      milestoneTag: 'Milestone 2 · Settlement',
-      subtitle: 'Statutory funds verified and confirmed received by landowner beneficiary',
+      subtitle: 'Funds confirmed received by the beneficiary',
       completed: isPaid,
-      badge: (
-        m2Record?.transactionHash ? (
-          <a
-            href={etherscanUrlFor(m2Record.transactionHash) ?? '#'}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 mt-1 hover:bg-emerald-100 transition-colors"
-          >
-            <ShieldCheck size={11} className="shrink-0 text-emerald-600" />
-            <span>On-Chain Notarized</span>
-            <ExternalLink size={10} className="shrink-0" />
-          </a>
-        ) : isPaid || isTransferSucceed ? (
-          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 mt-1">
-            <AlertTriangle size={10} className="shrink-0 text-amber-600" />
-            <span>Settlement Notarization Pending</span>
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-600 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5 mt-1">
-            <span>Awaiting Settlement</span>
-          </span>
-        )
-      ),
     },
   ];
 
@@ -467,41 +481,37 @@ export default function MemberPaymentStatus() {
    * and the Dual-Milestone Cryptographic Blockchain Proofs into a single cohesive card.
    */
   const renderUnifiedLifecycleAndAuditCard = () => (
-    <div className="bg-md-surface-container border border-md-outline/15 rounded-xl p-5 sm:p-6 shadow-sm space-y-6">
-      {/* Unified Card Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-md-outline/10">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-md-primary/10 border border-md-primary/20 flex items-center justify-center text-md-primary shrink-0">
+    <div className="bg-md-surface-container border border-md-outline/15 rounded-xl p-5 sm:p-7 shadow-sm">
+      {/* Card header — the ledger is named once, here, rather than on every row. */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-md-outline/10">
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-md-primary/10 border border-md-primary/20 flex items-center justify-center text-md-primary shrink-0">
             <ShieldCheck size={22} aria-hidden="true" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm sm:text-base font-bold text-md-on-surface">
-                Disbursement Lifecycle &amp; Blockchain Audit Trail
-              </h3>
-              <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
-                Sepolia On-Chain
-              </span>
-            </div>
-            <p className="text-xs text-md-on-surface-variant mt-0.5">
-              5-stage statutory payout progression anchored by dual cryptographic ledger milestones.
+            <h3 className="text-base font-bold text-md-on-surface">
+              Disbursement Lifecycle
+            </h3>
+            <p className="text-xs text-md-on-surface-variant mt-1 leading-relaxed">
+              Five statutory stages, with the award and the settlement each anchored on the
+              Ethereum Sepolia ledger.
             </p>
           </div>
         </div>
 
         <Link
           to="/member/verify-audit"
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-md-primary hover:underline shrink-0 focus-visible:ring-2 focus-visible:ring-md-primary focus-visible:outline-none rounded self-start sm:self-center"
-          aria-label="Verify Document File on blockchain audit trail"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-md-primary hover:underline shrink-0 focus-visible:ring-2 focus-visible:ring-md-primary focus-visible:outline-none rounded self-start sm:self-center"
+          aria-label="Verify a document against the blockchain audit trail"
         >
-          <span>Verify Document File</span>
+          <span>Verify a document</span>
           <ArrowRight size={14} aria-hidden="true" />
         </Link>
       </div>
 
-      {/* Part 1: 5-Stage Visual Stepper */}
-      <div>
-        <div className="space-y-6 sm:space-y-0 sm:grid sm:grid-cols-5 relative gap-2">
+      {/* Progress — generous rhythm so five stages read as a sequence, not a wall. */}
+      <div className="py-7">
+        <div className="space-y-7 sm:space-y-0 sm:grid sm:grid-cols-5 sm:gap-4">
           {steps.map((s, idx) => {
             const isDone = s.completed;
             const isCurrent = !isDone && (idx === 0 || steps[idx - 1].completed);
@@ -509,12 +519,12 @@ export default function MemberPaymentStatus() {
             return (
               <div
                 key={s.step}
-                className="flex sm:flex-col items-start sm:items-center gap-4 sm:gap-2 relative text-left sm:text-center"
+                className="flex sm:flex-col items-start sm:items-center gap-4 sm:gap-3 relative text-left sm:text-center"
               >
-                {/* Desktop horizontal connector line */}
+                {/* Desktop connector, pinned to the centre of the 44px circle. */}
                 {idx < steps.length - 1 && (
                   <div
-                    className={`hidden sm:block absolute top-4.5 left-1/2 w-full h-0.5 -z-0 ${
+                    className={`hidden sm:block absolute top-[21px] left-1/2 w-full h-px -z-0 ${
                       steps[idx + 1].completed
                         ? 'bg-emerald-500'
                         : isDone
@@ -524,9 +534,8 @@ export default function MemberPaymentStatus() {
                   />
                 )}
 
-                {/* Step Circle Icon */}
                 <div
-                  className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-all duration-200 z-10 ${
+                  className={`w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-all duration-200 z-10 ${
                     isDone
                       ? 'bg-emerald-600 text-white shadow-sm'
                       : isCurrent
@@ -534,19 +543,12 @@ export default function MemberPaymentStatus() {
                       : 'bg-md-surface-container-low text-md-on-surface-variant border border-md-outline/30'
                   }`}
                 >
-                  {isDone ? <CheckCircle2 size={18} /> : s.step}
+                  {isDone ? <CheckCircle2 size={20} /> : s.step}
                 </div>
 
-                {/* Step Info */}
-                <div className="min-w-0 flex-1">
-                  {s.milestoneTag && (
-                    <span className="inline-block text-[9px] font-bold uppercase tracking-wider text-md-primary bg-md-primary/10 px-1.5 py-0.2 rounded mb-0.5">
-                      {s.milestoneTag}
-                    </span>
-                  )}
-
+                <div className="min-w-0 flex-1 sm:pt-1">
                   <span
-                    className={`text-xs font-bold block ${
+                    className={`text-[13px] font-bold block ${
                       isDone
                         ? 'text-emerald-700'
                         : isCurrent
@@ -556,19 +558,17 @@ export default function MemberPaymentStatus() {
                   >
                     {s.title}
                   </span>
-                  <span className="text-[11px] text-md-on-surface-variant leading-tight block mt-0.5">
+                  <span className="text-xs text-md-on-surface-variant leading-relaxed block mt-1.5">
                     {s.subtitle}
                   </span>
-
-                  {s.badge && <div className="mt-0.5">{s.badge}</div>}
 
                   {s.actionRequired && (
                     <button
                       type="button"
                       onClick={scrollToBankForm}
-                      className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 underline mt-1 cursor-pointer"
+                      className="inline-flex items-center gap-1 text-xs font-bold text-amber-800 underline mt-2 cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                     >
-                      <span>Submit Details Now</span>
+                      <span>Submit details now</span>
                       <ArrowRight size={12} />
                     </button>
                   )}
@@ -579,169 +579,161 @@ export default function MemberPaymentStatus() {
         </div>
       </div>
 
-      {/* Part 2: Integrated Dual-Milestone Cryptographic Anchors */}
-      <div className="pt-5 border-t border-md-outline/10 space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-md-primary" />
-            <h4 className="text-xs font-bold uppercase tracking-wider text-md-on-surface">
-              Cryptographic Milestone Records
-            </h4>
-            <span className="text-[11px] text-md-on-surface-variant hidden sm:inline">
-              · Immutable proofs anchoring Steps 1 &amp; 5
-            </span>
-          </div>
-          <span className="text-[11px] text-md-on-surface-variant">
-            Ledger: <span className="font-semibold text-md-on-surface">Ethereum Sepolia Testnet</span>
-          </span>
+      {/* Anchors — the one place notarization status is reported. */}
+      <div className="pt-6 border-t border-md-outline/10">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 mb-5">
+          <h4 className="text-sm font-bold text-md-on-surface">
+            Blockchain anchors
+          </h4>
+          <p className="text-xs text-md-on-surface-variant">
+            One immutable record for the award, one for the settlement
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-          {/* Milestone 1 Card (Step 1 Anchor) */}
-          <div className="p-4 rounded-xl bg-md-surface-container-low border border-md-outline/15 space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-md-primary/10 text-md-primary">
-                Milestone 1 · Statutory Award
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Milestone 1 */}
+          <div className="p-5 rounded-xl bg-md-surface-container-low border border-md-outline/15">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <span className="text-xs font-semibold text-md-on-surface-variant">
+                Milestone 1 · Statutory award
               </span>
               {m1Record ? (
-                <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-700">
                   <CheckCircle2 size={13} aria-hidden="true" />
-                  <span>On-Chain Notarized</span>
+                  <span>Notarised</span>
                 </span>
               ) : (
-                <span className="text-xs font-bold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
-                  Pending Notarization
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-700">
+                  <AlertTriangle size={13} aria-hidden="true" />
+                  <span>Pending</span>
                 </span>
               )}
             </div>
 
-            <div>
-              <h5 className="text-sm font-bold text-md-on-surface">
-                Form H Award Acceptance
-              </h5>
-              <p className="text-xs text-md-on-surface-variant leading-relaxed mt-0.5">
-                Compensation entitlement permanently anchored on-chain under LAA 1960.
-              </p>
-            </div>
+            <h5 className="text-sm font-bold text-md-on-surface">
+              Form H award acceptance
+            </h5>
+            <p className="text-xs text-md-on-surface-variant leading-relaxed mt-1.5">
+              The compensation entitlement, recorded permanently on-chain.
+            </p>
 
             {m1Record ? (
-              <div className="space-y-2 text-xs pt-2.5 border-t border-md-outline/10">
-                <div className="flex justify-between items-center">
-                  <span className="text-md-on-surface-variant font-medium">Ledger Key</span>
-                  <span className="font-mono text-xs text-md-on-surface font-bold">
+              <dl className="mt-5 space-y-3 text-xs">
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="text-md-on-surface-variant shrink-0">Ledger key</dt>
+                  <dd className="font-mono font-semibold text-md-on-surface text-right break-all">
                     {m1Record.onChainKey || `${selectedCaseId}#M1`}
-                  </span>
+                  </dd>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-md-on-surface-variant font-medium">Tx Hash</span>
-                  <div className="flex items-center gap-1.5">
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-md-on-surface-variant shrink-0">Transaction</dt>
+                  <dd className="flex items-center gap-1.5 min-w-0">
                     <a
                       href={`https://sepolia.etherscan.io/tx/${m1Record.transactionHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="font-mono text-xs font-semibold text-md-primary hover:underline inline-flex items-center gap-1 focus-visible:ring-1 focus-visible:ring-md-primary rounded"
-                      title="View transaction on Etherscan Sepolia"
+                      className="font-mono font-semibold text-md-primary hover:underline inline-flex items-center gap-1 focus-visible:ring-2 focus-visible:ring-md-primary rounded"
+                      title="View this transaction on Etherscan Sepolia"
                     >
                       <span>{m1Record.transactionHash.slice(0, 8)}…{m1Record.transactionHash.slice(-6)}</span>
                       <ExternalLink size={11} aria-hidden="true" />
                     </a>
                     <CopyButton value={m1Record.transactionHash} size="sm" title="Copy transaction hash" />
-                  </div>
+                  </dd>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-md-on-surface-variant font-medium">Form H SHA-256</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-mono text-xs text-md-on-surface truncate max-w-[160px] sm:max-w-[200px]">
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-md-on-surface-variant shrink-0">Form H SHA-256</dt>
+                  <dd className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-mono text-md-on-surface truncate max-w-[150px] sm:max-w-[190px]">
                       {m1Record.documentHash}
                     </span>
                     <CopyButton value={m1Record.documentHash} size="sm" title="Copy Form H hash" />
-                  </div>
+                  </dd>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-md-on-surface-variant font-medium">Notarised At</span>
-                  <span className="font-mono text-xs text-md-on-surface font-medium">
-                    {formatDateTime(m1Record.createdAt)}
-                  </span>
+                <div className="flex items-center justify-between gap-4 pt-3 border-t border-md-outline/10">
+                  <dt className="text-md-on-surface-variant shrink-0">Notarised</dt>
+                  <dd className="font-medium text-md-on-surface text-right">
+                    {formatDateTime(m1Record.publishedAt ?? m1Record.createdAt)}
+                  </dd>
                 </div>
-              </div>
+              </dl>
             ) : (
-              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900 font-medium">
+              <p className="mt-5 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3.5 py-3 leading-relaxed">
                 Awaiting publication after the statutory review window.
-              </div>
+              </p>
             )}
           </div>
 
-          {/* Milestone 2 Card (Step 5 Anchor) */}
-          <div className="p-4 rounded-xl bg-md-surface-container-low border border-md-outline/15 space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800">
-                Milestone 2 · Settlement &amp; Payout
+          {/* Milestone 2 */}
+          <div className="p-5 rounded-xl bg-md-surface-container-low border border-md-outline/15">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <span className="text-xs font-semibold text-md-on-surface-variant">
+                Milestone 2 · Settlement
               </span>
               {m2Record ? (
-                <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-700">
                   <CheckCircle2 size={13} aria-hidden="true" />
-                  <span>On-Chain Notarized</span>
+                  <span>Notarised</span>
                 </span>
               ) : (
-                <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
-                  Awaiting Settlement
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-700">
+                  <AlertTriangle size={13} aria-hidden="true" />
+                  <span>Pending</span>
                 </span>
               )}
             </div>
 
-            <div>
-              <h5 className="text-sm font-bold text-md-on-surface">
-                Official Payment Receipt
-              </h5>
-              <p className="text-xs text-md-on-surface-variant leading-relaxed mt-0.5">
-                Bank Negara RENTAS RTGS settlement receipt anchored on-chain.
-              </p>
-            </div>
+            <h5 className="text-sm font-bold text-md-on-surface">
+              Official payment receipt
+            </h5>
+            <p className="text-xs text-md-on-surface-variant leading-relaxed mt-1.5">
+              The RENTAS RTGS settlement receipt, anchored on-chain.
+            </p>
 
             {m2Record ? (
-              <div className="space-y-2 text-xs pt-2.5 border-t border-md-outline/10">
-                <div className="flex justify-between items-center">
-                  <span className="text-md-on-surface-variant font-medium">Ledger Key</span>
-                  <span className="font-mono text-xs text-md-on-surface font-bold">
+              <dl className="mt-5 space-y-3 text-xs">
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="text-md-on-surface-variant shrink-0">Ledger key</dt>
+                  <dd className="font-mono font-semibold text-md-on-surface text-right break-all">
                     {m2Record.onChainKey || `${selectedCaseId}#M2`}
-                  </span>
+                  </dd>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-md-on-surface-variant font-medium">Tx Hash</span>
-                  <div className="flex items-center gap-1.5">
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-md-on-surface-variant shrink-0">Transaction</dt>
+                  <dd className="flex items-center gap-1.5 min-w-0">
                     <a
                       href={`https://sepolia.etherscan.io/tx/${m2Record.transactionHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="font-mono text-xs font-semibold text-md-primary hover:underline inline-flex items-center gap-1 focus-visible:ring-1 focus-visible:ring-md-primary rounded"
-                      title="View transaction on Etherscan Sepolia"
+                      className="font-mono font-semibold text-md-primary hover:underline inline-flex items-center gap-1 focus-visible:ring-2 focus-visible:ring-md-primary rounded"
+                      title="View this transaction on Etherscan Sepolia"
                     >
                       <span>{m2Record.transactionHash.slice(0, 8)}…{m2Record.transactionHash.slice(-6)}</span>
                       <ExternalLink size={11} aria-hidden="true" />
                     </a>
-                    <CopyButton value={m2Record.transactionHash} size="sm" title="Copy tx hash" />
-                  </div>
+                    <CopyButton value={m2Record.transactionHash} size="sm" title="Copy transaction hash" />
+                  </dd>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-md-on-surface-variant font-medium">Receipt SHA-256</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-mono text-xs text-md-on-surface truncate max-w-[160px] sm:max-w-[200px]">
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-md-on-surface-variant shrink-0">Receipt SHA-256</dt>
+                  <dd className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-mono text-md-on-surface truncate max-w-[150px] sm:max-w-[190px]">
                       {m2Record.documentHash}
                     </span>
                     <CopyButton value={m2Record.documentHash} size="sm" title="Copy receipt hash" />
-                  </div>
+                  </dd>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-md-on-surface-variant font-medium">Notarised At</span>
-                  <span className="font-mono text-xs text-md-on-surface font-medium">
-                    {formatDateTime(m2Record.createdAt)}
-                  </span>
+                <div className="flex items-center justify-between gap-4 pt-3 border-t border-md-outline/10">
+                  <dt className="text-md-on-surface-variant shrink-0">Notarised</dt>
+                  <dd className="font-medium text-md-on-surface text-right">
+                    {formatDateTime(m2Record.publishedAt ?? m2Record.createdAt)}
+                  </dd>
                 </div>
-              </div>
+              </dl>
             ) : (
-              <div className="p-3 rounded-lg bg-md-surface-container border border-md-outline/15 text-xs text-md-on-surface-variant font-medium">
-                Scheduled for notarization upon interbank fund settlement.
-              </div>
+              <p className="mt-5 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3.5 py-3 leading-relaxed">
+                Awaiting notarisation after the interbank settlement.
+              </p>
             )}
           </div>
         </div>
@@ -907,6 +899,130 @@ export default function MemberPaymentStatus() {
              ========================================================================= */}
           {!isBankPending && (
             <>
+              {/* Transfer Failed / Transfer Rejected — plain-language reason and
+                  the single next step, with no raw bank or governance codes. */}
+              {memberFailureNotice && (
+                <div
+                  className={`p-5 sm:p-6 rounded-2xl border-2 shadow-sm space-y-3 ${
+                    memberFailureNotice.category === 'rejected'
+                      ? 'bg-amber-50 border-amber-300'
+                      : 'bg-rose-50 border-rose-300'
+                  }`}
+                >
+                  <div className="flex items-start gap-3.5">
+                    <div
+                      className={`w-10 h-10 rounded-full text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5 ${
+                        memberFailureNotice.category === 'rejected' ? 'bg-amber-600' : 'bg-rose-600'
+                      }`}
+                    >
+                      <AlertTriangle size={20} />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-sm sm:text-base font-bold text-md-on-surface">
+                        {memberFailureNotice.title}
+                      </h3>
+                      <p className="text-xs sm:text-sm text-md-on-surface-variant mt-1 leading-relaxed">
+                        {memberFailureNotice.reason}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="p-3.5 rounded-xl bg-white/70 border border-md-outline/15 text-xs text-md-on-surface leading-relaxed">
+                    <span className="font-semibold">What happens next: </span>
+                    {memberFailureNotice.nextStep}
+                  </div>
+                </div>
+              )}
+
+              {/* Dispute record — after contesting a transfer the member needs to see
+                  exactly what they filed (remark + statement) and re-open the evidence,
+                  mirroring the receipt group on the Transfer Succeed banner. */}
+              {isDisputed && (
+                <div className="p-5 sm:p-6 rounded-2xl bg-amber-50 border-2 border-amber-300 shadow-sm space-y-4">
+                  <div className="flex items-start gap-3.5 pb-3.5 border-b border-amber-200">
+                    <div className="w-10 h-10 rounded-full bg-amber-600 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+                      <AlertTriangle size={22} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-base sm:text-lg font-bold text-amber-950">
+                          Payment Disputed
+                        </h3>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-amber-200 text-amber-900 border border-amber-300">
+                          Under Review
+                        </span>
+                      </div>
+                      <p className="text-xs sm:text-sm text-amber-800 mt-1 leading-relaxed">
+                        You reported that this payment has not reached your account. A Government
+                        Administrator is cross-checking the transfer with the bank.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="text-xs font-bold text-amber-950">What you submitted</div>
+
+                    {latestDisputeRemark && (
+                      <div className="rounded-xl bg-white/70 border border-amber-200 px-3.5 py-3">
+                        <div className="text-[11px] font-semibold text-amber-800/80 mb-0.5">
+                          Your remark
+                        </div>
+                        <p className="text-xs text-md-on-surface leading-relaxed break-words">
+                          {latestDisputeRemark}
+                        </p>
+                      </div>
+                    )}
+
+                    {hasDisputeStatement && (
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl bg-white/70 border border-amber-200 px-3.5 py-3">
+                        <div className="min-w-0">
+                          <div className="text-[11px] font-semibold text-amber-800/80 mb-0.5">
+                            Supporting statement
+                          </div>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <FileText size={14} className="text-amber-700 shrink-0" />
+                            <span className="text-xs font-semibold text-md-on-surface truncate">
+                              {paymentCase?.disputeDocumentName}
+                            </span>
+                          </div>
+                          {paymentCase?.disputeUploadedAt && (
+                            <div className="text-[11px] text-md-on-surface-variant mt-0.5">
+                              Uploaded {formatDateTime(paymentCase.disputeUploadedAt)}
+                            </div>
+                          )}
+                        </div>
+                        <div className="inline-flex self-start rounded-xl overflow-hidden border border-amber-300 bg-white shadow-2xs shrink-0">
+                          <button
+                            type="button"
+                            onClick={handleViewDisputeStatementInNewTab}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-amber-950 hover:bg-amber-100/70 transition-colors cursor-pointer border-r border-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-600"
+                            title="Open your submitted bank statement in a new tab"
+                          >
+                            <Eye size={14} className="text-amber-700" />
+                            <span>View statement</span>
+                            <ExternalLink size={11} className="text-amber-600/70" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleDownloadDisputeStatement}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-amber-950 hover:bg-amber-100/70 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-600"
+                            title="Download your submitted bank statement"
+                          >
+                            <Download size={14} className="text-amber-700" />
+                            <span>Download</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-3 border-t border-amber-200 text-xs text-amber-900 leading-relaxed">
+                    <span className="font-semibold">What happens next: </span>
+                    The recorded transfer is cross-checked against your statement. You will be notified
+                    once the dispute is resolved — no action is needed from you right now.
+                  </div>
+                </div>
+              )}
+
               {/* Transfer Succeed Confirmation & Receipt Banner */}
               {isTransferSucceed && (
                 <div className="p-5 sm:p-6 rounded-2xl bg-emerald-50 border-2 border-emerald-300 shadow-sm space-y-4">
@@ -932,47 +1048,65 @@ export default function MemberPaymentStatus() {
                     </div>
                   </div>
 
-                  {/* Actions Row: View / Download Receipt on Left, Confirm / Dispute on Right */}
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <button
-                        type="button"
-                        onClick={handleViewReceiptInNewTab}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-emerald-100/60 text-emerald-950 border border-emerald-300 shadow-2xs transition-all hover:border-emerald-400 cursor-pointer flex-1 sm:flex-initial justify-center"
-                        title="View official statutory receipt in a new tab"
-                      >
-                        <Eye size={14} className="text-emerald-700" />
-                        <span>View Receipt (New Tab)</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleDownloadReceipt}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-emerald-100/60 text-emerald-950 border border-emerald-300 shadow-2xs transition-all hover:border-emerald-400 cursor-pointer flex-1 sm:flex-initial justify-center"
-                        title="Download official statutory payment voucher PDF"
-                      >
-                        <Download size={14} className="text-emerald-700" />
-                        <span>Download PDF</span>
-                      </button>
+                  {/* Receipt is evidence, not a decision: view and download share one
+                      segmented control so they read as a single artifact, kept quiet
+                      above the decision instead of competing with it as equal buttons. */}
+                  <div className="inline-flex self-start rounded-xl overflow-hidden border border-emerald-300 bg-white shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={handleViewReceiptInNewTab}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-emerald-950 hover:bg-emerald-100/70 transition-colors cursor-pointer border-r border-emerald-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-600"
+                      title="View official statutory receipt in a new tab"
+                    >
+                      <Eye size={14} className="text-emerald-700" />
+                      <span>View receipt</span>
+                      <ExternalLink size={11} className="text-emerald-600/70" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDownloadReceipt}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-emerald-950 hover:bg-emerald-100/70 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-600"
+                      title="Download official statutory payment voucher PDF"
+                    >
+                      <Download size={14} className="text-emerald-700" />
+                      <span>Download receipt</span>
+                    </button>
+                  </div>
+
+                  {/* The one decision the member has to make. Confirm is the primary
+                      path and takes the size; disputing is the exception, so it sits
+                      beside it as a dimmed secondary — still legible, clearly not the
+                      default, and never styled to look destructive-by-accident. */}
+                  <div className="pt-4 border-t border-emerald-200 space-y-3">
+                    <div>
+                      <h4 className="text-sm font-bold text-emerald-950">
+                        Have you received this payment?
+                      </h4>
+                      <p className="text-xs text-emerald-800/80 mt-0.5 leading-relaxed">
+                        Confirming closes your case as Paid. If the funds have not arrived, tell us
+                        before the 7-day window ends.
+                      </p>
                     </div>
 
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
                       <Button
                         variant="filled"
-                        size="sm"
-                        className="!bg-emerald-600 !text-white hover:!bg-emerald-700 font-bold !text-xs !py-2 !px-4 shadow-sm flex-1 sm:flex-initial"
+                        size="lg"
+                        className="!bg-emerald-600 !text-white hover:!bg-emerald-700 font-bold shadow-md w-full sm:w-auto"
                         onClick={() => setShowReceiptConfirm(true)}
                       >
-                        <CheckCircle2 size={15} />
+                        <CheckCircle2 size={18} />
                         <span>Confirm Payment Received</span>
                       </Button>
                       <Button
-                        variant="outlined"
-                        size="sm"
-                        className="!text-xs !py-2 !px-3.5 !bg-white hover:!bg-red-50 !text-slate-700 hover:!text-red-700 !border-slate-300 hover:!border-red-300 shadow-2xs flex-1 sm:flex-initial"
+                        variant="text"
+                        size="md"
+                        className="!text-xs !font-semibold !text-rose-600 hover:!bg-rose-50 w-full sm:w-auto"
                         onClick={() => setShowDisputeModal(true)}
+                        title="Open a dispute if the funds have not reached your account"
                       >
-                        <AlertTriangle size={14} className="text-amber-600" />
-                        <span>Payment Not Received</span>
+                        <AlertTriangle size={14} />
+                        <span>Payment not received</span>
                       </Button>
                     </div>
                   </div>
@@ -1057,45 +1191,50 @@ export default function MemberPaymentStatus() {
                   </div>
                 </div>
 
-                {/* Quick Action Bar for Bank Details & Receipts */}
+                {/* The receipt is the artifact and the bank details are a lookup, so
+                    they get different weight: view and download share one segmented
+                    control, and the details lookup is a quiet text affordance rather
+                    than a third pill competing with them. */}
                 {isBankVerified && (
-                  <div className="pt-3 border-t border-md-outline/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                    <span className="text-md-on-surface-variant flex items-center gap-1.5">
+                  <div className="pt-3 border-t border-md-outline/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <span className="text-md-on-surface-variant flex items-center gap-1.5 min-w-0">
                       <CreditCard size={14} className="text-md-primary shrink-0" />
-                      <span>Registered Account: <strong>{paymentCase?.bankName}</strong> (•••• {paymentCase?.accountNumber?.slice(-4)})</span>
+                      <span className="truncate">
+                        Registered Account: <strong>{paymentCase?.bankName}</strong> (•••• {paymentCase?.accountNumber?.slice(-4)})
+                      </span>
                     </span>
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-3 flex-wrap shrink-0">
                       {isPaid && (
-                        <>
-                          <Button
-                            variant="tonal"
-                            size="sm"
+                        <div className="inline-flex rounded-xl overflow-hidden border border-md-outline/40 bg-md-surface-container-low shadow-2xs">
+                          <button
+                            type="button"
                             onClick={handleViewReceiptInNewTab}
-                            className="!text-xs !py-1 !px-2.5"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-md-on-surface hover:bg-md-primary/8 transition-colors cursor-pointer border-r border-md-outline/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-md-primary"
+                            title="Open the official statutory receipt in a new tab"
                           >
-                            <Eye size={13} />
-                            <span>View Receipt</span>
-                          </Button>
-                          <Button
-                            variant="tonal"
-                            size="sm"
+                            <Eye size={13} className="text-md-primary" />
+                            <span>View receipt</span>
+                            <ExternalLink size={10} className="text-md-on-surface-variant" />
+                          </button>
+                          <button
+                            type="button"
                             onClick={handleDownloadReceipt}
-                            className="!text-xs !py-1 !px-2.5"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-md-on-surface hover:bg-md-primary/8 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-md-primary"
+                            title="Download the official statutory payment voucher as PDF"
                           >
-                            <Download size={13} />
-                            <span>Download Receipt</span>
-                          </Button>
-                        </>
+                            <Download size={13} className="text-md-primary" />
+                            <span>Download</span>
+                          </button>
+                        </div>
                       )}
-                      <Button
-                        variant="tonal"
-                        size="sm"
+                      <button
+                        type="button"
                         onClick={() => setShowBankDetailsModal(true)}
-                        className="!text-xs !py-1 !px-3 self-start sm:self-auto"
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-md-primary hover:underline underline-offset-2 cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-primary focus-visible:ring-offset-1"
                       >
-                        <Eye size={13} />
-                        <span>View Full Bank Details</span>
-                      </Button>
+                        <span>View full bank details</span>
+                        <ArrowRight size={13} aria-hidden="true" />
+                      </button>
                     </div>
                   </div>
                 )}

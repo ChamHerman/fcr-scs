@@ -8,7 +8,7 @@ import { prisma } from "../prisma";
 import { AuthenticatedRequest } from "../../../user_management_service/src/middleware/auth.middleware";
 
 export async function submitBankDetails(req: Request, res: Response): Promise<void> {
-  const { caseId: rawCaseId, paymentCaseId, bankName, accountNumber, phoneNumber } = req.body;
+  const { caseId: rawCaseId, paymentCaseId, bankName, accountNumber, phoneNumber, isAnotherAccount } = req.body;
   const caseId = rawCaseId || paymentCaseId;
   if (!caseId) {
     res.status(400).json({ error: "caseId is required" });
@@ -26,6 +26,7 @@ export async function submitBankDetails(req: Request, res: Response): Promise<vo
   const sessionUser = (req as AuthenticatedRequest).user;
   const accountHolderName = (sessionUser?.name || "").trim();
   const myKadNumber = (sessionUser?.identificationNumber || "").trim();
+  const userId = sessionUser?.userId;
   if (!accountHolderName) {
     res.status(400).json({ error: "A registered account holder name is required — complete your profile first." });
     return;
@@ -40,6 +41,8 @@ export async function submitBankDetails(req: Request, res: Response): Promise<vo
       accountHolderName,
       phoneNumber: cleanPhone,
       myKadNumber,
+      userId,
+      isAnotherAccount: Boolean(isAnotherAccount),
     });
 
     // Also persist encrypted record into receiver_bank_details if available
@@ -393,6 +396,25 @@ export async function downloadReceipt(req: Request, res: Response): Promise<void
   }
 }
 
+// FR-014: archived receipts from voided dispute cycles. Bytes are frozen, so
+// the download matches the SHA-256 recorded on the archived row.
+export async function downloadArchivedReceipt(req: Request, res: Response): Promise<void> {
+  const archiveId = req.params.archiveId as string;
+  try {
+    const pdfBuffer = await receiptService.getArchivedReceiptBuffer(archiveId);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename=archived-receipt-${archiveId}.pdf`);
+    res.send(pdfBuffer);
+  } catch (e: unknown) {
+    const msg = (e as Error).message;
+    if (msg.toLowerCase().includes("not found")) {
+      res.status(404).json({ error: msg });
+    } else {
+      res.status(500).json({ error: msg });
+    }
+  }
+}
+
 // FR-013 + FR-015: lodging a dispute strictly requires a real bank
 // statement / transaction record PDF plus a typed remark for extra context.
 export async function dispute(req: Request, res: Response): Promise<void> {
@@ -470,8 +492,9 @@ export async function downloadDisputeDocument(req: Request, res: Response): Prom
 }
 
 // FR-014: Government Administrator resolves a DISPUTED payment after a bank
-// cross-check — Mark as Resolved (back to TRANSFER_SUCCEED) or Reinitiate
-// Payment (re-queue the transfer to the bank gateway).
+// cross-check — Mark as Resolved (back to TRANSFER_SUCCEED), Reinitiate
+// Payment (re-queue the transfer to the bank gateway), or Request New Bank
+// Details (bad account details; opens a fresh bank-details + multi-sig cycle).
 export async function resolveDispute(req: Request, res: Response): Promise<void> {
   const { caseId, resolution } = req.body;
   const adminId = (req as AuthenticatedRequest).user?.userId || req.body.adminId;
@@ -479,19 +502,19 @@ export async function resolveDispute(req: Request, res: Response): Promise<void>
     res.status(400).json({ error: "caseId is required" });
     return;
   }
-  if (!resolution || !["MARK_AS_RESOLVED", "REINITIATE_PAYMENT"].includes(resolution)) {
-    res.status(400).json({ error: "resolution must be 'MARK_AS_RESOLVED' or 'REINITIATE_PAYMENT'" });
+  const allowed = Object.keys(paymentService.DISPUTE_RESOLUTIONS);
+  if (!resolution || !allowed.includes(resolution)) {
+    res.status(400).json({ error: `resolution must be one of: ${allowed.join(", ")}` });
     return;
   }
   try {
     const paymentCase = await paymentService.resolveDispute(caseId, adminId, resolution);
-    res.json({
-      paymentCase,
-      message:
-        resolution === "MARK_AS_RESOLVED"
-          ? "Dispute marked as resolved. Case returned to Transfer Succeed for member re-confirmation."
-          : "Payment reinitiated and re-queued to the bank gateway.",
-    });
+    const messages: Record<string, string> = {
+      MARK_AS_RESOLVED: "Dispute marked as resolved. Case returned to Transfer Succeed for member re-confirmation.",
+      REINITIATE_PAYMENT: "Payment reinitiated and re-queued to the bank gateway.",
+      REQUEST_NEW_BANK_DETAILS: "New bank details requested. A fresh multi-sig cycle has been opened.",
+    };
+    res.json({ paymentCase, message: messages[resolution] });
   } catch (e: unknown) {
     const msg = (e as Error).message;
     if (msg.toLowerCase().includes("not found")) {

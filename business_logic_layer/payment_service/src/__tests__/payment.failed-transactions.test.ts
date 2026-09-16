@@ -113,4 +113,90 @@ describe("GET /api/payments/failed (admin name enrichment)", () => {
     expect(reject.adminName).toBe(ga2.name);
     expect(initiate.adminName).not.toBe(reject.adminName);
   });
+
+  /**
+   * Regression guard: the register used to select on
+   * `failedTransactions: { some: {} }`, so a case that had EVER failed stayed
+   * listed after it resolved — a dispute resolved to Pending Approval, or a
+   * failure rescheduled to Scheduled, both kept appearing as open work.
+   * Membership must be the case's current status.
+   */
+  it("excludes cases that resolved out of failure, keeps currently-failed ones", async () => {
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+    const makeCase = async (status: PaymentStatus) => {
+      const caseId = `FAILEDTX-SCOPE-${status}-${stamp}`;
+      await prisma.acquisitionCase.create({
+        data: {
+          caseId,
+          projectId: testProjectId,
+          createdById: testCreatedById,
+          caseTitle: "Failed Register Scope Test Case",
+          status: "OFFER_ACCEPTED",
+          registrationDate: new Date(),
+          remarks: "Test case for /failed status scoping",
+        },
+      });
+      const pc = await prisma.paymentCase.create({
+        data: {
+          id: await newPaymentId(),
+          caseId,
+          beneficiaryId: testLandOwnerId,
+          amount: 100000,
+          bankName: "Maybank",
+          accountHolderName: "Scope Test Beneficiary",
+          status,
+          requiredSignatures: 2,
+          currentSignatures: 1,
+        },
+      });
+      // Every one of these cases carries a historical failure row — that is
+      // what the old query keyed on, so each is a candidate for the bug.
+      await prisma.failedTransaction.create({
+        data: {
+          paymentCaseId: pc.id,
+          errorLog: "DISPUTE: this time, i dont get it really",
+          resolution: "request_details",
+          resolvedAt: new Date(),
+        },
+      });
+      return caseId;
+    };
+
+    const failedCaseId = await makeCase(PaymentStatus.TRANSFER_FAILED);
+    const disputedCaseId = await makeCase(PaymentStatus.DISPUTED);
+    // Resolved out of failure — must NOT appear.
+    const resolvedToApproval = await makeCase(PaymentStatus.PENDING_APPROVAL);
+    const resolvedToScheduled = await makeCase(PaymentStatus.SCHEDULED);
+    const resolvedToSucceed = await makeCase(PaymentStatus.TRANSFER_SUCCEED);
+
+    try {
+      const r = await request(app)
+        .get("/api/payments/failed")
+        .set("Authorization", `Bearer ${gaToken}`);
+      expect(r.status).toBe(200);
+
+      const ids: string[] = r.body.cases.map((c: any) => c.caseId);
+      expect(ids).toContain(failedCaseId);
+      expect(ids).toContain(disputedCaseId);
+      expect(ids).not.toContain(resolvedToApproval);
+      expect(ids).not.toContain(resolvedToScheduled);
+      expect(ids).not.toContain(resolvedToSucceed);
+    } finally {
+      const ids = [
+        failedCaseId,
+        disputedCaseId,
+        resolvedToApproval,
+        resolvedToScheduled,
+        resolvedToSucceed,
+      ];
+      // failed_transaction -> payment_case is RESTRICT, so the child rows have
+      // to go first or the payment-case delete is rejected.
+      await prisma.failedTransaction.deleteMany({
+        where: { paymentCase: { caseId: { in: ids } } },
+      });
+      await prisma.paymentCase.deleteMany({ where: { caseId: { in: ids } } });
+      await prisma.acquisitionCase.deleteMany({ where: { caseId: { in: ids } } });
+    }
+  });
 });

@@ -29,11 +29,14 @@ export default function SubmitBankDetails() {
   // type a different one. The backend re-derives it from the session user.
   const effectiveHolderName = (user?.name || '').trim();
 
+  // Contact number is locked to the registered profile — never manually entered.
+  const phoneNumber = formatLocalContactNumber(user?.contactNumber);
+  const hasProfilePhone = phoneNumber.trim().replace(/\D/g, '').length >= 9;
+
   const [formData, setFormData] = useState({
     caseId: '',
     bankName: '',
     accountNumber: '',
-    phoneNumber: '',
     myKadNumber: ''
   });
 
@@ -72,12 +75,17 @@ export default function SubmitBankDetails() {
       return;
     }
 
+    if (!hasProfilePhone) {
+      notify({ type: 'error', title: 'Missing Contact Number', message: 'No valid contact number on your profile. Update your profile before submitting bank details.' });
+      return;
+    }
+
     setLoading(true);
     try {
       await paymentApi.submitBankDetails({
         ...formData,
         accountHolderName: effectiveHolderName,
-        phoneNumber: formatLocalContactNumber(formData.phoneNumber),
+        phoneNumber,
       });
       notify({
         type: 'success',
@@ -145,13 +153,15 @@ export default function SubmitBankDetails() {
             placeholder="As per your registered MyKad name"
             suffix={<Lock size={14} />}
           />
-          <Input 
-            label="Phone Number" 
-            name="phoneNumber" 
-            value={formData.phoneNumber} 
-            onChange={handleChange} 
-            required 
-            disabled={loading}
+          <Input
+            label="Phone Number"
+            name="phoneNumber"
+            value={phoneNumber}
+            readOnly={true}
+            disabled={true}
+            autoComplete="off"
+            placeholder="As per your registered profile"
+            suffix={<Lock size={14} />}
           />
           <Input 
             label="MyKAD Number" 

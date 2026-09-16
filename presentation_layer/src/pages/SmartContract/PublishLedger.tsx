@@ -211,12 +211,14 @@ export const PublishLedger: React.FC = () => {
       setM1Rows(awardQueue);
 
       // ----- Tab 2: Milestone 2 Settlement queue — Paid without an M2 record.
+      // FR-005 / FR-019: Paid only. Publishing at Transfer Succeed would anchor a
+      // settlement the member has not confirmed, and the publish closes the case.
       // The anchor hash is the frozen receipt binary SHA-256 (FR-019); legacy
       // rows without a persisted hash fall back to the deterministic computed one.
       const settlementQueue: LedgerRow[] = [];
       for (const pc of (allCases.cases || [])) {
         const norm = normalizePaymentStatus(pc.status);
-        if (norm !== 'Paid' && norm !== 'Transfer Succeed') continue;
+        if (norm !== 'Paid') continue;
         if (m2Published.has(pc.caseId)) continue;
         const existingRec = readyRecordsMap.get(`${pc.caseId}#M2`);
         const docHash = pc.receipt?.documentHash || (await computeSettlementHash(pc.caseId, pc.amount));
@@ -335,8 +337,11 @@ export const PublishLedger: React.FC = () => {
       )}
       {walletError && <p className="text-red-500 my-2">{walletError}</p>}
 
-      {/* Single continuous trail / track with GSAP sliding indicator */}
-      <div className="relative inline-flex items-center p-1 rounded-full bg-md-surface-container-high border border-md-outline/15 shadow-inner mt-6 max-w-full overflow-x-auto no-scrollbar">
+      {/* Single continuous trail / track with GSAP sliding indicator.
+          Recessed track (shadow-inner + sunken surface) so the raised
+          active pill reads as sitting above the page, matching the
+          Show Cancelled capsule treatment. */}
+      <div className="relative inline-flex items-center p-1 rounded-full bg-md-surface-container/80 dark:bg-md-surface-container-high/40 border border-md-outline/15 shadow-inner mt-6 max-w-full overflow-x-auto no-scrollbar">
         {/* Animated GSAP sliding pill indicator */}
         <div
           ref={sliderRef}
@@ -349,7 +354,7 @@ export const PublishLedger: React.FC = () => {
             ref={(el) => { tabRefs.current[t.key] = el; }}
             type="button"
             onClick={() => setActiveTab(t.key)}
-            className={`relative z-10 shrink-0 whitespace-nowrap px-4 py-2 rounded-full text-xs font-semibold transition-colors duration-200 cursor-pointer ${activeTab === t.key
+            className={`relative z-10 shrink-0 whitespace-nowrap px-5 py-2 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer ${activeTab === t.key
               ? 'text-white font-bold'
               : 'text-md-on-surface-variant hover:text-md-on-surface'
               }`}
@@ -407,7 +412,17 @@ export const PublishLedger: React.FC = () => {
               ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center text-gray-500 py-8">
-                    Nothing ready to publish right now.
+                    {activeTab === 'm2' ? (
+                      <>
+                        Nothing ready to publish right now.
+                        <div className="text-xs mt-1">
+                          Settlement (M2) unlocks only once a case reaches <span className="font-semibold">Paid</span> —
+                          receipt confirmed by the member, or by a Government Administrator after the 7-day window.
+                        </div>
+                      </>
+                    ) : (
+                      'Nothing ready to publish right now.'
+                    )}
                   </td>
                 </tr>
               ) : (

@@ -31,6 +31,7 @@ router.get("/cases", authenticate, requireRole(UserRole.GOVERNMENT_ADMINISTRATOR
 router.get("/pending-authorisations", authenticate, requireRole(UserRole.GOVERNMENT_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR), ctrl.getPendingAuthorisations);
 router.get("/failed", authenticate, requireRole(UserRole.GOVERNMENT_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR), ctrl.getFailedTransactions);
 router.get("/cases/:caseId/receipt", authenticate, requireRole(UserRole.GOVERNMENT_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR, UserRole.DISPLACED_COMMUNITY_MEMBER), ctrl.downloadReceipt);
+router.get("/receipt-archive/:archiveId", authenticate, requireRole(UserRole.GOVERNMENT_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR, UserRole.DISPLACED_COMMUNITY_MEMBER), ctrl.downloadArchivedReceipt);
 router.get("/cases/:caseId/dispute-document", authenticate, requireRole(UserRole.GOVERNMENT_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR, UserRole.DISPLACED_COMMUNITY_MEMBER), ctrl.downloadDisputeDocument);
 
 // Receipt confirmation route (Member and Government Administrator)

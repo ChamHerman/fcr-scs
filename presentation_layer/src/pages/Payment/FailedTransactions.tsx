@@ -7,6 +7,7 @@ import { paymentApi } from '../../services/paymentApi';
 import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Button } from '../../components/ui/Button';
+import { Switch } from '../../components/ui/Switch';
 import { CopyButton } from '../../components/ui/CopyButton';
 import { Pagination } from '../../components/ui/Pagination';
 import { Modal } from '../../components/ui/Modal';
@@ -21,15 +22,17 @@ import {
   ScheduleTomorrowModal,
   CancelPaymentModal,
   ResolveRejectionModal,
+  ResolveDisputeModal,
   paymentBadge,
   fmtAmount,
   fmtDate,
   stripRawLogPrefix,
+  formatResolutionLabel,
 } from './paymentModals';
 import { CaseDetailsModal } from './CaseDetailsModal';
 import { PaymentRowActions } from './PaymentRowActions';
 import type { PaymentRow } from './paymentModals';
-import { normalizePaymentStatus } from './statusMaps';
+import { normalizePaymentStatus, byFailedTransactionPriority, isFailedRegisterStatus } from './statusMaps';
 type ModalState =
   | { type: 'view'; caseId: string }
   | { type: 'error-log'; caseId: string }
@@ -38,6 +41,7 @@ type ModalState =
   | { type: 'schedule'; caseId: string }
   | { type: 'cancel'; caseId: string }
   | { type: 'resolve-rejection'; caseId: string }
+  | { type: 'resolve-dispute'; caseId: string }
   | null;
 
 export default function FailedTransactions() {
@@ -47,6 +51,7 @@ export default function FailedTransactions() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState(deepLink || '');
+  const [showCancelled, setShowCancelled] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
   const [caseDetailsId, setCaseDetailsId] = useState<string | null>(null);
@@ -89,8 +94,18 @@ export default function FailedTransactions() {
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return cases.filter((c) => !q || c.caseId.toLowerCase().includes(q) || (c.accountHolderName ?? '').toLowerCase().includes(q));
-  }, [cases, searchQuery]);
+    return cases
+      .filter((c) => {
+        // Defensive mirror of the backend allow-list: a case that has moved on
+        // from a failure/dispute/rejection must never render in this register.
+        if (!isFailedRegisterStatus(c.status)) return false;
+        if (!showCancelled && normalizePaymentStatus(c.status) === 'Cancelled') {
+          return false;
+        }
+        return !q || c.caseId.toLowerCase().includes(q) || (c.accountHolderName ?? '').toLowerCase().includes(q);
+      })
+      .sort(byFailedTransactionPriority);
+  }, [cases, searchQuery, showCancelled]);
 
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
@@ -167,7 +182,17 @@ export default function FailedTransactions() {
       <div className="filter-bar">
         <SearchInput placeholder="Search case ID or beneficiary..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
         <div className="filter-group">
-          <Button variant="outlined" size="sm" onClick={() => setSearchQuery('')}>Clear</Button>
+          <Button
+            variant="outlined"
+            size="sm"
+            onClick={() => {
+              setSearchQuery('');
+              setShowCancelled(false);
+              setCurrentPage(1);
+            }}
+          >
+            Clear
+          </Button>
         </div>
       </div>
 
@@ -176,7 +201,27 @@ export default function FailedTransactions() {
           <AlertTriangle size={18} />
           <span className="count">Failed transactions ({filtered.length})</span>
         </div>
-        <div className="right">
+        <div className="right flex items-center gap-3">
+          <div className="h-9 px-3 rounded-full bg-md-surface-container-high/60 dark:bg-md-surface-container-high border border-md-outline/15 shadow-inner inline-flex items-center">
+            <Switch
+              size="sm"
+              id="failed-show-cancelled"
+              label={
+                <span className="inline-flex items-center gap-1.5 font-medium">
+                  <span className="text-xs text-md-on-surface-variant">Show</span>
+                  <span className="payment-badge status-cancelled !py-0.5 !px-2 !text-[11px] !h-5.5">
+                    <span className="dot" />
+                    Cancelled
+                  </span>
+                </span>
+              }
+              checked={showCancelled}
+              onChange={(e) => {
+                setShowCancelled(e.target.checked);
+                setCurrentPage(1);
+              }}
+            />
+          </div>
           <RefreshButton onClick={() => loadData()} loading={loading} />
         </div>
       </div>
@@ -292,7 +337,7 @@ export default function FailedTransactions() {
                     <div className="text-sm text-md-on-surface break-words whitespace-pre-wrap">{stripRawLogPrefix(f.errorLog)}</div>
                     {f.resolution && (
                       <div className="text-xs text-md-on-success mt-1">
-                        Resolution: {f.resolution} {f.resolvedAt ? `· ${fmtDate(f.resolvedAt)}` : ''}
+                        Resolution: {formatResolutionLabel(f.resolution)} {f.resolvedAt ? `· ${fmtDate(f.resolvedAt)}` : ''}
                       </div>
                     )}
                   </div>
@@ -334,6 +379,11 @@ export default function FailedTransactions() {
       />
       <ResolveRejectionModal
         pc={modal?.type === 'resolve-rejection' ? modalPc : null}
+        onClose={closeModal}
+        onDone={() => { closeModal(); loadData(); }}
+      />
+      <ResolveDisputeModal
+        pc={modal?.type === 'resolve-dispute' ? modalPc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />

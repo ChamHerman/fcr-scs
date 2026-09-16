@@ -46,7 +46,7 @@ type ModalState =
 const SORT_STORAGE_KEY = 'blockchain_overview_sort';
 type SortKey = 'priority' | 'recent';
 const SORT_OPTIONS = [
-  { value: 'priority', label: 'Default (Status Priority)' },
+  { value: 'priority', label: 'Default (Action Priority)' },
   { value: 'recent', label: 'Most Recent Activity' },
 ] as const;
 
@@ -150,6 +150,10 @@ export const BlockchainDashboard: React.FC = () => {
             publishedAt: r.publishedAt ?? r.createdAt,
             createdAt: r.createdAt,
             recordType: 'Original',
+            bankName: pmt?.bankName,
+            accountNumber: pmt?.accountNumber,
+            bankReferenceNumber: pmt?.receipt?.bankReferenceNumber,
+            paidAt: pmt?.receipt?.generatedAt || pmt?.paidAt || pmt?.updatedAt,
           });
         }
       });
@@ -158,7 +162,8 @@ export const BlockchainDashboard: React.FC = () => {
       //   M1 (Award)  — accepted offers past the 24-hour grace window, Form H
       //                 hash frozen, with no M1 record on the ledger yet.
       //   M2 (Settlement) — Paid payment cases whose receipt hash has no M2
-      //                 record on the ledger yet.
+      //                 record on the ledger yet. Paid only: the settlement is
+      //                 locked until the member's receipt is confirmed (FR-005).
       const ACCEPTANCE_GRACE_PERIOD_MS = 24 * 60 * 60 * 1000;
       const now = Date.now();
       const m1Published = new Set(
@@ -228,10 +233,7 @@ export const BlockchainDashboard: React.FC = () => {
       });
 
       const paid = (paidRes.cases || [])
-        .filter((c: any) => {
-          const s = normalizePaymentStatus(c.status);
-          return s === 'Paid' || s === 'Transfer Succeed';
-        })
+        .filter((c: any) => normalizePaymentStatus(c.status) === 'Paid')
         .sort((a: any, b: any) => {
           const timeA = a.updatedAt || a.paidAt ? new Date(a.updatedAt || a.paidAt).getTime() : 0;
           const timeB = b.updatedAt || b.paidAt ? new Date(b.updatedAt || b.paidAt).getTime() : 0;
@@ -268,6 +270,9 @@ export const BlockchainDashboard: React.FC = () => {
               acceptedAt: null,
               paidAt: c.receipt?.generatedAt || c.paidAt || c.updatedAt || null,
               createdAt: existingRec?.createdAt || c.receipt?.generatedAt || c.updatedAt || undefined,
+              bankName: c.bankName,
+              accountNumber: c.accountNumber,
+              bankReferenceNumber: c.receipt?.bankReferenceNumber,
             };
           })
       );

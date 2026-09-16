@@ -120,6 +120,7 @@ async function main() {
   const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
   // Clean up payment & blockchain records so they are strictly generated dynamically from Case Management
+  await prisma.memberPayoutDetail.deleteMany();
   await prisma.failedTransaction.deleteMany();
   await prisma.paymentReceipt.deleteMany();
   await prisma.paymentAuthorisation.deleteMany();

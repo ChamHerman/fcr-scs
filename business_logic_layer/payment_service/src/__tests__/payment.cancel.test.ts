@@ -8,7 +8,9 @@ import { newPaymentId } from "../services/payment.service";
 import { PaymentStatus, UserRole } from "@prisma/client";
 import { getTestSessionToken, cleanupTestSessions } from "./testAuthHelper";
 
-const VALID_REASON = "DUPLICATE_DISBURSEMENT_PREVENTION";
+// Cancel is terminal (payment → CANCELLED, case → CASE_CLOSED) and reserved for
+// cases the bank/governance already bounced. These are the current statutory keys.
+const VALID_REASON = "ACQUISITION_DISCONTINUED";
 
 describe("POST /api/payments/cancel (RBAC & SOP Hardening)", () => {
   let createdCaseId: string;
@@ -43,7 +45,7 @@ describe("POST /api/payments/cancel (RBAC & SOP Hardening)", () => {
         projectId: testProjectId,
         createdById: testCreatedById,
         caseTitle: "Cancel Test Acquisition Case",
-        status: "OFFER_ACCEPTED",
+        status: "PAYMENT_IN_PROGRESS",
         registrationDate: new Date(),
         remarks: "Test case for cancel",
       },
@@ -91,7 +93,7 @@ describe("POST /api/payments/cancel (RBAC & SOP Hardening)", () => {
   });
 
   it("403 when System Administrator attempts cancellation (view-only)", async () => {
-    await makeCase(PaymentStatus.BANK_DETAILS_PENDING);
+    await makeCase(PaymentStatus.TRANSFER_REJECTED);
     const r = await request(app)
       .post("/api/payments/cancel")
       .set("Authorization", `Bearer ${sysAdminToken}`)
@@ -104,7 +106,7 @@ describe("POST /api/payments/cancel (RBAC & SOP Hardening)", () => {
     const r = await request(app)
       .post("/api/payments/cancel")
       .set("Authorization", `Bearer ${gaToken}`)
-      .send({ reason: "Wrong beneficiary" });
+      .send({ reason: VALID_REASON });
     expect(r.status).toBe(400);
   });
 
@@ -125,7 +127,27 @@ describe("POST /api/payments/cancel (RBAC & SOP Hardening)", () => {
     expect(r.status).toBe(404);
   });
 
-  it("400 when the case is not in a pre-transfer state", async () => {
+  it("400 when the case is still pre-initiation (Bank Details Pending) — cancel is rejected/failed only", async () => {
+    await makeCase(PaymentStatus.BANK_DETAILS_PENDING);
+    const r = await request(app)
+      .post("/api/payments/cancel")
+      .set("Authorization", `Bearer ${gaToken}`)
+      .send({ caseId: createdCaseId, reason: VALID_REASON });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/Transfer Rejected or Transfer Failed/i);
+  });
+
+  it("400 when the case is awaiting approval (Pending Approval) — cancel is rejected/failed only", async () => {
+    await makeCase(PaymentStatus.PENDING_APPROVAL);
+    const r = await request(app)
+      .post("/api/payments/cancel")
+      .set("Authorization", `Bearer ${gaToken}`)
+      .send({ caseId: createdCaseId, reason: VALID_REASON });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/Transfer Rejected or Transfer Failed/i);
+  });
+
+  it("400 when the case is already Paid", async () => {
     await makeCase(PaymentStatus.PAID);
     const r = await request(app)
       .post("/api/payments/cancel")
@@ -146,7 +168,7 @@ describe("POST /api/payments/cancel (RBAC & SOP Hardening)", () => {
   });
 
   it("400 when the reason is free-text instead of an approved statutory key", async () => {
-    await makeCase(PaymentStatus.BANK_DETAILS_PENDING);
+    await makeCase(PaymentStatus.TRANSFER_REJECTED);
     const r = await request(app)
       .post("/api/payments/cancel")
       .set("Authorization", `Bearer ${gaToken}`)
@@ -155,25 +177,22 @@ describe("POST /api/payments/cancel (RBAC & SOP Hardening)", () => {
     expect(r.body.error).toMatch(/approved statutory cancellation reason/i);
   });
 
-  it("400 when the reason is the retired bank-account-change key (belongs to Request New Bank Details flow)", async () => {
-    await makeCase(PaymentStatus.BANK_DETAILS_PENDING);
+  it("400 when the reason is a retired key (belongs to the old SOP vocabulary)", async () => {
+    await makeCase(PaymentStatus.TRANSFER_REJECTED);
     const r = await request(app)
       .post("/api/payments/cancel")
       .set("Authorization", `Bearer ${gaToken}`)
-      .send({ caseId: createdCaseId, reason: "LANDOWNER_REQUESTED_ACCOUNT_CHANGE" });
+      .send({ caseId: createdCaseId, reason: "DUPLICATE_DISBURSEMENT_PREVENTION" });
     expect(r.status).toBe(400);
     expect(r.body.error).toMatch(/approved statutory cancellation reason/i);
   });
 
-  it("200 cancels a Bank Details Pending case, writes audit row, creates FailedTransaction, status becomes CANCELLED", async () => {
-    await makeCase(PaymentStatus.BANK_DETAILS_PENDING);
+  it("200 cancels a Transfer Rejected case: audit row, FailedTransaction, payment CANCELLED, case CASE_CLOSED", async () => {
+    await makeCase(PaymentStatus.TRANSFER_REJECTED);
     const r = await request(app)
       .post("/api/payments/cancel")
       .set("Authorization", `Bearer ${gaToken}`)
-      .send({
-        caseId: createdCaseId,
-        reason: VALID_REASON,
-      });
+      .send({ caseId: createdCaseId, reason: VALID_REASON });
     expect(r.status).toBe(200);
     expect(r.body.paymentCase.status).toBe(PaymentStatus.CANCELLED);
 
@@ -182,13 +201,30 @@ describe("POST /api/payments/cancel (RBAC & SOP Hardening)", () => {
       where: { paymentCaseId: r.body.paymentCase.id, action: "cancel" },
     });
     expect(audit).not.toBeNull();
-    expect(audit!.reason).toMatch(/Duplicate payment instruction detected/i);
+    expect(audit!.reason).toMatch(/Land acquisition discontinued/i);
 
     // Verify failed transaction entry created for SOP tracking
     const failedTx = await prisma.failedTransaction.findFirst({
       where: { paymentCaseId: r.body.paymentCase.id },
     });
     expect(failedTx).not.toBeNull();
-    expect(failedTx!.errorLog).toMatch(/CANCELLED:.*Duplicate payment instruction detected/i);
+    expect(failedTx!.errorLog).toMatch(/CANCELLED:.*Land acquisition discontinued/i);
+
+    // Cancelling is terminal: the statutory case closes.
+    const ac = await prisma.acquisitionCase.findUnique({ where: { caseId: createdCaseId } });
+    expect(ac!.status).toBe("CASE_CLOSED");
+  });
+
+  it("200 cancels a Transfer Failed case and leaves blockchain notarization untouched", async () => {
+    await makeCase(PaymentStatus.TRANSFER_FAILED);
+    const r = await request(app)
+      .post("/api/payments/cancel")
+      .set("Authorization", `Bearer ${gaToken}`)
+      .send({ caseId: createdCaseId, reason: VALID_REASON });
+    expect(r.status).toBe(200);
+    expect(r.body.paymentCase.status).toBe(PaymentStatus.CANCELLED);
+
+    const ac = await prisma.acquisitionCase.findUnique({ where: { caseId: createdCaseId } });
+    expect(ac!.status).toBe("CASE_CLOSED");
   });
 });

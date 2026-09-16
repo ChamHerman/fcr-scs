@@ -59,6 +59,11 @@ const AUTHORISATION_REASON_LABELS: Record<string, string> = {
   INCORRECT_AWARD_AMOUNT: 'Statutory compensation award calculation error detected',
   SUSPECTED_FRAUD_OR_IMPERSONATION: 'Security flag raised on beneficiary identity or banking document',
   DUPLICATE_DISBURSEMENT_PREVENTION: 'Duplicate payment instruction detected across system records',
+  // Current statutory cancellation codes (terminal — case closed, new case required)
+  COURT_ORDER_OR_INJUNCTION: 'Court order or legal injunction halts the acquisition',
+  AWARD_OVERTURNED_ON_APPEAL: 'Compensation award overturned or revised on appeal / objection',
+  BENEFICIARY_INELIGIBLE_OR_FRAUD: 'Beneficiary ineligibility or fraud confirmed after verification',
+  ACQUISITION_DISCONTINUED: 'Land acquisition discontinued — land no longer required',
 };
 
 export function formatReasonLabel(reason: string | null | undefined): string {
@@ -96,6 +101,111 @@ export function isCategory1BankFailure(reason?: string | null): boolean {
     s.includes('account invalid')
   );
 }
+
+/**
+ * Member-facing explanation for a transfer the bank failed or governance rejected.
+ * The claimant never sees the raw log: machine identifiers are stripped and any
+ * recognised reason code is mapped to English before it reaches the screen.
+ */
+export interface MemberFailureNotice {
+  category: 'rejected' | 'failed';
+  title: string;
+  reason: string;
+  nextStep: string;
+}
+
+/** Drops machine identifiers (e.g. "RECIPIENT_ACCOUNT_CLOSED: ") from a stored failure log. */
+function humanizeFailureLog(raw: string): string {
+  const stripped = raw
+    .replace(/^\s*(CANCELLED|DISPUTE|BANK)\s*:\s*/i, '')
+    .replace(/^\s*[A-Z0-9_]{6,}\s*:\s*/, '')
+    .trim();
+  return formatReasonLabel(stripped).replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Resolves the plain-language reason and next step for a TRANSFER_FAILED or
+ * TRANSFER_REJECTED case, or null when the case is in any other status.
+ */
+export function getMemberFailureNotice(paymentCase: any): MemberFailureNotice | null {
+  if (!paymentCase) return null;
+  const s = String(paymentCase.status || '').trim();
+  const isRejected = s === 'TRANSFER_REJECTED' || s === 'Transfer Rejected';
+  const isFailed =
+    s === 'TRANSFER_FAILED' || s === 'Transfer Failed' || s === 'Failed' || s === 'FAILED';
+
+  if (isRejected) {
+    const rejections = (paymentCase.authorisations || []).filter(
+      (a: any) => String(a?.action || '').toLowerCase() === 'reject'
+    );
+    const latest = rejections[rejections.length - 1];
+    const reason = latest?.reason ? humanizeFailureLog(String(latest.reason)) : '';
+    return {
+      category: 'rejected',
+      title: 'Transfer Not Approved',
+      reason: reason || 'The Land Administration did not approve the transfer for this case.',
+      nextStep:
+        'The Land Administration is reviewing this case. Nothing is required from you right now — this page updates automatically once the transfer moves forward again.',
+    };
+  }
+
+  if (!isFailed) return null;
+
+  const failures = Array.isArray(paymentCase.failedTransactions) ? paymentCase.failedTransactions : [];
+  const latest = failures[failures.length - 1];
+  const reason = latest?.errorLog ? humanizeFailureLog(String(latest.errorLog)) : '';
+
+  // Category 1 is a fault on the destination account, so the member has to act.
+  // Anything else is a bank or clearing fault they cannot influence.
+  const memberMustAct = isCategory1BankFailure(reason);
+
+  return {
+    category: 'failed',
+    title: 'Transfer Could Not Be Completed',
+    reason: reason || 'The bank could not complete the transfer to your registered account.',
+    nextStep: memberMustAct
+      ? 'Please check that your bank account is active and that the details are correct, then submit your updated bank details on this page.'
+      : 'This is a bank-side issue, not a problem with your account. Nothing is required from you — the Land Administration will retry the transfer.',
+  };
+}
+
+/**
+ * Ordering for the Failed Transactions register. Resolution effort is ranked by
+ * what an admin can still act on: a governance rejection needs "Mark as
+ * Resolved", a bank failure needs a retry/schedule decision, and a cancelled
+ * case is terminal with no exit path, so it must never sit above live work.
+ * Anything unexpected ranks with the actionable failures and keeps its existing
+ * relative order (Array#sort is stable), so the backend's recency sort still
+ * decides ties.
+ */
+const FAILURE_STATUS_RANK: Record<string, number> = {
+  'Transfer Rejected': 0,
+  'Transfer Failed': 1,
+  Cancelled: 3,
+};
+
+export function failedTransactionRank(status: string | null | undefined): number {
+  return FAILURE_STATUS_RANK[normalizePaymentStatus(status || '')] ?? 2;
+}
+
+export const byFailedTransactionPriority = (a: { status: string }, b: { status: string }): number =>
+  failedTransactionRank(a.status) - failedTransactionRank(b.status);
+
+/**
+ * The statuses a case must currently be in to belong on the Failed Transactions
+ * register. Membership is current status only: a case that resolved back to
+ * Pending Approval, or was rescheduled, is live work again and must not appear.
+ * Mirrors the backend allow-list in getFailedTransactions.
+ */
+export const FAILED_REGISTER_STATUSES = [
+  'Transfer Failed',
+  'Transfer Rejected',
+  'Disputed',
+  'Cancelled',
+];
+
+export const isFailedRegisterStatus = (status: string | null | undefined): boolean =>
+  FAILED_REGISTER_STATUSES.includes(normalizePaymentStatus(status || ''));
 
 export const PAYMENT_STATUSES = [
   'All',

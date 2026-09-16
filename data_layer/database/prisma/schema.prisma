@@ -191,6 +191,7 @@ model PaymentCase {
   beneficiary          LandOwner              @relation(fields: [beneficiaryId], references: [ownerId], onDelete: Restrict)
   authorisations       PaymentAuthorisation[]
   receipt              PaymentReceipt?
+  receiptArchives      PaymentReceiptArchive[]
   failedTransactions   FailedTransaction[]
   receiverBankDetails  ReceiverBankDetails?
 
@@ -228,6 +229,27 @@ model PaymentReceipt {
   paymentCase         PaymentCase @relation(fields: [paymentCaseId], references: [id], onDelete: Restrict)
 
   @@map("payment_receipt")
+}
+
+// Archived receipts (FR-014 dispute "funds never arrived" resolution): when a GA
+// resolves a dispute by scheduling a new attempt or requesting new bank details,
+// the frozen receipt from the voided cycle is preserved here and the active
+// PaymentReceipt row is cleared so the next cycle generates a fresh one. Unlike
+// PaymentReceipt (one per case), this table stacks many versions per case.
+model PaymentReceiptArchive {
+  id                  String   @id @default(uuid())
+  paymentCaseId       String   @map("payment_case_id")
+  bankReferenceNumber String   @map("bank_reference_number")
+  documentHash        String?  @map("document_hash")
+  documentPath        String?  @map("document_path")
+  generatedAt         DateTime @map("generated_at")
+  archivedAt          DateTime @default(now()) @map("archived_at")
+  archiveReason       String?  @map("archive_reason")
+
+  paymentCase         PaymentCase @relation(fields: [paymentCaseId], references: [id], onDelete: Cascade)
+
+  @@index([paymentCaseId])
+  @@map("payment_receipt_archive")
 }
 
 model FailedTransaction {

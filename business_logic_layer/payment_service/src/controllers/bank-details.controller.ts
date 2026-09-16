@@ -26,6 +26,7 @@ export const submitBankDetails = async (req: Request, res: Response) => {
     }
 
     const cleanPhone = paymentService.normalizeLocalPhoneNumber(phoneNumber);
+    const sessionUser = (req as any).user;
 
     let paymentCase = null;
     try {
@@ -36,6 +37,8 @@ export const submitBankDetails = async (req: Request, res: Response) => {
         accountHolderName: accountHolderName || "",
         phoneNumber: cleanPhone,
         myKadNumber,
+        userId: sessionUser?.userId,
+        isAnotherAccount: Boolean(req.body.isAnotherAccount),
       });
     } catch (e: any) {
       if (

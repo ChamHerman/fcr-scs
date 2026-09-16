@@ -181,12 +181,15 @@ export const PaymentRowActions: React.FC<PaymentRowActionsProps> = ({
     }
 
     case 'Paid':
+    case 'Transfer Succeed':
       return (
         <div className="row-actions">
-          <Button size="sm" variant="filled" className={pillBtn} onClick={() => downloadReceipt(pc, notify)}>
-            <Download size={13} className="shrink-0" />
-            <span>Receipt</span>
-          </Button>
+          {pc.receipt && (
+            <Button size="sm" variant="filled" className={pillBtn} onClick={() => downloadReceipt(pc, notify)}>
+              <Download size={13} className="shrink-0" />
+              <span>Receipt</span>
+            </Button>
+          )}
         </div>
       );
 
