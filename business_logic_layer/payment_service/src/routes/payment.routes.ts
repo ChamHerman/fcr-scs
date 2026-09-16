@@ -7,8 +7,10 @@ import { UserRole } from "@prisma/client";
 const upload = multer({ storage: multer.memoryStorage() });
 const router = Router();
 
-// Bank details submission (from landowner or member)
-router.post("/bank-details", ctrl.submitBankDetails);
+// Bank details submission (from landowner or member). Authenticated so the
+// account holder name and MyKad can be re-derived from the session user rather
+// than trusted from the request body.
+router.post("/bank-details", authenticate, ctrl.submitBankDetails);
 
 // Mutations - Government Administrator only
 router.post("/initiate", authenticate, requireRole(UserRole.GOVERNMENT_ADMINISTRATOR), ctrl.initiate);
@@ -20,6 +22,7 @@ router.post("/cancel", authenticate, requireRole(UserRole.GOVERNMENT_ADMINISTRAT
 router.post("/retry", authenticate, requireRole(UserRole.GOVERNMENT_ADMINISTRATOR), ctrl.retry);
 router.post("/request-details-update", authenticate, requireRole(UserRole.GOVERNMENT_ADMINISTRATOR), ctrl.requestDetailsUpdate);
 router.post("/schedule-tomorrow", authenticate, requireRole(UserRole.GOVERNMENT_ADMINISTRATOR), ctrl.scheduleTomorrow);
+router.post("/auto-execute-scheduled", ctrl.autoExecuteScheduledTransfers);
 router.post("/resolve-dispute", authenticate, requireRole(UserRole.GOVERNMENT_ADMINISTRATOR), ctrl.resolveDispute);
 
 // Read routes - Government Administrator, System Administrator & Displaced Community Member

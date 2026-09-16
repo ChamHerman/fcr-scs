@@ -1,6 +1,35 @@
 import { Request, Response } from "express";
 import * as svc from "../services/blockchain.service";
 import * as ethereumService from "../services/ethereum.service";
+import { AuthenticatedRequest } from "../../../user_management_service/src/middleware/auth.middleware";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The acting admin, taken from the session only. The publish route's existing
+ * walletAuth compares a body-supplied wallet address against one shared env
+ * var, so it identifies no individual — and a "publishing by <name>" lock is
+ * worthless if the name comes from the request body.
+ */
+function actingAdmin(req: Request): { adminId: string; adminName: string } | null {
+  const user = (req as AuthenticatedRequest).user;
+  if (!user?.userId || !UUID_RE.test(user.userId)) return null;
+  return { adminId: user.userId, adminName: user.name || "Government Admin" };
+}
+
+/** Maps a held-claim error onto a 409; returns false if `e` was something else. */
+function respondClaimHeld(res: Response, e: unknown): boolean {
+  if (e instanceof svc.PublishClaimHeldByError) {
+    res.status(409).json({
+      error: e.message,
+      claimedBy: e.holderAdminId,
+      claimedByName: e.holderAdminName,
+      claimedAt: e.holderClaimedAt,
+    });
+    return true;
+  }
+  return false;
+}
 
 export async function getNetwork(_req: Request, res: Response): Promise<void> {
   try {
@@ -42,10 +71,74 @@ export async function publish(req: Request, res: Response): Promise<void> {
     return;
   }
   try {
-    const r = await svc.publishRecord({ caseId, milestone, documentHash, transactionHash, onChainKey });
+    const admin = actingAdmin(req);
+    // Refuse a publish that another admin is holding, so the loser learns the
+    // record is taken rather than clobbering the winner's transactionHash.
+    if (admin) {
+      await svc.assertNotClaimedByOther(caseId, svc.normalizeMilestone(milestone), admin.adminId);
+    }
+    const r = await svc.publishRecord({
+      caseId,
+      milestone,
+      documentHash,
+      transactionHash,
+      onChainKey,
+      adminId: admin?.adminId,
+    });
     res.status(201).json({ transactionHash: r.transactionHash, record: r });
   } catch (e: unknown) {
+    if (respondClaimHeld(res, e)) return;
     res.status(400).json({ error: (e as Error).message });
+  }
+}
+
+/** POST /publish-claim — take the lock before starting the MetaMask flow. */
+export async function claimPublish(req: Request, res: Response): Promise<void> {
+  const { caseId, milestone } = req.body as { caseId?: string; milestone?: string };
+  if (!caseId) {
+    res.status(400).json({ error: "caseId is required" });
+    return;
+  }
+  const admin = actingAdmin(req);
+  if (!admin) {
+    res.status(401).json({ error: "Unauthorized: a valid administrator session is required" });
+    return;
+  }
+  try {
+    const claim = await svc.claimPublish({ caseId, milestone, ...admin });
+    res.status(201).json({ claim });
+  } catch (e: unknown) {
+    if (respondClaimHeld(res, e)) return;
+    res.status(400).json({ error: (e as Error).message });
+  }
+}
+
+/** DELETE /publish-claim — give the lock back after a failure or cancellation. */
+export async function releasePublishClaim(req: Request, res: Response): Promise<void> {
+  const { caseId, milestone } = req.body as { caseId?: string; milestone?: string };
+  if (!caseId) {
+    res.status(400).json({ error: "caseId is required" });
+    return;
+  }
+  const admin = actingAdmin(req);
+  if (!admin) {
+    res.status(401).json({ error: "Unauthorized: a valid administrator session is required" });
+    return;
+  }
+  try {
+    const released = await svc.releasePublishClaim({ caseId, milestone, adminId: admin.adminId });
+    res.json({ released });
+  } catch (e: unknown) {
+    res.status(400).json({ error: (e as Error).message });
+  }
+}
+
+/** GET /publish-claims — live locks, polled by every admin's publish pages. */
+export async function listPublishClaims(_req: Request, res: Response): Promise<void> {
+  try {
+    res.json({ claims: await svc.getPublishClaims() });
+  } catch (e: unknown) {
+    res.status(500).json({ error: (e as Error).message });
   }
 }
 

@@ -30,10 +30,10 @@ import { PaymentRowActions } from './PaymentRowActions';
 import type { PaymentRow } from './paymentModals';
 
 type ModalState =
-  | { type: 'view'; pc: PaymentRow }
-  | { type: 'authorise'; pc: PaymentRow }
-  | { type: 'reject'; pc: PaymentRow }
-  | { type: 'cancel'; pc: PaymentRow }
+  | { type: 'view'; caseId: string }
+  | { type: 'authorise'; caseId: string }
+  | { type: 'reject'; caseId: string }
+  | { type: 'cancel'; caseId: string }
   | null;
 
 export default function PendingAuthorisations() {
@@ -46,7 +46,7 @@ export default function PendingAuthorisations() {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
   const [caseDetailsId, setCaseDetailsId] = useState<string | null>(null);
-  const [finalConfirmCase, setFinalConfirmCase] = useState<PaymentRow | null>(null);
+  const [finalConfirmCaseId, setFinalConfirmCaseId] = useState<string | null>(null);
   const { identityId } = useAdminIdentity();
   const { user } = useAuth();
   const pageRef = useRef<HTMLDivElement>(null);
@@ -118,6 +118,26 @@ export default function PendingAuthorisations() {
   }, [searchQuery]);
 
   const closeModal = () => setModal(null);
+
+  const modalPc = useMemo(
+    () => (modal ? cases.find((c) => c.caseId === modal.caseId) ?? null : null),
+    [modal, cases]
+  );
+
+  const finalConfirmPc = useMemo(
+    () => (finalConfirmCaseId ? cases.find((c) => c.caseId === finalConfirmCaseId) ?? null : null),
+    [finalConfirmCaseId, cases]
+  );
+
+  // Opening a modal silently re-fetches so it renders current backend state,
+  // not the snapshot the row was rendered with.
+  const openModal = useCallback(
+    (type: Exclude<ModalState, null>['type'], caseId: string) => {
+      setModal({ type, caseId } as ModalState);
+      loadData(true);
+    },
+    [loadData]
+  );
 
   return (
     <div className="main" ref={pageRef}>
@@ -209,7 +229,7 @@ export default function PendingAuthorisations() {
                     <tr
                       key={pc.caseId}
                       className={`row-clickable${deepLink === pc.caseId ? ' bg-md-secondary-container/40' : ''}`}
-                      onClick={() => setModal({ type: 'view', pc })}
+                      onClick={() => openModal('view', pc.caseId)}
                     >
                       <td>
                         <div className="flex items-center gap-1.5">
@@ -245,19 +265,22 @@ export default function PendingAuthorisations() {
       <div style={{ height: '32px' }} />
 
       <ViewDetailsModal
-        pc={modal?.type === 'view' ? modal.pc : null}
+        pc={modal?.type === 'view' ? modalPc : null}
         identityId={identityId}
         onClose={closeModal}
         onAction={(type, target) => {
           if (type === 'confirm-execution') {
-            setFinalConfirmCase(target);
+            setFinalConfirmCaseId(target.caseId);
+            loadData(true);
+          } else if (type === 'confirm-receipt') {
+            loadData(true);
           } else {
-            setModal({ type, pc: target } as ModalState);
+            openModal(type as Exclude<ModalState, null>['type'], target.caseId);
           }
         }}
       />
       <AuthoriseTransferModal
-        pc={modal?.type === 'authorise' ? modal.pc : null}
+        pc={modal?.type === 'authorise' ? modalPc : null}
         onClose={closeModal}
         onDone={() => {
           closeModal();
@@ -265,18 +288,18 @@ export default function PendingAuthorisations() {
         }}
       />
       <FinalExecutionConfirmModal
-        pc={finalConfirmCase}
-        isOpen={Boolean(finalConfirmCase)}
+        pc={finalConfirmPc}
+        isOpen={Boolean(finalConfirmCaseId)}
         onConfirm={async () => {
-          if (!finalConfirmCase) return;
-          await paymentApi.confirmExecution({ caseId: finalConfirmCase.caseId, adminId: identityId });
+          if (!finalConfirmPc) return;
+          await paymentApi.confirmExecution({ caseId: finalConfirmPc.caseId, adminId: identityId });
           setTimeout(() => {
-            setFinalConfirmCase(null);
+            setFinalConfirmCaseId(null);
             loadData();
           }, 1100);
         }}
         onHold={() => {
-          setFinalConfirmCase(null);
+          setFinalConfirmCaseId(null);
           loadData();
         }}
       />
@@ -285,12 +308,12 @@ export default function PendingAuthorisations() {
         onClose={() => setCaseDetailsId(null)}
       />
       <RejectTransferModal
-        pc={modal?.type === 'reject' ? modal.pc : null}
+        pc={modal?.type === 'reject' ? modalPc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />
       <CancelPaymentModal
-        pc={modal?.type === 'cancel' ? modal.pc : null}
+        pc={modal?.type === 'cancel' ? modalPc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />

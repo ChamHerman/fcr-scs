@@ -25,6 +25,8 @@ export const submitBankDetails = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: "Invalid MyKad Number" });
     }
 
+    const cleanPhone = paymentService.normalizeLocalPhoneNumber(phoneNumber);
+
     let paymentCase = null;
     try {
       paymentCase = await paymentService.submitBankDetails({
@@ -32,11 +34,19 @@ export const submitBankDetails = async (req: Request, res: Response) => {
         bankName,
         accountNumber,
         accountHolderName: accountHolderName || "",
-        phoneNumber: phoneNumber || "",
+        phoneNumber: cleanPhone,
         myKadNumber,
       });
     } catch (e: any) {
-      if (e?.message && (e.message.includes("already registered") || e.message.includes("must be unique") || e.message.includes("Invalid"))) {
+      if (
+        e?.message &&
+        (e.message.includes("already registered") ||
+          e.message.includes("must be unique") ||
+          e.message.includes("Invalid") ||
+          e.message.includes("Unsupported bank") ||
+          e.message.includes("required") ||
+          e.message.includes("digits"))
+      ) {
         return res.status(400).json({ success: false, error: e.message });
       }
       // Graceful fallback if database mock or isolated test environment
@@ -52,7 +62,7 @@ export const submitBankDetails = async (req: Request, res: Response) => {
         bankName,
         accountNumber,
         accountHolderName: accountHolderName || "",
-        phoneNumber: phoneNumber || "",
+        phoneNumber: cleanPhone,
         myKadNumber,
         encryptedBankDetails,
         paymentCaseId: resolvedPaymentCaseId,

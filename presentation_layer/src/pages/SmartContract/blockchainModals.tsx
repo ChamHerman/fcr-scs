@@ -6,7 +6,7 @@ import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { Textarea } from '../../components/ui/Textarea';
 import { CopyButton } from '../../components/ui/CopyButton';
-import { blockchainApi } from '../../services/blockchainApi';
+import { blockchainApi, PublishClaimHeldError } from '../../services/blockchainApi';
 import { landAcquisitionApi } from '../../services/landAcquisitionApi';
 import { useWallet } from '../../hooks/useWallet';
 import { useNotification } from '../../components/ui/NotificationSystem';
@@ -48,6 +48,30 @@ export interface LedgerRow {
   acceptedAt?: string | null;
 }
 
+/**
+ * Live publish lock on one (caseId, milestone), computed by the owning page from
+ * the claims poll and handed to the modals so a single poller serves the table
+ * and both dialogs.
+ */
+export interface PublishLockState {
+  /** Another admin holds it, so publishing here would waste minutes. */
+  heldByOther: boolean;
+  /** This admin holds it, so the button must stay usable for them. */
+  heldByMe: boolean;
+  adminName?: string;
+  claimedAt?: string;
+}
+
+export const NO_PUBLISH_LOCK: PublishLockState = { heldByOther: false, heldByMe: false };
+
+/** Counts up while a lock is held, e.g. "0:42". */
+export const formatClaimElapsed = (msElapsed: number): string => {
+  const totalSeconds = Math.max(0, Math.floor(msElapsed / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+};
+
 export const maskAccount = (n?: string | null) =>
   n && n.length > 4 ? `•••• ${n.slice(-4)}` : n || '—';
 
@@ -69,10 +93,15 @@ export const fmtAmount = (v?: string | number) => `RM ${Number(v || 0).toLocaleS
 export const fmtDate = (d?: string | number | Date | null) => formatDateTime(d);
 
 export const formatGraceCountdown = (msRemaining: number): string => {
-  const totalMinutes = Math.max(0, Math.ceil(msRemaining / 60_000));
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+  if (msRemaining <= 0) return '';
+  const totalSeconds = Math.max(1, Math.ceil(msRemaining / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m`;
+  return `${seconds}s`;
 };
 
 /* ------------------------------ View Details ------------------------------ */
@@ -81,8 +110,19 @@ export const ViewLedgerModal: React.FC<{
   row: LedgerRow | null;
   onClose: () => void;
   onAction?: (action: 'publish', row: LedgerRow) => void;
-}> = ({ row, onClose, onAction }) => {
+  /** Live publish lock on this record, from the page's claims poll. */
+  lock?: PublishLockState;
+}> = ({ row, onClose, onAction, lock = NO_PUBLISH_LOCK }) => {
   const [caseData, setCaseData] = useState<any>(null);
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
+
+  useEffect(() => {
+    if (!row) return;
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [row]);
 
   useEffect(() => {
     if (!row?.caseId) {
@@ -112,24 +152,34 @@ export const ViewLedgerModal: React.FC<{
     : (row.publicId || row.id);
   const txUrl = row.transactionHash ? `https://sepolia.etherscan.io/tx/${row.transactionHash}` : null;
   const isPublished = row.status === 'Published' || row.status === 'PUBLISHED' || row.status === 'CONFIRMED';
-  const graceLocked =
-    row.milestone === 'M1' &&
-    !!row.graceEndsAt &&
-    Date.now() < new Date(row.graceEndsAt).getTime();
-  const countdown = graceLocked
-    ? formatGraceCountdown(new Date(row.graceEndsAt as string | number).getTime() - Date.now())
-    : '';
+  const graceEndsAtMs = row.graceEndsAt ? new Date(row.graceEndsAt).getTime() : null;
+  const remainingMs = graceEndsAtMs != null ? graceEndsAtMs - currentTime : 0;
+  const graceLocked = row.milestone === 'M1' && remainingMs > 0;
+  const countdown = graceLocked ? formatGraceCountdown(remainingMs) : '';
+  const effectiveStatus = isPublished
+    ? row.status
+    : graceLocked
+    ? 'Grace Period (Locked)'
+    : (row.status === 'Grace Period (Locked)' ? 'Ready to Publish' : (row.status || 'Ready to Publish'));
+
   const hashMissing = row.milestone === 'M1' && !row.documentHash;
+  // Another admin is mid-publish on this exact record: minutes of MetaMask
+  // signing and mining they have already spent, that this admin would repeat.
+  const claimElapsedMs = lock.claimedAt ? Math.max(0, currentTime - new Date(lock.claimedAt).getTime()) : 0;
+  const publishingByOther = lock.heldByOther;
+  const publishingLabel = publishingByOther
+    ? `Publishing · ${lock.adminName || 'Gov Admin'} (${formatClaimElapsed(claimElapsedMs)})`
+    : null;
   const isReady =
     !isPublished &&
-    (row.status === 'Ready to Publish' ||
-      row.status === 'READY_TO_PUBLISH' ||
-      row.status === 'PENDING' ||
-      row.status === 'OFFER_ACCEPTED' ||
-      row.status === 'COMPLETED' ||
-      row.status === 'READY' ||
+    (effectiveStatus === 'Ready to Publish' ||
+      effectiveStatus === 'READY_TO_PUBLISH' ||
+      effectiveStatus === 'PENDING' ||
+      effectiveStatus === 'OFFER_ACCEPTED' ||
+      effectiveStatus === 'COMPLETED' ||
+      effectiveStatus === 'READY' ||
       graceLocked ||
-      row.status === 'Grace Period (Locked)');
+      effectiveStatus === 'Grace Period (Locked)');
 
   return (
     <Modal
@@ -148,23 +198,27 @@ export const ViewLedgerModal: React.FC<{
               <Button
                 variant="animated-primary"
                 size="md"
-                disabled={hashMissing || graceLocked}
+                disabled={hashMissing || graceLocked || publishingByOther}
                 title={
                   hashMissing
                     ? 'The accepted offer has no frozen Form H fingerprint yet — publishing is blocked'
                     : graceLocked
                     ? `Milestone 1 unlocks when the 24-hour acceptance grace period ends (${countdown} left)`
+                    : publishingByOther
+                    ? `${lock.adminName || 'Another government administrator'} is publishing this record to Sepolia. The lock releases when they finish, or automatically if their session drops.`
                     : undefined
                 }
                 onClick={() => {
                   onClose();
-                  onAction('publish', row);
+                  onAction('publish', { ...row, status: effectiveStatus });
                 }}
               >
-                {graceLocked ? <Lock size={15} className="mr-1.5" /> : <Upload size={15} className="mr-1.5" />}
+                {graceLocked || publishingByOther ? <Lock size={15} className="mr-1.5" /> : <Upload size={15} className="mr-1.5" />}
                 <span>
                   {graceLocked
                     ? `Locked (${countdown} Left)`
+                    : publishingLabel
+                    ? publishingLabel
                     : hashMissing
                     ? 'Form H Hash Missing'
                     : row.milestone === 'M2'
@@ -267,7 +321,7 @@ export const ViewLedgerModal: React.FC<{
             </div>
             <div className="payment-detail-item">
               <div className="label">Status</div>
-              <div className="value">{ledgerBadge(row.status)}</div>
+              <div className="value">{ledgerBadge(effectiveStatus)}</div>
             </div>
             <div className="payment-detail-item">
               <div className="label">Published Timestamp</div>
@@ -317,13 +371,54 @@ export const ViewLedgerModal: React.FC<{
 
 /* ------------------------------ Publish modal ------------------------------ */
 
-export const PublishModal: React.FC<{ row: LedgerRow | null; onClose: () => void; onDone: () => void }> = ({ row, onClose, onDone }) => {
+export const PublishModal: React.FC<{
+  row: LedgerRow | null;
+  onClose: () => void;
+  onDone: () => void;
+  /** Live publish lock on this record, from the page's claims poll. */
+  lock?: PublishLockState;
+  /** Re-poll the locks after this dialog takes or gives one back. */
+  onLocksChanged?: () => void;
+}> = ({ row, onClose, onDone, lock = NO_PUBLISH_LOCK, onLocksChanged }) => {
   const { walletAddress, walletConnected, connectWallet, error: walletError } = useWallet();
   const { notify } = useNotification();
   const [loading, setLoading] = useState(false);
   const [stage, setStage] = useState<'wallet' | 'mining' | 'recording'>('wallet');
   const [resultTx, setResultTx] = useState('');
   const [caseData, setCaseData] = useState<any>(null);
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
+  // True only while THIS dialog holds the server-side claim, so release is
+  // never attempted for a lock we did not take.
+  const claimedRef = useRef(false);
+
+  useEffect(() => {
+    if (!row) return;
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [row]);
+
+  const graceEndsAtMs = row?.graceEndsAt ? new Date(row.graceEndsAt).getTime() : null;
+  const remainingMs = graceEndsAtMs != null ? graceEndsAtMs - currentTime : 0;
+  const isGraceLocked = row?.milestone === 'M1' && remainingMs > 0;
+  const countdown = isGraceLocked ? formatGraceCountdown(remainingMs) : '';
+
+  // The claim key must match the server's stored milestone, not the UI's M1/M2.
+  const claimMilestone = row?.milestone === 'M2' ? 'SETTLEMENT' : 'AWARD';
+  const claimElapsedMs = lock.claimedAt ? Math.max(0, currentTime - new Date(lock.claimedAt).getTime()) : 0;
+  const publishingByOther = lock.heldByOther;
+
+  const releaseClaim = async () => {
+    if (!claimedRef.current || !row) return;
+    claimedRef.current = false;
+    try {
+      await blockchainApi.releasePublishClaim({ caseId: row.caseId, milestone: claimMilestone });
+    } catch {
+      // An expired claim is ignored server-side, so the TTL is the safety net.
+    }
+    onLocksChanged?.();
+  };
 
   useEffect(() => {
     if (!row?.caseId) {
@@ -360,6 +455,11 @@ export const PublishModal: React.FC<{ row: LedgerRow | null; onClose: () => void
 
     const handleUnload = () => {
       isCancelledRef.current = true;
+      // Abandoning the tab must not leave the record locked for the full TTL.
+      if (claimedRef.current && row) {
+        blockchainApi.releasePublishClaimOnUnload({ caseId: row.caseId, milestone: claimMilestone });
+        claimedRef.current = false;
+      }
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -370,7 +470,7 @@ export const PublishModal: React.FC<{ row: LedgerRow | null; onClose: () => void
       window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('unload', handleUnload);
     };
-  }, [loading]);
+  }, [loading, row, claimMilestone]);
 
   const handleModalClose = () => {
     if (loading) return;
@@ -379,6 +479,14 @@ export const PublishModal: React.FC<{ row: LedgerRow | null; onClose: () => void
 
   const confirm = async () => {
     if (!row) return;
+    if (isGraceLocked) {
+      notify({
+        type: 'error',
+        title: 'Publication Locked',
+        message: `Milestone 1 publication is locked: the statutory 24-hour acceptance grace period ends in ${countdown}. Publishing is only permitted after 0 seconds have elapsed.`,
+      });
+      return;
+    }
     if (!walletConnected || !walletAddress) return;
     if (loading) return;
 
@@ -387,6 +495,22 @@ export const PublishModal: React.FC<{ row: LedgerRow | null; onClose: () => void
     isCancelledRef.current = false;
 
     try {
+      // 0. Take the cross-admin lock BEFORE anything expensive happens. A record
+      // another admin is already publishing must never cost this admin a MetaMask
+      // signature and minutes of mining.
+      try {
+        await blockchainApi.claimPublish({ caseId: row.caseId, milestone: claimMilestone });
+        claimedRef.current = true;
+        onLocksChanged?.();
+      } catch (claimErr) {
+        if (claimErr instanceof PublishClaimHeldError) throw claimErr;
+        // Only "someone else holds it" stops us. If the claim service is
+        // unreachable the publish must still proceed: the atomic first-write-wins
+        // update in publishRecord is what actually prevents double-recording,
+        // so the lock is an optimisation, not a precondition.
+        console.warn('[blockchain] publish claim unavailable, continuing:', claimErr);
+      }
+
       const net = await blockchainApi.getNetworkInfo();
       if (!net.contractAddress) {
         throw new Error('No contract address configured for the active network — set it in the smart-contract service env.');
@@ -445,20 +569,27 @@ export const PublishModal: React.FC<{ row: LedgerRow | null; onClose: () => void
         onChainKey: publishKey,
       });
 
+      // The successful publish released our claim server-side.
+      claimedRef.current = false;
+
       if (isCancelledRef.current) return;
 
       notify({ type: 'success', title: 'Published on-chain', message: `${row.milestone === 'M2' ? 'Settlement (M2)' : 'Statutory award (M1)'} record for ${row.caseId} published · Tx ${fmtTx(txHash)}` });
       onClose();
       onDone();
     } catch (e: any) {
-      console.error('[blockchain] publish failed:', e);
+      const heldByOther = e instanceof PublishClaimHeldError;
+      if (!heldByOther) console.error('[blockchain] publish failed:', e);
       notify({
         type: 'error',
-        title: 'Publish failed',
+        title: heldByOther ? 'Already publishing' : 'Publish failed',
         message: e?.message || 'Transaction failed',
-        error: e,
+        ...(heldByOther ? {} : { error: e }),
       });
+      onLocksChanged?.();
     } finally {
+      // Hand the lock back unless the publish already did or the tab is closing.
+      await releaseClaim();
       if (!isCancelledRef.current) {
         setLoading(false);
       }
@@ -473,12 +604,45 @@ export const PublishModal: React.FC<{ row: LedgerRow | null; onClose: () => void
       title="Publish to Blockchain"
       subtitle={row ? `Record ${row.publicId ?? row.caseId} · ${fmtAmount(row.amount)}` : ''}
       cancelText="Cancel"
-      confirmText="Confirm & Publish"
+      confirmText={
+        isGraceLocked
+          ? `Locked (${countdown} Left)`
+          : publishingByOther
+          ? `Publishing · ${lock.adminName || 'Gov Admin'}`
+          : "Confirm & Publish"
+      }
       confirmLoading={loading}
+      confirmDisabled={isGraceLocked || publishingByOther}
       onConfirm={confirm}
     >
       {row && (
         <div className="space-y-4 pb-5">
+          {publishingByOther && (
+            <div className="flex items-start gap-2.5 p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-xs text-rose-900 dark:text-rose-200">
+              <AlertTriangle size={16} className="text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <span className="font-bold block">
+                  {lock.adminName || 'Another government administrator'} is publishing this record · {formatClaimElapsed(claimElapsedMs)} elapsed
+                </span>
+                <span>
+                  Publishing to Sepolia takes several minutes. This button unlocks as soon as they finish, and automatically if their session drops, so there is no need to wait and retry.
+                </span>
+              </div>
+            </div>
+          )}
+          {isGraceLocked && (
+            <div className="flex items-start gap-2.5 p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-xs text-amber-900 dark:text-amber-200">
+              <Lock size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <span className="font-bold block">
+                  Statutory 24-Hour Cooling Grace Window Active ({countdown} remaining)
+                </span>
+                <span>
+                  Milestone 1 award notarization cannot be published until the grace window ends. The landowner retains the statutory right to cancel acceptance until 0 seconds. Publication unlocks automatically after 0 seconds have passed.
+                </span>
+              </div>
+            </div>
+          )}
           <div className="payment-detail-grid">
             <div className="payment-detail-item">
               <div className="label">Case</div>

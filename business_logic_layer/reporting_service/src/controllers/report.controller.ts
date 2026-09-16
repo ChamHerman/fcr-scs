@@ -20,12 +20,13 @@ export const getOverviewStats = async (req: Request, res: Response): Promise<voi
 
 export const getCaseStatusReport = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { format, startDate, endDate, state, status, projectType } = req.query;
+    const { format, startDate, endDate, state, status, location, projectType } = req.query;
     const filters: ReportFilterParams = {
       startDate: startDate as string,
       endDate: endDate as string,
       state: state as string,
       status: status as string,
+      location: location as string,
       projectType: projectType as string,
     };
 

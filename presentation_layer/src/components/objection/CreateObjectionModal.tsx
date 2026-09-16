@@ -7,7 +7,6 @@ import { Textarea } from '../ui/Textarea';
 import { FileUpload } from '../ui/FileUpload';
 import { useNotification } from '../ui/NotificationSystem';
 import { compensationApi } from '../../services/compensationApi';
-import { ConfirmSubmitModal, ConfirmRow } from '../member/ConfirmSubmitModal';
 
 export interface CreateObjectionFile {
   id: string;
@@ -43,7 +42,6 @@ export const CreateObjectionModal: React.FC<CreateObjectionModalProps> = ({
   const [reason, setReason] = useState<string>('');
   const [files, setFiles] = useState<CreateObjectionFile[]>([]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [showConfirm, setShowConfirm] = useState<boolean>(false);
 
   // Reset form when opened
   useEffect(() => {
@@ -116,28 +114,6 @@ export const CreateObjectionModal: React.FC<CreateObjectionModalProps> = ({
       return;
     }
 
-    let finalOfferId = offerId;
-    if (!finalOfferId && caseId) {
-      try {
-        const res = await compensationApi.getAllOfferLetters({ limit: 100 });
-        const match = (res.offerLetters || []).find((o: any) => o.caseId === caseId);
-        if (match) {
-          finalOfferId = match.offerId;
-        }
-      } catch (e) {
-        console.warn('Failed to resolve offer letter:', e);
-      }
-    }
-
-    if (!finalOfferId) {
-      notify({
-        type: 'error',
-        title: 'Offer Letter Not Found',
-        message: 'A formal compensation offer letter (Form H) is required before filing an objection for this case.',
-      });
-      return;
-    }
-
     if (typeof amount !== 'number' || amount <= 0) {
       notify({
         type: 'general',
@@ -156,11 +132,6 @@ export const CreateObjectionModal: React.FC<CreateObjectionModalProps> = ({
       return;
     }
 
-    // FR-017: second explicit confirmation before the official submission.
-    setShowConfirm(true);
-  };
-
-  const handleConfirmedSubmit = async () => {
     setIsSubmitting(true);
     try {
       let finalOfferId = offerId;
@@ -175,8 +146,8 @@ export const CreateObjectionModal: React.FC<CreateObjectionModalProps> = ({
           console.warn('Failed to resolve offer letter:', e);
         }
       }
+
       if (!finalOfferId) {
-        setShowConfirm(false);
         notify({
           type: 'error',
           title: 'Offer Letter Not Found',
@@ -184,18 +155,21 @@ export const CreateObjectionModal: React.FC<CreateObjectionModalProps> = ({
         });
         return;
       }
+
+      const actualFiles = files.map((f) => f.file).filter(Boolean) as File[];
       await compensationApi.createObjection({
         offerId: finalOfferId,
         caseId: caseId || '',
         objectionReason: reason.trim(),
         requestedAmount: Number(amount),
         createdById: userId,
+        files: actualFiles.length > 0 ? actualFiles : undefined,
       });
 
       notify({
         type: 'success',
         title: 'Objection Filed',
-        message: 'Your compensation objection has been successfully submitted for officer review.',
+        message: 'Your compensation objection and offer dispute have been successfully submitted for officer review.',
       });
 
       onClose();
@@ -230,9 +204,10 @@ export const CreateObjectionModal: React.FC<CreateObjectionModalProps> = ({
             variant="filled"
             size="md"
             onClick={handleSubmit}
+            isLoading={isSubmitting}
             className="!rounded-xl bg-violet-700 hover:bg-violet-800 text-white font-bold text-xs"
           >
-            Review & Submit Objection
+            Submit Objection (Form N)
           </Button>
         </div>
       }
@@ -301,27 +276,6 @@ export const CreateObjectionModal: React.FC<CreateObjectionModalProps> = ({
           )}
         </div>
       </div>
-
-      {/* FR-017 second confirmation */}
-      <ConfirmSubmitModal
-        isOpen={showConfirm}
-        title="Confirm Objection Submission"
-        loading={isSubmitting}
-        confirmLabel="Submit Official Objection"
-        onConfirm={handleConfirmedSubmit}
-        onCancel={() => setShowConfirm(false)}
-        summary={
-          <>
-            {caseId && <ConfirmRow label="Case" value={caseId} mono />}
-            <ConfirmRow
-              label="Requested Amount"
-              value={`RM ${Number(amount || 0).toLocaleString('en-MY', { minimumFractionDigits: 2 })}`}
-            />
-            <ConfirmRow label="Grounds" value={reason.trim()} />
-            {files.length > 0 && <ConfirmRow label="Attachments" value={files.map((f) => f.name).join(', ')} />}
-          </>
-        }
-      />
     </Modal>
   );
 };

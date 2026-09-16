@@ -10,7 +10,9 @@ export async function getTestSessionToken(
   const email =
     role === UserRole.SYSTEM_ADMINISTRATOR
       ? "admin@fcrscs.gov.my"
-      : `ga${index}@fcrscs.gov.my`;
+      : role === UserRole.DISPLACED_COMMUNITY_MEMBER
+        ? `m${index}@fcrscs.gov.my`
+        : `ga${index}@fcrscs.gov.my`;
 
   const user = await prisma.user.findUnique({
     where: { email },

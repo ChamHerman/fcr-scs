@@ -16,11 +16,16 @@ import { Select } from '../../components/ui/Select';
 import { Modal } from '../../components/ui/Modal';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import {
+  ALL_OPTION,
   STATES,
   CASE_STATUS_OPTIONS,
   PAYMENT_STATUS_OPTIONS,
-  BLOCKCHAIN_STATUS_OPTIONS
+  BLOCKCHAIN_STATUS_OPTIONS,
+  caseStatusLabel,
+  paymentStatusLabel,
+  blockchainStatusLabel
 } from './reportConstants';
+import type { SelectOption } from '../../components/ui/Select';
 import { ReportSummaryCards, ReportDataTable } from './reportComponents';
 import {
   fetchCaseStatusReport,
@@ -62,7 +67,6 @@ export const GenerateReports: React.FC = () => {
   };
 
   const [state, setState] = useState<string>('All');
-  const [location, setLocation] = useState<string>('All');
   const [status, setStatus] = useState<string>('All');
   const [startDate, setStartDate] = useState<string>('2026-01-01');
   const [endDate, setEndDate] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -75,12 +79,17 @@ export const GenerateReports: React.FC = () => {
 
   const seqRef = useRef(0);
 
-  const locationOptions = useMemo(() => (state === 'All' ? [] : (STATES[state] ?? [])), [state]);
+  /* Values are real enum members; labels come from the owning module's map. */
+  const currentStatusOptions = useMemo<SelectOption[]>(() => {
+    const toOptions = (values: string[], labelFor: (value: string) => string): SelectOption[] =>
+      values.map((value) => ({
+        value,
+        label: value === ALL_OPTION ? 'All Statuses' : labelFor(value),
+      }));
 
-  const currentStatusOptions = useMemo(() => {
-    if (category === 'Payment Report') return PAYMENT_STATUS_OPTIONS;
-    if (category === 'Blockchain Audit Report') return BLOCKCHAIN_STATUS_OPTIONS;
-    return CASE_STATUS_OPTIONS;
+    if (category === 'Payment Report') return toOptions(PAYMENT_STATUS_OPTIONS, paymentStatusLabel);
+    if (category === 'Blockchain Audit Report') return toOptions(BLOCKCHAIN_STATUS_OPTIONS, blockchainStatusLabel);
+    return toOptions(CASE_STATUS_OPTIONS, caseStatusLabel);
   }, [category]);
 
   const buildFilters = useCallback((): ReportFilterOptions => {
@@ -89,9 +98,8 @@ export const GenerateReports: React.FC = () => {
       endDate,
       state: state === 'All' ? undefined : state,
       status: status === 'All' ? undefined : status,
-      location: location === 'All' ? undefined : location,
     };
-  }, [startDate, endDate, state, status, location]);
+  }, [startDate, endDate, state, status]);
 
   const loadPreview = useCallback(async () => {
     const seq = ++seqRef.current;
@@ -196,36 +204,22 @@ export const GenerateReports: React.FC = () => {
           </div>
 
           {category === 'Case Status Report' && (
-            <>
-              <Select
-                label="State / Territory"
-                value={state}
-                onChange={(v) => {
-                  setState(v);
-                  setLocation('All');
-                }}
-                options={[
-                  { value: 'All', label: 'All States' },
-                  ...Object.keys(STATES).map((s) => ({ value: s, label: s })),
-                ]}
-              />
-              <Select
-                label="District / Location"
-                value={location}
-                onChange={setLocation}
-                options={[
-                  { value: 'All', label: 'All Districts' },
-                  ...locationOptions.map((loc) => ({ value: loc, label: loc })),
-                ]}
-              />
-            </>
+            <Select
+              label="State / Territory"
+              value={state}
+              onChange={setState}
+              options={[
+                { value: 'All', label: 'All States' },
+                ...Object.keys(STATES).map((s) => ({ value: s, label: s })),
+              ]}
+            />
           )}
 
           <Select
             label="Filter Status"
             value={status}
             onChange={setStatus}
-            options={currentStatusOptions.map((st) => ({ value: st, label: st.replace(/_/g, ' ') }))}
+            options={currentStatusOptions}
           />
 
           <div className="grid grid-cols-2 gap-4">

@@ -5,7 +5,7 @@ import { IconButton } from '../../components/ui/IconButton';
 import { ActionMenuPortal } from '../../components/ui/ActionMenuPortal';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { useAuth } from '../../context/AuthContext';
-import { normalizePaymentStatus } from './statusMaps';
+import { normalizePaymentStatus, isCategory1BankFailure } from './statusMaps';
 import { hasBankDetails, hasSignedOrInitiated, signaturesLeft, downloadReceipt } from './paymentModals';
 import type { PaymentRow } from './paymentModals';
 /**
@@ -157,20 +157,28 @@ export const PaymentRowActions: React.FC<PaymentRowActionsProps> = ({
       );
     }
 
-    case 'Transfer Failed':
+    case 'Transfer Failed': {
+      const latestFt = pc.failedTransactions?.[pc.failedTransactions.length - 1];
+      const isCat1 = isCategory1BankFailure(latestFt?.errorLog);
+
+      if (isCat1) {
+        return (
+          <div className="row-actions">
+            <Button size="sm" variant="filled" className={pillBtn} onClick={() => onAction('request-update', pc)}>
+              <span>Request Details Update</span>
+            </Button>
+          </div>
+        );
+      }
+
       return (
         <div className="row-actions">
-          <Button size="sm" variant="filled" className={pillBtn} onClick={() => onAction('retry', pc)}>
-            <RotateCcw size={13} className="shrink-0" />
-            <span>Retry</span>
+          <Button size="sm" variant="filled" className={pillBtn} onClick={() => onAction('schedule', pc)}>
+            <span>Schedule Next Working Day</span>
           </Button>
-          {menu([
-            ...(extraMenuActions ?? []),
-            { label: 'Request Details Update', onClick: () => onAction('request-update', pc) },
-            { label: 'Schedule Tomorrow', onClick: () => onAction('schedule', pc) },
-          ])}
         </div>
       );
+    }
 
     case 'Paid':
       return (

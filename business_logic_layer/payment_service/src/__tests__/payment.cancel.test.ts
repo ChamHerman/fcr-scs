@@ -8,6 +8,8 @@ import { newPaymentId } from "../services/payment.service";
 import { PaymentStatus, UserRole } from "@prisma/client";
 import { getTestSessionToken, cleanupTestSessions } from "./testAuthHelper";
 
+const VALID_REASON = "DUPLICATE_DISBURSEMENT_PREVENTION";
+
 describe("POST /api/payments/cancel (RBAC & SOP Hardening)", () => {
   let createdCaseId: string;
   let gaToken: string;
@@ -119,7 +121,7 @@ describe("POST /api/payments/cancel (RBAC & SOP Hardening)", () => {
     const r = await request(app)
       .post("/api/payments/cancel")
       .set("Authorization", `Bearer ${gaToken}`)
-      .send({ caseId: "NONEXISTENT", reason: "Test" });
+      .send({ caseId: "NONEXISTENT", reason: VALID_REASON });
     expect(r.status).toBe(404);
   });
 
@@ -128,7 +130,7 @@ describe("POST /api/payments/cancel (RBAC & SOP Hardening)", () => {
     const r = await request(app)
       .post("/api/payments/cancel")
       .set("Authorization", `Bearer ${gaToken}`)
-      .send({ caseId: createdCaseId, reason: "Too late" });
+      .send({ caseId: createdCaseId, reason: VALID_REASON });
     expect(r.status).toBe(400);
     expect(r.body.error).toMatch(/cancel/i);
   });
@@ -138,9 +140,29 @@ describe("POST /api/payments/cancel (RBAC & SOP Hardening)", () => {
     const r = await request(app)
       .post("/api/payments/cancel")
       .set("Authorization", `Bearer ${gaToken}`)
-      .send({ caseId: createdCaseId, reason: "Too late" });
+      .send({ caseId: createdCaseId, reason: VALID_REASON });
     expect(r.status).toBe(400);
     expect(r.body.error).toMatch(/cancel/i);
+  });
+
+  it("400 when the reason is free-text instead of an approved statutory key", async () => {
+    await makeCase(PaymentStatus.BANK_DETAILS_PENDING);
+    const r = await request(app)
+      .post("/api/payments/cancel")
+      .set("Authorization", `Bearer ${gaToken}`)
+      .send({ caseId: createdCaseId, reason: "idk" });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/approved statutory cancellation reason/i);
+  });
+
+  it("400 when the reason is the retired bank-account-change key (belongs to Request New Bank Details flow)", async () => {
+    await makeCase(PaymentStatus.BANK_DETAILS_PENDING);
+    const r = await request(app)
+      .post("/api/payments/cancel")
+      .set("Authorization", `Bearer ${gaToken}`)
+      .send({ caseId: createdCaseId, reason: "LANDOWNER_REQUESTED_ACCOUNT_CHANGE" });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/approved statutory cancellation reason/i);
   });
 
   it("200 cancels a Bank Details Pending case, writes audit row, creates FailedTransaction, status becomes CANCELLED", async () => {
@@ -150,7 +172,7 @@ describe("POST /api/payments/cancel (RBAC & SOP Hardening)", () => {
       .set("Authorization", `Bearer ${gaToken}`)
       .send({
         caseId: createdCaseId,
-        reason: "LANDOWNER_REQUESTED_ACCOUNT_CHANGE",
+        reason: VALID_REASON,
       });
     expect(r.status).toBe(200);
     expect(r.body.paymentCase.status).toBe(PaymentStatus.CANCELLED);
@@ -160,13 +182,13 @@ describe("POST /api/payments/cancel (RBAC & SOP Hardening)", () => {
       where: { paymentCaseId: r.body.paymentCase.id, action: "cancel" },
     });
     expect(audit).not.toBeNull();
-    expect(audit!.reason).toMatch(/Landowner requested bank account change/i);
+    expect(audit!.reason).toMatch(/Duplicate payment instruction detected/i);
 
     // Verify failed transaction entry created for SOP tracking
     const failedTx = await prisma.failedTransaction.findFirst({
       where: { paymentCaseId: r.body.paymentCase.id },
     });
     expect(failedTx).not.toBeNull();
-    expect(failedTx!.errorLog).toMatch(/CANCELLED:.*Landowner requested bank account change/i);
+    expect(failedTx!.errorLog).toMatch(/CANCELLED:.*Duplicate payment instruction detected/i);
   });
 });

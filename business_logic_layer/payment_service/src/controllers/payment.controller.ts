@@ -9,7 +9,7 @@ import { AuthenticatedRequest } from "../../../user_management_service/src/middl
 import { logAudit } from "../../../user_management_service/src/services/audit.service";
 
 export async function submitBankDetails(req: Request, res: Response): Promise<void> {
-  const { caseId: rawCaseId, paymentCaseId, bankName, accountNumber, accountHolderName, phoneNumber, myKadNumber } = req.body;
+  const { caseId: rawCaseId, paymentCaseId, bankName, accountNumber, phoneNumber } = req.body;
   const caseId = rawCaseId || paymentCaseId;
   if (!caseId) {
     res.status(400).json({ error: "caseId is required" });
@@ -19,13 +19,27 @@ export async function submitBankDetails(req: Request, res: Response): Promise<vo
     res.status(400).json({ error: "bankName is required" });
     return;
   }
+
+  // The account holder name and MyKad are the identity the bank verification
+  // compares against, so they must come from the authenticated member's own
+  // profile — never from the request body, which a client could spoof to match
+  // any IC name. The frontend locks these fields to the same source.
+  const sessionUser = (req as AuthenticatedRequest).user;
+  const accountHolderName = (sessionUser?.name || "").trim();
+  const myKadNumber = (sessionUser?.identificationNumber || "").trim();
+  if (!accountHolderName) {
+    res.status(400).json({ error: "A registered account holder name is required — complete your profile first." });
+    return;
+  }
+
   try {
+    const cleanPhone = paymentService.normalizeLocalPhoneNumber(phoneNumber);
     const paymentCase = await paymentService.submitBankDetails({
       caseId,
       bankName,
       accountNumber,
       accountHolderName,
-      phoneNumber,
+      phoneNumber: cleanPhone,
       myKadNumber,
     });
 
@@ -38,7 +52,7 @@ export async function submitBankDetails(req: Request, res: Response): Promise<vo
           bankName,
           accountNumber,
           accountHolderName: accountHolderName || "",
-          phoneNumber: phoneNumber || "",
+          phoneNumber: cleanPhone,
           myKadNumber: myKadNumber || "",
           encryptedBankDetails,
         },
@@ -46,7 +60,7 @@ export async function submitBankDetails(req: Request, res: Response): Promise<vo
           bankName,
           accountNumber,
           accountHolderName: accountHolderName || "",
-          phoneNumber: phoneNumber || "",
+          phoneNumber: cleanPhone,
           myKadNumber: myKadNumber || "",
           encryptedBankDetails,
           paymentCaseId: paymentCase.id,
@@ -239,6 +253,12 @@ export async function cancel(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: "Cancellation reason is required" });
     return;
   }
+  // Cancel is irreversible (status CANCELLED has no exit path), so only the
+  // approved statutory reason keys are accepted — no free-text passthrough.
+  if (!(reason.trim() in paymentService.CANCELLATION_REASONS)) {
+    res.status(400).json({ error: "An approved statutory cancellation reason is required" });
+    return;
+  }
   try {
     const paymentCase = await paymentService.cancelPayment(caseId, adminId, reason);
     res.json({ paymentCase });
@@ -364,11 +384,12 @@ export async function saveDefaultBankDetails(req: Request, res: Response): Promi
       res.status(400).json({ error: "bankName and accountNumber are required" });
       return;
     }
+    const cleanPhone = paymentService.normalizeLocalPhoneNumber(phoneNumber || user?.contactNumber);
     const result = await paymentService.saveMemberBankDetails(user?.userId || "", {
       bankName,
       accountNumber,
       accountHolderName: accountHolderName || user?.name || "",
-      phoneNumber: phoneNumber || user?.contactNumber || "",
+      phoneNumber: cleanPhone,
       myKadNumber: myKadNumber || user?.identificationNumber || "",
     });
     res.json({ success: true, savedAccount: result, message: "Bank details saved successfully." });
@@ -591,9 +612,7 @@ export async function rejectBank(req: Request, res: Response): Promise<void> {
     const paymentCase = await paymentService.rejectBankTransfer(caseId, errorReason, isCatA);
     res.json({
       paymentCase,
-      message: isCatA
-        ? "Transfer marked as Transfer Rejected (recipient account issue)."
-        : "Transfer marked as Transfer Failed (gateway/switch issue).",
+      message: "Transfer marked as Transfer Failed by commercial bank gateway.",
     });
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -602,6 +621,15 @@ export async function rejectBank(req: Request, res: Response): Promise<void> {
     } else {
       res.status(400).json({ error: msg });
     }
+  }
+}
+
+export async function autoExecuteScheduledTransfers(_req: Request, res: Response): Promise<void> {
+  try {
+    const executedCount = await paymentService.checkAndAutoExecuteScheduledTransfers();
+    res.json({ executedCount, message: `Auto-executed ${executedCount} scheduled transfers.` });
+  } catch (e: unknown) {
+    res.status(500).json({ error: (e as Error).message });
   }
 }
 

@@ -3,6 +3,7 @@ import classNames from 'classnames';
 
 export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "prefix"> {
   label: string;
+  requiredIndicator?: boolean;
   error?: string;
   prefix?: React.ReactNode;
   prefixClassName?: string;
@@ -12,6 +13,7 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
 
 export const Input: React.FC<InputProps> = ({
   label,
+  requiredIndicator,
   error,
   prefix,
   prefixClassName,
@@ -29,11 +31,14 @@ export const Input: React.FC<InputProps> = ({
       <label 
         htmlFor={inputId}
         className={classNames(
-          "text-xs font-medium absolute top-2 left-5 z-10 pointer-events-none transition-colors",
+          "text-xs font-medium absolute top-2 left-5 z-10 pointer-events-none transition-colors flex items-center gap-1",
           error ? "text-md-error" : "text-md-on-surface-variant"
         )}
       >
-        {label}
+        <span>{label}</span>
+        {requiredIndicator && (
+          <span className="text-rose-500 font-bold ml-0.5" aria-hidden="true">*</span>
+        )}
       </label>
       <div className="relative flex items-center w-full">
         {prefix && (

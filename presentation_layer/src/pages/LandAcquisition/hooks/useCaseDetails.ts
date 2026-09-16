@@ -5,6 +5,7 @@ import {
   CASE_STATUS_CLASS_MAP as statusClassMap,
   CASE_STATUS_LABEL_MAP as statusLabelMap,
 } from "../../../constants";
+import { formatCurrencyRM } from "../../../utils/currency";
 
 export function useCaseDetails(caseId: string | null | undefined) {
   const [caseData, setCaseData] = useState<CaseDetailsData | null>(null);
@@ -37,7 +38,7 @@ export function useCaseDetails(caseId: string | null | undefined) {
         projectPurpose: c.project?.purpose || "—",
         projectBudget:
           c.project?.budget != null
-            ? `RM ${Number(c.project.budget).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            ? formatCurrencyRM(c.project.budget)
             : "—",
         fundingSource:
           c.project?.fundingSource === "GOVERNMENT"

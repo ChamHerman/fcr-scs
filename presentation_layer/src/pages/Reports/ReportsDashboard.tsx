@@ -143,12 +143,17 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
           totalPayments: 18,
           totalCompensationAmount: 3850000,
           totalPaidAmount: 2450000,
+          totalSettledAmount: 2900000,
           totalBlockchainRecords: 14,
           publishedBlockchainRecords: 12,
           readyToPublishBlockchainRecords: 2,
           completedCases: 9,
-          pendingValuation: 6,
-          pendingCompensation: 4,
+          activeCases: 15,
+          inValuation: 6,
+          inCompensation: 5,
+          inOffer: 3,
+          inPayment: 1,
+          rejectedCases: 0,
         },
         caseStatusDistribution: {
           "CASE_REGISTERED": 4,
@@ -158,18 +163,17 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
           "PAYMENT_COMPLETED": 6
         },
         paymentStatusDistribution: {
-          "Paid": { count: 12, total: 2450000 },
-          "Approved": { count: 4, total: 950000 },
-          "Transfer Initiated": { count: 2, total: 450000 }
+          "PAID": { count: 12, total: 2450000 },
+          "READY_TO_INITIATE": { count: 4, total: 950000 },
+          "BANK_DETAILS_AND_M1_PENDING": { count: 2, total: 450000 }
         },
         blockchainStatusDistribution: {
-          "Published": 12,
-          "Ready to Publish": 2
+          "PUBLISHED": 12,
+          "READY_TO_PUBLISH": 2
         },
         monthlyTrends: {
           "Feb": 4, "Mar": 8, "Apr": 14, "May": 19, "Jun": 21, "Jul": 26, "Aug": 24
         },
-        recentActivity: []
       });
     } finally {
       setLoading(false);
@@ -409,9 +413,9 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
         {!reportCategory && (
           <>
             <StatCard icon={<FolderKanban size={16} className="text-[#6750A4]" />} label="Total Acquisition Cases" value={data?.kpis.totalCases ?? 0} sub={`${data?.kpis.completedCases ?? 0} Completed / Closed`} />
-            <StatCard icon={<CreditCard size={16} className="text-[#1e7b4a]" />} label="Total Paid Out" value={`RM ${((data?.kpis.totalPaidAmount || 0) / 1000000).toFixed(2)}M`} sub={`Out of RM ${((data?.kpis.totalCompensationAmount || 0) / 1000000).toFixed(2)}M Approved`} />
-            <StatCard icon={<ShieldCheck size={16} className="text-[#0b5b8c]" />} label="Blockchain Notarized" value={data?.kpis.publishedBlockchainRecords ?? 0} sub="Ethereum Sepolia Verified" />
-            <StatCard icon={<TrendingUp size={16} className="text-[#a8600b]" />} label="Pipeline In Review" value={(data?.kpis.pendingValuation ?? 0) + (data?.kpis.pendingCompensation ?? 0)} sub="Needs review / approval" />
+            <StatCard icon={<CreditCard size={16} className="text-[#1e7b4a]" />} label="Total Paid Out" value={`RM ${((data?.kpis.totalSettledAmount || 0) / 1000000).toFixed(2)}M`} sub={`of RM ${((data?.kpis.totalCompensationAmount || 0) / 1000000).toFixed(2)}M payment volume`} />
+            <StatCard icon={<ShieldCheck size={16} className="text-[#0b5b8c]" />} label="Blockchain Notarized" value={data?.kpis.publishedBlockchainRecords ?? 0} sub={`${data?.kpis.readyToPublishBlockchainRecords ?? 0} ready to publish`} />
+            <StatCard icon={<TrendingUp size={16} className="text-[#a8600b]" />} label="Active Pipeline" value={data?.kpis.activeCases ?? 0} sub="Cases not yet closed" />
           </>
         )}
       </div>

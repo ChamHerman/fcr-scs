@@ -491,7 +491,13 @@ export async function createCase(input: CreateCaseInput) {
       },
     });
 
-    // 4. Create Owners and Ownerships
+    // 4. Validate and Create Owners and Ownerships
+    const ownerNrics = owners.map((o) => (o.nric || "").replace(/\D/g, "")).filter(Boolean);
+    const uniqueNrics = new Set(ownerNrics);
+    if (uniqueNrics.size !== ownerNrics.length) {
+      throw new Error("Duplicate identification number (NRIC) detected across multiple owners. Each owner must have a unique NRIC.");
+    }
+
     for (const ownerInput of owners) {
       let dbOwner = await tx.landOwner.findFirst({
         where: { nric: ownerInput.nric },
@@ -626,16 +632,25 @@ export async function updateOwnerInformation(caseId: string, ownersInput: any[])
 
   const landId = existing.landParcel.landId;
 
+  const ownerNrics = (ownersInput || [])
+    .map((o) => (o.nric || o.icNumber || "").replace(/\D/g, ""))
+    .filter(Boolean);
+  const uniqueNrics = new Set(ownerNrics);
+  if (uniqueNrics.size !== ownerNrics.length) {
+    throw new Error("Duplicate identification number (NRIC) detected across multiple owners. Each owner must have a unique NRIC.");
+  }
+
   return prisma.$transaction(async (tx) => {
     const updatedOwnerIds: string[] = [];
+    const activeOwnershipIds: string[] = [];
 
     for (const ownerInput of ownersInput) {
-      const nric = ownerInput.nric || ownerInput.icNumber;
-      const contact = ownerInput.contact || ownerInput.phone;
-      const email = ownerInput.email || null;
-      const share = ownerInput.share || "1/1";
-      const name = ownerInput.name;
-      const address = ownerInput.address;
+      const nric = (ownerInput.nric || ownerInput.icNumber || "").trim();
+      const contact = (ownerInput.contact || ownerInput.phone || "").trim();
+      const email = ownerInput.email ? ownerInput.email.trim() : null;
+      const share = ownerInput.share || (ownersInput.length === 1 ? "100" : "50");
+      const name = (ownerInput.name || "").trim();
+      const address = (ownerInput.address || "").trim();
       const ownershipType = parseOwnershipType(ownerInput.ownershipType);
 
       if (!nric) continue;
@@ -674,27 +689,39 @@ export async function updateOwnerInformation(caseId: string, ownersInput: any[])
       });
 
       if (existingOwnership) {
-        await tx.landOwnership.update({
+        const updatedOwnership = await tx.landOwnership.update({
           where: { ownershipId: existingOwnership.ownershipId },
           data: {
             ownershipType,
-            share,
+            share: String(share),
             isCurrent: true,
           },
         });
+        activeOwnershipIds.push(updatedOwnership.ownershipId);
       } else {
-        await tx.landOwnership.create({
+        const newOwnership = await tx.landOwnership.create({
           data: {
             landId,
             ownerId: dbOwner.ownerId,
             ownershipType,
-            share,
+            share: String(share),
             ownershipStart: new Date(),
             isCurrent: true,
             createdById: existing.createdById,
           },
         });
+        activeOwnershipIds.push(newOwnership.ownershipId);
       }
+    }
+
+    // Clean up any ownerships for this land parcel that were removed
+    if (activeOwnershipIds.length > 0) {
+      await tx.landOwnership.deleteMany({
+        where: {
+          landId,
+          ownershipId: { notIn: activeOwnershipIds },
+        },
+      });
     }
 
     return tx.landParcel.findUnique({

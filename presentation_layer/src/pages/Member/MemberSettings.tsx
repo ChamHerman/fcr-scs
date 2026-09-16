@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   User, 
@@ -12,30 +12,32 @@ import {
   Lock,
   Phone,
   Mail,
-  FileBadge
+  FileBadge,
+  AlertCircle,
+  Hash
 } from 'lucide-react';
+import gsap from 'gsap';
 import { useAuth } from '../../context/AuthContext';
 import { useRole } from '../../hooks/useRole';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { paymentApi } from '../../services/paymentApi';
-import { normalizeContactNumber } from './components/BankDetailsForm';
+import { formatLocalContactNumber } from './components/BankDetailsForm';
+import { 
+  SUPPORTED_MALAYSIAN_BANKS, 
+  getBankRule, 
+  validateBankAccNumber,
+  isAccountAttributionError,
+  ACCOUNT_ATTRIBUTION_HINT,
+} from './components/bankValidation';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Select, type SelectOption } from '../../components/ui/Select';
 import { ConfirmSubmitModal, ConfirmRow } from '../../components/member/ConfirmSubmitModal';
 
-const MALAYSIAN_BANKS: SelectOption[] = [
-  { value: 'Maybank', label: 'Maybank (Malayan Banking Berhad)' },
-  { value: 'CIMB Bank', label: 'CIMB Bank Berhad' },
-  { value: 'Public Bank', label: 'Public Bank Berhad' },
-  { value: 'RHB Bank', label: 'RHB Bank Berhad' },
-  { value: 'Hong Leong Bank', label: 'Hong Leong Bank Berhad' },
-  { value: 'AmBank', label: 'AmBank (M) Berhad' },
-  { value: 'Bank Islam', label: 'Bank Islam Malaysia Berhad' },
-  { value: 'Affin Bank', label: 'Affin Bank Berhad' },
-  { value: 'Alliance Bank', label: 'Alliance Bank Malaysia Berhad' },
-  { value: 'OCBC Bank Malaysia', label: 'OCBC Bank (Malaysia) Berhad' },
-];
+const MALAYSIAN_BANKS: SelectOption[] = SUPPORTED_MALAYSIAN_BANKS.map((b) => ({
+  value: b.key,
+  label: b.name,
+}));
 
 export const MemberSettings: React.FC = () => {
   const { user } = useAuth();
@@ -50,11 +52,29 @@ export const MemberSettings: React.FC = () => {
   // Form State for default payout bank details
   const [bankName, setBankName] = useState<string>('Maybank');
   const [accountNumber, setAccountNumber] = useState<string>('');
-  const [accountHolderName, setAccountHolderName] = useState<string>(user?.name || userName || '');
-  const [myKadNumber, setMyKadNumber] = useState<string>(user?.identificationNumber || identificationNumber || '');
-  const [phoneNumber, setPhoneNumber] = useState<string>(normalizeContactNumber(user?.contactNumber));
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  // Server-side rejection of the number itself (already attributed to another
+  // beneficiary), kept separate from local format validation.
+  const [serverAccountError, setServerAccountError] = useState<string | null>(null);
+  const [phoneNumber, setPhoneNumber] = useState<string>(formatLocalContactNumber(user?.contactNumber));
+  
+  // Real-time interaction tracking
+  const [accountTouched, setAccountTouched] = useState<boolean>(false);
+  const [phoneTouched, setPhoneTouched] = useState<boolean>(false);
+
+  const accInputRef = useRef<HTMLDivElement>(null);
+  const nameInputRef = useRef<HTMLDivElement>(null);
+  const phoneInputRef = useRef<HTMLDivElement>(null);
+  const validationCardRef = useRef<HTMLDivElement>(null);
+
   const [showSaveConfirm, setShowSaveConfirm] = useState<boolean>(false);
+
+  // Locked to the registered profile identity, mirroring effectiveMyKad: bank
+  // verification assumes the IC name and the account holder name are the same
+  // person, so the member must not be able to type a different one.
+  const effectiveHolderName = (user?.name || userName || '').trim();
+  const hasProfileName = effectiveHolderName.length > 0;
+
+  const effectiveMyKad = (user?.identificationNumber || identificationNumber || '').trim();
 
   useEffect(() => {
     let isMounted = true;
@@ -69,9 +89,8 @@ export const MemberSettings: React.FC = () => {
             const acc = list[0];
             setBankName(acc.bankName || 'Maybank');
             setAccountNumber(acc.accountNumber || '');
-            if (acc.accountHolderName) setAccountHolderName(acc.accountHolderName);
-            if (acc.myKadNumber) setMyKadNumber(acc.myKadNumber);
-            if (acc.phoneNumber) setPhoneNumber(normalizeContactNumber(acc.phoneNumber));
+            if (acc.phoneNumber) setPhoneNumber(formatLocalContactNumber(acc.phoneNumber));
+            setServerAccountError(null);
           }
         }
       } catch {
@@ -84,24 +103,86 @@ export const MemberSettings: React.FC = () => {
     return () => { isMounted = false; };
   }, []);
 
-  // FR-017: Save validates the form and opens the confirmation dialog; the
-  // dialog's Confirm performs the actual save.
+  // Pre-fill contact number from the profile. The holder name is locked to the
+  // registered name (see effectiveHolderName), so it is never editable state.
+  useEffect(() => {
+    if (user?.contactNumber) setPhoneNumber((prev) => prev || formatLocalContactNumber(user.contactNumber));
+  }, [user]);
+
+  // Bank rule and real-time account validation
+  const currentBankRule = useMemo(() => getBankRule(bankName), [bankName]);
+  const accValidation = useMemo(
+    () => validateBankAccNumber(bankName, accountNumber),
+    [bankName, accountNumber]
+  );
+
+  // Real-time error conditions. A server rejection of the number itself wins
+  // over the local format state, so the green card cannot mask it.
+  const showServerAccountError = Boolean(serverAccountError);
+  const showAccountError = !showServerAccountError && accountTouched && !accValidation.isValid;
+  const showAccountSuccess = !showServerAccountError && accountTouched && accValidation.isValid;
+  const showNameError = !hasProfileName;
+  const showPhoneError = phoneTouched && (!phoneNumber.trim() || phoneNumber.trim().replace(/\D/g, '').length < 9);
+
+  // Form validity gate — all fields required (no checkboxes for default settings)
+  const isFormValid = Boolean(
+    bankName &&
+      accValidation.isValid &&
+      hasProfileName &&
+      effectiveMyKad.length > 0 &&
+      phoneNumber.trim().replace(/\D/g, '').length >= 9
+  );
+
+  const triggerShake = (targetRef: React.RefObject<HTMLDivElement | null>) => {
+    if (targetRef.current) {
+      gsap.fromTo(
+        targetRef.current,
+        { x: -5 },
+        {
+          x: 0,
+          duration: 0.35,
+          ease: 'elastic.out(1, 0.3)',
+          clearProps: 'transform',
+        }
+      );
+    }
+  };
+
+  const handleAccountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (/[^\d\s-]/.test(val)) {
+      triggerShake(accInputRef);
+    }
+    setAccountNumber(val);
+    setAccountTouched(true);
+    setServerAccountError(null);
+  };
+
   const handleSaveBankDetails = async (e: React.FormEvent) => {
     e.preventDefault();
-    const errs: Record<string, string> = {};
-    if (!bankName) errs.bankName = 'Please select your bank institution';
-    if (!accountNumber || accountNumber.replace(/[^0-9]/g, '').length < 6) {
-      errs.accountNumber = 'Valid bank account number is required (min 6 digits)';
+    setAccountTouched(true);
+    setPhoneTouched(true);
+
+    let hasError = false;
+    if (!accValidation.isValid) {
+      triggerShake(accInputRef);
+      hasError = true;
     }
-    if (!accountHolderName.trim()) {
-      errs.accountHolderName = 'Account holder full name is required';
+    if (!hasProfileName) {
+      triggerShake(nameInputRef);
+      hasError = true;
     }
-    if (!myKadNumber.trim()) {
-      errs.myKadNumber = 'MyKad / NRIC is required';
+    if (!phoneNumber.trim() || phoneNumber.trim().replace(/\D/g, '').length < 9) {
+      triggerShake(phoneInputRef);
+      hasError = true;
     }
 
-    if (Object.keys(errs).length > 0) {
-      setErrors(errs);
+    if (hasError || !isFormValid) {
+      notify({
+        type: 'error',
+        title: 'Validation Incomplete',
+        message: 'Please fulfill all required bank account criteria before saving.',
+      });
       return;
     }
     setShowSaveConfirm(true);
@@ -109,16 +190,14 @@ export const MemberSettings: React.FC = () => {
 
   const handleConfirmedSave = async () => {
     setSaving(true);
-    setErrors({});
     try {
-      const effectiveMyKad = (user?.identificationNumber || identificationNumber || myKadNumber || '').trim();
-      const cleanPhone = normalizeContactNumber(phoneNumber);
+      const phoneToSubmit = formatLocalContactNumber(phoneNumber);
       await paymentApi.saveDefaultBankDetails({
         bankName,
-        accountNumber: accountNumber.trim(),
-        accountHolderName: accountHolderName.trim(),
+        accountNumber: accValidation.cleanedValue,
+        accountHolderName: effectiveHolderName,
         myKadNumber: effectiveMyKad,
-        phoneNumber: cleanPhone ? `+60${cleanPhone}` : '',
+        phoneNumber: phoneToSubmit,
       });
 
       notify({
@@ -132,10 +211,17 @@ export const MemberSettings: React.FC = () => {
       const res = await paymentApi.getSavedBankDetails();
       setSavedAccounts(res.savedAccounts || []);
     } catch (err: any) {
+      const message = err.message || 'Could not save bank details.';
+      if (isAccountAttributionError(message)) {
+        // Dismiss the confirmation dialog so the flagged field is reachable.
+        setShowSaveConfirm(false);
+        setServerAccountError(ACCOUNT_ATTRIBUTION_HINT);
+        triggerShake(accInputRef);
+      }
       notify({
         type: 'error',
         title: 'Save Failed',
-        message: err.message || 'Could not save bank details.',
+        message,
       });
     } finally {
       setSaving(false);
@@ -238,7 +324,12 @@ export const MemberSettings: React.FC = () => {
           )}
 
           {/* Form to update or set default bank account */}
-          <form onSubmit={handleSaveBankDetails} className="bg-md-surface-container border border-md-outline/15 rounded-xl p-5 sm:p-7 shadow-sm space-y-5">
+          <form
+            onSubmit={handleSaveBankDetails}
+            noValidate
+            autoComplete="off"
+            className="bg-md-surface-container border border-md-outline/15 rounded-xl p-5 sm:p-7 shadow-sm space-y-5"
+          >
             <div>
               <h2 className="text-base font-bold text-md-on-surface flex items-center gap-2">
                 <CreditCard size={18} className="text-md-primary" />
@@ -259,82 +350,207 @@ export const MemberSettings: React.FC = () => {
             {/* Bank Select */}
             <div>
               <Select
-                label="Bank Institution"
+                label="Malaysian Bank Institution"
+                requiredIndicator={true}
                 options={MALAYSIAN_BANKS}
                 value={bankName}
                 onChange={(val) => {
                   setBankName(val);
-                  if (errors.bankName) setErrors((prev) => ({ ...prev, bankName: '' }));
                 }}
-                error={errors.bankName}
+                disabled={saving}
               />
+              <p className="text-[11px] text-md-on-surface-variant mt-1 px-1">
+                Accepts all central bank (Bank Negara Malaysia) licensed commercial and Islamic banks.
+              </p>
             </div>
 
-            {/* Account Number */}
-            <Input
-              label="Account Number"
-              name="accountNumber"
-              value={accountNumber}
-              onChange={(e) => {
-                setAccountNumber(e.target.value);
-                if (errors.accountNumber) setErrors((prev) => ({ ...prev, accountNumber: '' }));
-              }}
-              placeholder="e.g. 114012345678"
-              error={errors.accountNumber}
-              className="font-mono"
-              required
-            />
-
-            {/* Holder & MyKad */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Bank Account Number with Interactive Validation UI */}
+            <div ref={accInputRef} className="space-y-1.5">
               <Input
-                label="Account Holder Full Name"
-                name="accountHolderName"
-                value={accountHolderName}
-                onChange={(e) => setAccountHolderName(e.target.value)}
-                placeholder="Full Name as per MyKad"
-                error={errors.accountHolderName}
-                required
+                label="Bank Account Number"
+                requiredIndicator={true}
+                name="fcr_default_account_num"
+                id="fcr-default-account-num"
+                type="text"
+                inputMode="numeric"
+                value={accountNumber}
+                onFocus={() => setAccountTouched(true)}
+                onBlur={() => setAccountTouched(true)}
+                onChange={handleAccountChange}
+                placeholder={currentBankRule?.placeholder || 'e.g. 114012345678'}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-lpignore="true"
+                data-form-type="other"
+                disabled={saving}
+                className="font-mono"
+                error={
+                  showServerAccountError
+                    ? serverAccountError!
+                    : showAccountError
+                    ? accValidation.statusMessage
+                    : undefined
+                }
+                inputClassName={
+                  showServerAccountError || showAccountError
+                    ? '!border-rose-500 !ring-2 !ring-rose-500/25 !text-rose-900 dark:!text-rose-100'
+                    : showAccountSuccess
+                    ? '!border-emerald-500 !ring-1 !ring-emerald-500/30'
+                    : ''
+                }
               />
+
+              {/* Server refused this number — it belongs to another beneficiary.
+                  The field's own error line above carries the instruction, so
+                  this card adds only the reason. */}
+              {showServerAccountError && (
+                <div
+                  role="alert"
+                  className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-900 dark:text-rose-200 flex items-start gap-2 animate-in fade-in"
+                >
+                  <AlertCircle size={16} className="text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                  <p className="text-[11px]">
+                    <strong>Why:</strong> each bank account may be registered to exactly one MyKad holder, so this number is already taken by someone else.
+                  </p>
+                </div>
+              )}
+
+              {/* Interactive State Feedback Box */}
+              {showAccountError && (
+                <div
+                  ref={validationCardRef}
+                  className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-900 dark:text-rose-200 transition-all duration-200 space-y-2 animate-in fade-in"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle size={16} className="text-rose-600 dark:text-rose-400 shrink-0" />
+                      <span className="text-xs font-semibold">{accValidation.statusMessage}</span>
+                    </div>
+                    <div className="shrink-0 flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-700 dark:text-rose-300 font-mono text-[11px] font-bold">
+                      <Hash size={12} />
+                      <span>
+                        {accValidation.currentLength}/{accValidation.targetLength}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-rose-800/80 dark:text-rose-300/80 pt-1 border-t border-rose-500/20">
+                    <span>
+                      <strong>Condition:</strong> {accValidation.ruleMessage}
+                    </span>
+                    <span className="font-semibold text-rose-600 dark:text-rose-400">
+                      {accValidation.digitsLeft > 0
+                        ? `${accValidation.digitsLeft} digits left to fulfill condition`
+                        : 'Account format invalid'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {showAccountSuccess && (
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-800 dark:text-emerald-300 flex items-center justify-between gap-2 text-xs font-medium">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span>Valid {currentBankRule?.key || bankName} online banking account format</span>
+                  </div>
+                  <span className="font-mono font-bold text-[11px] bg-emerald-500/20 px-2 py-0.5 rounded text-emerald-700 dark:text-emerald-300">
+                    {accValidation.currentLength} digits ✓
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Locked Account Holder Name & Locked MyKad — both mirror the
+                registered profile identity. */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div ref={nameInputRef}>
+                <Input
+                  label="Registered Account Holder Full Name"
+                  requiredIndicator={true}
+                  name="accountHolderName"
+                  type="text"
+                  value={effectiveHolderName}
+                  readOnly={true}
+                  disabled={true}
+                  autoComplete="off"
+                  placeholder="As per your registered MyKad name"
+                  error={
+                    showNameError
+                      ? 'Complete your registered name in your profile before saving bank details.'
+                      : undefined
+                  }
+                  inputClassName={
+                    showNameError
+                      ? '!border-rose-500 !ring-2 !ring-rose-500/25 !text-rose-900 dark:!text-rose-100'
+                      : ''
+                  }
+                  suffix={<Lock size={14} />}
+                />
+              </div>
 
               <div>
                 <Input
                   label="MyKad / Identification Number"
+                  requiredIndicator={true}
                   name="myKadNumber"
-                  value={user?.identificationNumber || identificationNumber || myKadNumber}
+                  type="text"
+                  value={effectiveMyKad}
                   readOnly={true}
                   disabled={true}
+                  autoComplete="off"
+                  className="font-mono"
                   suffix={<Lock size={14} />}
-                  required
                 />
-                <p className="text-[11px] text-md-on-surface-variant mt-1 flex items-center gap-1">
-                  <Lock size={12} className="text-md-primary shrink-0" />
-                  <span>Verified citizen identification number (Immutable)</span>
-                </p>
               </div>
             </div>
 
-            {/* Phone */}
-            <Input
-              label="Contact Phone Number"
-              name="phoneNumber"
-              type="tel"
-              inputMode="numeric"
-              autoComplete="tel-national"
-              value={phoneNumber}
-              onChange={(e) => setPhoneNumber(normalizeContactNumber(e.target.value))}
-              placeholder="172178475"
-              prefix="+60"
-              aria-label="Contact Phone Number, country code +60"
-              className="font-mono"
-            />
+            {/* Contact Number (Replaced label, removed +60 prefix) */}
+            <div ref={phoneInputRef}>
+              <Input
+                label="Contact Number"
+                requiredIndicator={true}
+                name="contactNumber"
+                type="tel"
+                inputMode="numeric"
+                value={phoneNumber}
+                onFocus={() => setPhoneTouched(true)}
+                onBlur={() => setPhoneTouched(true)}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/[^\d-]/g, '');
+                  setPhoneNumber(val);
+                  setPhoneTouched(true);
+                }}
+                placeholder="0160365985"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                error={
+                  showPhoneError
+                    ? !phoneNumber.trim()
+                      ? 'Contact number is required'
+                      : 'Contact number requires at least 9 digits (e.g. 0160365985)'
+                    : undefined
+                }
+                inputClassName={
+                  showPhoneError
+                    ? '!border-rose-500 !ring-2 !ring-rose-500/25 !text-rose-900 dark:!text-rose-100'
+                    : ''
+                }
+                disabled={saving}
+                className="font-mono"
+              />
+            </div>
 
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-md-outline/10">
               <Button
                 type="submit"
                 variant="filled"
-                disabled={saving}
-                className="w-full sm:w-auto"
+                disabled={!isFormValid || saving}
+                className={`w-full sm:w-auto ${
+                  !isFormValid || saving ? 'opacity-50 cursor-not-allowed !pointer-events-auto' : ''
+                }`}
               >
                 <Save size={16} />
                 <span>Review & Save Default Payout Account</span>
@@ -386,7 +602,7 @@ export const MemberSettings: React.FC = () => {
                 <span>Mobile Contact</span>
               </div>
               <div className="font-mono font-semibold text-sm text-md-on-surface">
-                {user?.contactNumber || phoneNumber || '—'}
+                {formatLocalContactNumber(user?.contactNumber || phoneNumber) || '—'}
               </div>
             </div>
 
@@ -406,23 +622,27 @@ export const MemberSettings: React.FC = () => {
         isOpen={showSaveConfirm}
         title="Confirm Default Payout Account"
         loading={saving}
-        confirmLabel="Confirm & Save"
+        confirmLabel="Confirm & Save Default"
         onConfirm={handleConfirmedSave}
         onCancel={() => setShowSaveConfirm(false)}
         summary={
           <>
-            <ConfirmRow label="Bank" value={bankName} />
-            <ConfirmRow label="Account Number" value={accountNumber.trim()} mono />
-            <ConfirmRow label="Account Holder" value={accountHolderName.trim()} />
+            <ConfirmRow label="Bank" value={currentBankRule?.name || bankName} />
+            <ConfirmRow
+              label="Account Number"
+              value={accValidation.cleanedValue}
+              mono
+            />
+            <ConfirmRow label="Account Holder" value={effectiveHolderName} />
             <ConfirmRow
               label="MyKad"
-              value={user?.identificationNumber || identificationNumber || myKadNumber}
+              value={effectiveMyKad}
               mono
             />
             {phoneNumber.trim() && (
               <ConfirmRow
-                label="Phone"
-                value={`+60 ${normalizeContactNumber(phoneNumber)}`}
+                label="Contact Number"
+                value={formatLocalContactNumber(phoneNumber.trim())}
                 mono
               />
             )}

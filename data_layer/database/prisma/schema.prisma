@@ -145,6 +145,23 @@ model BlockchainRecord {
   @@map("blockchain_record")
 }
 
+// Cross-admin publish lock. A Sepolia publish takes minutes and happens in the
+// admin's browser (MetaMask sign + mine) BEFORE POST /publish is called, so the
+// lock must outlive a single request — hence a row, not a mutex.
+// Keyed by (caseId, milestone) so M1 and M2 of the same case are independent.
+// Deliberately has no deletedAt: a claim is transient state that is hard-deleted
+// on release or lazily ignored once older than the TTL.
+model PublishClaim {
+  caseId    String   @map("case_id") @db.VarChar(255)
+  milestone String
+  adminId   String   @map("admin_id") @db.Uuid
+  adminName String
+  claimedAt DateTime @default(now()) @map("claimed_at")
+
+  @@id([caseId, milestone])
+  @@map("publish_claim")
+}
+
 // id is a short human-readable payment id (PMT-XXXXXXXX), assigned by the application
 model PaymentCase {
   id                   String                 @id

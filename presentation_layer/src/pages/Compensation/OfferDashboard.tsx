@@ -10,6 +10,7 @@ import { SearchInput } from "../../components/ui/SearchInput";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { Pagination } from "../../components/ui/Pagination";
 import { useRole } from "../../hooks/useRole";
+import { formatCurrencyRM } from "../../utils/currency";
 import "../../index.css";
 import "./compensation.css";
 
@@ -204,8 +205,8 @@ export const OfferDashboard: React.FC = () => {
     navigate("/admin/compensation/offer/review", { state: { offerId } });
   };
 
-  const formatCurrency = (val: number) => {
-    return "RM " + val.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const formatCurrency = (val: number | string | null | undefined) => {
+    return formatCurrencyRM(val);
   };
 
   // 4. Metrics dynamically derived directly from filtered data

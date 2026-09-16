@@ -3,6 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import * as crypto from "crypto";
 import * as ethereum from "./ethereum.service";
+import { claimCutoff, isClaimLive } from "../utils/publish-claim";
 
 if (!process.env.DATABASE_URL) {
   if (process.env.ALLOW_DEV_DB_FALLBACK === "true") {
@@ -113,11 +114,126 @@ export async function assertM1GracePeriodElapsed(caseId: string) {
   if (!offer?.acceptedAt) return;
   const graceEndsAt = new Date(offer.acceptedAt).getTime() + ACCEPTANCE_GRACE_PERIOD_MS;
   if (Date.now() < graceEndsAt) {
-    const minutesLeft = Math.ceil((graceEndsAt - Date.now()) / 60_000);
+    const msLeft = graceEndsAt - Date.now();
+    const secondsLeft = Math.max(1, Math.ceil(msLeft / 1000));
+    const minutesLeft = Math.ceil(secondsLeft / 60);
+    const timeLeftStr = secondsLeft < 60 ? `${secondsLeft} second(s)` : `${minutesLeft} minute(s)`;
     throw new Error(
-      `Milestone 1 publication is locked: the 24-hour acceptance grace period for ${caseId} ends in ${minutesLeft} minute(s).`
+      `Milestone 1 publication is locked: the 24-hour acceptance grace period for ${caseId} ends in ${timeLeftStr}.`
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// Cross-admin publish claim
+// ---------------------------------------------------------------------------
+// The minutes a publish takes are spent in the clicking admin's browser
+// (MetaMask approval + mining), before POST /publish ever fires. A mutex inside
+// that request would therefore cover nothing, so the lock is a row keyed by
+// (caseId, milestone) that outlives the request and expires lazily.
+
+export class PublishClaimHeldByError extends Error {
+  readonly holderAdminId: string;
+  readonly holderAdminName: string;
+  readonly holderClaimedAt: Date;
+
+  constructor(holderAdminId: string, holderAdminName: string, holderClaimedAt: Date) {
+    super(
+      `${holderAdminName || "Another government administrator"} is currently publishing this record. Try again once they finish.`
+    );
+    this.name = "PublishClaimHeldByError";
+    this.holderAdminId = holderAdminId;
+    this.holderAdminName = holderAdminName;
+    this.holderClaimedAt = holderClaimedAt;
+  }
+}
+
+/**
+ * Take the publish lock for one (caseId, milestone). Throws
+ * PublishClaimHeldByError when another admin holds a live claim.
+ *
+ * The stale sweep and the insert are two statements, which is safe: the
+ * composite primary key is the arbiter, so concurrent claims cannot both
+ * succeed — the loser hits P2002 and is reported the winner's identity.
+ */
+export async function claimPublish(params: {
+  caseId: string;
+  milestone?: string | null;
+  adminId: string;
+  adminName: string;
+}) {
+  const milestone = normalizeMilestone(params.milestone);
+  const now = Date.now();
+
+  // Free an expired claim, or this admin's own leftover row after a reload.
+  await prisma.publishClaim.deleteMany({
+    where: {
+      caseId: params.caseId,
+      milestone,
+      OR: [{ claimedAt: { lt: claimCutoff(now) } }, { adminId: params.adminId }],
+    },
+  });
+
+  try {
+    return await prisma.publishClaim.create({
+      data: {
+        caseId: params.caseId,
+        milestone,
+        adminId: params.adminId,
+        adminName: params.adminName,
+        claimedAt: new Date(now),
+      },
+    });
+  } catch (e: unknown) {
+    if ((e as { code?: string })?.code === "P2002") {
+      const holder = await prisma.publishClaim.findUnique({
+        where: { caseId_milestone: { caseId: params.caseId, milestone } },
+      });
+      if (holder) {
+        throw new PublishClaimHeldByError(holder.adminId, holder.adminName, holder.claimedAt);
+      }
+    }
+    throw e;
+  }
+}
+
+/**
+ * Release a claim. Scoped to the holder so one admin can never unlock a record
+ * another is mid-way through publishing. Idempotent — returns rows deleted.
+ */
+export async function releasePublishClaim(params: {
+  caseId: string;
+  milestone?: string | null;
+  adminId: string;
+}): Promise<number> {
+  const milestone = normalizeMilestone(params.milestone);
+  const res = await prisma.publishClaim.deleteMany({
+    where: { caseId: params.caseId, milestone, adminId: params.adminId },
+  });
+  return res.count;
+}
+
+/** Live claims only. Doubles as the stale sweep, since nothing else reaps them. */
+export async function getPublishClaims() {
+  const now = Date.now();
+  await prisma.publishClaim.deleteMany({ where: { claimedAt: { lt: claimCutoff(now) } } });
+  const claims = await prisma.publishClaim.findMany({ orderBy: { claimedAt: "asc" } });
+  return claims.filter((c) => isClaimLive(c.claimedAt, now));
+}
+
+/** Throws when a live claim is held by someone other than `adminId`. */
+export async function assertNotClaimedByOther(
+  caseId: string,
+  milestone: Milestone,
+  adminId?: string
+) {
+  if (!adminId) return;
+  const claim = await prisma.publishClaim.findUnique({
+    where: { caseId_milestone: { caseId, milestone } },
+  });
+  if (!claim || !isClaimLive(claim.claimedAt)) return;
+  if (claim.adminId === adminId) return;
+  throw new PublishClaimHeldByError(claim.adminId, claim.adminName, claim.claimedAt);
 }
 
 export async function publishRecord(params: {
@@ -126,6 +242,7 @@ export async function publishRecord(params: {
   documentHash: string;
   transactionHash: string;
   onChainKey?: string;
+  adminId?: string;
 }) {
   const { caseId, documentHash, transactionHash } = params;
   const milestone = normalizeMilestone(params.milestone);
@@ -148,8 +265,12 @@ export async function publishRecord(params: {
     }
     if (existing.status === BlockchainStatus.READY_TO_PUBLISH) {
       await assertRecordedOnChain(transactionHash);
-      record = await prisma.blockchainRecord.update({
-        where: { id: existing.id },
+      // First-write-wins: the status is re-checked inside the UPDATE itself, so
+      // two admins who both read READY_TO_PUBLISH cannot both record. A plain
+      // update-by-id let the later request silently overwrite the earlier
+      // transactionHash and orphan its on-chain anchor.
+      const updated = await prisma.blockchainRecord.updateMany({
+        where: { id: existing.id, status: BlockchainStatus.READY_TO_PUBLISH },
         data: {
           status: BlockchainStatus.PUBLISHED,
           transactionHash,
@@ -159,6 +280,16 @@ export async function publishRecord(params: {
           deletedAt: null,
         },
       });
+      if (updated.count === 0) {
+        throw new Error(
+          `Record already published for this case (${milestone === "AWARD" ? "Milestone 1 Award" : "Milestone 2 Settlement"})`
+        );
+      }
+      const persisted = await prisma.blockchainRecord.findUnique({ where: { id: existing.id } });
+      if (!persisted) {
+        throw new Error("Published record could not be re-read after the atomic update");
+      }
+      record = persisted;
     } else {
       throw new Error(
         `Record already published for this case (${milestone === "AWARD" ? "Milestone 1 Award" : "Milestone 2 Settlement"})`
@@ -208,6 +339,16 @@ export async function publishRecord(params: {
       });
     } catch (err) {
       console.error("[blockchain_service] Error closing acquisition case on M2 publish:", err);
+    }
+  }
+
+  // The publish succeeded, so this admin no longer needs the lock. Best-effort:
+  // a failed release is covered by the TTL rather than failing the publish.
+  if (params.adminId) {
+    try {
+      await releasePublishClaim({ caseId, milestone, adminId: params.adminId });
+    } catch (err) {
+      console.error("[blockchain_service] Error releasing publish claim:", err);
     }
   }
 

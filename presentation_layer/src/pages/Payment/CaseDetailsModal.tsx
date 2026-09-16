@@ -15,6 +15,7 @@ import { Button } from '../../components/ui/Button';
 import { landAcquisitionApi } from '../../services/landAcquisitionApi';
 import { CASE_STATUS_CLASS_MAP, CASE_STATUS_LABEL_MAP } from '../../constants/landAcquisition';
 import { formatDateTime } from '../../utils/dateFormat';
+import { formatCurrencyRM } from '../../utils/currency';
 interface CaseDetailsModalProps {
   caseId: string | null;
   onClose: () => void;
@@ -59,10 +60,7 @@ export const CaseDetailsModal: React.FC<CaseDetailsModalProps> = ({ caseId, onCl
     };
   }, [caseId]);
 
-  const fmtCurrency = (val?: number | string | null) =>
-    val != null && !isNaN(Number(val))
-      ? `RM ${Number(val).toLocaleString('en-MY', { minimumFractionDigits: 2 })}`
-      : 'RM 0.00';
+  const fmtCurrency = (val?: number | string | null) => formatCurrencyRM(val);
 
   const project = caseData?.project;
   const landParcel = caseData?.landParcel;

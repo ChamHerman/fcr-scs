@@ -315,6 +315,22 @@ export const MemberOfferLetter: React.FC = () => {
         parcelOwners.length > 0
           ? parcelOwners.map((ow: any) => ow.nric).join(', ')
           : o.landOwnership?.landOwner?.nric || identificationNumber || '—';
+      const matchingOwner =
+        (userIcClean
+          ? parcelOwners.find(
+              (ow: any) =>
+                (ow.nric || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === userIcClean.toLowerCase()
+            )
+          : null) ||
+        parcelOwners.find((ow: any) => ow.ownerId === user?.userId || ow.landOwnerId === user?.userId) ||
+        parcelOwners[0] ||
+        o.landOwnership?.landOwner;
+
+      const declarationOwnerName =
+        matchingOwner?.name || userName || user?.name || parcelOwners[0]?.name || 'Land Owner';
+      const declarationOwnerIc =
+        matchingOwner?.nric || identificationNumber || user?.identificationNumber || parcelOwners[0]?.nric || '—';
+
       const ownerAddress = o.landOwnership?.landOwner?.address || parcelOwners[0]?.address || 'Registered Address on File';
       const ownerPhone =
         parcelOwners.length > 0
@@ -333,6 +349,8 @@ export const MemberOfferLetter: React.FC = () => {
           c?.project?.acquiringAgency || 'Department of Lands and Mines (JKPTG)',
         ownerName,
         ownerIc,
+        declarationOwnerName,
+        declarationOwnerIc,
         ownerAddress,
         ownerPhone,
         landTitle: lp?.landTitleNo || '—',
@@ -537,6 +555,13 @@ export const MemberOfferLetter: React.FC = () => {
 
   const isOfferPending = !isOfferAccepted && !isOfferRejected;
 
+  // Active Objection from offer letter if rejected/disputed
+  const activeOfferObjection = useMemo(() => {
+    const objs = offer?.rawOffer?.objections;
+    if (objs && Array.isArray(objs) && objs.length > 0) return objs[0];
+    return null;
+  }, [offer]);
+
   // Days remaining calculation
   const daysRemaining = useMemo(() => {
     const rawExpiry = offer?.rawOffer?.expiryDate || offer?.expiryDate;
@@ -705,31 +730,6 @@ export const MemberOfferLetter: React.FC = () => {
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* CASE SWITCHER — always a dropdown, labels carry case details   */}
-      {/* ------------------------------------------------------------- */}
-      {casesList.length > 0 && (
-        <div className="bg-white border-b border-slate-200 px-4 sm:px-6 lg:px-8 py-3">
-          <div className="max-w-7xl mx-auto sm:w-[460px]">
-            <Select
-              label="Select Case"
-              placeholder="Select an acquisition case…"
-              options={casesList.map((c: any) => {
-                const lot = c.landParcel?.lotNo ? `Lot ${c.landParcel.lotNo}` : c.caseTitle || c.caseId;
-                const statusLabel = c.status ? String(c.status).replace(/_/g, ' ') : '';
-                return {
-                  value: c.caseId,
-                  label: `${c.caseId} — ${lot}${statusLabel ? ` [${statusLabel}]` : ''}`,
-                };
-              })}
-              value={selectedCaseId}
-              onChange={handleCaseChange}
-              wrapLabels
-            />
-          </div>
-        </div>
-      )}
-
-      {/* ------------------------------------------------------------- */}
       {/* MAIN CONTAINER                                                */}
       {/* ------------------------------------------------------------- */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
@@ -738,7 +738,7 @@ export const MemberOfferLetter: React.FC = () => {
           <div className="bg-white rounded-3xl p-16 border border-slate-200 text-center shadow-sm space-y-3">
             <div className="w-12 h-12 rounded-full border-4 border-violet-600 border-t-transparent animate-spin mx-auto" />
             <h3 className="text-sm font-bold text-slate-900">Retrieving Official Form H Offer Letter...</h3>
-            <p className="text-xs text-slate-500">Connecting to national land acquisition registry database</p>
+            <p className="text-xs text-slate-500">Connecting to national land acquisitio registry database</p>
           </div>
         ) : !offer ? (
           <div className="bg-white rounded-3xl p-16 border border-slate-200 text-center shadow-sm space-y-4">
@@ -1000,8 +1000,8 @@ export const MemberOfferLetter: React.FC = () => {
                         ? 'You have formally accepted this compensation award. You are currently in the statutory 24-hour cooling grace window.'
                         : 'You have formally accepted this compensation award and the cooling grace window has concluded.'
                       : isOfferRejected
-                      ? 'You have rejected this compensation award. You may file an objection for officer review and reassessment.'
-                      : 'Please download the Form G offer document below, sign the declaration, and upload the signed PDF before accepting.'}
+                      ? 'You have rejected this compensation award with a statutory Form N objection. It is currently under Land Administrator review.'
+                      : 'Please download the Form G offer document below, sign the declaration, and upload the signed PDF before accepting, or reject with objection.'}
                   </p>
                 </div>
 
@@ -1023,7 +1023,7 @@ export const MemberOfferLetter: React.FC = () => {
                 ) : isOfferRejected ? (
                   <div className="flex items-center gap-2">
                     <div className="px-3.5 py-1.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-bold flex items-center gap-1.5">
-                      <XCircle size={15} /> Offer Formally Rejected
+                      <AlertTriangle size={15} /> Rejected with Objection (Form N)
                     </div>
                   </div>
                 ) : null}
@@ -1098,7 +1098,7 @@ export const MemberOfferLetter: React.FC = () => {
                           className="border-rose-300 text-rose-700 hover:bg-rose-50 font-bold shrink-0 shadow-sm"
                         >
                           <XCircle size={16} className="text-rose-600" />
-                          <span>Cancel Acceptance (Grace Period)</span>
+                          <span>Cancel Acceptance</span>
                         </Button>
                       </div>
                     </div>
@@ -1155,6 +1155,107 @@ export const MemberOfferLetter: React.FC = () => {
                 </div>
               )}
 
+              {/* Rejected with Objection: Dedicated Objection Review & Status Card */}
+              {isOfferRejected && (
+                <div className="space-y-4">
+                  <div className="bg-gradient-to-br from-rose-50/90 via-rose-50/40 to-white p-5 rounded-2xl border border-rose-200/90 shadow-sm space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-rose-200/50 pb-3">
+                      <div className="flex items-center gap-2 text-sm font-bold text-rose-950">
+                        <AlertTriangle size={18} className="text-rose-600" />
+                        <span>Award Formally Rejected with Objection (Form N)</span>
+                      </div>
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-100/80 border border-rose-300/80 rounded-full text-xs font-semibold text-rose-900">
+                        <Clock size={13} className="text-rose-700 animate-pulse" />
+                        <span>
+                          {activeOfferObjection?.status === 'APPROVED'
+                            ? 'Objection Approved'
+                            : activeOfferObjection?.status === 'REJECTED'
+                            ? 'Objection Concluded'
+                            : 'Objection Under Land Administrator Review'}
+                        </span>
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      <div className="bg-white/90 p-3.5 rounded-xl border border-rose-200/60">
+                        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                          Original Offer Award
+                        </span>
+                        <span className="text-xs font-bold text-slate-700 mt-1 block">
+                          {formatCurrencyRM(offer.totalCompensation)}
+                        </span>
+                      </div>
+
+                      <div className="bg-white/90 p-3.5 rounded-xl border border-rose-200/60">
+                        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                          Requested Compensation
+                        </span>
+                        <span className="text-xs font-bold text-rose-700 mt-1 block font-mono">
+                          {activeOfferObjection?.requestedAmount
+                            ? formatCurrencyRM(Number(activeOfferObjection.requestedAmount))
+                            : 'Form N Objection Filed'}
+                        </span>
+                      </div>
+
+                      <div className="bg-white/90 p-3.5 rounded-xl border border-rose-200/60 sm:col-span-2 md:col-span-1">
+                        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                          Objection Reference
+                        </span>
+                        <span className="text-xs font-mono font-bold text-slate-900 mt-1 block truncate">
+                          {activeOfferObjection?.objectionId || 'Active Form N Filing'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Grounds & Details */}
+                    {activeOfferObjection?.objectionReason && (
+                      <div className="p-3.5 bg-white/90 rounded-xl border border-rose-200/60 text-xs text-slate-700 space-y-1">
+                        <span className="font-bold text-slate-900 block">Grounds for Objection:</span>
+                        <p className="italic text-slate-600 whitespace-pre-line">
+                          "{activeOfferObjection.objectionReason}"
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Supporting Documents if any */}
+                    {activeOfferObjection?.objectionDocuments && activeOfferObjection.objectionDocuments.length > 0 && (
+                      <div className="space-y-1.5 pt-1">
+                        <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block">
+                          Attached Supporting Documents ({activeOfferObjection.objectionDocuments.length})
+                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          {activeOfferObjection.objectionDocuments.map((doc: any) => (
+                            <div
+                              key={doc.documentId}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-xl border border-slate-200 text-xs font-medium text-slate-700 shadow-xs"
+                            >
+                              <FileText size={14} className="text-violet-600" />
+                              <span className="truncate max-w-[200px]">{doc.fileName}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
+                      <p className="text-xs text-rose-950/80 leading-relaxed">
+                        Your objection and dispute are being reviewed by the Land Administrator and Government Officer. You can track hearing schedules and valuation reassessments in the Objections tab.
+                      </p>
+
+                      <Button
+                        variant="outlined"
+                        size="md"
+                        onClick={() => navigate(`/member?caseId=${encodeURIComponent(offer.caseId)}&tab=objections`)}
+                        className="border-rose-300 text-rose-800 hover:bg-rose-50 font-bold shrink-0 shadow-sm"
+                      >
+                        <AlertTriangle size={16} className="text-rose-600" />
+                        <span>Track Objection in Portal</span>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Pending Acceptance: Upload & Action Buttons */}
               {isOfferPending && (
                 <div className="space-y-4">
@@ -1201,23 +1302,13 @@ export const MemberOfferLetter: React.FC = () => {
                   {/* Actions Row */}
                   <div className="flex items-center justify-end gap-3 flex-wrap pt-2">
                     <Button
-                      variant="outlined"
-                      size="md"
-                      onClick={handleOpenCreateObjection}
-                      className="w-full sm:w-auto"
-                    >
-                      <AlertTriangle size={16} className="text-amber-600" />
-                      <span>Submit Objection (Form N)</span>
-                    </Button>
-
-                    <Button
                       variant="danger"
                       size="md"
-                      onClick={() => setShowRejectModal(true)}
-                      className="w-full sm:w-auto"
+                      onClick={handleOpenCreateObjection}
+                      className="w-full sm:w-auto font-bold !bg-rose-600 hover:!bg-rose-700 text-white"
                     >
-                      <XCircle size={16} />
-                      <span>Reject Offer</span>
+                      <AlertTriangle size={16} />
+                      <span>Reject with Objection (Form N)</span>
                     </Button>
 
                     <Button
@@ -1225,7 +1316,7 @@ export const MemberOfferLetter: React.FC = () => {
                       size="md"
                       onClick={handleAcceptClick}
                       isLoading={submitting}
-                      className="w-full sm:w-auto"
+                      className="w-full sm:w-auto font-bold"
                     >
                       <CheckCircle2 size={16} />
                       <span>Accept Compensation Award</span>
@@ -1334,16 +1425,16 @@ export const MemberOfferLetter: React.FC = () => {
         onCloseObjectionModal={() => setShowObjectionPrompt(false)}
         onWithdrawObjectionAndAccept={handleWithdrawObjectionAndAccept}
         withdrawingObjection={withdrawingObjection}
-        // Reject
-        showRejectModal={showRejectModal}
-        onCloseRejectModal={() => setShowRejectModal(false)}
-        onConfirmReject={handleReject}
+        // Reject Modal disabled in favor of Reject with Objection (Form N)
+        showRejectModal={false}
+        onCloseRejectModal={() => {}}
+        onConfirmReject={() => {}}
         reason={reason}
         onReasonChange={(val) => { setReason(val); if (reasonError) setReasonError(''); }}
         reasonError={reasonError}
       />
 
-      {/* CREATE OBJECTION MODAL */}
+      {/* REJECT WITH OBJECTION MODAL (FORM N) */}
       <CreateObjectionModal
         isOpen={showCreateObjectionModal}
         onClose={() => setShowCreateObjectionModal(false)}
@@ -1351,6 +1442,8 @@ export const MemberOfferLetter: React.FC = () => {
         caseId={offer?.caseId}
         userId={user?.userId}
         onSuccess={loadOfferData}
+        title="Reject Offer with Objection (Form N)"
+        subtitle="Submit statutory Form N objection with your requested compensation amount and grounds for officer review"
       />
 
     </div>

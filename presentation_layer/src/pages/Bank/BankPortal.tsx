@@ -170,8 +170,8 @@ export default function BankPortal() {
       });
       notify({
         type: 'general',
-        title: isCatA ? 'Transfer Rejected (Category A)' : 'Transfer Failed (Category B)',
-        message: `Case ${rejectModalCase.caseId} marked ${isCatA ? 'Transfer Rejected' : 'Transfer Failed'}. Logged in Failed Transactions queue.`,
+        title: isCatA ? 'Transfer Failed (Category 1)' : 'Transfer Failed (Category 2)',
+        message: `Case ${rejectModalCase.caseId} marked Transfer Failed (${isCatA ? 'Category 1: Recipient Account Issue' : 'Category 2: Bank / Gateway Issue'}). Logged in Failed Transactions queue.`,
       });
       setRejectModalCase(null);
       loadData();

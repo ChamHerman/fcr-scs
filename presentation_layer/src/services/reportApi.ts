@@ -13,32 +13,27 @@ export interface DashboardOverviewData {
   kpis: {
     totalCases: number;
     totalPayments: number;
+    /** Total amount across all payment cases (the payment pipeline volume). */
     totalCompensationAmount: number;
+    /** Member-confirmed payments (PAID). */
     totalPaidAmount: number;
+    /** Money that left the bank (PAID + TRANSFER_SUCCEED). */
+    totalSettledAmount: number;
     totalBlockchainRecords: number;
     publishedBlockchainRecords: number;
     readyToPublishBlockchainRecords: number;
     completedCases: number;
-    pendingValuation: number;
-    pendingCompensation: number;
+    activeCases: number;
+    inValuation: number;
+    inCompensation: number;
+    inOffer: number;
+    inPayment: number;
+    rejectedCases: number;
   };
   caseStatusDistribution: Record<string, number>;
   paymentStatusDistribution: Record<string, { count: number; total: number }>;
   blockchainStatusDistribution: Record<string, number>;
   monthlyTrends: Record<string, number>;
-  recentActivity: Array<{
-    id: string;
-    title: string;
-    category: string;
-    location: string;
-    date: string;
-    status: string;
-    agingDays?: string;
-    bankDetails?: string;
-    bankReference?: string;
-    transactionHash?: string;
-    documentHash?: string;
-  }>;
 }
 
 export interface ReportGeneratedResponse {
