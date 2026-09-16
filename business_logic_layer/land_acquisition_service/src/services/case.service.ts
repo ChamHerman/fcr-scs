@@ -1,5 +1,5 @@
 import { prisma } from "../prisma";
-import { CaseStatus, AreaUnit, FundingSource, LandCategory, TenureType, OwnershipType, Prisma } from "@prisma/client";
+import { CaseStatus, AreaUnit, FundingSource, LandCategory, TenureType, OwnershipType, UserRole, Prisma } from "@prisma/client";
 import { CaseStateMachine } from "../utils/case-state.machine";
 import { parseLandCategory, parseTenureType, parseOwnershipType, formatOwnershipType } from "../utils/enum.utils";
 
@@ -442,6 +442,33 @@ export async function createCase(input: CreateCaseInput) {
     throw new Error(`Land title number '${land.landTitleNo}' already exists`);
   }
 
+  // Resolve valid createdById (must exist in user table to satisfy foreign keys)
+  let validCreatorId: string | undefined = createdById;
+  if (validCreatorId) {
+    const existingUser = await prisma.user.findUnique({
+      where: { userId: validCreatorId },
+    });
+    if (!existingUser || !existingUser.isActive) {
+      validCreatorId = undefined;
+    }
+  }
+
+  if (!validCreatorId) {
+    const fallbackUser = await prisma.user.findFirst({
+      where: {
+        role: { in: [UserRole.GOVERNMENT_OFFICER, UserRole.SYSTEM_ADMINISTRATOR, UserRole.GOVERNMENT_ADMINISTRATOR] },
+        isActive: true,
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!fallbackUser) {
+      throw new Error("No active system user found to associate with case creation.");
+    }
+    validCreatorId = fallbackUser.userId;
+  }
+
+  const finalCreatorId: string = validCreatorId;
+
   const result = await prisma.$transaction(async (tx) => {
     // Generate Case ID using LAC-YYYY-MM-XXXX format
     const caseId = customCaseId || await generateCaseId(tx);
@@ -456,7 +483,7 @@ export async function createCase(input: CreateCaseInput) {
         purpose: project.purpose,
         budget: project.budget,
         fundingSource: parseFundingSource(project.fundingSource),
-        createdById,
+        createdById: finalCreatorId,
       },
     });
 
@@ -469,7 +496,7 @@ export async function createCase(input: CreateCaseInput) {
         status: CaseStatus.CASE_REGISTERED,
         registrationDate: new Date(),
         remarks: remarks || "",
-        createdById,
+        createdById: finalCreatorId,
       },
     });
 
@@ -487,7 +514,7 @@ export async function createCase(input: CreateCaseInput) {
         areaUnit: parseAreaUnit(land.areaUnit),
         category: parseLandCategory(land.category),
         tenureType: parseTenureType(land.tenureType),
-        createdById,
+        createdById: finalCreatorId,
       },
     });
 
@@ -511,7 +538,7 @@ export async function createCase(input: CreateCaseInput) {
             address: ownerInput.address,
             contact: ownerInput.contact,
             email: ownerInput.email || null,
-            createdById,
+            createdById: finalCreatorId,
           },
         });
       } else {
@@ -534,7 +561,7 @@ export async function createCase(input: CreateCaseInput) {
           share: ownerInput.share || "1/1",
           ownershipStart: new Date(),
           isCurrent: true,
-          createdById,
+          createdById: finalCreatorId,
         },
       });
     }

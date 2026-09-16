@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
+import { UserRole } from '@prisma/client';
 import { prisma } from '../prisma';
 import { sendTemplatedEmail } from '../utils/email.service';
 import { logAudit } from '../services/audit.service';
@@ -384,6 +385,122 @@ export async function resolveIc(req: Request, res: Response): Promise<void> {
   } catch (error) {
     console.error('[Resolve IC Error]', error);
     res.status(500).json({ error: 'Failed to resolve IC identity' });
+  }
+}
+
+export async function lookupByIc(req: Request, res: Response): Promise<void> {
+  try {
+    const ic = req.params.ic as string;
+    if (!ic) {
+      res.status(400).json({ error: 'IC is required' });
+      return;
+    }
+
+    // Normalize to raw 12-digit format for lookup
+    const rawIc = ic.replace(/\D/g, '').slice(0, 12);
+    if (rawIc.length !== 12) {
+      res.status(400).json({ error: 'Invalid IC format. Must be 12 digits.' });
+      return;
+    }
+
+    const formattedIc = `${rawIc.slice(0, 6)}-${rawIc.slice(6, 8)}-${rawIc.slice(8)}`;
+
+    // 1. Check member table first (User table where role = DISPLACED_COMMUNITY_MEMBER or any member user)
+    let existingMember = await prisma.user.findFirst({
+      where: {
+        role: UserRole.DISPLACED_COMMUNITY_MEMBER,
+        OR: [
+          { identificationNumber: rawIc },
+          { identificationNumber: formattedIc },
+        ],
+      },
+      select: {
+        userId: true,
+        name: true,
+        address: true,
+        email: true,
+        contactNumber: true,
+      },
+    });
+
+    // If not found with DISPLACED_COMMUNITY_MEMBER role, also check if any User record matches the IC
+    if (!existingMember) {
+      existingMember = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { identificationNumber: rawIc },
+            { identificationNumber: formattedIc },
+          ],
+        },
+        select: {
+          userId: true,
+          name: true,
+          address: true,
+          email: true,
+          contactNumber: true,
+        },
+      });
+    }
+
+    if (existingMember) {
+      res.json({
+        success: true,
+        found: true,
+        source: 'member',
+        data: {
+          name: existingMember.name,
+          address: existingMember.address || '',
+          email: existingMember.email || '',
+          contactNumber: existingMember.contactNumber || '',
+          userId: existingMember.userId,
+        },
+      });
+      return;
+    }
+
+    // 2. Check land_owner table if not found in member table
+    const existingLandOwner = await prisma.landOwner.findFirst({
+      where: {
+        OR: [
+          { nric: rawIc },
+          { nric: formattedIc },
+        ],
+      },
+      select: {
+        ownerId: true,
+        name: true,
+        address: true,
+        email: true,
+        contact: true,
+      },
+    });
+
+    if (existingLandOwner) {
+      res.json({
+        success: true,
+        found: true,
+        source: 'land_owner',
+        data: {
+          name: existingLandOwner.name,
+          address: existingLandOwner.address || '',
+          email: existingLandOwner.email || '',
+          contactNumber: existingLandOwner.contact || '',
+          ownerId: existingLandOwner.ownerId,
+        },
+      });
+      return;
+    }
+
+    // 3. If not found in either table, return found: false with null data so fields remain empty
+    res.json({
+      success: true,
+      found: false,
+      source: 'database',
+      data: null,
+    });
+  } catch (error) {
+    console.error('[Lookup By IC Error]', error);
+    res.status(500).json({ error: 'Failed to look up IC in database' });
   }
 }
 

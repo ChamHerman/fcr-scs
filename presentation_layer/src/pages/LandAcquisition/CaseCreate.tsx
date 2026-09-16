@@ -77,7 +77,7 @@ export const CaseCreate: React.FC = () => {
         })),
         caseTitle: `${data.formData.projectName} - ${data.formData.landTitleNumber}`,
         remarks: "Case registered via online registration portal",
-        createdById: user?.userId || "00000000-0000-0000-0000-000000000001",
+        createdById: user?.userId || undefined,
       };
 
       const result = await landAcquisitionApi.createCase(payload);
