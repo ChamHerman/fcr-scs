@@ -134,7 +134,7 @@ model BlockchainRecord {
   transactionHash String?          @map("transaction_hash")
   documentHash    String           @map("document_hash")
   status          BlockchainStatus @default(PUBLISHED)
-  publishedAt     DateTime         @default(now()) @map("published_at")
+  publishedAt     DateTime?        @map("published_at")
   createdAt       DateTime         @default(now()) @map("created_at")
   updatedAt       DateTime         @updatedAt @map("updated_at")
   deletedAt       DateTime?        @map("deleted_at")
