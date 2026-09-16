@@ -225,7 +225,7 @@ export const CaseEdit: React.FC = () => {
 
     const ownersPayload = data.owners.map((o) => ({
       name: o.name,
-      nric: o.icNumber,
+      nric: (o.icNumber || "").replace(/\D/g, ""),
       address: o.address,
       contact: o.phone,
       email: o.email || undefined,

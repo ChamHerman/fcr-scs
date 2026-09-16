@@ -526,18 +526,26 @@ export async function createCase(input: CreateCaseInput) {
     }
 
     for (const ownerInput of owners) {
+      const pureNric = (ownerInput.nric || "").replace(/\D/g, "");
+      if (!pureNric) continue;
+
       let dbOwner = await tx.landOwner.findFirst({
-        where: { nric: ownerInput.nric },
+        where: { nric: pureNric },
       });
+
+      const ownerName = (ownerInput.name || "").trim() || "Land Owner";
+      const ownerAddress = (ownerInput.address || "").trim() || "";
+      const contact = (ownerInput.contact || "").trim();
+      const email = ownerInput.email ? ownerInput.email.trim() : null;
 
       if (!dbOwner) {
         dbOwner = await tx.landOwner.create({
           data: {
-            name: ownerInput.name,
-            nric: ownerInput.nric,
-            address: ownerInput.address,
-            contact: ownerInput.contact,
-            email: ownerInput.email || null,
+            name: ownerName,
+            nric: pureNric,
+            address: ownerAddress,
+            contact,
+            email,
             createdById: finalCreatorId,
           },
         });
@@ -545,10 +553,11 @@ export async function createCase(input: CreateCaseInput) {
         dbOwner = await tx.landOwner.update({
           where: { ownerId: dbOwner.ownerId },
           data: {
-            ...(ownerInput.name && { name: ownerInput.name }),
-            ...(ownerInput.address && { address: ownerInput.address }),
-            ...(ownerInput.contact && { contact: ownerInput.contact }),
-            ...(ownerInput.email !== undefined && { email: ownerInput.email || null }),
+            nric: pureNric,
+            ...(ownerName && { name: ownerName }),
+            ...(ownerAddress && { address: ownerAddress }),
+            ...(contact && { contact }),
+            ...(email !== undefined && { email }),
           },
         });
       }
@@ -672,24 +681,26 @@ export async function updateOwnerInformation(caseId: string, ownersInput: any[])
     const activeOwnershipIds: string[] = [];
 
     for (const ownerInput of ownersInput) {
-      const nric = (ownerInput.nric || ownerInput.icNumber || "").trim();
+      const pureNric = (ownerInput.nric || ownerInput.icNumber || "").replace(/\D/g, "");
       const contact = (ownerInput.contact || ownerInput.phone || "").trim();
       const email = ownerInput.email ? ownerInput.email.trim() : null;
       const share = ownerInput.share || (ownersInput.length === 1 ? "100" : "50");
-      const name = (ownerInput.name || "").trim();
-      const address = (ownerInput.address || "").trim();
       const ownershipType = parseOwnershipType(ownerInput.ownershipType);
 
-      if (!nric) continue;
+      if (!pureNric) continue;
 
       let dbOwner = await tx.landOwner.findFirst({
-        where: { nric },
+        where: { nric: pureNric },
       });
+
+      const name = (ownerInput.name || "").trim() || "Land Owner";
+      const address = (ownerInput.address || "").trim() || "";
 
       if (dbOwner) {
         dbOwner = await tx.landOwner.update({
           where: { ownerId: dbOwner.ownerId },
           data: {
+            nric: pureNric,
             ...(name && { name }),
             ...(address && { address }),
             ...(contact && { contact }),
@@ -699,10 +710,10 @@ export async function updateOwnerInformation(caseId: string, ownersInput: any[])
       } else {
         dbOwner = await tx.landOwner.create({
           data: {
-            name: name || "Land Owner",
-            nric,
-            address: address || "",
-            contact: contact || "",
+            name,
+            nric: pureNric,
+            address,
+            contact,
             email,
             createdById: existing.createdById,
           },
