@@ -243,8 +243,7 @@ export const GenerateAIValuation: React.FC = () => {
             </span>
           </div>
           <p className="text-md-on-surface-variant mt-1 max-w-3xl">
-            Estimate statutory compensation for an acquired parcel with the live trained model. Link an
-            acquisition case to auto-fill its registered attributes, or enter all seven attributes manually.
+            Estimate statutory compensation with the live trained model.
           </p>
         </div>
       </div>

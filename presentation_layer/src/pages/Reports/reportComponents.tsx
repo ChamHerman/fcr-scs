@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertCircle } from 'lucide-react';
+import { Pagination } from '../../components/ui/Pagination';
 import type { ReportGeneratedResponse } from '../../services/reportApi';
 import { reportStatusLabel } from './reportConstants';
 
@@ -145,10 +146,16 @@ const COLUMN_LABELS: Record<string, string> = {
 const columnLabel = (key: string) =>
   COLUMN_LABELS[key] ?? key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
 
-/* Renders every record with design-system styling: status columns get a coloured
-   pill badge and hash/address values keep their full length in monospace. */
+/* Records per page in the preview tables — matches the dashboard tables so the
+   footer pagination reads the same everywhere. */
+const PREVIEW_PAGE_SIZE = 10;
+
+/* Renders every record with design-system styling — status columns get a
+   coloured pill badge, hash/address values keep their full length in monospace,
+   and the footer paginates the list the same way the dashboard tables do. */
 export const ReportDataTable: React.FC<{ data: ReportGeneratedResponse }> = ({ data }) => {
   const rows: Record<string, any>[] = data.details ?? [];
+  const [currentPage, setCurrentPage] = React.useState(1);
 
   const columns = React.useMemo(() => {
     if (rows.length === 0) return [] as string[];
@@ -158,54 +165,68 @@ export const ReportDataTable: React.FC<{ data: ReportGeneratedResponse }> = ({ d
     return [...preferred, ...remaining];
   }, [rows, data.reportType]);
 
+  const totalPages = Math.max(1, Math.ceil(rows.length / PREVIEW_PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const pageRows = rows.slice((safePage - 1) * PREVIEW_PAGE_SIZE, safePage * PREVIEW_PAGE_SIZE);
+
   return (
-    <div className="bg-md-surface-container rounded-xl shadow-sm overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr>
-            {columns.map((key) => (
-              <th
-                key={key}
-                className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant whitespace-nowrap"
-              >
-                {columnLabel(key)}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 || columns.length === 0 ? (
+    <div className="bg-md-surface-container rounded-xl shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
             <tr>
-              <td colSpan={Math.max(columns.length, 1)} className="px-4 py-8 text-center text-md-on-surface-variant">
-                <AlertCircle size={24} className="mx-auto mb-2 opacity-50" />
-                No preview records found. Adjust your filters.
-              </td>
+              {columns.map((key) => (
+                <th
+                  key={key}
+                  className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant whitespace-nowrap"
+                >
+                  {columnLabel(key)}
+                </th>
+              ))}
             </tr>
-          ) : (
-            rows.map((row, idx) => (
-              <tr key={idx} className="border-t border-md-outline/10 hover:bg-md-primary/5 transition-colors">
-                {columns.map((key) => {
-                  const value = row[key];
-                  if (key.toLowerCase() === 'status') {
+          </thead>
+          <tbody>
+            {rows.length === 0 || columns.length === 0 ? (
+              <tr>
+                <td colSpan={Math.max(columns.length, 1)} className="px-4 py-8 text-center text-md-on-surface-variant">
+                  <AlertCircle size={24} className="mx-auto mb-2 opacity-50" />
+                  No preview records found. Adjust your filters.
+                </td>
+              </tr>
+            ) : (
+              pageRows.map((row, idx) => (
+                <tr key={idx} className="border-t border-md-outline/10 hover:bg-md-primary/5 transition-colors">
+                  {columns.map((key) => {
+                    const value = row[key];
+                    if (key.toLowerCase() === 'status') {
+                      return (
+                        <td key={key} className="px-4 py-3">
+                          <StatusBadge status={String(value)} />
+                        </td>
+                      );
+                    }
+                    const text = String(value ?? '-');
+                    const isHash = key.toLowerCase().includes('hash') || text.startsWith('0x');
                     return (
-                      <td key={key} className="px-4 py-3">
-                        <StatusBadge status={String(value)} />
+                      <td key={key} className="px-4 py-3 text-md-on-surface-variant">
+                        {isHash ? <span className="font-mono text-xs break-all">{text}</span> : text}
                       </td>
                     );
-                  }
-                  const text = String(value ?? '-');
-                  const isHash = key.toLowerCase().includes('hash') || text.startsWith('0x');
-                  return (
-                    <td key={key} className="px-4 py-3 text-md-on-surface-variant">
-                      {isHash ? <span className="font-mono text-xs break-all">{text}</span> : text}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+                  })}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+      <Pagination
+        currentPage={safePage}
+        totalPages={totalPages}
+        totalCount={rows.length}
+        pageSize={PREVIEW_PAGE_SIZE}
+        onPageChange={setCurrentPage}
+        itemLabel="records"
+      />
     </div>
   );
 };

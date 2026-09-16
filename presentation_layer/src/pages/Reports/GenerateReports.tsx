@@ -40,15 +40,11 @@ import type {
 
 const SUPPORTED_TYPES = ['Case Status Report', 'Payment Report', 'Blockchain Audit Report'];
 
-/* One description per report function, mirroring the per-report subtitles on the
-   reporting dashboard so every report type explains what it covers. */
+/* One short description per report function. */
 const REPORT_DESCRIPTIONS: Record<string, string> = {
-  'Case Status Report':
-    'Filter the acquisition lifecycle by state, status and registration date range to review case aging and statutory progress.',
-  'Payment Report':
-    'Filter the disbursement ledger by status and date range to review bank clearance, settlement outcomes and success rates.',
-  'Blockchain Audit Report':
-    'Filter the notarization ledger by status and publication date range to review on-chain publication and document integrity.',
+  'Case Status Report': 'Acquisition lifecycle, statutory aging and case status.',
+  'Payment Report': 'Disbursement ledger, bank clearance and settlement outcomes.',
+  'Blockchain Audit Report': 'On-chain publication and document integrity trail.',
 };
 
 export const GenerateReports: React.FC = () => {
@@ -186,7 +182,7 @@ export const GenerateReports: React.FC = () => {
               </span>
             </div>
             <p className="text-md-on-surface-variant mt-1 max-w-3xl">
-              {REPORT_DESCRIPTIONS[category]} The preview updates in real time as you change the filters.
+              {REPORT_DESCRIPTIONS[category]}
             </p>
           </div>
         </div>
@@ -253,13 +249,8 @@ export const GenerateReports: React.FC = () => {
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <TableIcon size={20} className="text-md-primary" />
-          <h2 className="text-lg font-semibold">Live Report Preview</h2>
+          <h2 className="text-lg font-semibold">Report Preview</h2>
           {loading && <RefreshCw size={16} className="animate-spin text-md-on-surface-variant" />}
-          {previewData && (
-            <span className="text-xs text-md-on-surface-variant">
-              Report Reference: <strong>{previewData.reportId}</strong>
-            </span>
-          )}
         </div>
 
         {error && (
@@ -282,8 +273,8 @@ export const GenerateReports: React.FC = () => {
         isOpen={previewOpen}
         onClose={() => !downloading && setPreviewOpen(false)}
         title={`${category} — Preview`}
-        subtitle={previewData ? `Report Reference: ${previewData.reportId} — review the report below, then download the PDF.` : ''}
-        maxWidth="max-w-3xl"
+        subtitle="Review the report below, then download the PDF."
+        maxWidth="max-w-5xl"
         footer={
           <div className="flex items-center justify-end gap-3">
             <Button variant="text" disabled={downloading} onClick={() => setPreviewOpen(false)}>

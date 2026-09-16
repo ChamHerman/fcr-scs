@@ -10,8 +10,7 @@ import {
   ShieldCheck,
   CreditCard,
   FolderKanban,
-  RefreshCw,
-  AlertCircle
+  RefreshCw
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -33,7 +32,7 @@ import { Select } from '../../components/ui/Select';
 import { Modal } from '../../components/ui/Modal';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { STATES } from './reportConstants';
-import { StatusBadge, ReportSummaryCards, ReportDataTable } from './reportComponents';
+import { ReportSummaryCards, ReportDataTable } from './reportComponents';
 import {
   fetchDashboardOverview,
   fetchCaseStatusReport,
@@ -524,86 +523,17 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
             </div>
           </div>
 
-          {/* Data Table */}
-          <div className="bg-md-surface-container rounded-xl shadow-sm overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr>
-                  {reportCategory === 'Case Status' ? (
-                    <>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Record ID</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Title / Description</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">State / Location</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Date</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Lifecycle Aging</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Status</th>
-                    </>
-                  ) : reportCategory === 'Payment' ? (
-                    <>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Record ID</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Payee / Title</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Bank Name</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Amount</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Bank Reference</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Date</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Status</th>
-                    </>
-                  ) : (
-                    <>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Record ID</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Transaction Hash</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Document Hash</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Date</th>
-                      <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-md-on-surface-variant">Status</th>
-                    </>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredDetails.length === 0 ? (
-                  <tr>
-                    <td colSpan={reportCategory === 'Payment' ? 7 : reportCategory === 'Blockchain Audit' ? 5 : 6} className="px-4 py-8 text-center text-md-on-surface-variant">
-                      <AlertCircle size={24} className="mx-auto mb-2 opacity-50" />
-                      No records found matching the selected criteria.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredDetails.map((row: any, idx) => (
-                    <tr key={idx} className="border-t border-md-outline/10 hover:bg-md-primary/5 transition-colors">
-                      {reportCategory === 'Case Status' ? (
-                        <>
-                          <td className="px-4 py-3 font-semibold text-md-primary text-[13px]">{row.caseId}</td>
-                          <td className="px-4 py-3 font-medium">{row.title}</td>
-                          <td className="px-4 py-3 text-md-on-surface-variant">{`${row.state} / ${row.district}`}</td>
-                          <td className="px-4 py-3 text-md-on-surface-variant">{row.date}</td>
-                          <td className="px-4 py-3 text-md-on-surface-variant">{row.lifecycleAging}</td>
-                          <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
-                        </>
-                      ) : reportCategory === 'Payment' ? (
-                        <>
-                          <td className="px-4 py-3 font-semibold text-md-primary text-[13px]">{row.caseId}</td>
-                          <td className="px-4 py-3 font-medium">{row.payeeName}</td>
-                          <td className="px-4 py-3 text-md-on-surface-variant">{row.bankName}</td>
-                          <td className="px-4 py-3 font-medium">{row.amount}</td>
-                          <td className="px-4 py-3 text-md-on-surface-variant">{row.bankReference}</td>
-                          <td className="px-4 py-3 text-md-on-surface-variant">{row.date}</td>
-                          <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
-                        </>
-                      ) : (
-                        <>
-                          <td className="px-4 py-3 font-semibold text-md-primary text-[13px]">{row.caseId}</td>
-                          <td className="px-4 py-3 font-mono text-xs text-md-on-surface-variant">{row.transactionHash}</td>
-                          <td className="px-4 py-3 font-mono text-xs text-md-on-surface-variant">{row.documentHash}</td>
-                          <td className="px-4 py-3 text-md-on-surface-variant">{row.publishedAt}</td>
-                          <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
-                        </>
-                      )}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          {/* Data Table — same shared component the preview modal uses */}
+          <ReportDataTable
+            data={{
+              reportType: categoryData?.reportType ?? `${reportCategory} Report`,
+              reportId: categoryData?.reportId ?? '',
+              generatedAt: categoryData?.generatedAt ?? new Date().toISOString(),
+              filterApplied: categoryData?.filterApplied ?? {},
+              summary: categoryData?.summary ?? {},
+              details: filteredDetails,
+            }}
+          />
         </>
       )}
 
@@ -613,7 +543,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
         onClose={() => !downloading && setFullReportOpen(false)}
         title={`${reportCategory ? `${reportCategory} Report` : 'Report'} — Full Preview`}
         subtitle="Complete report without filters. Review the report below, then download the PDF."
-        maxWidth="max-w-3xl"
+        maxWidth="max-w-5xl"
         footer={
           <div className="flex items-center justify-end gap-3">
             <Button variant="text" disabled={downloading} onClick={() => setFullReportOpen(false)}>
