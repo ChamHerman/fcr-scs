@@ -387,6 +387,69 @@ export async function resolveIc(req: Request, res: Response): Promise<void> {
   }
 }
 
+export async function lookupByIc(req: Request, res: Response): Promise<void> {
+  try {
+    const ic = req.params.ic as string;
+    if (!ic) {
+      res.status(400).json({ error: 'IC is required' });
+      return;
+    }
+
+    // Normalize to raw 12-digit format for lookup
+    const rawIc = ic.replace(/\D/g, '').slice(0, 12);
+    if (rawIc.length !== 12) {
+      res.status(400).json({ error: 'Invalid IC format. Must be 12 digits.' });
+      return;
+    }
+
+    const formattedIc = `${rawIc.slice(0, 6)}-${rawIc.slice(6, 8)}-${rawIc.slice(8)}`;
+
+    // Check if user exists in database with this IC (raw digits or formatted)
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { identificationNumber: rawIc },
+          { identificationNumber: formattedIc },
+        ],
+      },
+      select: {
+        userId: true,
+        name: true,
+        address: true,
+        email: true,
+        contactNumber: true,
+      },
+    });
+
+    if (existingUser) {
+      res.json({
+        success: true,
+        found: true,
+        source: 'database',
+        data: {
+          name: existingUser.name,
+          address: existingUser.address || '',
+          email: existingUser.email || '',
+          contactNumber: existingUser.contactNumber || '',
+          userId: existingUser.userId,
+        },
+      });
+      return;
+    }
+
+    // If not found in database, return found: false with null data so fields remain empty
+    res.json({
+      success: true,
+      found: false,
+      source: 'database',
+      data: null,
+    });
+  } catch (error) {
+    console.error('[Lookup By IC Error]', error);
+    res.status(500).json({ error: 'Failed to look up IC in database' });
+  }
+}
+
 export async function getUserById(req: Request, res: Response): Promise<void> {
   try {
     const id = req.params.id as string;

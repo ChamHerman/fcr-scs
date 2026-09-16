@@ -13,7 +13,7 @@ import { FileUpload } from "./ui/FileUpload";
 import { useNotification } from "./ui/NotificationSystem";
 import { useAuth } from "../context/AuthContext";
 import { landAcquisitionApi } from "../services/landAcquisitionApi";
-import { BASE_URL } from "../services/api";
+import api, { BASE_URL } from "../services/api";
 import { formatCurrencyWithDecimals, formatLiveCurrency } from "../utils/currency";
 import "../index.css";
 import "../pages/LandAcquisition/case_management.css";
@@ -511,9 +511,37 @@ export const CaseForm: React.FC<CaseFormProps> = ({
   };
 
   const handleOwnerChange = (id: string, field: keyof Owner, value: string) => {
-    const updated = owners.map((o) => (o.id === id ? { ...o, [field]: value } : o));
+    let icChanged = false;
+    const updated = owners.map((o) => {
+      if (o.id !== id) return o;
+      if (field === "icNumber") {
+        const prevDigits = o.icNumber.replace(/\D/g, "");
+        const newDigits = value.replace(/\D/g, "");
+        if (prevDigits !== newDigits) {
+          icChanged = true;
+          delete lastLookedUpIcRef.current[id];
+          // If user changes the IC digits, remove the other fields
+          return {
+            ...o,
+            icNumber: value,
+            name: "",
+            address: "",
+            phone: "",
+            email: "",
+          };
+        }
+      }
+      return { ...o, [field]: value };
+    });
+
     setOwners(updated);
     clearError(`owner_${id}_${field}`);
+    if (icChanged) {
+      clearError(`owner_${id}_name`);
+      clearError(`owner_${id}_address`);
+      clearError(`owner_${id}_phone`);
+      clearError(`owner_${id}_email`);
+    }
     clearError("owners");
     clearError("ownersShareTotal");
     clearError("duplicateIc");
@@ -581,6 +609,90 @@ export const CaseForm: React.FC<CaseFormProps> = ({
           return next;
         });
       }
+    }
+  };
+
+  const lastLookedUpIcRef = React.useRef<Record<string, string>>({});
+  const [lookingUpOwnerId, setLookingUpOwnerId] = useState<string | null>(null);
+
+  const handleOwnerIcBlurOrLeave = async (ownerId: string, overrideIc?: string) => {
+    const owner = owners.find((o) => o.id === ownerId);
+    if (!owner && !overrideIc) return;
+
+    const icStr = overrideIc ?? owner?.icNumber ?? "";
+    const rawIc = icStr.replace(/\D/g, "");
+    if (rawIc.length !== 12) return;
+
+    if (lastLookedUpIcRef.current[ownerId] === rawIc) return;
+    lastLookedUpIcRef.current[ownerId] = rawIc;
+
+    setLookingUpOwnerId(ownerId);
+
+    try {
+      // Query backend to look up user in database by IC
+      const response = await api.get(`/users/lookup-by-ic/${rawIc}`);
+      const resData = response.data;
+
+      if (resData?.found && resData?.data) {
+        const userData = resData.data;
+        setOwners((prev) =>
+          prev.map((o) =>
+            o.id === ownerId
+              ? {
+                  ...o,
+                  name: userData.name || "",
+                  address: userData.address || "",
+                  phone: userData.contactNumber || o.phone,
+                  email: userData.email || o.email,
+                }
+              : o
+          )
+        );
+        clearError(`owner_${ownerId}_name`);
+        clearError(`owner_${ownerId}_address`);
+        if (userData.contactNumber) clearError(`owner_${ownerId}_phone`);
+        if (userData.email) clearError(`owner_${ownerId}_email`);
+
+        notify({
+          type: "success",
+          title: "Owner Details Found",
+          message: `Retrieved ${userData.name} and address from user database.`,
+        });
+        return;
+      }
+
+      // If not found in database: all remain empty
+      setOwners((prev) =>
+        prev.map((o) =>
+          o.id === ownerId
+            ? {
+                ...o,
+                name: "",
+                address: "",
+                phone: "",
+                email: "",
+              }
+            : o
+        )
+      );
+    } catch (err) {
+      console.warn("Backend IC lookup failed:", err);
+      // On error, also leave empty
+      setOwners((prev) =>
+        prev.map((o) =>
+          o.id === ownerId
+            ? {
+                ...o,
+                name: "",
+                address: "",
+                phone: "",
+                email: "",
+              }
+            : o
+        )
+      );
+    } finally {
+      setLookingUpOwnerId(null);
     }
   };
 
@@ -1434,6 +1546,31 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                   {/* Row 1: Full Name | Identification Number */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
+                      <IdentificationInput
+                        id={`owner_${owner.id}_icNumber`}
+                        name={`owner_${owner.id}_icNumber`}
+                        label="Identification Number *"
+                        value={owner.icNumber}
+                        error={errors[`owner_${owner.id}_icNumber`]}
+                        onChange={(e) =>
+                          handleOwnerChange(owner.id, "icNumber", e.target.value)
+                        }
+                        onBlur={(e) => handleOwnerIcBlurOrLeave(owner.id, e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleOwnerIcBlurOrLeave(owner.id, (e.target as HTMLInputElement).value);
+                          }
+                        }}
+                        placeholder="e.g., 800101-10-1234"
+                      />
+                      {lookingUpOwnerId === owner.id && (
+                        <p className="text-xs text-brand-600 dark:text-brand-400 mt-1 animate-pulse">
+                          Checking user registry...
+                        </p>
+                      )}
+                    </div>
+                    <div>
                       <Input
                         id={`owner_${owner.id}_name`}
                         name={`owner_${owner.id}_name`}
@@ -1444,19 +1581,6 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                           handleOwnerChange(owner.id, "name", e.target.value)
                         }
                         placeholder="e.g., Tan Ah Kow / Syarikat ABC Sdn Bhd"
-                      />
-                    </div>
-                    <div>
-                      <IdentificationInput
-                        id={`owner_${owner.id}_icNumber`}
-                        name={`owner_${owner.id}_icNumber`}
-                        label="Identification Number *"
-                        value={owner.icNumber}
-                        error={errors[`owner_${owner.id}_icNumber`]}
-                        onChange={(e) =>
-                          handleOwnerChange(owner.id, "icNumber", e.target.value)
-                        }
-                        placeholder="e.g., 800101-10-1234"
                       />
                     </div>
                   </div>
