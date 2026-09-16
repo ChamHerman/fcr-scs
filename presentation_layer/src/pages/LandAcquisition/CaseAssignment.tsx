@@ -165,6 +165,7 @@ export const CaseAssignment: React.FC = () => {
         caseId: selectedCaseId,
         valuerId: selectedValuerId,
         acceptancePeriodDays: parseInt(acceptancePeriod, 10),
+        assignedById: user?.userId,
       });
 
       const assignedValuer = valuers.find((v) => v.id === selectedValuerId);
@@ -173,7 +174,7 @@ export const CaseAssignment: React.FC = () => {
         caseId: selectedCaseId,
         valuerId: selectedValuerId,
         valuerName: assignedValuer?.name || res.assignment.assignedTo?.name || "Valuer",
-        assignedBy: "System Administrator",
+        assignedBy: user?.name || "Administrator",
         assignedDate: new Date().toLocaleDateString("en-GB", {
           day: "2-digit",
           month: "short",
