@@ -4,6 +4,8 @@ import crypto from 'crypto';
 import { prisma } from '../prisma';
 import { sendTemplatedEmail } from '../utils/email.service';
 import { logAudit } from '../services/audit.service';
+import { generateCustomId } from '../utils/idGenerator';
+import { resolveMalaysianIdentity } from '../utils/malaysianIdentity';
 
 interface OtpSession {
   userId: string;
@@ -25,6 +27,26 @@ setInterval(() => {
     }
   }
 }, 5 * 60 * 1000);
+
+// Generate a compliant temporary password satisfying policy (8+ chars, upper, lower, number, special)
+function generateTemporaryPassword(): string {
+  const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const smalls = 'abcdefghijkmnpqrstuvwxyz';
+  const numbers = '23456789';
+  const specials = '@$!%*?&';
+  
+  let result = '';
+  result += letters[crypto.randomInt(0, letters.length)];
+  result += smalls[crypto.randomInt(0, smalls.length)];
+  result += numbers[crypto.randomInt(0, numbers.length)];
+  result += specials[crypto.randomInt(0, specials.length)];
+  
+  const all = letters + smalls + numbers + specials;
+  for (let i = 0; i < 8; i++) {
+    result += all[crypto.randomInt(0, all.length)];
+  }
+  return result;
+}
 
 export async function login(req: Request, res: Response): Promise<void> {
   try {
@@ -74,8 +96,8 @@ export async function login(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    // System Administrators require 2FA OTP verification
-    if (user.role === 'SYSTEM_ADMINISTRATOR') {
+    // 2FA OTP verification: required for System Administrators or accounts with mfaEnabled = true
+    if (user.role === 'SYSTEM_ADMINISTRATOR' || user.mfaEnabled) {
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       const tempToken = crypto.randomBytes(32).toString('hex');
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
@@ -137,8 +159,10 @@ export async function login(req: Request, res: Response): Promise<void> {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 1); // 1 day expiration
 
+    const sessionId = await generateCustomId('userSession');
     const session = await prisma.userSession.create({
       data: {
+        sessionId,
         userId: user.userId,
         sessionToken,
         ipAddress: req.ip || '0.0.0.0',
@@ -172,11 +196,14 @@ export async function login(req: Request, res: Response): Promise<void> {
       token: sessionToken,
       user: {
         userId: user.userId,
+        id: user.userId,
         name: user.name,
         email: user.email,
         role: user.role,
         identificationNumber: user.identificationNumber,
         contactNumber: user.contactNumber,
+        address: user.address,
+        mustChangePassword: user.mustChangePassword,
       },
     });
   } catch (error) {
@@ -233,8 +260,10 @@ export async function verifyOtp(req: Request, res: Response): Promise<void> {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 1); // 1 day expiration
 
+    const sessionId = await generateCustomId('userSession');
     await prisma.userSession.create({
       data: {
+        sessionId,
         userId: user.userId,
         sessionToken,
         ipAddress: req.ip || '0.0.0.0',
@@ -268,11 +297,14 @@ export async function verifyOtp(req: Request, res: Response): Promise<void> {
       token: sessionToken,
       user: {
         userId: user.userId,
+        id: user.userId,
         name: user.name,
         email: user.email,
         role: user.role,
         identificationNumber: user.identificationNumber,
         contactNumber: user.contactNumber,
+        address: user.address,
+        mustChangePassword: user.mustChangePassword,
       },
     });
   } catch (error) {
@@ -340,6 +372,21 @@ export async function resendOtp(req: Request, res: Response): Promise<void> {
   }
 }
 
+export async function resolveIc(req: Request, res: Response): Promise<void> {
+  try {
+    const ic = req.params.ic as string;
+    if (!ic) {
+      res.status(400).json({ error: 'IC is required' });
+      return;
+    }
+    const identity = resolveMalaysianIdentity(ic);
+    res.json({ success: true, data: identity });
+  } catch (error) {
+    console.error('[Resolve IC Error]', error);
+    res.status(500).json({ error: 'Failed to resolve IC identity' });
+  }
+}
+
 export async function getUserById(req: Request, res: Response): Promise<void> {
   try {
     const id = req.params.id as string;
@@ -351,6 +398,7 @@ export async function getUserById(req: Request, res: Response): Promise<void> {
         email: true,
         contactNumber: true,
         identificationNumber: true,
+        address: true,
         role: true,
         isActive: true,
         createdAt: true,
@@ -391,8 +439,10 @@ export async function forgotPassword(req: Request, res: Response): Promise<void>
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 1); // 1 hour expiration
 
+    const resetId = await generateCustomId('passwordReset');
     await prisma.passwordReset.create({
       data: {
+        resetId,
         userId: user.userId,
         resetToken,
         expiresAt,
@@ -457,12 +507,21 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
 
 export async function register(req: Request, res: Response): Promise<void> {
   try {
-    const { name, email, contactNumber, identificationNumber, password } = req.body;
+    const { name, email, contactNumber, identificationNumber, password, address } = req.body;
 
-    if (!name || !email || !contactNumber || !identificationNumber || !password) {
-      res.status(400).json({ error: 'All fields are required' });
+    if (!email || !contactNumber || !identificationNumber || !password) {
+      res.status(400).json({ error: 'Email, contact number, identification number, and password are required' });
       return;
     }
+
+    // Resolve identity strictly from Malaysian IC (no manual override allowed)
+    const identity = resolveMalaysianIdentity(identificationNumber);
+    if (!identity.isValid) {
+      res.status(400).json({ error: 'Invalid Malaysian Identification Number (IC). Name and address could not be verified.' });
+      return;
+    }
+    const resolvedName = identity.name;
+    const resolvedAddress = identity.address;
 
     // Check for duplicates
     // Email is globally unique
@@ -478,7 +537,7 @@ export async function register(req: Request, res: Response): Promise<void> {
         role: 'DISPLACED_COMMUNITY_MEMBER',
         OR: [
           { contactNumber },
-          { identificationNumber },
+          { identificationNumber: identity.rawDigits || identificationNumber },
         ]
       }
     });
@@ -488,7 +547,7 @@ export async function register(req: Request, res: Response): Promise<void> {
         res.status(400).json({ error: 'Contact number is already in use' });
         return;
       }
-      if (existingRoleUser.identificationNumber === identificationNumber) {
+      if (existingRoleUser.identificationNumber === (identity.rawDigits || identificationNumber)) {
         res.status(400).json({ error: 'Identification number is already in use' });
         return;
       }
@@ -497,12 +556,15 @@ export async function register(req: Request, res: Response): Promise<void> {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    const userId = await generateCustomId('user');
     const user = await prisma.user.create({
       data: {
-        name,
+        userId,
+        name: resolvedName,
         email,
         contactNumber,
-        identificationNumber,
+        identificationNumber: identity.rawDigits || identificationNumber,
+        address: resolvedAddress,
         passwordHash: hashedPassword,
         role: 'DISPLACED_COMMUNITY_MEMBER',
         isActive: false, // Must verify email
@@ -514,8 +576,10 @@ export async function register(req: Request, res: Response): Promise<void> {
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 24); // 24 hours
 
+    const activationId = await generateCustomId('accountActivation');
     await prisma.accountActivation.create({
       data: {
+        activationId,
         userId: user.userId,
         token,
         expiresAt,
@@ -547,7 +611,7 @@ export async function register(req: Request, res: Response): Promise<void> {
       severity: 'INFO',
       ipAddress: req.ip || '127.0.0.1',
       deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
-      activityDetails: { name, email, contactNumber, role: 'DISPLACED_COMMUNITY_MEMBER' },
+      activityDetails: { name: user.name, email, contactNumber, role: 'DISPLACED_COMMUNITY_MEMBER', address: user.address },
       systemResponse: 'CREATED (201)',
     });
   } catch (error) {
@@ -559,11 +623,11 @@ export async function register(req: Request, res: Response): Promise<void> {
 export async function adminCreateUser(req: Request, res: Response): Promise<void> {
   try {
     console.log('[adminCreateUser] Request body:', req.body);
-    const { name, email, contactNumber, identificationNumber, role } = req.body;
+    const { name, email, contactNumber, identificationNumber, role, address } = req.body;
     const password = req.body.password || 'Password$123';
 
-    if (!name || !email || !contactNumber || !identificationNumber || !role) {
-      res.status(400).json({ error: 'All fields are required' });
+    if (!email || !contactNumber || !identificationNumber || !role) {
+      res.status(400).json({ error: 'Email, contact number, identification number, and role are required' });
       return;
     }
 
@@ -571,6 +635,15 @@ export async function adminCreateUser(req: Request, res: Response): Promise<void
       res.status(403).json({ error: 'Cannot create system administrator account' });
       return;
     }
+
+    // Resolve identity strictly from Malaysian IC (no manual override allowed)
+    const identity = resolveMalaysianIdentity(identificationNumber);
+    if (!identity.isValid) {
+      res.status(400).json({ error: 'Invalid Malaysian Identification Number (IC). Name and address could not be verified.' });
+      return;
+    }
+    const resolvedName = identity.name;
+    const resolvedAddress = identity.address;
 
     // Check for duplicates
     // Email is globally unique
@@ -586,7 +659,7 @@ export async function adminCreateUser(req: Request, res: Response): Promise<void
         role,
         OR: [
           { contactNumber },
-          { identificationNumber },
+          { identificationNumber: identity.rawDigits || identificationNumber },
         ]
       }
     });
@@ -596,28 +669,58 @@ export async function adminCreateUser(req: Request, res: Response): Promise<void
         res.status(400).json({ error: 'Contact number is already in use for this role' });
         return;
       }
-      if (existingRoleUser.identificationNumber === identificationNumber) {
+      if (existingRoleUser.identificationNumber === (identity.rawDigits || identificationNumber)) {
         res.status(400).json({ error: 'Identification number is already in use for this role' });
         return;
       }
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Generate compliant temporary password satisfying policy
+    const temporaryPassword = generateTemporaryPassword();
+    const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
 
+    const userId = await generateCustomId('user');
     const user = await prisma.user.create({
       data: {
-        name,
+        userId,
+        name: resolvedName,
         email,
         contactNumber,
-        identificationNumber,
+        identificationNumber: identity.rawDigits || identificationNumber,
+        address: resolvedAddress,
         passwordHash: hashedPassword,
         role: role,
         isActive: true, // admin created users are active by default
+        mustChangePassword: true, // MUST change password on first login
       },
     });
 
-    res.status(201).json({ success: true, message: 'User created successfully', data: { id: user.userId, email: user.email } });
+    // Send credentials email to user
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    try {
+      await sendTemplatedEmail(user.email, 'TEMPORARY_CREDENTIALS', {
+        name: user.name,
+        role: user.role.replace(/_/g, ' '),
+        email: user.email,
+        temporaryPassword,
+        loginUrl: `${frontendUrl}/login`,
+      });
+    } catch (emailErr) {
+      console.error('[Admin Create User] Failed to send credentials email:', emailErr);
+    }
+
+    res.status(201).json({ 
+      success: true, 
+      message: 'User created successfully! Temporary credentials have been dispatched to their email.', 
+      data: { 
+        id: user.userId, 
+        userId: user.userId, 
+        email: user.email, 
+        name: user.name, 
+        address: user.address,
+        temporaryPassword 
+      } 
+    });
 
     logAudit({
       userId: user.userId,
@@ -629,7 +732,7 @@ export async function adminCreateUser(req: Request, res: Response): Promise<void
       severity: 'INFO',
       ipAddress: req.ip || '127.0.0.1',
       deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
-      activityDetails: { createdUser: user.name, targetEmail: user.email, targetRole: user.role },
+      activityDetails: { createdUser: user.name, targetEmail: user.email, targetRole: user.role, address: user.address },
       systemResponse: 'CREATED (201)',
     });
   } catch (error) {
@@ -649,11 +752,13 @@ export async function getAllUsers(req: Request, res: Response): Promise<void> {
         isActive: true,
         identificationNumber: true,
         contactNumber: true,
+        address: true,
       },
     });
 
     const formattedUsers = users.map(u => ({
       id: u.userId,
+      userId: u.userId,
       name: u.name,
       email: u.email,
       role: u.role,
@@ -661,6 +766,7 @@ export async function getAllUsers(req: Request, res: Response): Promise<void> {
       sensitive: u.email,
       identificationNumber: u.identificationNumber,
       contactNumber: u.contactNumber,
+      address: u.address,
     }));
 
     res.json({ success: true, data: formattedUsers });
@@ -766,6 +872,329 @@ export async function toggleUserStatus(req: Request, res: Response): Promise<voi
   } catch (error) {
     console.error('[toggleUserStatus Error]', error);
     res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function changeInitialPassword(req: Request, res: Response): Promise<void> {
+  try {
+    const { email, currentPassword, newPassword } = req.body;
+
+    if (!email || !currentPassword || !newPassword) {
+      res.status(400).json({ error: 'Email, current password, and new password are required' });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isMatch) {
+      res.status(400).json({ error: 'Current temporary password does not match' });
+      return;
+    }
+
+    // Validate password policy: min 8 chars, 1 upper, 1 lower, 1 digit, 1 special char
+    const policyRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (!policyRegex.test(newPassword)) {
+      res.status(400).json({ error: 'New password must be at least 8 characters and include uppercase, lowercase, number, and special character.' });
+      return;
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { userId: user.userId },
+      data: {
+        passwordHash: hashedPassword,
+        mustChangePassword: false,
+      },
+    });
+
+    logAudit({
+      userId: user.userId,
+      userRole: user.role,
+      actorName: user.name,
+      actorEmail: user.email,
+      activityType: 'USER_INITIAL_PASSWORD_CHANGED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { email: user.email, reason: 'First-time temporary password changed to permanent' },
+      systemResponse: 'SUCCESS (200)',
+    });
+
+    res.json({ success: true, message: 'Password has been set successfully. You can now access your account.' });
+  } catch (error) {
+    console.error('[Change Initial Password Error]', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function getProfile(req: Request, res: Response): Promise<void> {
+  try {
+    const id = req.params.id as string;
+    const user = await prisma.user.findUnique({
+      where: { userId: id },
+      select: {
+        userId: true,
+        name: true,
+        email: true,
+        pendingEmail: true,
+        contactNumber: true,
+        identificationNumber: true,
+        address: true,
+        role: true,
+        isActive: true,
+        mustChangePassword: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...user,
+        id: user.userId,
+        status: user.isActive ? 'Active' : 'Inactive',
+      },
+    });
+  } catch (error) {
+    console.error('[Get Profile Error]', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function updateProfile(req: Request, res: Response): Promise<void> {
+  try {
+    const id = req.params.id as string;
+    const { contactNumber, email } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { userId: id } });
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const updateData: any = {};
+
+    if (contactNumber && contactNumber.trim() !== '') {
+      updateData.contactNumber = contactNumber.trim();
+    }
+
+    let emailVerificationDispatched = false;
+    let pendingEmailValue = user.pendingEmail;
+
+    if (email && email.trim().toLowerCase() !== user.email.toLowerCase()) {
+      const normalizedNewEmail = email.trim().toLowerCase();
+      // Check if new email is taken by another account
+      const emailExists = await prisma.user.findUnique({ where: { email: normalizedNewEmail } });
+      if (emailExists && emailExists.userId !== user.userId) {
+        res.status(400).json({ error: 'Email address is already in use by another account' });
+        return;
+      }
+
+      // Generate email change token
+      const emailChangeToken = crypto.randomBytes(32).toString('hex');
+      const emailChangeExpiresAt = new Date();
+      emailChangeExpiresAt.setHours(emailChangeExpiresAt.getHours() + 24);
+
+      updateData.pendingEmail = normalizedNewEmail;
+      updateData.emailChangeToken = emailChangeToken;
+      updateData.emailChangeExpiresAt = emailChangeExpiresAt;
+      pendingEmailValue = normalizedNewEmail;
+
+      // Send verification email to the NEW email address
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const verificationLink = `${frontendUrl}/verify-email-change?token=${emailChangeToken}`;
+
+      try {
+        await sendTemplatedEmail(normalizedNewEmail, 'EMAIL_CHANGE_VERIFICATION', {
+          name: user.name,
+          newEmail: normalizedNewEmail,
+          verificationLink,
+        });
+        emailVerificationDispatched = true;
+      } catch (e) {
+        console.error('[Update Profile] Failed to send email change verification:', e);
+      }
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { userId: id },
+      data: updateData,
+      select: {
+        userId: true,
+        name: true,
+        email: true,
+        pendingEmail: true,
+        contactNumber: true,
+        identificationNumber: true,
+        address: true,
+        role: true,
+      },
+    });
+
+    logAudit({
+      userId: user.userId,
+      userRole: user.role,
+      actorName: user.name,
+      actorEmail: user.email,
+      activityType: 'USER_PROFILE_UPDATED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { 
+        contactNumber: updateData.contactNumber, 
+        pendingEmail: updateData.pendingEmail || null,
+        emailVerificationDispatched 
+      },
+      systemResponse: 'SUCCESS (200)',
+    });
+
+    let message = 'Profile updated successfully.';
+    if (emailVerificationDispatched) {
+      message = `Profile updated. A verification link has been sent to ${pendingEmailValue}. Your active login email remains ${user.email} until verified.`;
+    }
+
+    res.json({
+      success: true,
+      message,
+      data: updatedUser,
+      pendingEmailDispatched: emailVerificationDispatched,
+    });
+  } catch (error) {
+    console.error('[Update Profile Error]', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function verifyEmailChange(req: Request, res: Response): Promise<void> {
+  try {
+    const token = (req.query.token || req.body.token) as string;
+    if (!token) {
+      res.status(400).json({ error: 'Verification token is required' });
+      return;
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        emailChangeToken: token,
+        emailChangeExpiresAt: { gt: new Date() },
+      },
+    });
+
+    if (!user || !user.pendingEmail) {
+      res.status(400).json({ error: 'Invalid or expired email verification token' });
+      return;
+    }
+
+    const newEmail = user.pendingEmail;
+    // Check if new email was claimed by another account in the meantime
+    const taken = await prisma.user.findUnique({ where: { email: newEmail } });
+    if (taken && taken.userId !== user.userId) {
+      res.status(400).json({ error: 'This email address has already been claimed by another account' });
+      return;
+    }
+
+    // Commit email change
+    await prisma.user.update({
+      where: { userId: user.userId },
+      data: {
+        email: newEmail,
+        pendingEmail: null,
+        emailChangeToken: null,
+        emailChangeExpiresAt: null,
+      },
+    });
+
+    logAudit({
+      userId: user.userId,
+      userRole: user.role,
+      actorName: user.name,
+      actorEmail: newEmail,
+      activityType: 'USER_EMAIL_VERIFIED_AND_UPDATED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { oldEmail: user.email, newEmail },
+      systemResponse: 'SUCCESS (200)',
+    });
+
+    res.json({
+      success: true,
+      message: `Your email address has been successfully verified and updated to ${newEmail}. Please use this new email for future logins.`,
+      email: newEmail,
+    });
+  } catch (error) {
+    console.error('[Verify Email Change Error]', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function changePassword(req: Request, res: Response): Promise<void> {
+  try {
+    const { userId, currentPassword, newPassword } = req.body;
+
+    if (!userId || !currentPassword || !newPassword) {
+      res.status(400).json({ error: 'User ID, current password, and new password are required' });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({ where: { userId } });
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isMatch) {
+      res.status(400).json({ error: 'Current password is incorrect' });
+      return;
+    }
+
+    const policyRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (!policyRegex.test(newPassword)) {
+      res.status(400).json({ error: 'New password must be at least 8 characters and include uppercase, lowercase, number, and special character.' });
+      return;
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { userId: user.userId },
+      data: {
+        passwordHash: hashedPassword,
+        mustChangePassword: false,
+      },
+    });
+
+    logAudit({
+      userId: user.userId,
+      userRole: user.role,
+      actorName: user.name,
+      actorEmail: user.email,
+      activityType: 'USER_PASSWORD_UPDATED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { email: user.email },
+      systemResponse: 'SUCCESS (200)',
+    });
+
+    res.json({ success: true, message: 'Password changed successfully' });
+  } catch (error) {
+    console.error('[Change Password Error]', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 }
 

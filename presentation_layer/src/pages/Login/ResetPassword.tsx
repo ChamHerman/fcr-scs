@@ -77,18 +77,45 @@ export const ResetPassword: React.FC = () => {
               <MD3Input 
                 type="password" 
                 label="New Password" 
-                value={newPassword}
+                value={newPassword} 
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPassword(e.target.value)}
                 required 
               />
+
+              {/* Password Policy Checklist */}
+              <div className="p-3 bg-md-surface-container-low border border-md-outline/20 rounded-xl text-xs text-md-on-surface-variant">
+                <p className="font-semibold text-md-primary mb-1">Password Policy Requirements:</p>
+                <ul className="space-y-1">
+                  <li className={`flex items-center gap-2 ${newPassword.length >= 8 ? 'text-green-600 font-medium' : 'text-gray-500'}`}>
+                    <span>{newPassword.length >= 8 ? '✓' : '•'}</span> Minimum 8 characters
+                  </li>
+                  <li className={`flex items-center gap-2 ${/[A-Z]/.test(newPassword) ? 'text-green-600 font-medium' : 'text-gray-500'}`}>
+                    <span>{/[A-Z]/.test(newPassword) ? '✓' : '•'}</span> At least one uppercase letter (A-Z)
+                  </li>
+                  <li className={`flex items-center gap-2 ${/[a-z]/.test(newPassword) ? 'text-green-600 font-medium' : 'text-gray-500'}`}>
+                    <span>{/[a-z]/.test(newPassword) ? '✓' : '•'}</span> At least one lowercase letter (a-z)
+                  </li>
+                  <li className={`flex items-center gap-2 ${/\d/.test(newPassword) ? 'text-green-600 font-medium' : 'text-gray-500'}`}>
+                    <span>{/\d/.test(newPassword) ? '✓' : '•'}</span> At least one digit (0-9)
+                  </li>
+                  <li className={`flex items-center gap-2 ${/[@$!%*?&]/.test(newPassword) ? 'text-green-600 font-medium' : 'text-gray-500'}`}>
+                    <span>{/[@$!%*?&]/.test(newPassword) ? '✓' : '•'}</span> At least one special character (@$!%*?&)
+                  </li>
+                </ul>
+              </div>
+
               <MD3Input 
                 type="password" 
                 label="Confirm Password" 
-                value={confirmPassword}
+                value={confirmPassword} 
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
                 required 
               />
-              <MD3Button type="submit" className="w-full" disabled={isLoading || !token}>
+              <MD3Button 
+                type="submit" 
+                className="w-full" 
+                disabled={isLoading || !token || !/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(newPassword) || newPassword !== confirmPassword}
+              >
                 {isLoading ? 'Resetting...' : 'Reset Password'}
               </MD3Button>
             </form>

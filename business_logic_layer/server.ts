@@ -47,6 +47,7 @@ import reportRoutes from "./reporting_service/src/routes/report.routes";
 import userRoutes from "./user_management_service/src/routes/user.routes";
 import emailTemplateRoutes from "./user_management_service/src/routes/email-template.routes";
 import auditRoutes from "./user_management_service/src/routes/audit.routes";
+import alertRoutes from "./user_management_service/src/routes/alert.routes";
 import predictionRoutes from "./ai_prediction_service/src/routes/ai-prediction.routes";
 
 import { enforcePageAccess } from "./user_management_service/src/middleware/auth.middleware";
@@ -83,6 +84,7 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/email-templates", emailTemplateRoutes);
 app.use("/api/audit-logs", auditRoutes);
+app.use("/api/alerts", alertRoutes);
 app.use("/api/prediction", predictionRoutes);
 
 if (process.env.NODE_ENV !== "test") {

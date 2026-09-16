@@ -1,5 +1,7 @@
 import { EventEmitter } from 'events';
 import { prisma } from '../prisma';
+import { dispatchNotificationsForAudit } from './notification.service';
+import { generateCustomId } from '../utils/idGenerator';
 
 export type AuditSeverity = 'INFO' | 'WARNING' | 'CRITICAL' | 'SECURITY';
 
@@ -98,8 +100,10 @@ export async function recordAuditLog(event: AuditLogEvent) {
       serializedDetails = serializedDetails.substring(0, 4950) + '... [TRUNCATED]';
     }
 
+    const logId = await generateCustomId('auditLog');
     const created = await prisma.auditLog.create({
       data: {
+        logId,
         userId: event.userId || null,
         userRole: event.userRole || null,
         activityType: event.activityType,
@@ -116,6 +120,11 @@ export async function recordAuditLog(event: AuditLogEvent) {
     if (severity === 'SECURITY') {
       console.warn(`[SECURITY ALERT] [AuditService] ${event.activityType} by ${event.actorEmail || event.userId || 'Anonymous'} from IP ${ipAddress}`);
     }
+
+    // Evaluate matching AlertRules asynchronously and trigger In-App alerts / Emails
+    dispatchNotificationsForAudit(created, event).catch((notifyErr) => {
+      console.error('[AuditService] Notification dispatch error:', notifyErr);
+    });
 
     return created;
   } catch (error) {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MD3Card, MD3Button } from '../MD3Components';
-import { ArrowLeft, User, Mail, Phone, CreditCard, Calendar, Shield, AlertTriangle, Key, Edit, Power, PowerOff } from 'lucide-react';
+import { ArrowLeft, User, Mail, Phone, CreditCard, Calendar, Shield, AlertTriangle, Key, Edit, Power, PowerOff, MapPin } from 'lucide-react';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import '../LandAcquisition/case_management.css';
 
@@ -152,6 +152,16 @@ export const UserDetails: React.FC = () => {
                 <div className="text-md-on-surface">{user.contactNumber || 'Not provided'}</div>
               </div>
             </div>
+
+            {user.address && (
+              <div className="flex items-start">
+                <MapPin size={20} className="text-md-on-surface-variant mr-3 mt-0.5 flex-shrink-0" />
+                <div>
+                  <div className="text-xs text-md-on-surface-variant mb-1 uppercase font-medium tracking-wider">Residential Address</div>
+                  <div className="text-md-on-surface">{user.address}</div>
+                </div>
+              </div>
+            )}
           </div>
         </MD3Card>
 

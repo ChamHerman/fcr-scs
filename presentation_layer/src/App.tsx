@@ -16,6 +16,7 @@ import { Register } from './pages/Login/Register';
 import { ForgotPassword } from './pages/Login/ForgotPassword';
 import { ResetPassword } from './pages/Login/ResetPassword';
 import { AccountActivation } from './pages/Login/AccountActivation';
+import { VerifyEmailChange } from './pages/Login/VerifyEmailChange';
 import { Unauthorized } from './pages/Login/Unauthorized';
 
 import { DashboardOverview } from './pages/Dashboard/DashboardOverview';
@@ -95,6 +96,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/activate" element={<AccountActivation />} />
+          <Route path="/verify-email-change" element={<VerifyEmailChange />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/unauthorized" element={<Unauthorized />} />

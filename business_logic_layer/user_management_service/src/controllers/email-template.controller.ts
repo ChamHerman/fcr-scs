@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../prisma';
 import { logAudit } from '../services/audit.service';
+import { generateCustomId } from '../utils/idGenerator';
 
 export const DEFAULT_TEMPLATES: Record<string, { subject: string; bodyContent: string }> = {
   PASSWORD_RESET: {
@@ -217,8 +218,10 @@ export const createTemplate = async (req: Request, res: Response): Promise<any> 
       return res.status(500).json({ error: 'System administrator user not found' });
     }
 
+    const templateId = await generateCustomId('emailTemplate');
     const template = await prisma.emailTemplate.create({
       data: {
+        templateId,
         templateName: normalizedName,
         subject,
         bodyContent,

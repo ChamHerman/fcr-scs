@@ -7,7 +7,8 @@ import { Modal } from '../../components/ui/Modal';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Pagination } from '../../components/ui/Pagination';
 import { PageHeader } from '../../components/ui/PageHeader';
-import { Search, Shield, MoreVertical, CheckCircle, Users, UserCheck, UserX, UserCog, ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react';
+import { Search, Shield, MoreVertical, CheckCircle, Users, UserCheck, UserX, UserCog, ChevronLeft, ChevronRight, ArrowUpDown, Sparkles, KeyRound, Info } from 'lucide-react';
+import { resolveMalaysianIdentity, parseRawIc, type MalaysianIdentity } from '../../utils/malaysianIdentity';
 import '../LandAcquisition/case_management.css';
 
 export const UserAdministration: React.FC = () => {
@@ -56,10 +57,28 @@ export const UserAdministration: React.FC = () => {
     email: '',
     contactNumber: '',
     identificationNumber: '',
+    address: '',
     role: 'GOVERNMENT_OFFICER'
   });
+  const [identityInfo, setIdentityInfo] = useState<MalaysianIdentity | null>(null);
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
+
+  // Auto-resolve fixed name and state-accurate address when 12-digit Malaysian IC is entered
+  useEffect(() => {
+    const rawDigits = parseRawIc(formData.identificationNumber);
+    if (rawDigits.length === 12) {
+      const identity = resolveMalaysianIdentity(rawDigits);
+      setIdentityInfo(identity);
+      setFormData(prev => ({
+        ...prev,
+        name: identity.name,
+        address: identity.address
+      }));
+    } else {
+      setIdentityInfo(null);
+    }
+  }, [formData.identificationNumber]);
 
   const fetchUsers = async () => {
     try {
@@ -95,7 +114,8 @@ export const UserAdministration: React.FC = () => {
       
       if (res.ok && json.success) {
         setFormSuccess('User created successfully with default password "Password$123"!');
-        setFormData({ name: '', email: '', contactNumber: '', identificationNumber: '', role: 'GOVERNMENT_OFFICER' });
+        setFormData({ name: '', email: '', contactNumber: '', identificationNumber: '', address: '', role: 'GOVERNMENT_OFFICER' });
+        setIdentityInfo(null);
         fetchUsers();
         setTimeout(() => {
           setIsModalOpen(false);
@@ -113,7 +133,9 @@ export const UserAdministration: React.FC = () => {
     let result = users.filter(u => {
       const matchesSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                             u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            (u.identificationNumber || '').includes(searchQuery);
+                            (u.id || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            (u.identificationNumber || '').includes(searchQuery) ||
+                            (u.address || '').toLowerCase().includes(searchQuery.toLowerCase());
       const matchesRole = roleFilter ? u.role === roleFilter : true;
       const matchesStatus = statusFilter ? u.status === statusFilter : true;
       return matchesSearch && matchesRole && matchesStatus;
@@ -282,14 +304,24 @@ export const UserAdministration: React.FC = () => {
                     className="case-row row-clickable"
                     onClick={() => navigate(`/admin/users/details/${user.id}`)}
                   >
-                    <td className="truncate font-medium">{user.name}</td>
+                    <td className="truncate font-medium">
+                      <div>{user.name}</div>
+                      {user.id && (
+                        <div className="text-[11px] font-mono text-md-primary font-semibold opacity-90">{user.id}</div>
+                      )}
+                    </td>
                     <td>
                       <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-md-secondary-container text-md-on-secondary-container whitespace-nowrap">
                         {formatRole(user.role)}
                       </span>
                     </td>
                     <td className="truncate">
-                      {user.identificationNumber || '-'}
+                      <div className="font-mono">{user.identificationNumber || '-'}</div>
+                      {user.address && (
+                        <div className="text-[11px] text-md-on-surface-variant/70 truncate max-w-[190px]" title={user.address}>
+                          {user.address}
+                        </div>
+                      )}
                     </td>
                     <td className="truncate">
                       {user.contactNumber || '-'}
@@ -325,11 +357,17 @@ export const UserAdministration: React.FC = () => {
 
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          setIsModalOpen(false);
+          setIdentityInfo(null);
+        }}
         title="Add New User"
         footer={
           <div className="flex gap-3">
-            <MD3Button variant="text" onClick={() => setIsModalOpen(false)}>
+            <MD3Button variant="text" onClick={() => {
+              setIsModalOpen(false);
+              setIdentityInfo(null);
+            }}>
               Cancel
             </MD3Button>
             <MD3Button form="addUserForm" type="submit">
@@ -353,11 +391,43 @@ export const UserAdministration: React.FC = () => {
           )}
           
           <form id="addUserForm" onSubmit={handleCreateUser} className="space-y-4">
+            <div>
+              <IdentificationInput 
+                label="Identification Number (IC) *" 
+                value={formData.identificationNumber}
+                onChange={(e) => setFormData({...formData, identificationNumber: e.target.value})}
+                placeholder="900101-14-5532"
+              />
+              {identityInfo?.isValid ? (
+                <div className="mt-2 p-2.5 rounded-xl bg-md-primary/10 border border-md-primary/20 text-md-primary text-xs flex items-center justify-between animate-fadeIn">
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle size={14} className="flex-shrink-0 text-md-primary" />
+                    <span>Verified: <strong>{identityInfo.state}</strong> • <strong>{identityInfo.gender}</strong> • Born {identityInfo.dateOfBirth}</span>
+                  </div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider bg-md-primary/20 text-md-primary px-1.5 py-0.5 rounded flex items-center gap-1">
+                    <Sparkles size={10} /> Auto-filled
+                  </span>
+                </div>
+              ) : (
+                <div className="mt-1 text-[11px] text-md-on-surface-variant/70 pl-1">
+                  Enter 12-digit IC to auto-resolve verified name and residential address.
+                </div>
+              )}
+            </div>
+
             <MD3Input 
-              label="Full Name *" 
+              label="Full Name (Locked to IC) *" 
               required 
-              value={formData.name}
-              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              value={formData.name} 
+              readOnly 
+              placeholder="Auto-populated from IC"
+            />
+            <MD3Input 
+              label="Residential Address (Locked to IC) *" 
+              required 
+              value={formData.address} 
+              readOnly 
+              placeholder="Auto-populated from IC"
             />
             <MD3Input 
               label="Email Address *" 
@@ -366,17 +436,21 @@ export const UserAdministration: React.FC = () => {
               value={formData.email}
               onChange={(e) => setFormData({...formData, email: e.target.value})}
             />
+
+            {/* Temporary password notice container placed below email input */}
+            <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-900 dark:text-blue-200 flex items-start gap-2.5">
+              <KeyRound size={16} className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+              <div className="leading-relaxed">
+                <span>A secure temporary password will be auto-generated and emailed to this address. The user will be required to set a permanent password on first login.</span>
+              </div>
+            </div>
+
             <MD3Input 
               label="Contact Number *" 
               required 
               value={formData.contactNumber}
               onChange={(e) => setFormData({...formData, contactNumber: e.target.value})}
-            />
-            <IdentificationInput 
-              label="Identification Number (IC) *" 
-              value={formData.identificationNumber}
-              onChange={(e) => setFormData({...formData, identificationNumber: e.target.value})}
-              placeholder="900101-14-5532"
+              placeholder="0123456789"
             />
             
             <div className="flex flex-col gap-1.5 mt-2 z-10 relative">

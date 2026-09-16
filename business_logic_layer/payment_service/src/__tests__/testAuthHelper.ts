@@ -26,6 +26,7 @@ export async function getTestSessionToken(
 
   await prisma.userSession.create({
     data: {
+      sessionId: `SES-${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${crypto.randomBytes(4).toString('hex')}`,
       userId: user.userId,
       sessionToken: token,
       ipAddress: "127.0.0.1",

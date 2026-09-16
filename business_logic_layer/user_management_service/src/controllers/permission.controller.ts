@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../prisma';
 import { UserRole } from '@prisma/client';
 import { logAudit } from '../services/audit.service';
+import { generateCustomId } from '../utils/idGenerator';
 
 /**
  * Get permissions for a specific role
@@ -86,6 +87,7 @@ export const updateRolePermissions = async (req: Request, res: Response): Promis
             canAccess: effectiveCanAccess
           },
           create: {
+            id: await generateCustomId('rolePermission', tx),
             role: role as UserRole,
             pagePath: perm.pagePath,
             canAccess: effectiveCanAccess

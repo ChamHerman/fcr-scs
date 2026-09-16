@@ -143,7 +143,7 @@ export const RoleManagement: React.FC = () => {
   const isSysAdmin = selectedRole === 'SYSTEM_ADMINISTRATOR';
 
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto">
+    <div className="main blur-shape-bg">
       <PageHeader
         title="Role Management"
         subtitle="Configure access control for different system roles."

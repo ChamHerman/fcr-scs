@@ -510,7 +510,7 @@ const STOCK_DEFAULTS: Record<string, { subject: string; bodyContent: string }> =
   }, [templates, searchQuery, selectedCategory]);
 
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto">
+    <div className="main blur-shape-bg">
       {/* Toast Alert */}
       {toast && (
         <div

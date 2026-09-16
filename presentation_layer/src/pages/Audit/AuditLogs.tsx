@@ -440,6 +440,7 @@ export const AuditLogs: React.FC = () => {
                           {log.activityType}
                         </div>
                         <div className="text-[11px] text-md-on-surface-variant/70 flex items-center gap-1 mt-0.5 truncate">
+                          <span className="font-mono text-[10px] text-md-primary font-semibold">{log.logId} ·</span>
                           <span className="font-medium">{log.moduleName}</span>
                           {log.caseReference && (
                             <span className="font-mono text-xs text-md-primary">· {log.caseReference}</span>
@@ -483,7 +484,7 @@ export const AuditLogs: React.FC = () => {
           isOpen={!!inspectLog}
           onClose={() => setInspectLog(null)}
           title="Audit Trail Log Inspection"
-          subtitle={`Trace ID: ${inspectLog.logId}`}
+          subtitle={`Trace ID / Reference: ${inspectLog.logId}`}
           maxWidth="max-w-2xl"
           footer={
             <div className="flex justify-between items-center w-full">
@@ -499,6 +500,23 @@ export const AuditLogs: React.FC = () => {
           <div className="space-y-4">
             {/* Top Grid of Metadata */}
             <div className="grid grid-cols-2 gap-3 p-3.5 rounded-xl bg-md-surface-container-low border border-md-outline/20 text-xs">
+              <div className="col-span-2 pb-2 border-b border-md-outline/10 flex items-center justify-between">
+                <div>
+                  <div className="text-md-on-surface-variant font-medium">Compliance Log Reference</div>
+                  <div className="font-mono text-sm font-bold text-md-primary mt-0.5">
+                    {inspectLog.logId}
+                  </div>
+                </div>
+                <Button
+                  variant="outlined"
+                  size="sm"
+                  onClick={() => handleCopy(inspectLog.logId, 'id')}
+                  className="h-7 text-xs flex items-center gap-1"
+                >
+                  {copiedId ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
+                  {copiedId ? 'Copied' : 'Copy ID'}
+                </Button>
+              </div>
               <div>
                 <div className="text-md-on-surface-variant font-medium">Timestamp (UTC)</div>
                 <div className="font-mono text-sm text-md-on-surface mt-0.5">

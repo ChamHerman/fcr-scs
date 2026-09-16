@@ -34,6 +34,8 @@ import {
   LogOut
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { getRoleShortForm, getRoleTitle } from '../../utils/roleUtils';
+import { FirstTimePasswordModal } from '../auth/FirstTimePasswordModal';
 
 export const AdminLayout: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -380,20 +382,32 @@ export const AdminLayout: React.FC = () => {
         }
       `}</style>
       <div className="admin-layout" ref={containerRef}>
+        <FirstTimePasswordModal />
         <aside className="admin-sidebar">
           <div className="admin-sidebar-header">
-            <div className="admin-sidebar-brand" style={{ display: isCollapsed ? 'none' : 'flex' }}>
-              <div className="brand-icon">
-                <Scale size={24} />
+            <div 
+              className="admin-sidebar-brand" 
+              style={{ display: isCollapsed ? 'none' : 'flex', cursor: 'pointer' }}
+              onClick={() => navigate('/admin/profile')}
+              title={`Logged in as ${getRoleTitle(user?.role)} (${getRoleShortForm(user?.role)}) — Click to view Profile`}
+            >
+              <div className="brand-icon" style={{ fontWeight: 800, fontSize: '13px', letterSpacing: '0.5px' }}>
+                {getRoleShortForm(user?.role)}
               </div>
               <span>FCR·SCS Admin</span>
             </div>
             {isCollapsed && (
-              <div className="brand-icon" style={{
-                width: 40, height: 40, background: 'var(--md-primary)', borderRadius: 12,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0
-              }}>
-                <Scale size={24} />
+              <div 
+                className="brand-icon" 
+                style={{
+                  width: 40, height: 40, background: 'var(--md-primary)', borderRadius: 12,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0,
+                  fontWeight: 800, fontSize: '13px', letterSpacing: '0.5px', cursor: 'pointer'
+                }}
+                onClick={() => navigate('/admin/profile')}
+                title={`Logged in as ${getRoleTitle(user?.role)} (${getRoleShortForm(user?.role)}) — Click to view Profile`}
+              >
+                {getRoleShortForm(user?.role)}
               </div>
             )}
             <button

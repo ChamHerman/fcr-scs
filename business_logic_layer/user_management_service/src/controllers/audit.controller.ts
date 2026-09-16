@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../prisma';
+import { logAudit } from '../services/audit.service';
 
 export async function getAuditLogs(req: Request, res: Response): Promise<void> {
   try {
@@ -43,6 +44,7 @@ export async function getAuditLogs(req: Request, res: Response): Promise<void> {
     if (search && typeof search === 'string' && search.trim().length > 0) {
       const q = search.trim();
       where.OR = [
+        { logId: { contains: q, mode: 'insensitive' } },
         { activityType: { contains: q, mode: 'insensitive' } },
         { userRole: { contains: q, mode: 'insensitive' } },
         { caseReference: { contains: q, mode: 'insensitive' } },
@@ -149,6 +151,7 @@ export async function exportAuditLogsCsv(req: Request, res: Response): Promise<v
     if (search && typeof search === 'string' && search.trim().length > 0) {
       const q = search.trim();
       where.OR = [
+        { logId: { contains: q, mode: 'insensitive' } },
         { activityType: { contains: q, mode: 'insensitive' } },
         { userRole: { contains: q, mode: 'insensitive' } },
         { caseReference: { contains: q, mode: 'insensitive' } },
@@ -229,6 +232,18 @@ export async function exportAuditLogsCsv(req: Request, res: Response): Promise<v
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="audit_logs_${timestamp}.csv"`);
+
+    logAudit({
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'AUDIT_LOGS_EXPORTED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { exportedRows: rows.length, filename: `audit_logs_${timestamp}.csv` },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     res.status(200).send(csvContent);
   } catch (error) {
     console.error('[AuditController] Error exporting audit logs to CSV:', error);
@@ -250,6 +265,17 @@ export async function archiveOldLogs(req: Request, res: Response): Promise<void>
       data: {
         isArchived: true,
       },
+    });
+
+    logAudit({
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'AUDIT_LOGS_ARCHIVED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'WARNING',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { archivedCount: result.count, olderThanDays: days },
+      systemResponse: 'SUCCESS (200)',
     });
 
     res.json({

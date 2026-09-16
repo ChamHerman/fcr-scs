@@ -2,6 +2,7 @@ import api from './api';
 
 export interface AuditLogItem {
   logId: string;
+  customId?: string | null;
   userId: string | null;
   userRole: string | null;
   activityType: string;

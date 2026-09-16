@@ -11,26 +11,77 @@ function getTransporter() {
   });
 }
 
+const STOCK_TEMPLATES: Record<string, { subject: string; bodyContent: string }> = {
+  PASSWORD_RESET: {
+    subject: 'FCR-SCS: Password Reset Request',
+    bodyContent: `<div style="font-family: sans-serif; padding: 20px;">
+      <h2>Password Reset Request</h2>
+      <p>Hi {{name}},</p>
+      <p>You recently requested to reset your password for your FCR-SCS account. Click the button below to reset it:</p>
+      <a href="{{resetLink}}" style="background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0;">Reset Password</a>
+      <p>If you did not request a password reset, please ignore this email. This link is valid for 60 minutes.</p>
+      <br><p>Thanks,<br>The FCR-SCS Team</p>
+    </div>`,
+  },
+  ACCOUNT_ACTIVATION: {
+    subject: 'FCR-SCS: Activate Your Account',
+    bodyContent: `<div style="font-family: sans-serif; padding: 20px;">
+      <h2>Activate Your Account</h2>
+      <p>Hi {{name}},</p>
+      <p>Thank you for registering with FCR-SCS. Please click the button below to activate your account:</p>
+      <a href="{{activationLink}}" style="background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0;">Activate Account</a>
+      <p>If you did not register for an account, please ignore this email.</p>
+      <br><p>Thanks,<br>The FCR-SCS Team</p>
+    </div>`,
+  },
+  TEMPORARY_CREDENTIALS: {
+    subject: 'FCR-SCS: Your Account Credentials',
+    bodyContent: `<div style="font-family: sans-serif; padding: 20px; color: #1f2937;">
+      <h2 style="color: #0066cc;">Welcome to FCR-SCS</h2>
+      <p>Dear {{name}},</p>
+      <p>An administrator has provisioned an account for you with the role of <strong>{{role}}</strong>.</p>
+      <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+        <p style="margin: 0 0 10px 0;"><strong>Login Email:</strong> {{email}}</p>
+        <p style="margin: 0;"><strong>Temporary Password:</strong> <code style="background: #e5e7eb; padding: 2px 6px; border-radius: 4px; font-size: 1.1em;">{{temporaryPassword}}</code></p>
+      </div>
+      <p style="color: #b91c1c; font-weight: bold;">Important: For security reasons, you are required to change this temporary password upon your first login.</p>
+      <a href="{{loginUrl}}" style="background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 15px 0;">Sign In to Your Account</a>
+      <br><p>Regards,<br>The FCR-SCS Administration Team</p>
+    </div>`,
+  },
+  EMAIL_CHANGE_VERIFICATION: {
+    subject: 'FCR-SCS: Verify Your New Email Address',
+    bodyContent: `<div style="font-family: sans-serif; padding: 20px; color: #1f2937;">
+      <h2 style="color: #0066cc;">Email Address Verification</h2>
+      <p>Dear {{name}},</p>
+      <p>You requested to update your registered email address on the FCR-SCS platform to <strong>{{newEmail}}</strong>.</p>
+      <p>Your current login email will remain unchanged until you confirm this change.</p>
+      <a href="{{verificationLink}}" style="background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0;">Confirm New Email Address</a>
+      <p>If you did not initiate this request, please contact your system administrator immediately.</p>
+      <br><p>Regards,<br>The FCR-SCS Administration Team</p>
+    </div>`,
+  }
+};
+
 /**
- * Sends an email using a database template.
+ * Sends an email using a database template or built-in stock template.
  * @param to Recipient email address
- * @param templateName The name of the template in the database (e.g., 'PASSWORD_RESET')
- * @param variables Key-value pairs to replace in the template (e.g., { name: 'John', token: '123' })
+ * @param templateName The name of the template (e.g., 'PASSWORD_RESET', 'TEMPORARY_CREDENTIALS')
+ * @param variables Key-value pairs to replace in the template
  */
 export async function sendTemplatedEmail(to: string, templateName: string, variables: Record<string, string>) {
   try {
-    // 1. Fetch template from database
-    const template = await prisma.emailTemplate.findUnique({
+    // 1. Fetch template from database or fallback to stock
+    let template = await prisma.emailTemplate.findUnique({
       where: { templateName },
     });
 
-    if (!template) {
-      throw new Error(`Email template '${templateName}' not found in database.`);
-    }
+    let subject = template?.subject || STOCK_TEMPLATES[templateName]?.subject;
+    let body = template?.bodyContent || STOCK_TEMPLATES[templateName]?.bodyContent;
 
-    // 2. Replace variables in subject and body
-    let subject = template.subject;
-    let body = template.bodyContent;
+    if (!subject || !body) {
+      throw new Error(`Email template '${templateName}' not found in database or stock presets.`);
+    }
 
     for (const [key, value] of Object.entries(variables)) {
       const placeholder = `{{${key}}}`;
