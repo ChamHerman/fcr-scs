@@ -5,6 +5,7 @@ import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { landAcquisitionApi } from "../../../services/landAcquisitionApi";
 import { useNotification } from "../../../components/ui/NotificationSystem";
+import { useRole } from "../../../hooks/useRole";
 
 interface ValuerAssignmentModalProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ export const ValuerAssignmentModal: React.FC<ValuerAssignmentModalProps> = ({
   onClose,
   onAssigned,
 }) => {
+  const { user } = useRole();
   const { notify } = useNotification();
   const [valuers, setValuers] = useState<any[]>([]);
   const [loadingValuers, setLoadingValuers] = useState<boolean>(false);
@@ -76,6 +78,7 @@ export const ValuerAssignmentModal: React.FC<ValuerAssignmentModalProps> = ({
         valuerId: selectedValuerId,
         acceptancePeriodDays: days,
         remarks: assignmentRemarks || undefined,
+        assignedById: user?.userId,
       });
 
       const selectedValuer = valuers.find((v) => v.userId === selectedValuerId);

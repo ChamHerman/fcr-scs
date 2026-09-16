@@ -24,11 +24,50 @@ export async function assignValuer(input: AssignValuerInput) {
     throw new Error("Target user is not an active Land Valuer");
   }
 
-  // 3. Calculate due date
+  // 3. Verify Assigner User
+  let validAssignerId = assignedById;
+  if (validAssignerId) {
+    const assigner = await prisma.user.findUnique({
+      where: { userId: validAssignerId },
+    });
+    if (!assigner || !assigner.isActive) {
+      throw new Error("Assigning user does not exist or is inactive");
+    }
+
+    // Role check: Government Admin & System Admin can assign any case.
+    // Government Officer can only assign their own registered cases.
+    if (
+      assigner.role !== UserRole.GOVERNMENT_ADMINISTRATOR &&
+      assigner.role !== UserRole.SYSTEM_ADMINISTRATOR
+    ) {
+      if (assigner.role === UserRole.GOVERNMENT_OFFICER) {
+        if (caseData.createdById !== assigner.userId) {
+          throw new Error("Government Officers can only assign land valuers to cases they registered.");
+        }
+      } else {
+        throw new Error("Only Government Administrators and System Administrators can assign land valuers.");
+      }
+    }
+  } else {
+    // If no assignedById provided, safely fallback to an active Government Administrator or System Administrator
+    const defaultAdmin = await prisma.user.findFirst({
+      where: {
+        role: { in: [UserRole.GOVERNMENT_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR] },
+        isActive: true,
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!defaultAdmin) {
+      throw new Error("No active Government Administrator found to assign case.");
+    }
+    validAssignerId = defaultAdmin.userId;
+  }
+
+  // 4. Calculate due date
   const dueDate = new Date();
   dueDate.setDate(dueDate.getDate() + acceptancePeriodDays);
 
-  // 4. Transaction: CaseAssignment + AcquisitionCase status update
+  // 5. Transaction: CaseAssignment + AcquisitionCase status update
   const result = await prisma.$transaction(async (tx) => {
     // Create CaseAssignment record (without pre-creating a ValuationReport)
     const assignment = await tx.caseAssignment.create({
@@ -38,7 +77,7 @@ export async function assignValuer(input: AssignValuerInput) {
         assignmentDate: new Date(),
         dueDate,
         remarks: remarks || "",
-        createdById: assignedById,
+        createdById: validAssignerId!,
       },
       include: {
         assignedTo: true,

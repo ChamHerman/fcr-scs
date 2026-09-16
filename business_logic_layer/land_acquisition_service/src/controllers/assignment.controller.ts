@@ -13,7 +13,7 @@ export async function assignValuer(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const userId = assignedById || "00000000-0000-0000-0000-000000000001";
+  const userId = assignedById || (req as any).user?.userId || (req.headers["x-user-id"] as string) || undefined;
 
   try {
     const assignment = await assignmentService.assignValuer({
