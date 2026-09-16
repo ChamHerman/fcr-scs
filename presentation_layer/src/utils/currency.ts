@@ -56,7 +56,7 @@ export const formatCurrencyWithDecimals = (
   val: string | number | null | undefined
 ): string => {
   if (val === null || val === undefined || val === "") return "";
-  const clean = String(val).replace(/,/g, "").trim();
+  const clean = String(val).replace(/[^0-9.-]/g, "").trim();
   if (!clean || isNaN(Number(clean))) return "";
   const num = parseFloat(clean);
   if (isNaN(num)) return "";

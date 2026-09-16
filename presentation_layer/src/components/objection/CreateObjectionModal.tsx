@@ -8,6 +8,7 @@ import { FileUpload } from '../ui/FileUpload';
 import { useNotification } from '../ui/NotificationSystem';
 import { compensationApi } from '../../services/compensationApi';
 import { ConfirmSubmitModal, ConfirmRow } from '../member/ConfirmSubmitModal';
+import { formatCurrencyRM } from '../../utils/currency';
 
 export interface CreateObjectionFile {
   id: string;
@@ -315,7 +316,7 @@ export const CreateObjectionModal: React.FC<CreateObjectionModalProps> = ({
             {caseId && <ConfirmRow label="Case" value={caseId} mono />}
             <ConfirmRow
               label="Requested Amount"
-              value={`RM ${Number(amount || 0).toLocaleString('en-MY', { minimumFractionDigits: 2 })}`}
+              value={formatCurrencyRM(amount)}
             />
             <ConfirmRow label="Grounds" value={reason.trim()} />
             {files.length > 0 && <ConfirmRow label="Attachments" value={files.map((f) => f.name).join(', ')} />}

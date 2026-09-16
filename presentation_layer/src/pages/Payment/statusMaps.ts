@@ -76,6 +76,27 @@ export function formatReasonLabel(reason: string | null | undefined): string {
   return reason;
 }
 
+/**
+ * Classifies whether a bank transfer failure is Category 1 (Recipient Account fault)
+ * vs Category 2 (Bank / Network / Clearing / System fault).
+ */
+export function isCategory1BankFailure(reason?: string | null): boolean {
+  if (!reason) return false;
+  const s = reason.trim().toLowerCase();
+  return (
+    s.includes('recipient_account') ||
+    s.includes('name_mismatch') ||
+    s.includes('account number not found') ||
+    s.includes('routing code invalid') ||
+    s.includes('dormant') ||
+    s.includes('frozen') ||
+    s.includes('closed') ||
+    s.includes('does not match bank account records') ||
+    s.includes('beneficiary name') ||
+    s.includes('account invalid')
+  );
+}
+
 export const PAYMENT_STATUSES = [
   'All',
   'Bank Details Pending',

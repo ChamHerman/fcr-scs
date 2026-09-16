@@ -294,9 +294,11 @@ export async function createObjection(input: CreateObjectionInput) {
 
   if (isAccepted && acceptanceTime) {
     const now = new Date();
-    const diffHours = (now.getTime() - new Date(acceptanceTime).getTime()) / (1000 * 60 * 60);
+    const GRACE_PERIOD_MS = 24 * 60 * 60 * 1000;
+    const NETWORK_LATENCY_BUFFER_MS = 60 * 1000; // 60s network tolerance buffer for requests submitted near 0s
+    const elapsedMs = now.getTime() - new Date(acceptanceTime).getTime();
 
-    if (diffHours > 24) {
+    if (elapsedMs > (GRACE_PERIOD_MS + NETWORK_LATENCY_BUFFER_MS)) {
       throw new Error(
         "The 24-hour grace period for this accepted offer letter has expired. Objections cannot be submitted after the grace period."
       );

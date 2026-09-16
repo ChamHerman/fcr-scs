@@ -89,10 +89,83 @@ export async function newPaymentId(): Promise<string> {
  */
 export const BANK_SUBMISSION_DELAY_MS = 5_000;
 
-export function formatPaymentResponse<T extends { id: string; caseId: string }>(pc: T): T & { paymentId: string } {
+/**
+ * Normalizes any contact number to local Malaysian format (e.g. "011111111"),
+ * removing all "+60", "+6", or "60" prefixes and ensuring leading "0".
+ */
+export function normalizeLocalPhoneNumber(raw?: string | null): string {
+  if (!raw) return "";
+  let cleaned = String(raw).trim().replace(/[\s-]/g, "");
+  if (cleaned.startsWith("+60")) {
+    cleaned = cleaned.slice(3);
+  } else if (cleaned.startsWith("+6")) {
+    cleaned = cleaned.slice(2);
+  } else if (cleaned.startsWith("60")) {
+    cleaned = cleaned.slice(2);
+  }
+  if (!cleaned.startsWith("0") && cleaned.length > 0) {
+    cleaned = `0${cleaned}`;
+  }
+  return cleaned.replace(/\D/g, "");
+}
+
+// Prisma's `include: { authorisations: true }` carries no relation-level orderBy, so
+// Postgres returns those rows in arbitrary physical order. Every GA audit trail reads
+// this array as a chronological log, so normalise it once at the shared serializer.
+const byCreatedAtAsc = (a: { createdAt?: Date | string }, b: { createdAt?: Date | string }) =>
+  new Date(a.createdAt ?? 0).getTime() - new Date(b.createdAt ?? 0).getTime();
+
+/**
+ * Calculates the next bank working day in Malaysia (Monday to Friday, 09:00 AM MYT / UTC+8).
+ * Saturday and Sunday roll forward to Monday 09:00 AM MYT.
+ */
+export function calculateNextWorkingDayMYT(fromDate: Date = new Date()): Date {
+  const mytOffsetMs = 8 * 60 * 60 * 1000;
+  const mytDate = new Date(fromDate.getTime() + mytOffsetMs);
+
+  // Advance by 1 calendar day in MYT
+  mytDate.setUTCDate(mytDate.getUTCDate() + 1);
+
+  // If Saturday (6) -> skip 2 days to Monday
+  // If Sunday (0) -> skip 1 day to Monday
+  const day = mytDate.getUTCDay();
+  if (day === 6) {
+    mytDate.setUTCDate(mytDate.getUTCDate() + 2);
+  } else if (day === 0) {
+    mytDate.setUTCDate(mytDate.getUTCDate() + 1);
+  }
+
+  // Set time to 09:00:00.000 AM MYT (01:00:00.000 UTC)
+  mytDate.setUTCHours(9, 0, 0, 0);
+
+  return new Date(mytDate.getTime() - mytOffsetMs);
+}
+
+export function extractScheduledFor(pc: any): string | null {
+  if (!pc) return null;
+  const fts = Array.isArray(pc.failedTransactions) ? pc.failedTransactions : [];
+  const latest = fts[fts.length - 1];
+  if (latest?.resolution && latest.resolution.startsWith("schedule_next_working_day:")) {
+    return latest.resolution.slice("schedule_next_working_day:".length).trim();
+  }
+  if (pc.status === PaymentStatus.SCHEDULED || pc.status === "SCHEDULED" || pc.status === "Scheduled") {
+    const baseDate = latest?.resolvedAt || latest?.createdAt || pc.updatedAt || pc.createdAt || new Date();
+    return calculateNextWorkingDayMYT(new Date(baseDate)).toISOString();
+  }
+  return null;
+}
+
+export function formatPaymentResponse<T extends { id: string; caseId: string }>(pc: T): T & { paymentId: string; scheduledFor?: string | null } {
+  const anyPc = pc as any;
+  const scheduledFor = extractScheduledFor(anyPc);
   return {
     ...pc,
     paymentId: pc.id,
+    ...(scheduledFor ? { scheduledFor } : {}),
+    ...(anyPc.phoneNumber !== undefined ? { phoneNumber: normalizeLocalPhoneNumber(anyPc.phoneNumber) } : {}),
+    ...(Array.isArray(anyPc.authorisations)
+      ? { authorisations: [...anyPc.authorisations].sort(byCreatedAtAsc) }
+      : {}),
   };
 }
 
@@ -378,13 +451,15 @@ export async function submitBankDetails(data: {
     ? PaymentStatus.READY_TO_INITIATE
     : PaymentStatus.AWARD_NOTARIZATION_PENDING;
 
+  const cleanPhone = normalizeLocalPhoneNumber(data.phoneNumber || owner?.contact);
+
   const pc = await prisma.paymentCase.upsert({
     where: { caseId: data.caseId },
     update: {
       bankName: data.bankName,
       accountNumber: cleanAccountNumber,
       accountHolderName: data.accountHolderName,
-      phoneNumber: data.phoneNumber,
+      phoneNumber: cleanPhone,
       myKadNumber: data.myKadNumber,
       status: targetInitialStatus,
     },
@@ -396,7 +471,7 @@ export async function submitBankDetails(data: {
       bankName: data.bankName,
       accountNumber: cleanAccountNumber,
       accountHolderName: data.accountHolderName,
-      phoneNumber: data.phoneNumber,
+      phoneNumber: cleanPhone,
       myKadNumber: data.myKadNumber,
       status: targetInitialStatus,
     },
@@ -408,7 +483,7 @@ export async function submitBankDetails(data: {
       bankName: data.bankName,
       accountNumber: cleanAccountNumber,
       accountHolderName: data.accountHolderName,
-      phoneNumber: data.phoneNumber,
+      phoneNumber: cleanPhone,
       myKadNumber: data.myKadNumber,
       verified: true,
     });
@@ -421,7 +496,7 @@ export async function submitBankDetails(data: {
           bankName: data.bankName,
           accountNumber: cleanAccountNumber,
           accountHolderName: data.accountHolderName,
-          phoneNumber: data.phoneNumber,
+          phoneNumber: cleanPhone,
           myKadNumber: data.myKadNumber,
         },
         create: {
@@ -429,7 +504,7 @@ export async function submitBankDetails(data: {
           bankName: data.bankName,
           accountNumber: cleanAccountNumber,
           accountHolderName: data.accountHolderName,
-          phoneNumber: data.phoneNumber,
+          phoneNumber: cleanPhone,
           myKadNumber: data.myKadNumber,
         },
       });
@@ -441,7 +516,7 @@ export async function submitBankDetails(data: {
       bankName: data.bankName,
       accountNumber: cleanAccountNumber,
       accountHolderName: data.accountHolderName,
-      phoneNumber: data.phoneNumber,
+      phoneNumber: cleanPhone,
       myKadNumber: data.myKadNumber,
       verified: true,
     });
@@ -650,8 +725,14 @@ export async function confirmExecution(caseId: string, rawAdminId: string) {
   return formatPaymentResponse(enriched);
 }
 
+/**
+ * Cancel is irreversible, so only edge-case reasons that mean "this case is
+ * no longer needed / must be refiled" are allowed. A landowner bank-account
+ * change goes through requestDetailsUpdate (NEW_BANK_DETAILS_PENDING) instead.
+ * Keep in sync with CANCELLATION_REASONS in paymentModals.tsx; the controller
+ * enforces this list as an allow-guard on POST /cancel.
+ */
 export const CANCELLATION_REASONS = {
-  LANDOWNER_REQUESTED_ACCOUNT_CHANGE: "Landowner requested bank account change / account closed",
   LEGAL_DISPUTE_OR_INJUNCTION: "Land parcel ownership dispute or court injunction received",
   INCORRECT_AWARD_AMOUNT: "Statutory compensation award calculation error detected",
   SUSPECTED_FRAUD_OR_IMPERSONATION: "Security flag raised on beneficiary identity or banking document",
@@ -888,11 +969,16 @@ export async function scheduleTomorrow(caseId: string) {
   });
   if (!pc) throw new Error("Case not found");
 
+  const scheduledFor = calculateNextWorkingDayMYT();
+
   const latestFailed = pc.failedTransactions[pc.failedTransactions.length - 1];
   if (latestFailed) {
     await prisma.failedTransaction.update({
       where: { id: latestFailed.id },
-      data: { resolution: "schedule_tomorrow", resolvedAt: new Date() },
+      data: {
+        resolution: `schedule_next_working_day:${scheduledFor.toISOString()}`,
+        resolvedAt: new Date(),
+      },
     });
   }
 
@@ -902,6 +988,52 @@ export async function scheduleTomorrow(caseId: string) {
     include: { authorisations: true, failedTransactions: true },
   });
   return formatPaymentResponse(updated);
+}
+
+export async function checkAndAutoExecuteScheduledTransfers(): Promise<number> {
+  try {
+    const scheduledCases = await prisma.paymentCase.findMany({
+      where: {
+        status: PaymentStatus.SCHEDULED,
+        deletedAt: null,
+      },
+      include: {
+        failedTransactions: true,
+      },
+    });
+
+    if (!scheduledCases || scheduledCases.length === 0) return 0;
+
+    const now = new Date();
+    let executedCount = 0;
+
+    for (const pc of scheduledCases) {
+      const scheduledIso = extractScheduledFor(pc);
+      const scheduledDate = scheduledIso ? new Date(scheduledIso) : null;
+
+      if (scheduledDate && now.getTime() >= scheduledDate.getTime()) {
+        const latestFailed = pc.failedTransactions[pc.failedTransactions.length - 1];
+        if (latestFailed) {
+          await prisma.failedTransaction.update({
+            where: { id: latestFailed.id },
+            data: { resolution: "auto_executed_scheduled", resolvedAt: now },
+          });
+        }
+
+        await prisma.paymentCase.update({
+          where: { id: pc.id },
+          data: { status: PaymentStatus.BANK_APPROVAL_PENDING },
+        });
+
+        executedCount++;
+      }
+    }
+
+    return executedCount;
+  } catch (err) {
+    console.error("[payment_service] Error auto-executing scheduled transfers:", err);
+    return 0;
+  }
 }
 
 export async function getPaymentStatus(caseId: string, userRole?: string, userId?: string) {
@@ -977,7 +1109,7 @@ export async function getPaymentStatus(caseId: string, userRole?: string, userId
         beneficiaryId: primaryOwner.ownerId,
         amount,
         accountHolderName: primaryOwner?.name || null,
-        phoneNumber: primaryOwner?.contact || null,
+        phoneNumber: normalizeLocalPhoneNumber(primaryOwner?.contact) || null,
         myKadNumber: primaryOwner?.nric || null,
         status: initialStatus,
         requiredSignatures: 0,
@@ -1167,7 +1299,7 @@ export async function getAllCases(userRole?: string, userId?: string) {
             beneficiaryId: primaryOwner.ownerId,
             amount,
             accountHolderName: primaryOwner?.name || null,
-            phoneNumber: primaryOwner?.contact || null,
+            phoneNumber: normalizeLocalPhoneNumber(primaryOwner?.contact) || null,
             myKadNumber: primaryOwner?.nric || null,
             status: initialStatus,
             requiredSignatures: 0,
@@ -1205,13 +1337,15 @@ export async function getAllCases(userRole?: string, userId?: string) {
     console.error("[payment_service] Error syncing accepted cases to payment cases:", err);
   }
 
+  await checkAndAutoExecuteScheduledTransfers();
+
   const cases = await prisma.paymentCase.findMany({
     where: {
       deletedAt: null,
       caseId: { in: Array.from(eligibleCaseIds) },
     },
     include: {
-      authorisations: true,
+      authorisations: { orderBy: { createdAt: "asc" } },
       receipt: true,
       failedTransactions: true,
     },
@@ -1344,7 +1478,7 @@ export async function getSavedBankDetails(userId?: string, myKadNumber?: string,
             bankName: payout.bankName,
             accountNumber: payout.accountNumber,
             accountHolderName: payout.accountHolderName,
-            phoneNumber: payout.phoneNumber,
+            phoneNumber: normalizeLocalPhoneNumber(payout.phoneNumber),
             myKadNumber: payout.myKadNumber,
             verified: true,
           });
@@ -1371,7 +1505,7 @@ export async function getSavedBankDetails(userId?: string, myKadNumber?: string,
         bankName: rec.bankName,
         accountNumber: rec.accountNumber,
         accountHolderName: rec.accountHolderName,
-        phoneNumber: rec.phoneNumber,
+        phoneNumber: normalizeLocalPhoneNumber(rec.phoneNumber),
         myKadNumber: rec.myKadNumber,
         verified: rec.verified,
       });
@@ -1434,7 +1568,7 @@ export async function getSavedBankDetails(userId?: string, myKadNumber?: string,
           bankName: pc.bankName,
           accountNumber: pc.accountNumber,
           accountHolderName: pc.accountHolderName || currentUser?.name || name,
-          phoneNumber: pc.phoneNumber || "",
+          phoneNumber: normalizeLocalPhoneNumber(pc.phoneNumber),
           myKadNumber: pc.myKadNumber || currentUser?.identificationNumber || myKadNumber || "",
           verified: pc.status !== PaymentStatus.TRANSFER_FAILED && pc.status !== PaymentStatus.TRANSFER_REJECTED,
         });
@@ -1469,12 +1603,14 @@ export async function saveMemberBankDetails(
     userName,
   });
 
+  const cleanPhone = normalizeLocalPhoneNumber(data.phoneNumber || user?.contactNumber || "");
+
   const record: SavedAccountRecord = {
     userId,
     bankName: data.bankName,
     accountNumber: cleanAccountNumber,
     accountHolderName: userName || data.accountHolderName,
-    phoneNumber: data.phoneNumber || user?.contactNumber || "",
+    phoneNumber: cleanPhone,
     myKadNumber: user?.identificationNumber || data.myKadNumber || "",
     verified: true,
   };
@@ -1545,7 +1681,7 @@ export async function saveMemberBankDetails(
             bankName: data.bankName,
             accountNumber: cleanAccountNumber,
             accountHolderName: data.accountHolderName,
-            phoneNumber: data.phoneNumber,
+            phoneNumber: cleanPhone,
             myKadNumber: data.myKadNumber,
             encryptedBankDetails,
           },
@@ -1553,7 +1689,7 @@ export async function saveMemberBankDetails(
             bankName: data.bankName,
             accountNumber: cleanAccountNumber,
             accountHolderName: data.accountHolderName,
-            phoneNumber: data.phoneNumber,
+            phoneNumber: cleanPhone,
             myKadNumber: data.myKadNumber,
             encryptedBankDetails,
             paymentCaseId: pc.id,
@@ -1590,6 +1726,8 @@ export async function getFailedTransactions() {
   const eligibleCaseMap = new Map(eligibleAcquisitionCases.map((c) => [c.caseId, c.status]));
   const eligibleCaseIds = Array.from(new Set(eligibleAcquisitionCases.map((c) => c.caseId)));
 
+  await checkAndAutoExecuteScheduledTransfers();
+
   // GA-rejected transfers (FR-018) carry no failedTransaction row on purpose —
   // they enter this register by status instead, awaiting "Mark as Resolved".
   const cases = await prisma.paymentCase.findMany({
@@ -1601,7 +1739,8 @@ export async function getFailedTransactions() {
     include: { failedTransactions: true, authorisations: true },
     orderBy: { updatedAt: "desc" },
   });
-  return cases.map((c) => ({
+  const enriched = await Promise.all(cases.map(enrichPaymentWithAdminNames));
+  return enriched.map((c) => ({
     ...formatPaymentResponse(c),
     caseStatus: eligibleCaseMap.get(c.caseId) || "OFFER_ACCEPTED",
   }));
@@ -1717,6 +1856,7 @@ export async function resolveDispute(caseId: string, rawAdminId: string, resolut
 // -------------------------------------------------------------
 
 export async function getBankPendingTransfers() {
+  await checkAndAutoExecuteScheduledTransfers();
   const cases = await prisma.paymentCase.findMany({
     where: { status: PaymentStatus.BANK_APPROVAL_PENDING },
     include: { authorisations: true, failedTransactions: true },
@@ -1798,7 +1938,9 @@ export async function rejectBankTransfer(caseId: string, errorReason: string, is
     },
   });
 
-  const targetStatus = isRejectedCategory ? PaymentStatus.TRANSFER_REJECTED : PaymentStatus.TRANSFER_FAILED;
+  // All rejections from commercial bank gateway result in TRANSFER_FAILED.
+  // TRANSFER_REJECTED is reserved strictly for GA multi-signature rejections.
+  const targetStatus = PaymentStatus.TRANSFER_FAILED;
 
   const updated = await prisma.paymentCase.update({
     where: { caseId },

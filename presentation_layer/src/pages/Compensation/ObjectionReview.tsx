@@ -12,6 +12,7 @@ import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
 import { EditObjectionModal, DeleteObjectionModal } from "../../components/objection";
+import { formatCurrencyRM } from "../../utils/currency";
 import "../../index.css";
 import "./objection.css";
 
@@ -177,7 +178,7 @@ export const ObjectionReview: React.FC = () => {
       notify({
         type: 'success',
         title: 'Objection Approved',
-        message: `Award amount updated to RM ${Number(revised).toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}, status reset to Pending.`,
+        message: `Award amount updated to ${formatCurrencyRM(revised)}, status reset to Pending.`,
       });
     } catch (err: any) {
       console.error("Approve failed:", err);
@@ -247,7 +248,7 @@ export const ObjectionReview: React.FC = () => {
     setShowEditModal(true);
   };
 
-  const formatCurrency = (val: number) => `RM ${val.toLocaleString("en-MY", { minimumFractionDigits: 2 })}`;
+  const formatCurrency = (val: number | string | null | undefined) => formatCurrencyRM(val);
 
   if (loading) {
     return (

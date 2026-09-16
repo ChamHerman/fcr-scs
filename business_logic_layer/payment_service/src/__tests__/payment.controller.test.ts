@@ -5,14 +5,18 @@ import request from "supertest";
 import { app } from "../index";
 import { UserRole } from "@prisma/client";
 import { getTestSessionToken, cleanupTestSessions } from "./testAuthHelper";
+import * as paymentService from "../services/payment.service";
+import { prisma } from "../prisma";
 
 describe("Payment Controller & RBAC Routes", () => {
   let gaToken: string;
   let sysAdminToken: string;
+  let memberToken: string;
 
   beforeAll(async () => {
     gaToken = await getTestSessionToken(UserRole.GOVERNMENT_ADMINISTRATOR, 1, "ctrl");
     sysAdminToken = await getTestSessionToken(UserRole.SYSTEM_ADMINISTRATOR, 1, "ctrl");
+    memberToken = await getTestSessionToken(UserRole.DISPLACED_COMMUNITY_MEMBER, 1, "ctrl");
   });
 
   afterAll(async () => {
@@ -20,13 +24,55 @@ describe("Payment Controller & RBAC Routes", () => {
   });
 
   describe("POST /api/payments/bank-details", () => {
+    it("401 when request is unauthenticated", async () => {
+      const r = await request(app)
+        .post("/api/payments/bank-details")
+        .send({ caseId: "CASE-001", bankName: "Maybank" });
+      expect(r.status).toBe(401);
+    });
+
     it("400 when caseId is missing", async () => {
-      const r = await request(app).post("/api/payments/bank-details").send({ bankName: "Maybank" });
+      const r = await request(app)
+        .post("/api/payments/bank-details")
+        .set("Authorization", `Bearer ${memberToken}`)
+        .send({ bankName: "Maybank" });
       expect(r.status).toBe(400);
     });
+
     it("400 when bankName is missing", async () => {
-      const r = await request(app).post("/api/payments/bank-details").send({ caseId: "CASE-001" });
+      const r = await request(app)
+        .post("/api/payments/bank-details")
+        .set("Authorization", `Bearer ${memberToken}`)
+        .send({ caseId: "CASE-001" });
       expect(r.status).toBe(400);
+    });
+
+    it("derives the account holder name from the session user, ignoring a spoofed body value", async () => {
+      const member = await prisma.user.findUnique({ where: { email: "m1@fcrscs.gov.my" } });
+      const submit = jest
+        .spyOn(paymentService, "submitBankDetails")
+        .mockResolvedValue({ id: "pay-stub", caseId: "CASE-001" } as never);
+      const upsert = jest
+        .spyOn(prisma.receiverBankDetails, "upsert")
+        .mockResolvedValue({} as never);
+
+      await request(app)
+        .post("/api/payments/bank-details")
+        .set("Authorization", `Bearer ${memberToken}`)
+        .send({
+          caseId: "CASE-001",
+          bankName: "Maybank",
+          accountNumber: "114012345678",
+          accountHolderName: "Somebody Else",
+          myKadNumber: "900101010001",
+          phoneNumber: "0123456789",
+        });
+
+      expect(submit).toHaveBeenCalledTimes(1);
+      expect(submit.mock.calls[0][0].accountHolderName).toBe(member!.name);
+
+      submit.mockRestore();
+      upsert.mockRestore();
     });
   });
 

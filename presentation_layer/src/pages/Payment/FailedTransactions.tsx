@@ -31,13 +31,13 @@ import { PaymentRowActions } from './PaymentRowActions';
 import type { PaymentRow } from './paymentModals';
 import { normalizePaymentStatus } from './statusMaps';
 type ModalState =
-  | { type: 'view'; pc: PaymentRow }
-  | { type: 'error-log'; pc: PaymentRow }
-  | { type: 'retry'; pc: PaymentRow }
-  | { type: 'request-update'; pc: PaymentRow }
-  | { type: 'schedule'; pc: PaymentRow }
-  | { type: 'cancel'; pc: PaymentRow }
-  | { type: 'resolve-rejection'; pc: PaymentRow }
+  | { type: 'view'; caseId: string }
+  | { type: 'error-log'; caseId: string }
+  | { type: 'retry'; caseId: string }
+  | { type: 'request-update'; caseId: string }
+  | { type: 'schedule'; caseId: string }
+  | { type: 'cancel'; caseId: string }
+  | { type: 'resolve-rejection'; caseId: string }
   | null;
 
 export default function FailedTransactions() {
@@ -58,8 +58,8 @@ export default function FailedTransactions() {
     gsap.fromTo('.stats-grid, .filter-bar, .action-bar, .table-wrap', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.08, ease: 'back.out(1.2)', delay: 0.2 });
   }, { scope: pageRef });
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError('');
     try {
       const res = await paymentApi.getFailedTransactions();
@@ -67,7 +67,7 @@ export default function FailedTransactions() {
     } catch (err: any) {
       setError(err.message || 'Failed to load failed transactions');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -105,7 +105,22 @@ export default function FailedTransactions() {
 
   const closeModal = () => setModal(null);
 
-  const selectedErrorLog = modal?.type === 'error-log' ? modal.pc : null;
+  const modalPc = useMemo(
+    () => (modal ? cases.find((c) => c.caseId === modal.caseId) ?? null : null),
+    [modal, cases]
+  );
+
+  // Opening a modal silently re-fetches so it renders current backend state,
+  // not the snapshot the row was rendered with.
+  const openModal = useCallback(
+    (type: Exclude<ModalState, null>['type'], caseId: string) => {
+      setModal({ type, caseId } as ModalState);
+      loadData(true);
+    },
+    [loadData]
+  );
+
+  const selectedErrorLog = modal?.type === 'error-log' ? modalPc : null;
 
   return (
     <div className="main" ref={pageRef}>
@@ -209,7 +224,7 @@ export default function FailedTransactions() {
                     <tr
                       key={pc.caseId}
                       className={`row-clickable${deepLink === pc.caseId ? ' bg-md-secondary-container/40' : ''}`}
-                      onClick={() => setModal({ type: 'view', pc })}
+                      onClick={() => openModal('view', pc.caseId)}
                     >
                       <td>
                         <div className="flex items-center gap-1.5">
@@ -227,7 +242,7 @@ export default function FailedTransactions() {
                         </span>
                       </td>
                       <td><span className="meta-text font-mono text-xs">{latest ? fmtDate(latest.createdAt) : fmtDate(pc.updatedAt)}</span></td>
-                      <td>{paymentBadge(pc.status, pc.currentSignatures, pc.requiredSignatures)}</td>
+                      <td>{paymentBadge(pc.status, pc.currentSignatures, pc.requiredSignatures, pc.scheduledFor)}</td>
                     </tr>
                   );
                 })
@@ -289,33 +304,36 @@ export default function FailedTransactions() {
       </Modal>
 
       <ViewDetailsModal
-        pc={modal?.type === 'view' ? modal.pc : null}
+        pc={modal?.type === 'view' ? modalPc : null}
         identityId={identityId}
         onClose={closeModal}
-        onAction={(type, target) => setModal({ type, pc: target } as ModalState)}
+        onAction={(type, target) => {
+          if (type === 'confirm-execution' || type === 'confirm-receipt') return;
+          openModal(type as Exclude<ModalState, null>['type'], target.caseId);
+        }}
       />
       <RetryPaymentModal
-        pc={modal?.type === 'retry' ? modal.pc : null}
+        pc={modal?.type === 'retry' ? modalPc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />
       <RequestDetailsUpdateModal
-        pc={modal?.type === 'request-update' ? modal.pc : null}
+        pc={modal?.type === 'request-update' ? modalPc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />
       <ScheduleTomorrowModal
-        pc={modal?.type === 'schedule' ? modal.pc : null}
+        pc={modal?.type === 'schedule' ? modalPc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />
       <CancelPaymentModal
-        pc={modal?.type === 'cancel' ? modal.pc : null}
+        pc={modal?.type === 'cancel' ? modalPc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />
       <ResolveRejectionModal
-        pc={modal?.type === 'resolve-rejection' ? modal.pc : null}
+        pc={modal?.type === 'resolve-rejection' ? modalPc : null}
         onClose={closeModal}
         onDone={() => { closeModal(); loadData(); }}
       />

@@ -7,10 +7,33 @@ import {
   submitBankDetails,
   saveMemberBankDetails,
   getSavedBankDetails,
+  formatPaymentResponse,
 } from "../services/payment.service";
 import { prisma } from "../prisma";
 import { CaseStatus, PaymentStatus } from "@prisma/client";
 import { generateReceipt } from "../services/receipt.service";
+
+describe("formatPaymentResponse — GA audit trail ordering", () => {
+  it("returns authorisations sorted by createdAt ascending regardless of input order", () => {
+    const out = formatPaymentResponse({
+      id: "PMT-1",
+      caseId: "CASE-1",
+      authorisations: [
+        { adminId: "ga5", action: "reject", createdAt: new Date("2026-09-15T19:13:00Z") },
+        { adminId: "ga3", action: "initiate", createdAt: new Date("2026-09-15T18:14:00Z") },
+        { adminId: "ga2", action: "mark_resolved", createdAt: new Date("2026-09-15T19:12:00Z") },
+        { adminId: "ga1", action: "authorise", createdAt: new Date("2026-09-15T18:14:30Z") },
+      ],
+    } as never) as never as { authorisations: Array<{ adminId: string }> };
+
+    expect(out.authorisations.map((a) => a.adminId)).toEqual(["ga3", "ga1", "ga2", "ga5"]);
+  });
+
+  it("leaves payloads without authorisations untouched", () => {
+    const out = formatPaymentResponse({ id: "PMT-2", caseId: "CASE-2" } as never);
+    expect((out as never as Record<string, unknown>).authorisations).toBeUndefined();
+  });
+});
 
 describe("calculateRequiredSignatures — tiered multi-sig formula with GA cap", () => {
   it("returns 2 base signatures for amounts under RM 1,000,000", () => {
@@ -123,7 +146,7 @@ describe("Bank Account Uniqueness & Decoupled Profile Storage", () => {
   const testCaseId1 = `TEST-CASE-UNIQ-1-${Date.now()}`;
   const testCaseId2 = `TEST-CASE-UNIQ-2-${Date.now()}`;
   const testCaseId3 = `TEST-CASE-UNIQ-3-${Date.now()}`;
-  const uniqueAcc = "8888999901";
+  const uniqueAcc = "888899990123";
   const member1MyKad = "900101145555";
   const member2MyKad = "910202146666";
 

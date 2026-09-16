@@ -3,6 +3,7 @@ import cors from "cors";
 import * as dotenv from "dotenv";
 import paymentRoutes from "./routes/payment.routes";
 import bankDetailsRoutes from "./routes/bank-details.routes";
+import { checkAndAutoExecuteScheduledTransfers } from "./services/payment.service";
 
 dotenv.config();
 
@@ -17,4 +18,11 @@ if (process.env.NODE_ENV !== "test") {
   app.listen(port, () => {
     console.log(`[${new Date().toISOString()}] [INFO] [payment-service] Listening on port ${port}`);
   });
+
+  // Periodically check and auto-execute scheduled transfers whose execution datetime has passed
+  setInterval(() => {
+    checkAndAutoExecuteScheduledTransfers().catch((err) => {
+      console.error("[payment-service] Scheduled transfer execution interval error:", err);
+    });
+  }, 10_000);
 }

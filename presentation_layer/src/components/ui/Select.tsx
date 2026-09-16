@@ -12,6 +12,7 @@ export interface SelectOption {
 
 export interface SelectProps {
   label: string;
+  requiredIndicator?: boolean;
   options: SelectOption[];
   value?: string;
   /**
@@ -40,6 +41,7 @@ const TYPE_AHEAD_RESET_MS = 600;
 
 export const Select: React.FC<SelectProps> = ({
   label,
+  requiredIndicator,
   options,
   value,
   onChange,
@@ -252,11 +254,14 @@ export const Select: React.FC<SelectProps> = ({
         id={labelId}
         htmlFor={selectId}
         className={classNames(
-          'text-xs font-medium absolute top-2 left-5 z-10 pointer-events-none transition-colors',
+          'text-xs font-medium absolute top-2 left-5 z-10 pointer-events-none transition-colors flex items-center gap-1',
           error ? 'text-md-error' : 'text-md-on-surface-variant'
         )}
       >
-        {label}
+        <span>{label}</span>
+        {requiredIndicator && (
+          <span className="text-rose-500 font-bold ml-0.5" aria-hidden="true">*</span>
+        )}
       </label>
 
       <div className="relative">

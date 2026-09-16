@@ -224,3 +224,72 @@ export function parseAppError(error: any, fallbackTitle = 'Operation Failed'): P
     rawDetails: rawStr,
   };
 }
+
+/** True when the logged-in user is a member-portal audience (not admin/officer/valuer). */
+export function isMemberAudience(): boolean {
+  try {
+    const stored = localStorage.getItem('user_data');
+    if (!stored) return false;
+    const role = (JSON.parse(stored)?.role || '').toString().toUpperCase();
+    return role === 'DISPLACED_COMMUNITY_MEMBER' || role.includes('MEMBER');
+  } catch {
+    return false;
+  }
+}
+
+const MEMBER_NEXT_STEP = 'Please try again. If it keeps happening, find our support team.';
+
+// Technical markers that mean a message is not fit for a member-facing toast.
+const MEMBER_TECHNICAL_MARKERS = [
+  '{',
+  'http ',
+  'code=',
+  'requesturl',
+  'server response',
+  'scs-be-',
+  '0x',
+  'error:',
+  'exception',
+  'gateway',
+];
+
+/**
+ * Builds a short, plain-language message for member-portal error toasts:
+ * what happened + a single next step. Nothing technical, no diagnostics.
+ */
+export function memberErrorMessage(
+  rawMessage: string | undefined,
+  parsed: ParsedAppError,
+): string {
+  let what: string;
+
+  const trimmed = (rawMessage || '').trim();
+  const isCleanHuman =
+    trimmed.length > 0 &&
+    trimmed.length <= 110 &&
+    !MEMBER_TECHNICAL_MARKERS.some((m) => trimmed.toLowerCase().includes(m)) &&
+    !/\d{9,}/.test(trimmed);
+
+  if (isCleanHuman) {
+    what = trimmed;
+  } else {
+    switch (parsed.category) {
+      case 'Network Connection':
+        what = "We couldn't reach the server. Check your internet connection and try again.";
+        break;
+      case 'Access Control':
+        what = "You don't have permission to do this.";
+        break;
+      case 'Backend Error':
+      case 'System Error':
+        what = 'Something went wrong on our side.';
+        break;
+      default:
+        what = 'Something went wrong.';
+    }
+  }
+
+  // Don't tack on a second retry instruction when the phrase already has one.
+  if (/try again/i.test(what)) return what;
+  return `${what.replace(/\s*\.?\s*$/, '')}. ${MEMBER_NEXT_STEP}`;
+}

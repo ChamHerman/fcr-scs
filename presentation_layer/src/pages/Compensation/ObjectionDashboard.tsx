@@ -11,6 +11,7 @@ import { CopyButton } from "../../components/ui/CopyButton";
 import { Pagination } from "../../components/ui/Pagination";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
+import { formatCurrencyRM } from "../../utils/currency";
 import "../../index.css";
 import "./compensation.css";
 
@@ -213,8 +214,8 @@ export const ObjectionDashboard: React.FC = () => {
     navigate("/admin/compensation/objection/create");
   };
 
-  const formatCurrency = (val: number) => {
-    return "RM " + val.toLocaleString("en-MY", { minimumFractionDigits: 2 });
+  const formatCurrency = (val: number | string | null | undefined) => {
+    return formatCurrencyRM(val);
   };
 
   // 4. Metrics dynamically derived directly from filtered data
