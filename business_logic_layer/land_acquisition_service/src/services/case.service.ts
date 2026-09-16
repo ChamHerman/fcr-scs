@@ -1,7 +1,32 @@
 import { prisma } from "../prisma";
-import { CaseStatus, AreaUnit, FundingSource, LandCategory, TenureType, OwnershipType, UserRole, Prisma } from "@prisma/client";
+import { CaseStatus, AreaUnit, FundingSource, LandCategory, TenureType, OwnershipType, UserRole, Prisma, AlertChannel, AlertUrgency, ReportStatus, ObjectionStatus } from "@prisma/client";
 import { CaseStateMachine } from "../utils/case-state.machine";
 import { parseLandCategory, parseTenureType, parseOwnershipType, formatOwnershipType } from "../utils/enum.utils";
+import bcrypt from "bcrypt";
+import crypto from "crypto";
+import { sendTemplatedEmail } from "../../../user_management_service/src/utils/email.service";
+import { resolveMalaysianIdentity } from "../../../user_management_service/src/utils/malaysianIdentity";
+import { generateCustomId } from "../../../user_management_service/src/utils/idGenerator";
+import { logAudit } from "../../../user_management_service/src/services/audit.service";
+
+function generateTemporaryPassword(): string {
+  const letters = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const smalls = "abcdefghijkmnpqrstuvwxyz";
+  const numbers = "23456789";
+  const specials = "@$!%*?&";
+  
+  let result = "";
+  result += letters[crypto.randomInt(0, letters.length)];
+  result += smalls[crypto.randomInt(0, smalls.length)];
+  result += numbers[crypto.randomInt(0, numbers.length)];
+  result += specials[crypto.randomInt(0, specials.length)];
+  
+  const all = letters + smalls + numbers + specials;
+  for (let i = 0; i < 8; i++) {
+    result += all[crypto.randomInt(0, all.length)];
+  }
+  return result;
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -384,6 +409,77 @@ export async function getCaseStats(filters?: CaseFilters) {
   };
 }
 
+export async function getDashboardOverviewStats() {
+  const [
+    totalCases,
+    caseByStatus,
+    totalValuations,
+    valByStatus,
+    totalCompensations,
+    compByStatus,
+    totalObjections,
+    objectionByStatus,
+    systemUsers,
+    unackAlerts,
+  ] = await Promise.all([
+    prisma.acquisitionCase.count({ where: { deletedAt: null } }),
+    prisma.acquisitionCase.groupBy({
+      by: ["status"],
+      where: { deletedAt: null },
+      _count: { _all: true },
+    }),
+    prisma.valuationReport.count({ where: { deletedAt: null } }),
+    prisma.valuationReport.groupBy({
+      by: ["reportStatus"],
+      where: { deletedAt: null },
+      _count: { _all: true },
+    }),
+    prisma.compensationReport.count({ where: { deletedAt: null } }),
+    prisma.compensationReport.groupBy({
+      by: ["status"],
+      where: { deletedAt: null },
+      _count: { _all: true },
+    }),
+    prisma.objection.count({ where: { deletedAt: null } }),
+    prisma.objection.groupBy({
+      by: ["status"],
+      where: { deletedAt: null },
+      _count: { _all: true },
+    }),
+    prisma.user.count({ where: { deletedAt: null, isActive: true } }),
+    prisma.systemAlert.count({ where: { isAcknowledged: false } }),
+  ]);
+
+  const activeCases = caseByStatus
+    .filter((g) => CaseStateMachine.isActive(g.status))
+    .reduce((sum, g) => sum + g._count._all, 0);
+
+  const pendingValuations = valByStatus
+    .filter((g) => g.reportStatus === ReportStatus.PENDING)
+    .reduce((sum, g) => sum + g._count._all, 0);
+
+  const pendingCompensations = compByStatus
+    .filter((g) => g.status === ReportStatus.PENDING)
+    .reduce((sum, g) => sum + g._count._all, 0);
+
+  const activeObjections = objectionByStatus
+    .filter((g) => g.status === ObjectionStatus.PENDING)
+    .reduce((sum, g) => sum + g._count._all, 0);
+
+  return {
+    totalCases,
+    activeCases: activeCases || totalCases,
+    totalValuations,
+    pendingValuations,
+    totalCompensations,
+    pendingCompensations,
+    totalObjections,
+    activeObjections,
+    systemUsers,
+    alertsToday: unackAlerts,
+  };
+}
+
 export async function getUnassignedCases() {
   const cases = await prisma.acquisitionCase.findMany({
     where: {
@@ -525,9 +621,75 @@ export async function createCase(input: CreateCaseInput) {
       throw new Error("Duplicate identification number (NRIC) detected across multiple owners. Each owner must have a unique NRIC.");
     }
 
+    const ownerEmails = owners.map((o) => (o.email || "").trim().toLowerCase()).filter(Boolean);
+    const uniqueEmails = new Set(ownerEmails);
+    if (uniqueEmails.size !== ownerEmails.length) {
+      throw new Error("Duplicate email address detected across multiple owners. Each owner must have a unique email address.");
+    }
+
+    const ownerContacts = owners.map((o) => (o.contact || "").replace(/[\s\-+]/g, "")).filter(Boolean);
+    const uniqueContacts = new Set(ownerContacts);
+    if (uniqueContacts.size !== ownerContacts.length) {
+      throw new Error("Duplicate phone number detected across multiple owners. Each owner must have a unique phone number.");
+    }
+
     for (const ownerInput of owners) {
       const pureNric = (ownerInput.nric || "").replace(/\D/g, "");
       if (!pureNric) continue;
+
+      const ownerEmail = (ownerInput.email || "").trim().toLowerCase();
+      const contact = (ownerInput.contact || "").trim();
+
+      // Check database collision with existing User accounts
+      if (ownerEmail) {
+        const existingEmailUser = await tx.user.findFirst({
+          where: {
+            email: { equals: ownerEmail, mode: "insensitive" },
+          },
+          select: { userId: true, identificationNumber: true, email: true, name: true, role: true },
+        });
+        if (existingEmailUser) {
+          // Reject if the existing user is an administrative or non-community-member account
+          if (existingEmailUser.role !== UserRole.DISPLACED_COMMUNITY_MEMBER) {
+            throw new Error(`Email address '${ownerInput.email}' belongs to an administrative account (${existingEmailUser.role.replace(/_/g, ' ')}). Administrative personnel cannot be registered as affected landowners.`);
+          }
+          const existingPureNric = (existingEmailUser.identificationNumber || "").replace(/\D/g, "");
+          if (existingPureNric && existingPureNric !== pureNric) {
+            throw new Error(`Email address '${ownerInput.email}' is already registered to another user account (${existingEmailUser.name}, NRIC mismatch). Please use a unique email or enter the matching NRIC.`);
+          }
+        }
+      }
+
+      // Check NRIC collision with existing non-community member users
+      const existingNricUser = await tx.user.findFirst({
+        where: {
+          OR: [
+            { identificationNumber: pureNric },
+            { identificationNumber: (ownerInput.nric || "").trim() },
+          ],
+        },
+        select: { userId: true, identificationNumber: true, email: true, name: true, role: true },
+      });
+      if (existingNricUser && existingNricUser.role !== UserRole.DISPLACED_COMMUNITY_MEMBER) {
+        throw new Error(`NRIC '${ownerInput.nric}' belongs to an administrative account (${existingNricUser.role.replace(/_/g, ' ')}). Administrative personnel cannot be registered as affected landowners.`);
+      }
+
+      if (contact) {
+        const cleanContact = contact.replace(/[\s\-+]/g, "");
+        const existingPhoneUser = await tx.user.findFirst({
+          where: {
+            contactNumber: { in: [contact, cleanContact] },
+            role: UserRole.DISPLACED_COMMUNITY_MEMBER,
+          },
+          select: { userId: true, identificationNumber: true, contactNumber: true, name: true },
+        });
+        if (existingPhoneUser) {
+          const existingPureNric = (existingPhoneUser.identificationNumber || "").replace(/\D/g, "");
+          if (existingPureNric && existingPureNric !== pureNric) {
+            throw new Error(`Phone number '${contact}' is already registered to another account (NRIC mismatch).`);
+          }
+        }
+      }
 
       let dbOwner = await tx.landOwner.findFirst({
         where: { nric: pureNric },
@@ -535,8 +697,7 @@ export async function createCase(input: CreateCaseInput) {
 
       const ownerName = (ownerInput.name || "").trim() || "Land Owner";
       const ownerAddress = (ownerInput.address || "").trim() || "";
-      const contact = (ownerInput.contact || "").trim();
-      const email = ownerInput.email ? ownerInput.email.trim() : null;
+      const email = ownerEmail ? ownerEmail : null;
 
       if (!dbOwner) {
         dbOwner = await tx.landOwner.create({
@@ -557,7 +718,7 @@ export async function createCase(input: CreateCaseInput) {
             ...(ownerName && { name: ownerName }),
             ...(ownerAddress && { address: ownerAddress }),
             ...(contact && { contact }),
-            ...(email !== undefined && { email }),
+            ...(email !== null && { email }),
           },
         });
       }
@@ -573,6 +734,135 @@ export async function createCase(input: CreateCaseInput) {
           createdById: finalCreatorId,
         },
       });
+
+      // Auto-provision a user account for the landowner if none exists yet
+      if (pureNric.length === 12 && ownerEmail) {
+        const rawNric = (ownerInput.nric || "").trim();
+        const existingAccount = await tx.user.findFirst({
+          where: {
+            OR: [
+              { identificationNumber: pureNric },
+              { identificationNumber: rawNric },
+              { email: { equals: ownerEmail, mode: "insensitive" } },
+            ],
+          },
+        });
+
+        if (existingAccount) {
+          console.log(`[CaseService] Landowner account already exists for ${ownerEmail} (UserId: ${existingAccount.userId}, Role: ${existingAccount.role}). Skipping auto-provisioning.`);
+
+          // 1. Create In-App SystemAlert for existing landowner
+          const alertId = await generateCustomId("systemAlert");
+          await tx.systemAlert.create({
+            data: {
+              alertId,
+              recipientId: existingAccount.userId,
+              alertType: "CASE_CREATED",
+              channel: AlertChannel.IN_APP,
+              urgencyLevel: AlertUrgency.HIGH,
+              caseReference: dbCase.caseId,
+              message: `You have been registered as an affected landowner for land acquisition case: ${dbCase.caseTitle} (${dbCase.caseId}). Please review your case details.`,
+              isAcknowledged: false,
+            },
+          });
+
+          // 2. Notify existing landowner account about the newly attached case
+          const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+          sendTemplatedEmail(existingAccount.email, "SYSTEM_ALERT", {
+            name: existingAccount.name,
+            alertType: "NEW_CASE_ATTACHED",
+            message: `You have been registered as an affected landowner for new land acquisition case ${dbCase.caseTitle} (${dbCase.caseId}). Please log in to your portal to review case information.`,
+            severity: "INFO",
+            ruleName: "New Land Acquisition Case Notification",
+            timestamp: new Date().toLocaleString("en-MY", { timeZone: "Asia/Kuala_Lumpur" }),
+            caseId: dbCase.caseId,
+            caseReference: dbCase.caseId,
+            caseTitle: dbCase.caseTitle,
+            actionUrl: `${frontendUrl}/member`,
+            buttonText: "View Case in Portal",
+            portalLink: `${frontendUrl}/member`,
+          }).catch((err) => {
+            console.warn(`[CaseService] Non-fatal notification failure to existing landowner ${existingAccount.email}:`, err);
+          });
+        } else {
+          try {
+            const identity = resolveMalaysianIdentity(pureNric);
+            const resolvedName = identity.isValid ? identity.name : ownerName;
+            const resolvedAddress = identity.isValid ? identity.address : ownerAddress;
+            const tempPassword = generateTemporaryPassword();
+            const hashedPassword = await bcrypt.hash(tempPassword, 10);
+            const newUserId = await generateCustomId("user");
+
+            const newUser = await tx.user.create({
+              data: {
+                userId: newUserId,
+                name: resolvedName,
+                email: ownerEmail,
+                contactNumber: contact || "0123456789",
+                identificationNumber: pureNric,
+                address: resolvedAddress,
+                passwordHash: hashedPassword,
+                role: UserRole.DISPLACED_COMMUNITY_MEMBER,
+                isActive: true,
+                mustChangePassword: true,
+              },
+            });
+
+            // 1. Create In-App Notification for new landowner so it is immediately visible on first login
+            const alertId = await generateCustomId("systemAlert");
+            await tx.systemAlert.create({
+              data: {
+                alertId,
+                recipientId: newUser.userId,
+                alertType: "CASE_CREATED",
+                channel: AlertChannel.IN_APP,
+                urgencyLevel: AlertUrgency.HIGH,
+                caseReference: dbCase.caseId,
+                message: `Welcome to FCR-SCS. Your account has been provisioned as an affected landowner for land acquisition case: ${dbCase.caseTitle} (${dbCase.caseId}). Please review your case details.`,
+                isAcknowledged: false,
+              },
+            });
+
+            // 2. Dispatch temporary credentials email with explicit case reason
+            const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+            sendTemplatedEmail(newUser.email, "TEMPORARY_CREDENTIALS", {
+              name: newUser.name,
+              role: "Displaced Community Member",
+              email: newUser.email,
+              temporaryPassword: tempPassword,
+              loginUrl: `${frontendUrl}/login`,
+              caseId: dbCase.caseId,
+              caseTitle: dbCase.caseTitle,
+              caseReference: dbCase.caseId,
+            }).catch((mailErr) => {
+              console.error(`[CaseService] Failed to send credentials email to ${newUser.email}:`, mailErr);
+            });
+
+            logAudit({
+              userId: newUser.userId,
+              userRole: newUser.role,
+              actorName: newUser.name,
+              actorEmail: newUser.email,
+              activityType: "CITIZEN_AUTO_PROVISIONED",
+              moduleName: "LAND_ACQUISITION",
+              caseReference: dbCase.caseId,
+              severity: "INFO",
+              activityDetails: {
+                name: newUser.name,
+                email: newUser.email,
+                caseId: dbCase.caseId,
+                role: newUser.role,
+              },
+              systemResponse: "CREATED (201)",
+            });
+
+            console.log(`[CaseService] Auto-provisioned account & in-app alert for landowner ${newUser.name} (${newUser.email}) on case ${dbCase.caseId}`);
+          } catch (autoErr) {
+            console.error(`[CaseService] Error auto-provisioning landowner account:`, autoErr);
+            throw autoErr;
+          }
+        }
+      }
     }
 
     return tx.acquisitionCase.findUnique({

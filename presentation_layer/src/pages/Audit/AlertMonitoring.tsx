@@ -18,6 +18,7 @@ import {
   Filter,
   CheckCheck,
   Send,
+  ChevronDown,
 } from 'lucide-react';
 import { MD3Button } from '../MD3Components';
 import '../LandAcquisition/case_management.css';
@@ -53,22 +54,65 @@ const URGENCY_OPTIONS: SelectOption[] = [
 
 const ACTIVITY_TYPE_PRESETS: SelectOption[] = [
   { value: '*', label: '* All Events (Wildcard)' },
-  { value: 'SECURITY_ALERT_BRUTE_FORCE_THROTTLED', label: 'Brute Force & Throttling' },
-  { value: 'ADMIN_USER_PROVISIONED', label: 'Admin User Provisioning' },
-  { value: 'ROLE_PERMISSIONS_UPDATED', label: 'Role Permissions Modified' },
-  { value: 'USER_STATUS_CHANGE', label: 'User Account Status Change' },
-  { value: 'EMAIL_TEMPLATE_MODIFIED', label: 'Email Template Modified' },
-  { value: 'PAYMENT_AUTHORISATION', label: 'Payment Authorisation Event' },
+  // Land Acquisition & Case Management
+  { value: 'CASE_CREATED', label: 'Land Acquisition: Case Created' },
+  { value: 'CASE_UPDATED', label: 'Land Acquisition: Case Updated' },
+  { value: 'CASE_DELETED', label: 'Land Acquisition: Case Deleted' },
+  { value: 'VALUER_ASSIGNED', label: 'Land Acquisition: Valuer Assigned' },
+  { value: 'VALUATION_REPORT_CREATED', label: 'Valuation: Report Submitted' },
+  { value: 'VALUATION_REPORT_APPROVED', label: 'Valuation: Report Approved' },
+  { value: 'VALUATION_REPORT_REJECTED', label: 'Valuation: Report Rejected' },
+  // Compensation Management
+  { value: 'COMPENSATION_REPORT_CREATED', label: 'Compensation: Report Created' },
+  { value: 'COMPENSATION_REPORT_APPROVED', label: 'Compensation: Report Approved' },
+  { value: 'COMPENSATION_REPORT_REJECTED', label: 'Compensation: Report Rejected' },
+  { value: 'OFFER_LETTER_CREATED', label: 'Offer Letter: Form H Generated' },
+  { value: 'OFFER_LETTER_ACCEPTED', label: 'Offer Letter: Accepted by Landowner' },
+  { value: 'OFFER_LETTER_REJECTED', label: 'Offer Letter: Declined by Landowner' },
+  { value: 'OBJECTION_FILED', label: 'Objection: Form N Filed' },
+  { value: 'OBJECTION_REVIEWED', label: 'Objection: Reviewed & Decided' },
+  { value: 'OBJECTION_WITHDRAWN', label: 'Objection: Withdrawn / Deleted' },
+  // System & Security
+  { value: 'SECURITY_ALERT_BRUTE_FORCE_THROTTLED', label: 'Security: Brute Force Throttling' },
+  { value: 'ADMIN_USER_PROVISIONED', label: 'User Admin: Account Provisioned' },
+  { value: 'ROLE_PERMISSIONS_UPDATED', label: 'Security: Role Permissions Modified' },
+  { value: 'USER_STATUS_CHANGE', label: 'User Admin: Status Change' },
+  { value: 'EMAIL_TEMPLATE_MODIFIED', label: 'Settings: Email Template Modified' },
+  { value: 'PAYMENT_AUTHORISATION', label: 'Finance: Payment Authorisation' },
 ];
 
-const ROLE_OPTIONS: SelectOption[] = [
-  { value: 'ALL_ADMINS', label: 'All Administrators (System & Gov)' },
-  { value: 'SYSTEM_ADMINISTRATOR', label: 'System Administrator Only' },
-  { value: 'GOVERNMENT_ADMINISTRATOR', label: 'Government Administrator Only' },
-  { value: 'GOVERNMENT_OFFICER', label: 'Government Officer' },
-  { value: 'LAND_VALUER', label: 'Land Valuer' },
-  { value: 'DISPLACED_COMMUNITY_MEMBER', label: 'Displaced Community Member' },
+const TARGET_ROLES_LIST = [
+  { value: 'SYSTEM_ADMINISTRATOR', label: 'System Administrator', short: 'Sys Admin' },
+  { value: 'GOVERNMENT_ADMINISTRATOR', label: 'Government Administrator', short: 'Gov Admin' },
+  { value: 'GOVERNMENT_OFFICER', label: 'Government Officer', short: 'Gov Officer' },
+  { value: 'LAND_VALUER', label: 'Land Valuer', short: 'Valuer' },
+  { value: 'DISPLACED_COMMUNITY_MEMBER', label: 'Displaced Community Member', short: 'Community Member' },
 ];
+
+const renderTargetAudiencePills = (targetRole: string | null) => {
+  if (!targetRole) {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-md-secondary-container text-md-on-secondary-container">
+        Sys Admin
+      </span>
+    );
+  }
+
+  const normalized = targetRole.replace(/ALL[\s_]ADMINS?/gi, 'SYSTEM_ADMINISTRATOR,GOVERNMENT_ADMINISTRATOR');
+  const roles = normalized.split(',').map((r) => r.trim()).filter(Boolean);
+  return roles.map((r) => {
+    const matched = TARGET_ROLES_LIST.find((item) => item.value === r);
+    const label = matched ? matched.short : r.replace(/_/g, ' ');
+    return (
+      <span
+        key={r}
+        className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-md-secondary-container text-md-on-secondary-container"
+      >
+        {label}
+      </span>
+    );
+  });
+};
 
 const SEVERITY_LEVEL_OPTIONS: SelectOption[] = [
   { value: 'INFO', label: 'INFO (Low threshold)' },
@@ -76,6 +120,13 @@ const SEVERITY_LEVEL_OPTIONS: SelectOption[] = [
   { value: 'CRITICAL', label: 'CRITICAL' },
   { value: 'SECURITY', label: 'SECURITY (Highest threshold)' },
   { value: 'ALL', label: 'ALL Severities' },
+];
+
+const URGENCY_LEVEL_OPTIONS: SelectOption[] = [
+  { value: 'LOW', label: 'LOW' },
+  { value: 'MEDIUM', label: 'MEDIUM' },
+  { value: 'HIGH', label: 'HIGH' },
+  { value: 'CRITICAL', label: 'CRITICAL' },
 ];
 
 export const AlertMonitoring: React.FC = () => {
@@ -112,6 +163,17 @@ export const AlertMonitoring: React.FC = () => {
 
   // Inspect Alert Modal
   const [inspectAlert, setInspectAlert] = useState<SystemAlertItem | null>(null);
+
+  // Alert rule options
+  const emailTemplateOptions: SelectOption[] = React.useMemo(() => {
+    if (!emailTemplates || emailTemplates.length === 0) {
+      return [{ value: 'SYSTEM_ALERT', label: 'SYSTEM_ALERT' }];
+    }
+    return emailTemplates.map((tmpl) => ({
+      value: tmpl.templateName,
+      label: tmpl.templateName,
+    }));
+  }, [emailTemplates]);
 
   // Rule Form State
   const [ruleForm, setRuleForm] = useState({
@@ -869,10 +931,10 @@ export const AlertMonitoring: React.FC = () => {
                       </td>
 
                       {/* Target Audience */}
-                      <td>
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-md-secondary-container text-md-on-secondary-container whitespace-nowrap">
-                          {rule.targetRole ? rule.targetRole.replace(/_/g, ' ') : 'System Admin'}
-                        </span>
+                      <td className="max-w-[190px] py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {renderTargetAudiencePills(rule.targetRole)}
+                        </div>
                       </td>
 
                       {/* Active Status Toggle */}
@@ -994,38 +1056,22 @@ export const AlertMonitoring: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-md-on-surface mb-1">
-                  Trigger Audit Activity Type
-                </label>
-                <select
-                  className="w-full px-3.5 py-2 text-sm rounded-xl border border-md-outline/30 bg-md-surface focus:outline-none focus:border-md-primary font-mono text-xs"
+              <div className="flex flex-col gap-1.5 z-20 relative">
+                <Select
+                  label="Trigger Audit Activity Type"
+                  options={ACTIVITY_TYPE_PRESETS}
                   value={ruleForm.activityType}
-                  onChange={(e) => setRuleForm({ ...ruleForm, activityType: e.target.value })}
-                >
-                  {ACTIVITY_TYPE_PRESETS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setRuleForm({ ...ruleForm, activityType: val })}
+                />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-md-on-surface mb-1">
-                  Minimum Severity Threshold
-                </label>
-                <select
-                  className="w-full px-3.5 py-2 text-sm rounded-xl border border-md-outline/30 bg-md-surface focus:outline-none focus:border-md-primary text-xs"
+              <div className="flex flex-col gap-1.5 z-20 relative">
+                <Select
+                  label="Minimum Severity Threshold"
+                  options={SEVERITY_LEVEL_OPTIONS}
                   value={ruleForm.minSeverity}
-                  onChange={(e) => setRuleForm({ ...ruleForm, minSeverity: e.target.value })}
-                >
-                  {SEVERITY_LEVEL_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setRuleForm({ ...ruleForm, minSeverity: val })}
+                />
               </div>
             </div>
 
@@ -1048,20 +1094,15 @@ export const AlertMonitoring: React.FC = () => {
                 </label>
 
                 {ruleForm.triggerInApp && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-md-on-surface-variant">Urgency:</span>
-                    <select
-                      className="px-2.5 py-1 text-xs rounded-lg border border-md-outline/30 bg-md-surface"
+                  <div className="w-36 z-10 relative">
+                    <Select
+                      label="Urgency"
+                      options={URGENCY_LEVEL_OPTIONS}
                       value={ruleForm.urgencyLevel}
-                      onChange={(e) =>
-                        setRuleForm({ ...ruleForm, urgencyLevel: e.target.value as any })
+                      onChange={(val) =>
+                        setRuleForm({ ...ruleForm, urgencyLevel: val as any })
                       }
-                    >
-                      <option value="LOW">LOW</option>
-                      <option value="MEDIUM">MEDIUM</option>
-                      <option value="HIGH">HIGH</option>
-                      <option value="CRITICAL">CRITICAL</option>
-                    </select>
+                    />
                   </div>
                 )}
               </div>
@@ -1079,49 +1120,72 @@ export const AlertMonitoring: React.FC = () => {
                 </label>
 
                 {ruleForm.triggerEmail && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-md-on-surface-variant">Template:</span>
-                    <select
-                      className="px-2.5 py-1 text-xs rounded-lg border border-md-outline/30 bg-md-surface max-w-[200px]"
+                  <div className="w-64 z-10 relative">
+                    <Select
+                      label="Email Template"
+                      options={emailTemplateOptions}
                       value={ruleForm.emailTemplateName}
-                      onChange={(e) => setRuleForm({ ...ruleForm, emailTemplateName: e.target.value })}
-                    >
-                      {emailTemplates.length > 0 ? (
-                        emailTemplates.map((tmpl) => (
-                          <option key={tmpl.templateId} value={tmpl.templateName}>
-                            {tmpl.templateName}
-                          </option>
-                        ))
-                      ) : (
-                        <option value="SYSTEM_ALERT">SYSTEM_ALERT (Default)</option>
-                      )}
-                    </select>
+                      onChange={(val) =>
+                        setRuleForm({ ...ruleForm, emailTemplateName: val })
+                      }
+                    />
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Target Audience */}
+            {/* Target Audience Multi-selection */}
             <div>
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center justify-between mb-2">
                 <label className="block text-xs font-semibold text-md-on-surface">
-                  Target Recipient Role
+                  Target Recipient Roles <span className="text-md-error">*</span>
                 </label>
-                <span className="text-[10px] text-md-primary font-medium">Case-Contextual Routing Active</span>
+                <span className="text-[10px] text-md-primary font-medium">Multi-selection supported</span>
               </div>
-              <select
-                className="w-full px-3.5 py-2 text-sm rounded-xl border border-md-outline/30 bg-md-surface focus:outline-none focus:border-md-primary text-xs"
-                value={ruleForm.targetRole}
-                onChange={(e) => setRuleForm({ ...ruleForm, targetRole: e.target.value })}
-              >
-                {ROLE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-              <p className="text-[11px] text-md-on-surface-variant mt-1.5 leading-relaxed bg-md-surface-variant/30 p-2 rounded-lg border border-md-outline/10">
-                💡 <strong>Dynamic Stakeholder Routing:</strong> When an event carries a <code>Case Reference</code> (e.g. <em>LAC-2026-08-0001</em>), notifications route specifically to the involved landowner, assigned officer, or valuer for that case. Events without a case reference broadcast to all users in the selected role.
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {TARGET_ROLES_LIST.map((opt) => {
+                  const selectedRoles = (ruleForm.targetRole || 'SYSTEM_ADMINISTRATOR')
+                    .split(',')
+                    .map((r) => r.trim())
+                    .filter(Boolean);
+                  const isChecked = selectedRoles.includes(opt.value);
+
+                  const handleToggle = () => {
+                    let next: string[];
+                    if (isChecked) {
+                      next = selectedRoles.filter((r) => r !== opt.value);
+                      if (next.length === 0) next = [opt.value]; // keep at least one
+                    } else {
+                      next = [...selectedRoles, opt.value];
+                    }
+                    setRuleForm({ ...ruleForm, targetRole: next.join(',') });
+                  };
+
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={handleToggle}
+                      className={`flex items-center justify-between p-2.5 rounded-xl border text-xs font-medium text-left transition-all ${
+                        isChecked
+                          ? 'bg-md-primary/10 border-md-primary text-md-primary font-semibold shadow-xs'
+                          : 'bg-md-surface-container-low border-md-outline/20 text-md-on-surface hover:border-md-outline/40'
+                      }`}
+                    >
+                      <span>{opt.label}</span>
+                      <span className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${
+                        isChecked ? 'bg-md-primary border-md-primary text-white' : 'border-md-outline/40'
+                      }`}>
+                        {isChecked && <Check size={12} />}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <p className="text-[11px] text-md-on-surface-variant mt-2 leading-relaxed bg-md-surface-variant/30 p-2.5 rounded-xl border border-md-outline/10">
+                💡 <strong>Dynamic Stakeholder Routing:</strong> When an event carries a <code>Case Reference</code> (e.g. <em>LAC-2026-08-0001</em>), notifications route specifically to the involved landowner, assigned officer, or valuer for that case. Events without a case reference broadcast to all users in the selected role(s).
               </p>
             </div>
 

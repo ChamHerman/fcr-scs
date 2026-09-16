@@ -14,6 +14,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useRole } from '../../hooks/useRole';
 import { Logo } from '../ui/Logo';
 import { alertService } from '../../services/alert.service';
+import { FirstTimePasswordModal } from '../auth/FirstTimePasswordModal';
 
 /** First letter of word[0] + first letter of word[1] of the name string */
 function getNameInitials(name: string | undefined | null): string {
@@ -255,6 +256,9 @@ export const MemberLayout: React.FC = () => {
       <main className="flex-1 w-full">
         <Outlet />
       </main>
+
+      {/* Force Password Change Modal for new accounts */}
+      <FirstTimePasswordModal />
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MD3Button, MD3Input, MD3Card, MD3BlurBackground } from '../MD3Components';
-import { UserPlus, Info, AlertTriangle, CheckCircle2, XCircle, Sparkles } from 'lucide-react';
+import { UserPlus, Info, AlertTriangle, CheckCircle2, XCircle, Sparkles, Home } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../../services/auth.service';
 import { IdentificationInput } from '../../components/ui/IdentificationInput';
@@ -96,8 +96,23 @@ export const Register: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative z-0">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 relative z-0">
       <MD3BlurBackground />
+
+      <div className="w-full max-w-lg mb-3 flex items-center justify-between z-10">
+        <a
+          href="/"
+          onClick={(e) => {
+            e.preventDefault();
+            navigate('/');
+          }}
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-md-on-surface-variant hover:text-md-primary transition-colors py-1.5 px-3 rounded-xl hover:bg-md-surface-container bg-md-surface-container-low/80 border border-md-outline/10 shadow-sm"
+          title="Return to Public Homepage"
+        >
+          <Home size={14} />
+          <span>Back to Homepage</span>
+        </a>
+      </div>
       
       <MD3Card elevation={2} className="w-full max-w-lg z-10">
         <div className="text-center mb-6">

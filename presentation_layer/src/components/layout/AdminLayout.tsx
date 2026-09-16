@@ -25,6 +25,7 @@ import {
   Sun,
   BrainCircuit,
   Sparkles,
+  Bell,
   Send,
   PenLine,
   AlertTriangle,
@@ -684,7 +685,7 @@ export const AdminLayout: React.FC = () => {
               )}
               {(allowedPages.includes('*') || allowedPages.includes('/admin/alerts')) && (
                 <NavLink to="/admin/alerts" className="nav-item" title={isCollapsed ? "Alerts" : ""}>
-                  <Sparkles size={22} className="nav-icon" />
+                  <Bell size={22} className="nav-icon" />
                   {!isCollapsed && <span>Alerts</span>}
                 </NavLink>
               )}

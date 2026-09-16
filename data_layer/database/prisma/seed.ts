@@ -509,22 +509,32 @@ async function main() {
     create: {
       templateId: 'EMT-2026-09-0007',
       templateName: 'TEMPORARY_CREDENTIALS',
-      subject: 'FCR-SCS: Your Account Has Been Created (Temporary Credentials)',
+      subject: 'FCR-SCS: Your Account Credentials - Land Acquisition Case {{caseId}}',
       bodyContent: `
-        <div style="font-family: sans-serif; padding: 24px; max-width: 600px; border: 1px solid #e0e0e0; border-radius: 8px;">
-          <h2 style="color: #6750A4; margin-top: 0;">Welcome to FCR-SCS</h2>
-          <p>Dear {{name}},</p>
-          <p>An administrative account has been provisioned for you on the <strong>Federal Compensation & Resettlement - Statutory Case Management System (FCR-SCS)</strong> with the role of <strong>{{role}}</strong>.</p>
-          <div style="background-color: #F3EDF7; padding: 18px; border-radius: 8px; margin: 20px 0;">
-            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Email / Username:</strong> {{email}}</p>
-            <p style="margin: 0; font-size: 14px;"><strong>Temporary Password:</strong> <code style="background: #E8DEF8; padding: 2px 6px; border-radius: 4px; font-size: 15px; font-weight: bold;">{{temporaryPassword}}</code></p>
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 24px; max-width: 600px; border: 1px solid #e0e0e0; border-radius: 12px; color: #1f2937; background-color: #ffffff;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <h2 style="color: #6750A4; margin: 0; font-size: 22px;">Federal Compensation &amp; Resettlement System</h2>
+            <p style="color: #6b7280; font-size: 13px; margin: 4px 0 0 0;">Statutory Case Management &amp; Compensation Portal (FCR-SCS)</p>
           </div>
-          <p style="color: #49454F; font-size: 14px;">For security compliance, you are required to change this temporary password immediately upon your first sign-in.</p>
+          <p style="font-size: 15px;">Dear <strong>{{name}}</strong>,</p>
+          <p style="font-size: 14px; line-height: 1.5;">An account has been created for you on the <strong>FCR-SCS Platform</strong> as an affected landowner.</p>
+          <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-left: 4px solid #16a34a; padding: 14px 18px; border-radius: 8px; margin: 18px 0;">
+            <p style="margin: 0 0 6px 0; font-size: 14px; font-weight: bold; color: #166534;">Reason for Account Creation:</p>
+            <p style="margin: 0 0 4px 0; font-size: 14px; color: #14532d;">Your land parcel has been officially attached to statutory acquisition case <strong>{{caseTitle}}</strong> (Case ID: <strong>{{caseId}}</strong>).</p>
+            <p style="margin: 0; font-size: 13px; color: #15803d;">This account allows you to securely track case progress, view land valuation reports, review statutory Form H compensation awards, and lodge formal inquiries or objections.</p>
+          </div>
+          <div style="background-color: #F3EDF7; padding: 18px; border-radius: 8px; margin: 20px 0; border: 1px solid #e7d8f3;">
+            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Sign-In Email:</strong> <span style="color: #1e293b; font-weight: 600;">{{email}}</span></p>
+            <p style="margin: 0; font-size: 14px;"><strong>Temporary Password:</strong> <code style="background: #E8DEF8; color: #4a148c; padding: 3px 8px; border-radius: 4px; font-size: 15px; font-weight: bold; font-family: monospace;">{{temporaryPassword}}</code></p>
+          </div>
+          <div style="background-color: #fff1f2; border-left: 4px solid #f43f5e; padding: 12px 16px; border-radius: 6px; margin: 16px 0;">
+            <p style="margin: 0; font-size: 13px; color: #9f1239; font-weight: 600;">Security Requirement: For your protection, you must change this temporary password upon your first login.</p>
+          </div>
           <div style="text-align: center; margin: 24px 0;">
-            <a href="{{loginUrl}}" style="background-color: #6750A4; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Log In to Your Account</a>
+            <a href="{{loginUrl}}" style="background-color: #6750A4; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">Sign In to Member Portal</a>
           </div>
-          <br>
-          <p style="margin-bottom: 0;">Regards,<br><strong>FCR-SCS Identity & Administration</strong></p>
+          <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 20px 0;">
+          <p style="font-size: 12px; color: #94a3b8; margin: 0;">Regards,<br><strong>Land Acquisition &amp; Compensation Authority (FCR-SCS)</strong></p>
         </div>
       `,
       createdById: defaultAdmin.userId,
@@ -2234,7 +2244,7 @@ async function main() {
       triggerInApp: true,
       triggerEmail: false,
       urgencyLevel: AlertUrgency.MEDIUM,
-      targetRole: 'ALL_ADMINS',
+      targetRole: 'SYSTEM_ADMINISTRATOR,GOVERNMENT_ADMINISTRATOR',
       isEnabled: true,
       createdById: defaultAdmin.userId,
     },
@@ -2248,6 +2258,145 @@ async function main() {
       triggerEmail: false,
       urgencyLevel: AlertUrgency.LOW,
       targetRole: 'SYSTEM_ADMINISTRATOR',
+      isEnabled: true,
+      createdById: defaultAdmin.userId,
+    },
+    // --- Teammate Land Acquisition & Compensation Notification Rules ---
+    {
+      ruleName: 'Land Valuer Case Assignment',
+      description: 'Notify assigned land valuer when assigned to conduct inspection and valuation for a land acquisition case.',
+      activityType: 'VALUER_ASSIGNED',
+      moduleName: 'LAND_ACQUISITION',
+      minSeverity: 'INFO',
+      triggerInApp: true,
+      triggerEmail: true,
+      urgencyLevel: AlertUrgency.HIGH,
+      emailTemplateName: 'SYSTEM_ALERT',
+      targetRole: 'LAND_VALUER',
+      isEnabled: true,
+      createdById: defaultAdmin.userId,
+    },
+    {
+      ruleName: 'Valuation Assessment Report Submission',
+      description: 'Notify government case officers when an assigned land valuer submits a statutory valuation report for review.',
+      activityType: 'VALUATION_REPORT_CREATED',
+      moduleName: 'LAND_ACQUISITION',
+      minSeverity: 'INFO',
+      triggerInApp: true,
+      triggerEmail: false,
+      urgencyLevel: AlertUrgency.MEDIUM,
+      targetRole: 'GOVERNMENT_OFFICER',
+      isEnabled: true,
+      createdById: defaultAdmin.userId,
+    },
+    {
+      ruleName: 'Compensation Award Assessment Review',
+      description: 'Notify government administrators when a compensation report has been prepared and requires formal administrative review and sign-off.',
+      activityType: 'COMPENSATION_REPORT_CREATED',
+      moduleName: 'COMPENSATION_MANAGEMENT',
+      minSeverity: 'INFO',
+      triggerInApp: true,
+      triggerEmail: true,
+      urgencyLevel: AlertUrgency.HIGH,
+      emailTemplateName: 'SYSTEM_ALERT',
+      targetRole: 'GOVERNMENT_ADMINISTRATOR',
+      isEnabled: true,
+      createdById: defaultAdmin.userId,
+    },
+    {
+      ruleName: 'Statutory Compensation Award & Form H Notice',
+      description: 'Notify affected landowners and community members when statutory compensation assessment is approved and Form H award notice is published.',
+      activityType: 'OFFER_LETTER_CREATED',
+      moduleName: 'COMPENSATION_MANAGEMENT',
+      minSeverity: 'INFO',
+      triggerInApp: true,
+      triggerEmail: true,
+      urgencyLevel: AlertUrgency.HIGH,
+      emailTemplateName: 'OFFER_LETTER_NOTIFICATION',
+      targetRole: 'DISPLACED_COMMUNITY_MEMBER',
+      isEnabled: true,
+      createdById: defaultAdmin.userId,
+    },
+    {
+      ruleName: 'Compensation Report Approval Notice',
+      description: 'Notify affected landowners when formal compensation award report is approved by authorities.',
+      activityType: 'COMPENSATION_REPORT_APPROVED',
+      moduleName: 'COMPENSATION_MANAGEMENT',
+      minSeverity: 'INFO',
+      triggerInApp: true,
+      triggerEmail: true,
+      urgencyLevel: AlertUrgency.HIGH,
+      emailTemplateName: 'SYSTEM_ALERT',
+      targetRole: 'DISPLACED_COMMUNITY_MEMBER',
+      isEnabled: true,
+      createdById: defaultAdmin.userId,
+    },
+    {
+      ruleName: 'Landowner Compensation Offer Acceptance',
+      description: 'Notify government administrators immediately when a landowner officially accepts the statutory compensation offer (Form H).',
+      activityType: 'OFFER_LETTER_ACCEPTED',
+      moduleName: 'COMPENSATION_MANAGEMENT',
+      minSeverity: 'INFO',
+      triggerInApp: true,
+      triggerEmail: true,
+      urgencyLevel: AlertUrgency.HIGH,
+      emailTemplateName: 'SYSTEM_ALERT',
+      targetRole: 'GOVERNMENT_ADMINISTRATOR',
+      isEnabled: true,
+      createdById: defaultAdmin.userId,
+    },
+    {
+      ruleName: 'Form N Statutory Landowner Objection',
+      description: 'Notify government case officers immediately when an affected landowner files a Form N objection against land acquisition or compensation.',
+      activityType: 'OBJECTION_FILED',
+      moduleName: 'COMPENSATION_MANAGEMENT',
+      minSeverity: 'WARNING',
+      triggerInApp: true,
+      triggerEmail: true,
+      urgencyLevel: AlertUrgency.CRITICAL,
+      emailTemplateName: 'SYSTEM_ALERT',
+      targetRole: 'GOVERNMENT_OFFICER',
+      isEnabled: true,
+      createdById: defaultAdmin.userId,
+    },
+    {
+      ruleName: 'Form N Objection Decision Rendered',
+      description: 'Notify landowner when formal review decision or ruling is made regarding their lodged Form N objection.',
+      activityType: 'OBJECTION_REVIEWED',
+      moduleName: 'COMPENSATION_MANAGEMENT',
+      minSeverity: 'INFO',
+      triggerInApp: true,
+      triggerEmail: true,
+      urgencyLevel: AlertUrgency.HIGH,
+      emailTemplateName: 'OBJECTION_UPDATE',
+      targetRole: 'DISPLACED_COMMUNITY_MEMBER',
+      isEnabled: true,
+      createdById: defaultAdmin.userId,
+    },
+    {
+      ruleName: 'Land Acquisition Case Registration',
+      description: 'Notify case officers and administrators when a new land acquisition case is registered in the registry.',
+      activityType: 'CASE_CREATED',
+      moduleName: 'LAND_ACQUISITION',
+      minSeverity: 'INFO',
+      triggerInApp: true,
+      triggerEmail: false,
+      urgencyLevel: AlertUrgency.MEDIUM,
+      targetRole: 'GOVERNMENT_ADMINISTRATOR,GOVERNMENT_OFFICER,DISPLACED_COMMUNITY_MEMBER',
+      isEnabled: true,
+      createdById: defaultAdmin.userId,
+    },
+    {
+      ruleName: 'Valuation Report Approval Notice',
+      description: 'Notify assigned valuer and case officers when statutory valuation report is formally approved.',
+      activityType: 'VALUATION_REPORT_APPROVED',
+      moduleName: 'LAND_ACQUISITION',
+      minSeverity: 'INFO',
+      triggerInApp: true,
+      triggerEmail: true,
+      urgencyLevel: AlertUrgency.MEDIUM,
+      emailTemplateName: 'SYSTEM_ALERT',
+      targetRole: 'LAND_VALUER,GOVERNMENT_OFFICER',
       isEnabled: true,
       createdById: defaultAdmin.userId,
     },

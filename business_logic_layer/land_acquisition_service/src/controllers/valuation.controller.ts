@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import * as valuationService from "../services/valuation.service";
+import { logAudit } from "../../../user_management_service/src/services/audit.service";
 
 export async function getAllReports(req: Request, res: Response): Promise<void> {
   try {
@@ -116,6 +117,26 @@ export async function createReport(req: Request, res: Response): Promise<void> {
       remarks: remarks || "",
       createdById: userId,
     });
+
+    logAudit({
+      userId: (req as any).user?.userId || userId,
+      userRole: (req as any).user?.role || "LAND_VALUER",
+      activityType: "VALUATION_REPORT_CREATED",
+      moduleName: "LAND_ACQUISITION",
+      caseReference: caseId,
+      severity: "INFO",
+      ipAddress: req.ip || "127.0.0.1",
+      deviceInfo: (req.headers["user-agent"] as string) || "Unknown",
+      activityDetails: {
+        reportId: (report as any)?.reportId,
+        caseId,
+        valuationMethod,
+        marketValue,
+        recommendedCompensation,
+      },
+      systemResponse: "CREATED (201)",
+    });
+
     res.status(201).json({ report });
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -138,6 +159,20 @@ export async function approveReport(req: Request, res: Response): Promise<void> 
 
   try {
     const report = await valuationService.approveReport(reportId, reviewerId);
+
+    logAudit({
+      userId: (req as any).user?.userId || reviewerId || undefined,
+      userRole: (req as any).user?.role || "GOVERNMENT_ADMINISTRATOR",
+      activityType: "VALUATION_REPORT_APPROVED",
+      moduleName: "LAND_ACQUISITION",
+      caseReference: (report as any)?.caseId || undefined,
+      severity: "INFO",
+      ipAddress: req.ip || "127.0.0.1",
+      deviceInfo: (req.headers["user-agent"] as string) || "Unknown",
+      activityDetails: { reportId, caseId: (report as any)?.caseId },
+      systemResponse: "SUCCESS (200)",
+    });
+
     res.json({ report });
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -164,6 +199,20 @@ export async function rejectReport(req: Request, res: Response): Promise<void> {
 
   try {
     const report = await valuationService.rejectReport(reportId, reason, acceptancePeriodDays, reviewerId);
+
+    logAudit({
+      userId: (req as any).user?.userId || reviewerId || undefined,
+      userRole: (req as any).user?.role || "GOVERNMENT_ADMINISTRATOR",
+      activityType: "VALUATION_REPORT_REJECTED",
+      moduleName: "LAND_ACQUISITION",
+      caseReference: (report as any)?.caseId || undefined,
+      severity: "WARNING",
+      ipAddress: req.ip || "127.0.0.1",
+      deviceInfo: (req.headers["user-agent"] as string) || "Unknown",
+      activityDetails: { reportId, caseId: (report as any)?.caseId, reason },
+      systemResponse: "SUCCESS (200)",
+    });
+
     res.json({ report });
   } catch (e: unknown) {
     const msg = (e as Error).message;

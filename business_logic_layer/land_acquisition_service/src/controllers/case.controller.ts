@@ -4,6 +4,7 @@ import { validateCreateCasePayload } from "../validators/case.validator";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { logAudit } from "../../../user_management_service/src/services/audit.service";
 
 // ─── GET Handlers (Phase 1) ──────────────────────────────────────────────────
 
@@ -72,6 +73,15 @@ export async function getCaseStats(req: Request, res: Response): Promise<void> {
   }
 }
 
+export async function getDashboardStats(_req: Request, res: Response): Promise<void> {
+  try {
+    const stats = await caseService.getDashboardOverviewStats();
+    res.json(stats);
+  } catch (e: unknown) {
+    res.status(500).json({ error: (e as Error).message });
+  }
+}
+
 export async function getUnassignedCases(_req: Request, res: Response): Promise<void> {
   try {
     const cases = await caseService.getUnassignedCases();
@@ -112,6 +122,25 @@ export async function createCase(req: Request, res: Response): Promise<void> {
       remarks,
       createdById: userId,
     });
+
+    logAudit({
+      userId: (req as any).user?.userId || userId,
+      userRole: (req as any).user?.role || "GOVERNMENT_OFFICER",
+      activityType: "CASE_CREATED",
+      moduleName: "LAND_ACQUISITION",
+      caseReference: (result as any)?.caseId || caseId,
+      severity: "INFO",
+      ipAddress: req.ip || "127.0.0.1",
+      deviceInfo: (req.headers["user-agent"] as string) || "Unknown",
+      activityDetails: {
+        caseId: (result as any)?.caseId || caseId,
+        caseTitle,
+        projectName: project?.projectName,
+        landTitleNo: land?.landTitleNo,
+      },
+      systemResponse: "CREATED (201)",
+    });
+
     res.status(201).json({ case: result });
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -139,6 +168,20 @@ export async function updateCaseTitle(req: Request, res: Response): Promise<void
 
   try {
     const result = await caseService.updateCaseTitle(caseId, caseTitle);
+
+    logAudit({
+      userId: (req as any).user?.userId || undefined,
+      userRole: (req as any).user?.role || "GOVERNMENT_OFFICER",
+      activityType: "CASE_UPDATED",
+      moduleName: "LAND_ACQUISITION",
+      caseReference: caseId,
+      severity: "INFO",
+      ipAddress: req.ip || "127.0.0.1",
+      deviceInfo: (req.headers["user-agent"] as string) || "Unknown",
+      activityDetails: { caseId, caseTitle, field: "caseTitle" },
+      systemResponse: "SUCCESS (200)",
+    });
+
     res.json({ success: true, message: "Case title updated successfully", case: result, data: result });
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -169,6 +212,20 @@ export async function updateCase(req: Request, res: Response): Promise<void> {
       land,
       owners,
     });
+
+    logAudit({
+      userId: (req as any).user?.userId || undefined,
+      userRole: (req as any).user?.role || "GOVERNMENT_OFFICER",
+      activityType: "CASE_UPDATED",
+      moduleName: "LAND_ACQUISITION",
+      caseReference: caseId,
+      severity: "INFO",
+      ipAddress: req.ip || "127.0.0.1",
+      deviceInfo: (req.headers["user-agent"] as string) || "Unknown",
+      activityDetails: { caseId, status, caseTitle: caseTitle || caseName || title },
+      systemResponse: "SUCCESS (200)",
+    });
+
     res.json({ success: true, message: "Case updated successfully", case: result, data: result });
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -252,6 +309,20 @@ export async function deleteCase(req: Request, res: Response): Promise<void> {
 
   try {
     const result = await caseService.deleteCase(caseId);
+
+    logAudit({
+      userId: (req as any).user?.userId || undefined,
+      userRole: (req as any).user?.role || "GOVERNMENT_ADMINISTRATOR",
+      activityType: "CASE_DELETED",
+      moduleName: "LAND_ACQUISITION",
+      caseReference: caseId,
+      severity: "WARNING",
+      ipAddress: req.ip || "127.0.0.1",
+      deviceInfo: (req.headers["user-agent"] as string) || "Unknown",
+      activityDetails: { caseId },
+      systemResponse: "SUCCESS (200)",
+    });
+
     res.json(result);
   } catch (e: unknown) {
     const msg = (e as Error).message;

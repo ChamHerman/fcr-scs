@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import * as assignmentService from "../services/assignment.service";
+import { logAudit } from "../../../user_management_service/src/services/audit.service";
 
 export async function assignValuer(req: Request, res: Response): Promise<void> {
   const { caseId, valuerId, acceptancePeriodDays, remarks, assignedById } = req.body;
@@ -23,6 +24,25 @@ export async function assignValuer(req: Request, res: Response): Promise<void> {
       remarks,
       assignedById: userId,
     });
+
+    logAudit({
+      userId: (req as any).user?.userId || userId,
+      userRole: (req as any).user?.role || "GOVERNMENT_OFFICER",
+      activityType: "VALUER_ASSIGNED",
+      moduleName: "LAND_ACQUISITION",
+      caseReference: caseId,
+      severity: "INFO",
+      ipAddress: req.ip || "127.0.0.1",
+      deviceInfo: (req.headers["user-agent"] as string) || "Unknown",
+      activityDetails: {
+        caseId,
+        valuerId,
+        acceptancePeriodDays: acceptancePeriodDays ? parseInt(acceptancePeriodDays, 10) : 7,
+        remarks,
+      },
+      systemResponse: "CREATED (201)",
+    });
+
     res.status(201).json({ assignment });
   } catch (e: unknown) {
     const msg = (e as Error).message;

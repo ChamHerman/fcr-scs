@@ -9,6 +9,8 @@ const caseRouter = Router();
 caseRouter.get("/projects", caseCtrl.getAllProjects);
 caseRouter.get("/cases", caseCtrl.getAllCases);
 caseRouter.get("/cases/stats", caseCtrl.getCaseStats);
+caseRouter.get("/cases/dashboard-stats", caseCtrl.getDashboardStats);
+caseRouter.get("/dashboard-stats", caseCtrl.getDashboardStats);
 caseRouter.get("/cases/unassigned", caseCtrl.getUnassignedCases);
 caseRouter.get("/cases/next-id", caseCtrl.getNextCaseId);
 caseRouter.get("/cases/:caseId", caseCtrl.getCaseById);
