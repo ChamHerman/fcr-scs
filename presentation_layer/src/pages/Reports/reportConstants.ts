@@ -1,56 +1,106 @@
-export const STATES: Record<string, string[]> = {
-  Johor: ['Batu Pahat', 'Johor Bahru', 'Kluang', 'Kota Tinggi', 'Kulai', 'Mersing', 'Muar', 'Pontian', 'Segamat', 'Tangkak'],
-  Kedah: ['Baling', 'Bandar Baharu', 'Kota Setar', 'Kuala Muda', 'Kubang Pasu', 'Kulim', 'Langkawi', 'Padang Terap', 'Pendang', 'Pokok Sena', 'Sik', 'Yan'],
-  Kelantan: ['Bachok', 'Gua Musang', 'Jeli', 'Kota Bharu', 'Kuala Krai', 'Machang', 'Pasir Mas', 'Pasir Puteh', 'Tanah Merah', 'Tumpat'],
-  Melaka: ['Alor Gajah', 'Melaka Tengah', 'Jasin'],
-  'Negeri Sembilan': ['Jelebu', 'Jempol', 'Kuala Pilah', 'Port Dickson', 'Rembau', 'Seremban', 'Tampin'],
-  Pahang: ['Bentong', 'Bera', 'Cameron Highlands', 'Jerantut', 'Kuantan', 'Lipis', 'Maran', 'Pekan', 'Raub', 'Rompin', 'Temerloh'],
-  Penang: ['Seberang Perai Utara', 'Seberang Perai Tengah', 'Seberang Perai Selatan', 'Timur Laut', 'Barat Daya'],
-  Perak: ['Bagan Datuk', 'Batang Padang', 'Hilir Perak', 'Hulu Perak', 'Kampar', 'Kerian', 'Kinta', 'Kuala Kangsar', 'Larut, Matang dan Selama', 'Manjung', 'Muallim', 'Perak Tengah'],
-  Perlis: ['Arau', 'Kangar', 'Padang Besar'],
-  Sabah: ['Beaufort', 'Beluran', 'Kalabakan', 'Keningau', 'Kinabatangan', 'Kota Belud', 'Kota Kinabalu', 'Kota Marudu', 'Kuala Penyu', 'Kudat', 'Kunak', 'Lahad Datu', 'Membakut', 'Nabawan', 'Papar', 'Penampang', 'Pitas', 'Ranau', 'Sandakan', 'Semporna', 'Sipitang', 'Tambunan', 'Tawau', 'Telupid', 'Tenom', 'Tongod', 'Tuaran'],
-  Sarawak: ['Asajaya', 'Bau', 'Belaga', 'Beluru', 'Betong', 'Bintulu', 'Dalit', 'Daro', 'Julau', 'Kanowit', 'Kapit', 'Kuching', 'Lawas', 'Limbang', 'Lubok Antu', 'Lundu', 'Marudi', 'Matu', 'Meradong', 'Miri', 'Mukah', 'Pakan', 'Pusa', 'Samarahan', 'Saratok', 'Sarikei', 'Selangau', 'Serian', 'Sibu', 'Simunjan', 'Song', 'Sri Aman', 'Tatau', 'Tebedu', 'Telang Usan'],
-  Selangor: ['Gombak', 'Hulu Langat', 'Hulu Selangor', 'Klang', 'Kuala Langat', 'Kuala Selangor', 'Petaling', 'Sabak Bernam', 'Sepang'],
-  Terengganu: ['Besut', 'Dungun', 'Hulu Terengganu', 'Kemaman', 'Kuala Nerus', 'Kuala Terengganu', 'Marang', 'Setiu'],
-  'Kuala Lumpur': ['Kuala Lumpur'],
-  Labuan: ['Labuan'],
-  Putrajaya: ['Putrajaya']
+/**
+ * Report filter vocabularies.
+ *
+ * Every list here is derived from the module that owns the data, so report
+ * filters can never drift from what the other services actually store:
+ *  - locations        → constants/malaysiaLocations (used by case registration)
+ *  - case statuses    → CaseStatus enum, labelled by constants/landAcquisition
+ *  - payment statuses → PaymentStatus enum, labelled by pages/Payment/statusMaps
+ *  - blockchain       → BlockchainStatus enum, labelled by pages/Payment/statusMaps
+ *
+ * The reporting API validates these values against the Prisma enums, so only
+ * real enum values may appear here — display labels are resolved separately.
+ */
+import { MALAYSIA_DISTRICTS_MAP } from '../../constants/malaysiaLocations';
+import { CASE_STATUS_LABEL_MAP } from '../../constants/landAcquisition';
+import { paymentStatusLabelMap, blockchainStatusLabelMap } from '../Payment/statusMaps';
+
+export const ALL_OPTION = 'All';
+
+/** State → districts, taken from the canonical list the case module writes. */
+export const STATES = MALAYSIA_DISTRICTS_MAP;
+
+/** CaseStatus enum — the 15 values the reporting service accepts. */
+export const CASE_STATUS_VALUES = [
+  'CASE_REGISTERED',
+  'VALUER_ASSIGNED',
+  'VALUATION_IN_PROGRESS',
+  'PENDING_VALUATION_APPROVAL',
+  'VALUATION_APPROVED',
+  'VALUATION_REJECTED',
+  'PENDING_COMPENSATION_APPROVAL',
+  'COMPENSATION_APPROVED',
+  'COMPENSATION_REJECTED',
+  'OFFER_ISSUED',
+  'OFFER_ACCEPTED',
+  'OFFER_REJECTED',
+  'PAYMENT_IN_PROGRESS',
+  'PAYMENT_COMPLETED',
+  'CASE_CLOSED',
+];
+
+/** PaymentStatus enum — herman's canonical lifecycle (void ledger removed). */
+export const PAYMENT_STATUS_VALUES = [
+  'BANK_DETAILS_PENDING',
+  'READY_TO_INITIATE',
+  'PENDING_APPROVAL',
+  'BANK_APPROVAL_PENDING',
+  'TRANSFER_SUCCEED',
+  'TRANSFER_REJECTED',
+  'TRANSFER_FAILED',
+  'DISPUTED',
+  'PAID',
+  'CANCELLED',
+  'SCHEDULED',
+  'NEW_BANK_DETAILS_PENDING',
+  'AWARD_NOTARIZATION_PENDING',
+  'BANK_DETAILS_AND_M1_PENDING',
+];
+
+/** BlockchainStatus enum — publishing states only; voiding was removed. */
+export const BLOCKCHAIN_STATUS_VALUES = ['READY_TO_PUBLISH', 'PUBLISHED'];
+
+export const CASE_STATUS_OPTIONS = [ALL_OPTION, ...CASE_STATUS_VALUES];
+export const PAYMENT_STATUS_OPTIONS = [ALL_OPTION, ...PAYMENT_STATUS_VALUES];
+export const BLOCKCHAIN_STATUS_OPTIONS = [ALL_OPTION, ...BLOCKCHAIN_STATUS_VALUES];
+
+const prettify = (value: string) =>
+  value
+    .replace(/_/g, ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
+export const caseStatusLabel = (status: string): string =>
+  CASE_STATUS_LABEL_MAP[status] ?? prettify(status);
+
+export const paymentStatusLabel = (status: string): string =>
+  paymentStatusLabelMap[status] ?? prettify(status);
+
+export const blockchainStatusLabel = (status: string): string =>
+  blockchainStatusLabelMap[status] ?? prettify(status);
+
+/**
+ * Resolves a display label for any status the report can render.
+ *
+ * Enum membership decides which vocabulary wins: OFFER_ACCEPTED is a case
+ * status, even though the payment module's legacy map also knows that key.
+ */
+export const reportStatusLabel = (status: string): string => {
+  if (CASE_STATUS_VALUES.includes(status)) return caseStatusLabel(status);
+  if (PAYMENT_STATUS_VALUES.includes(status)) return paymentStatusLabel(status);
+  if (BLOCKCHAIN_STATUS_VALUES.includes(status)) return blockchainStatusLabel(status);
+  // Title-case / legacy display forms (e.g. labels normalised by the payment module)
+  return (
+    paymentStatusLabelMap[status] ??
+    blockchainStatusLabelMap[status] ??
+    CASE_STATUS_LABEL_MAP[status] ??
+    prettify(status)
+  );
 };
 
+/** Report types the reporting service actually implements. */
 export const REPORT_TYPES = [
   'Case Status Report',
   'Payment Report',
   'Blockchain Audit Report',
-  'Compensation Summary Report',
-  'Asset Valuation Report',
-  'Performance Report',
-  'Compliance Report'
-];
-
-export const CASE_STATUS_OPTIONS = [
-  'All',
-  'CASE_REGISTERED',
-  'VALUATION_IN_PROGRESS',
-  'PENDING_VALUATION_APPROVAL',
-  'VALUATION_APPROVED',
-  'PENDING_COMPENSATION_APPROVAL',
-  'COMPENSATION_APPROVED',
-  'OFFER_ISSUED',
-  'PAYMENT_IN_PROGRESS',
-  'PAYMENT_COMPLETED',
-  'CASE_CLOSED'
-];
-
-export const PAYMENT_STATUS_OPTIONS = [
-  'All',
-  'Approved',
-  'Transfer Initiated',
-  'Paid',
-  'Failed'
-];
-
-export const BLOCKCHAIN_STATUS_OPTIONS = [
-  'All',
-  'Published',
-  'Ready to Publish'
 ];

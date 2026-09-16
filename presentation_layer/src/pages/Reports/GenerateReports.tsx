@@ -16,11 +16,16 @@ import { Select } from '../../components/ui/Select';
 import { Modal } from '../../components/ui/Modal';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import {
+  ALL_OPTION,
   STATES,
   CASE_STATUS_OPTIONS,
   PAYMENT_STATUS_OPTIONS,
-  BLOCKCHAIN_STATUS_OPTIONS
+  BLOCKCHAIN_STATUS_OPTIONS,
+  caseStatusLabel,
+  paymentStatusLabel,
+  blockchainStatusLabel
 } from './reportConstants';
+import type { SelectOption } from '../../components/ui/Select';
 import { ReportSummaryCards, ReportDataTable } from './reportComponents';
 import {
   fetchCaseStatusReport,
@@ -77,10 +82,17 @@ export const GenerateReports: React.FC = () => {
 
   const locationOptions = useMemo(() => (state === 'All' ? [] : (STATES[state] ?? [])), [state]);
 
-  const currentStatusOptions = useMemo(() => {
-    if (category === 'Payment Report') return PAYMENT_STATUS_OPTIONS;
-    if (category === 'Blockchain Audit Report') return BLOCKCHAIN_STATUS_OPTIONS;
-    return CASE_STATUS_OPTIONS;
+  /* Values are real enum members; labels come from the owning module's map. */
+  const currentStatusOptions = useMemo<SelectOption[]>(() => {
+    const toOptions = (values: string[], labelFor: (value: string) => string): SelectOption[] =>
+      values.map((value) => ({
+        value,
+        label: value === ALL_OPTION ? 'All Statuses' : labelFor(value),
+      }));
+
+    if (category === 'Payment Report') return toOptions(PAYMENT_STATUS_OPTIONS, paymentStatusLabel);
+    if (category === 'Blockchain Audit Report') return toOptions(BLOCKCHAIN_STATUS_OPTIONS, blockchainStatusLabel);
+    return toOptions(CASE_STATUS_OPTIONS, caseStatusLabel);
   }, [category]);
 
   const buildFilters = useCallback((): ReportFilterOptions => {
@@ -225,7 +237,7 @@ export const GenerateReports: React.FC = () => {
             label="Filter Status"
             value={status}
             onChange={setStatus}
-            options={currentStatusOptions.map((st) => ({ value: st, label: st.replace(/_/g, ' ') }))}
+            options={currentStatusOptions}
           />
 
           <div className="grid grid-cols-2 gap-4">

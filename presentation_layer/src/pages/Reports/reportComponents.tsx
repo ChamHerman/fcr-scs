@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlertCircle } from 'lucide-react';
 import type { ReportGeneratedResponse } from '../../services/reportApi';
+import { reportStatusLabel } from './reportConstants';
 
 /* ─────────────────────── Design-system status badges ─────────────────────── */
 
@@ -12,13 +13,53 @@ const STATUS_STYLES = {
   blue: { bg: 'bg-[#e3f2fd]', fg: 'text-[#0b5b8c]', dot: 'bg-[#0b5b8c]' },
 } as const;
 
+/* Settled / approved milestones. */
+const GREEN_STATUSES = [
+  'CASE CLOSED',
+  'PAYMENT COMPLETED',
+  'PAID',
+  'TRANSFER SUCCEED',
+  'PUBLISHED',
+  'VALUATION APPROVED',
+  'COMPENSATION APPROVED',
+  'OFFER ACCEPTED',
+  'APPROVED',
+  'COMPLETED',
+];
+
+/* Rejections, failures and blocked money. */
+const RED_STATUSES = [
+  'VALUATION REJECTED',
+  'COMPENSATION REJECTED',
+  'OFFER REJECTED',
+  'TRANSFER REJECTED',
+  'TRANSFER FAILED',
+  'CANCELLED',
+  'DISPUTED',
+  'NEW BANK DETAILS PENDING',
+  'REJECTED',
+  'FAILED',
+  'VOIDED',
+];
+
+/* Newly registered or informational. */
+const BLUE_STATUSES = ['CASE REGISTERED', 'REGISTERED', 'READY TO PUBLISH', 'NOTARIZED'];
+
+/** Normalises enum values (TRANSFER_SUCCEED) and title-case labels alike. */
+function normaliseStatus(status: string): string {
+  return status
+    .toUpperCase()
+    .replace(/&/g, 'AND')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export function statusStyle(status: string) {
-  const s = status.toUpperCase().replace(/_/g, ' ');
-  if (['PAID', 'PUBLISHED', 'APPROVED', 'COMPLETED', 'CASE CLOSED', 'COMPENSATION APPROVED'].includes(s)) {
-    return STATUS_STYLES.green;
-  }
-  if (['FAILED', 'REJECTED'].includes(s)) return STATUS_STYLES.red;
-  if (['CASE REGISTERED', 'REGISTERED', 'NOTARIZED'].includes(s)) return STATUS_STYLES.blue;
+  const s = normaliseStatus(status);
+  if (GREEN_STATUSES.includes(s)) return STATUS_STYLES.green;
+  if (RED_STATUSES.includes(s)) return STATUS_STYLES.red;
+  if (BLUE_STATUSES.includes(s)) return STATUS_STYLES.blue;
   return STATUS_STYLES.amber;
 }
 
@@ -27,7 +68,7 @@ export const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full py-0.5 pl-2 pr-3 text-xs font-semibold ${style.bg} ${style.fg}`}>
       <span className={`w-2 h-2 rounded-full ${style.dot}`} />
-      {status.replace(/_/g, ' ')}
+      {reportStatusLabel(status)}
     </span>
   );
 };
