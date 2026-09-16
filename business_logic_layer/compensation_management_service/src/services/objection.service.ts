@@ -468,35 +468,60 @@ export async function reviewObjection(input: ReviewObjectionInput) {
       },
     });
 
-    // Business Logic: If objection is APPROVED (or revised/accepted), update the offer letter amount to the revised compensation
-    // and reset the offer letter status and member responses back to PENDING so the member can approve again.
+    // Business Logic:
+    // If objection is APPROVED (or revised/accepted), update offer letter amount to the revised compensation,
+    // reset offer letter status and member responses back to PENDING, and reset case status to OFFER_ISSUED.
+    // If objection is REJECTED, reset offer letter status and member responses back to PENDING (retaining original compensation award)
+    // and reset case status to OFFER_ISSUED so the landowner can take pending action (re-submit objection or accept the offer).
     const targetOfferId =
       objection.offerId ||
       (objection.caseId
         ? (await tx.offerLetter.findFirst({ where: { caseId: objection.caseId } }))?.offerId
         : null);
 
-    if (decision !== "REJECTED" && targetOfferId) {
-      const updatedOffer = await tx.offerLetter.update({
-        where: { offerId: targetOfferId },
-        data: {
-          offerAmount: finalRevisedAmount || objection.offerLetter?.offerAmount || 0,
-          status: OfferStatus.PENDING,
-          acceptedAt: null,
-          rejectedAt: null,
-          remarks: `Compensation revised via Objection (${objectionId}). Please review and approve revised offer.`,
-        },
-      });
+    let associatedCaseId = objection.caseId;
 
-      // Also update linked compensation report total compensation if exists
-      if (updatedOffer.compensationReportId) {
-        await tx.compensationReport.update({
-          where: { compensationReportId: updatedOffer.compensationReportId },
+    if (targetOfferId) {
+      if (decision !== "REJECTED") {
+        const updatedOffer = await tx.offerLetter.update({
+          where: { offerId: targetOfferId },
           data: {
-            totalCompensation: finalRevisedAmount,
-            remarks: `Revised via approved Objection (${objectionId})`,
+            offerAmount: finalRevisedAmount || objection.offerLetter?.offerAmount || 0,
+            status: OfferStatus.PENDING,
+            acceptedAt: null,
+            rejectedAt: null,
+            remarks: `Compensation revised via Objection (${objectionId}). Please review and approve revised offer.`,
           },
         });
+        if (updatedOffer.caseId) {
+          associatedCaseId = updatedOffer.caseId;
+        }
+
+        // Also update linked compensation report total compensation if exists
+        if (updatedOffer.compensationReportId) {
+          await tx.compensationReport.update({
+            where: { compensationReportId: updatedOffer.compensationReportId },
+            data: {
+              totalCompensation: finalRevisedAmount,
+              remarks: `Revised via approved Objection (${objectionId})`,
+            },
+          });
+        }
+      } else {
+        const updatedOffer = await tx.offerLetter.update({
+          where: { offerId: targetOfferId },
+          data: {
+            status: OfferStatus.PENDING,
+            acceptedAt: null,
+            rejectedAt: null,
+            remarks: reviewRemarks
+              ? `Objection (${objectionId}) rejected by Land Administrator: ${reviewRemarks}. Original compensation award reinstated for review.`
+              : `Objection (${objectionId}) rejected by Land Administrator. Original compensation award reinstated for review.`,
+          },
+        });
+        if (updatedOffer.caseId) {
+          associatedCaseId = updatedOffer.caseId;
+        }
       }
 
       // Reset member responses to PENDING
@@ -507,17 +532,16 @@ export async function reviewObjection(input: ReviewObjectionInput) {
           remarks: null,
         },
       });
+    }
 
-      // Update case status to OFFER_ISSUED
-      const caseIdToUpdate = objection.caseId || updatedOffer.caseId;
-      if (caseIdToUpdate) {
-        await tx.acquisitionCase.update({
-          where: { caseId: caseIdToUpdate },
-          data: {
-            status: CaseStatus.OFFER_ISSUED,
-          },
-        });
-      }
+    // Update case status to OFFER_ISSUED for both accepted and rejected objections
+    if (associatedCaseId) {
+      await tx.acquisitionCase.update({
+        where: { caseId: associatedCaseId },
+        data: {
+          status: CaseStatus.OFFER_ISSUED,
+        },
+      });
     }
 
     return updatedObj;
