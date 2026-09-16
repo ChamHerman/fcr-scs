@@ -19,6 +19,12 @@ export interface CreateObjectionInput {
   objectionReason: string;
   requestedAmount: number;
   createdById: string;
+  documents?: Array<{
+    fileName: string;
+    filePath: string;
+    mimeType: string;
+    checksum?: string;
+  }>;
 }
 
 export interface ReviewObjectionInput {
@@ -320,6 +326,21 @@ export async function createObjection(input: CreateObjectionInput) {
         offerLetter: true,
       },
     });
+
+    if (input.documents && input.documents.length > 0) {
+      for (const doc of input.documents) {
+        await tx.objectionDocument.create({
+          data: {
+            objectionId: createdObj.objectionId,
+            fileName: doc.fileName,
+            filePath: doc.filePath,
+            mimeType: doc.mimeType,
+            checksum: doc.checksum || "",
+            createdById: validUserId,
+          },
+        });
+      }
+    }
 
     // If the member had previously accepted within grace period, update response to REJECTED (disputed)
     if (matchingMemberResp) {
