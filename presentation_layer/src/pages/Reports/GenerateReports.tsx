@@ -40,10 +40,11 @@ import type {
 
 const SUPPORTED_TYPES = ['Case Status Report', 'Payment Report', 'Blockchain Audit Report'];
 
-const REPORT_CODE: Record<string, string> = {
-  'Case Status Report': 'FR-RPT-015',
-  'Payment Report': 'FR-RPT-014',
-  'Blockchain Audit Report': 'FR-RPT-013',
+/* One short description per report function. */
+const REPORT_DESCRIPTIONS: Record<string, string> = {
+  'Case Status Report': 'Acquisition lifecycle, statutory aging and case status.',
+  'Payment Report': 'Disbursement ledger, bank clearance and settlement outcomes.',
+  'Blockchain Audit Report': 'On-chain publication and document integrity trail.',
 };
 
 export const GenerateReports: React.FC = () => {
@@ -177,11 +178,11 @@ export const GenerateReports: React.FC = () => {
             <div className="flex items-center gap-3">
               <h1 className="text-2xl md:text-3xl font-bold">Generate Filtering Reports</h1>
               <span className="px-2 py-1 rounded-lg bg-md-primary/15 text-md-primary font-bold text-xs whitespace-nowrap">
-                {REPORT_CODE[category]}
+                {category}
               </span>
             </div>
-            <p className="text-md-on-surface-variant mt-1 max-w-2xl">
-              Configure filter parameters for the {category}. The preview updates in real time as you change the filters.
+            <p className="text-md-on-surface-variant mt-1 max-w-3xl">
+              {REPORT_DESCRIPTIONS[category]}
             </p>
           </div>
         </div>
@@ -199,7 +200,7 @@ export const GenerateReports: React.FC = () => {
           <div className="md:col-span-2 flex items-center gap-2 px-4 py-3 rounded-xl bg-md-secondary-container text-md-on-secondary-container text-sm">
             <FileText size={16} />
             <span>
-              Generating: <strong>{category}</strong> ({REPORT_CODE[category]})
+              Generating: <strong>{category}</strong>
             </span>
           </div>
 
@@ -248,13 +249,8 @@ export const GenerateReports: React.FC = () => {
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <TableIcon size={20} className="text-md-primary" />
-          <h2 className="text-lg font-semibold">Live Report Preview</h2>
+          <h2 className="text-lg font-semibold">Report Preview</h2>
           {loading && <RefreshCw size={16} className="animate-spin text-md-on-surface-variant" />}
-          {previewData && (
-            <span className="text-xs text-md-on-surface-variant">
-              Report Reference: <strong>{previewData.reportId}</strong>
-            </span>
-          )}
         </div>
 
         {error && (
@@ -277,8 +273,8 @@ export const GenerateReports: React.FC = () => {
         isOpen={previewOpen}
         onClose={() => !downloading && setPreviewOpen(false)}
         title={`${category} — Preview`}
-        subtitle={previewData ? `Report Reference: ${previewData.reportId} — review the report below, then download the PDF.` : ''}
-        maxWidth="max-w-3xl"
+        subtitle="Review the report below, then download the PDF."
+        maxWidth="max-w-5xl"
         footer={
           <div className="flex items-center justify-end gap-3">
             <Button variant="text" disabled={downloading} onClick={() => setPreviewOpen(false)}>
