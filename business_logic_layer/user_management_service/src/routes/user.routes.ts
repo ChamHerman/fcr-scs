@@ -11,6 +11,7 @@ import {
   getAllUsers, 
   getUserById, 
   toggleUserStatus, 
+  adminResetPassword,
   resolveIc,
   lookupByIc,
   changeInitialPassword,
@@ -46,6 +47,7 @@ router.post('/permissions/:role', updateRolePermissions);
 
 router.get('/:id', getUserById);
 router.post('/:id/toggle-status', toggleUserStatus);
+router.post('/:id/admin-reset-password', adminResetPassword);
 
 export default router;
 

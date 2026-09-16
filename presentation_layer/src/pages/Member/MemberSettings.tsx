@@ -14,7 +14,15 @@ import {
   Mail,
   FileBadge,
   AlertCircle,
-  Hash
+  Hash,
+  KeyRound,
+  Eye,
+  EyeOff,
+  XCircle,
+  AlertTriangle,
+  Clock,
+  Shield,
+  MapPin,
 } from 'lucide-react';
 import gsap from 'gsap';
 import { useAuth } from '../../context/AuthContext';
@@ -39,8 +47,17 @@ const MALAYSIAN_BANKS: SelectOption[] = SUPPORTED_MALAYSIAN_BANKS.map((b) => ({
   label: b.name,
 }));
 
+/** Compute name initials: first letter of word[0] + first letter of word[1] */
+function getNameInitials(name: string | undefined | null): string {
+  if (!name) return 'AL';
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const first = words[0]?.[0] ?? '';
+  const second = words[1]?.[0] ?? '';
+  return (first + second).toUpperCase() || 'AL';
+}
+
 export const MemberSettings: React.FC = () => {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const { userName, identificationNumber } = useRole();
   const { notify } = useNotification();
 
@@ -68,6 +85,44 @@ export const MemberSettings: React.FC = () => {
 
   const [showSaveConfirm, setShowSaveConfirm] = useState<boolean>(false);
 
+  // ─── Profile Management State ────────────────────────────────────────────
+  const activeUserId = user?.userId || (user as any)?.id || '';
+  const [profileData, setProfileData] = useState({
+    name: user?.name || '',
+    email: user?.email || '',
+    contactNumber: user?.contactNumber || '',
+    identificationNumber: user?.identificationNumber || identificationNumber || '',
+    address: (user as any)?.address || '',
+    status: user?.status || 'Active',
+    pendingEmail: (user as any)?.pendingEmail || null as string | null,
+  });
+  const [inputEmail, setInputEmail] = useState(user?.email || '');
+  const [inputContact, setInputContact] = useState(formatLocalContactNumber(user?.contactNumber));
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  // ─── Password Change State ────────────────────────────────────────────────
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  // Password policy live check
+  const policy = {
+    length: newPassword.length >= 8,
+    upper: /[A-Z]/.test(newPassword),
+    lower: /[a-z]/.test(newPassword),
+    digit: /\d/.test(newPassword),
+    special: /[@$!%*?&]/.test(newPassword),
+  };
+  const isPasswordPolicyMet = Object.values(policy).every(Boolean);
+
   // Locked to the registered profile identity, mirroring effectiveMyKad: bank
   // verification assumes the IC name and the account holder name are the same
   // person, so the member must not be able to type a different one.
@@ -76,6 +131,9 @@ export const MemberSettings: React.FC = () => {
 
   const effectiveMyKad = (user?.identificationNumber || identificationNumber || '').trim();
 
+  const nameInitials = getNameInitials(effectiveHolderName || userName);
+
+  // ─── Load saved bank details ──────────────────────────────────────────────
   useEffect(() => {
     let isMounted = true;
     async function loadSaved() {
@@ -103,8 +161,28 @@ export const MemberSettings: React.FC = () => {
     return () => { isMounted = false; };
   }, []);
 
-  // Pre-fill contact number from the profile. The holder name is locked to the
-  // registered name (see effectiveHolderName), so it is never editable state.
+  // ─── Load full profile from backend ──────────────────────────────────────
+  useEffect(() => {
+    if (!activeUserId) return;
+    const fetchProfile = async () => {
+      try {
+        const res = await fetch(`http://localhost:3030/api/users/profile/${activeUserId}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.data) {
+            setProfileData(json.data);
+            setInputEmail(json.data.email || '');
+            setInputContact(formatLocalContactNumber(json.data.contactNumber) || '');
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load profile:', err);
+      }
+    };
+    fetchProfile();
+  }, [activeUserId]);
+
+  // Pre-fill contact number from the profile
   useEffect(() => {
     if (user?.contactNumber) setPhoneNumber((prev) => prev || formatLocalContactNumber(user.contactNumber));
   }, [user]);
@@ -116,15 +194,14 @@ export const MemberSettings: React.FC = () => {
     [bankName, accountNumber]
   );
 
-  // Real-time error conditions. A server rejection of the number itself wins
-  // over the local format state, so the green card cannot mask it.
+  // Real-time error conditions
   const showServerAccountError = Boolean(serverAccountError);
   const showAccountError = !showServerAccountError && accountTouched && !accValidation.isValid;
   const showAccountSuccess = !showServerAccountError && accountTouched && accValidation.isValid;
   const showNameError = !hasProfileName;
   const showPhoneError = phoneTouched && (!phoneNumber.trim() || phoneNumber.trim().replace(/\D/g, '').length < 9);
 
-  // Form validity gate — all fields required (no checkboxes for default settings)
+  // Form validity gate
   const isFormValid = Boolean(
     bankName &&
       accValidation.isValid &&
@@ -207,13 +284,11 @@ export const MemberSettings: React.FC = () => {
       });
       setShowSaveConfirm(false);
 
-      // Reload saved
       const res = await paymentApi.getSavedBankDetails();
       setSavedAccounts(res.savedAccounts || []);
     } catch (err: any) {
       const message = err.message || 'Could not save bank details.';
       if (isAccountAttributionError(message)) {
-        // Dismiss the confirmation dialog so the flagged field is reachable.
         setShowSaveConfirm(false);
         setServerAccountError(ACCOUNT_ATTRIBUTION_HINT);
         triggerShake(accInputRef);
@@ -228,6 +303,92 @@ export const MemberSettings: React.FC = () => {
     }
   };
 
+  // ─── Profile submit ───────────────────────────────────────────────────────
+  const handleProfileSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeUserId) return;
+    setProfileError(null);
+    setProfileSuccess(null);
+    setSavingProfile(true);
+    try {
+      const res = await fetch(`http://localhost:3030/api/users/profile/${activeUserId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: inputEmail.trim(),
+          contactNumber: inputContact.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setProfileData(data.data);
+        if (data.emailVerificationSent) {
+          setProfileSuccess(data.message || 'A verification link has been sent to your new email address. Your login email stays unchanged until verified.');
+          updateUser({ pendingEmail: data.data.pendingEmail });
+        } else {
+          setProfileSuccess('Contact information updated successfully.');
+          updateUser({ contactNumber: data.data.contactNumber });
+        }
+      } else {
+        setProfileError(data.error || 'Failed to update profile details.');
+      }
+    } catch {
+      setProfileError('Network error while saving profile. Please check server connection.');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  // ─── Password submit ──────────────────────────────────────────────────────
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    if (!currentPassword) {
+      setPasswordError('Please enter your current account password.');
+      return;
+    }
+    if (!isPasswordPolicyMet) {
+      setPasswordError('Your new password does not satisfy all policy criteria.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New password and confirmation password do not match.');
+      return;
+    }
+    if (newPassword === currentPassword) {
+      setPasswordError('New password cannot be identical to your current password.');
+      return;
+    }
+
+    setSavingPassword(true);
+    try {
+      const res = await fetch('http://localhost:3030/api/users/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: activeUserId, currentPassword, newPassword }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setPasswordSuccess('Your password has been changed successfully.');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      } else {
+        setPasswordError(data.error || 'Failed to change password. Please verify current password.');
+      }
+    } catch {
+      setPasswordError('Network error while changing password. Please try again.');
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  // ─── Shared locked input style ────────────────────────────────────────────
+  const lockedInputCls =
+    'w-full px-4 py-2.5 rounded-xl border border-md-outline/20 bg-slate-100 text-slate-500 cursor-not-allowed text-sm font-medium select-none';
+
   return (
     <div className="max-w-4xl mx-auto pt-6 sm:pt-8 pb-12 px-4 sm:px-6 space-y-6">
       {/* Header */}
@@ -240,10 +401,10 @@ export const MemberSettings: React.FC = () => {
             <span className="text-xs text-md-on-surface-variant">Member Portal</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-md-on-surface">
-            Claimant Settings & Preferences
+            Claimant Settings &amp; Preferences
           </h1>
           <p className="text-xs sm:text-sm text-md-on-surface-variant mt-0.5">
-            Manage your default verified disbursement bank account and personal profile records.
+            Manage your default verified disbursement bank account, personal profile, and account security.
           </p>
         </div>
 
@@ -281,11 +442,13 @@ export const MemberSettings: React.FC = () => {
           }`}
         >
           <User size={15} />
-          <span>Landowner Identity Profile</span>
+          <span>Profile &amp; Security</span>
         </button>
       </div>
 
-      {/* Tab 1: Banking Settings */}
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      {/* Tab 1: Banking Settings                                             */}
+      {/* ──────────────────────────────────────────────────────────────────── */}
       {activeTab === 'banking' && (
         <div className="space-y-6">
           {/* Saved Bank Account Card */}
@@ -402,9 +565,6 @@ export const MemberSettings: React.FC = () => {
                 }
               />
 
-              {/* Server refused this number — it belongs to another beneficiary.
-                  The field's own error line above carries the instruction, so
-                  this card adds only the reason. */}
               {showServerAccountError && (
                 <div
                   role="alert"
@@ -417,7 +577,6 @@ export const MemberSettings: React.FC = () => {
                 </div>
               )}
 
-              {/* Interactive State Feedback Box */}
               {showAccountError && (
                 <div
                   ref={validationCardRef}
@@ -462,8 +621,7 @@ export const MemberSettings: React.FC = () => {
               )}
             </div>
 
-            {/* Locked Account Holder Name & Locked MyKad — both mirror the
-                registered profile identity. */}
+            {/* Locked Account Holder Name & Locked MyKad */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div ref={nameInputRef}>
                 <Input
@@ -506,7 +664,7 @@ export const MemberSettings: React.FC = () => {
               </div>
             </div>
 
-            {/* Contact Number (Replaced label, removed +60 prefix) */}
+            {/* Contact Number */}
             <div ref={phoneInputRef}>
               <Input
                 label="Contact Number"
@@ -553,76 +711,392 @@ export const MemberSettings: React.FC = () => {
                 }`}
               >
                 <Save size={16} />
-                <span>Review & Save Default Payout Account</span>
+                <span>Review &amp; Save Default Payout Account</span>
               </Button>
             </div>
           </form>
         </div>
       )}
 
-      {/* Tab 2: Profile Overview */}
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      {/* Tab 2: Profile & Security                                           */}
+      {/* ──────────────────────────────────────────────────────────────────── */}
       {activeTab === 'profile' && (
-        <div className="bg-md-surface-container border border-md-outline/15 rounded-xl p-6 shadow-sm space-y-5">
-          <div className="flex items-center gap-4 pb-4 border-b border-md-outline/10">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-violet-600 to-indigo-600 text-white font-bold flex items-center justify-center text-xl shadow-md">
-              {userName?.slice(0, 2).toUpperCase() || 'M1'}
+        <div className="space-y-6">
+          {/* ── Avatar / Identity Summary Card ──────────────────────────── */}
+          <div className="bg-md-surface-container border border-md-outline/15 rounded-xl p-5 shadow-sm">
+            <div className="flex items-center gap-4 pb-4 mb-4 border-b border-md-outline/10">
+              {/* Avatar — initials of first + second word of name */}
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-600 text-white font-bold flex items-center justify-center text-xl shadow-md shrink-0 select-none">
+                {nameInitials}
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-md-on-surface leading-tight">
+                  {profileData.name || effectiveHolderName || 'Landowner'}
+                </h2>
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-md-secondary-container text-md-on-secondary-container mt-1">
+                  <ShieldCheck size={13} />
+                  Affected Landowner (Claimant)
+                </span>
+              </div>
             </div>
+
+            {/* Quick info row */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div className="p-3 rounded-xl bg-md-surface-container-low border border-md-outline/10">
+                <div className="flex items-center gap-1.5 text-md-on-surface-variant mb-1">
+                  <FileBadge size={13} />
+                  <span>MyKad / NRIC</span>
+                </div>
+                <div className="font-mono font-bold text-sm text-md-on-surface">
+                  {profileData.identificationNumber || effectiveMyKad || '—'}
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-md-surface-container-low border border-md-outline/10">
+                <div className="flex items-center gap-1.5 text-md-on-surface-variant mb-1">
+                  <Mail size={13} />
+                  <span>Active Login Email</span>
+                </div>
+                <div className="font-medium text-sm text-md-on-surface truncate">
+                  {profileData.email || user?.email || '—'}
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-md-surface-container-low border border-md-outline/10">
+                <div className="flex items-center gap-1.5 text-md-on-surface-variant mb-1">
+                  <ShieldCheck size={13} className="text-emerald-600" />
+                  <span>Account Status</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                  <span className="font-semibold text-sm text-emerald-600">Active Verified</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Pending Email Banner ────────────────────────────────────── */}
+          {profileData.pendingEmail && (
+            <div className="p-4 rounded-xl border-l-4 border-amber-500 bg-amber-50 flex items-start gap-3">
+              <Clock className="text-amber-600 shrink-0 mt-0.5" size={20} />
+              <div>
+                <h4 className="text-sm font-bold text-amber-900">Pending Email Verification</h4>
+                <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                  A change to <strong className="underline">{profileData.pendingEmail}</strong> is awaiting verification.
+                </p>
+                <p className="text-[11px] text-amber-700/90 mt-2 bg-amber-500/10 p-2 rounded-lg">
+                  🛡️ <strong>Safety Guarantee:</strong> Your active login address and official notices remain tied to <strong>{profileData.email}</strong> until the new address is verified.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Editable Contact Details Form ───────────────────────────── */}
+          <form
+            onSubmit={handleProfileSubmit}
+            className="bg-md-surface-container border border-md-outline/15 rounded-xl p-5 sm:p-7 shadow-sm space-y-5"
+          >
             <div>
-              <h2 className="text-lg font-bold text-md-on-surface">{userName || user?.name}</h2>
-              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-md-secondary-container text-md-on-secondary-container">
-                Affected Landowner (Claimant)
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-            <div className="p-4 rounded-xl bg-md-surface-container-low border border-md-outline/10 space-y-1">
-              <div className="flex items-center gap-1.5 text-md-on-surface-variant">
-                <FileBadge size={14} />
-                <span>MyKad / NRIC</span>
-              </div>
-              <div className="font-mono font-bold text-sm text-md-on-surface">
-                {user?.identificationNumber || identificationNumber || '—'}
-              </div>
+              <h3 className="text-base font-bold text-md-on-surface flex items-center gap-2">
+                <User size={18} className="text-md-primary" />
+                <span>Contact Information</span>
+              </h3>
+              <p className="text-xs text-md-on-surface-variant mt-1">
+                Update your registered phone number and login email address.
+              </p>
             </div>
 
-            <div className="p-4 rounded-xl bg-md-surface-container-low border border-md-outline/10 space-y-1">
-              <div className="flex items-center gap-1.5 text-md-on-surface-variant">
-                <Mail size={14} />
-                <span>Email Address</span>
+            {/* Success / Error banners */}
+            {profileSuccess && (
+              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 text-sm flex items-start gap-3">
+                <CheckCircle2 size={18} className="shrink-0 mt-0.5" />
+                <div>{profileSuccess}</div>
               </div>
-              <div className="font-semibold text-sm text-md-on-surface">
-                {user?.email || '—'}
+            )}
+            {profileError && (
+              <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-700 text-sm flex items-start gap-3">
+                <XCircle size={18} className="shrink-0 mt-0.5" />
+                <div>{profileError}</div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {/* Locked: Full Name */}
+              <div className="sm:col-span-2">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-md-on-surface uppercase tracking-wider flex items-center gap-1.5">
+                    <Lock size={12} className="text-slate-400" />
+                    Official Full Name
+                  </label>
+                  <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                    <Lock size={11} /> Locked to National IC
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  readOnly
+                  disabled
+                  value={profileData.name || effectiveHolderName}
+                  className={lockedInputCls}
+                />
+              </div>
+
+              {/* Locked: IC Number */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-md-on-surface uppercase tracking-wider flex items-center gap-1.5">
+                    <FileBadge size={12} className="text-slate-400" />
+                    NRIC / IC Number
+                  </label>
+                  <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                    <Lock size={11} /> Read-Only
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  readOnly
+                  disabled
+                  value={profileData.identificationNumber || effectiveMyKad}
+                  className={`${lockedInputCls} font-mono`}
+                />
+              </div>
+
+              {/* Locked: Address */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-md-on-surface uppercase tracking-wider flex items-center gap-1.5">
+                    <MapPin size={12} className="text-slate-400" />
+                    Registered Address
+                  </label>
+                  <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                    <Lock size={11} /> Locked to IC
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  readOnly
+                  disabled
+                  value={profileData.address || (user as any)?.address || '—'}
+                  className={lockedInputCls}
+                />
+              </div>
+
+              {/* Editable: Phone */}
+              <div>
+                <label className="block text-xs font-semibold text-md-on-surface uppercase tracking-wider mb-1.5">
+                  Contact Phone Number
+                </label>
+                <div className="relative">
+                  <Phone size={15} className="absolute left-3.5 top-3 text-md-on-surface-variant opacity-60" />
+                  <input
+                    type="tel"
+                    required
+                    value={inputContact}
+                    onChange={(e) => setInputContact(e.target.value)}
+                    placeholder="e.g. 012-3456789"
+                    disabled={savingProfile}
+                    className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-md-outline/40 bg-white text-md-on-surface text-sm focus:border-md-primary focus:ring-1 focus:ring-md-primary outline-none transition-all disabled:opacity-60"
+                  />
+                </div>
+              </div>
+
+              {/* Editable: Email */}
+              <div>
+                <label className="block text-xs font-semibold text-md-on-surface uppercase tracking-wider mb-1.5">
+                  Email Address{' '}
+                  <span className="text-amber-600 font-normal normal-case">(Requires Verification if Changed)</span>
+                </label>
+                <div className="relative">
+                  <Mail size={15} className="absolute left-3.5 top-3 text-md-on-surface-variant opacity-60" />
+                  <input
+                    type="email"
+                    required
+                    value={inputEmail}
+                    onChange={(e) => setInputEmail(e.target.value)}
+                    placeholder="yourname@example.com"
+                    disabled={savingProfile}
+                    className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-md-outline/40 bg-white text-md-on-surface text-sm focus:border-md-primary focus:ring-1 focus:ring-md-primary outline-none transition-all disabled:opacity-60"
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-md-surface-container-low border border-md-outline/10 space-y-1">
-              <div className="flex items-center gap-1.5 text-md-on-surface-variant">
-                <Phone size={14} />
-                <span>Mobile Contact</span>
-              </div>
-              <div className="font-mono font-semibold text-sm text-md-on-surface">
-                {formatLocalContactNumber(user?.contactNumber || phoneNumber) || '—'}
+            {/* Email policy notice */}
+            <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 flex items-start gap-2.5">
+              <Info size={16} className="text-blue-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold">Email Change Policy: </span>
+                If you enter a new email address, a secure verification link will be sent there.{' '}
+                <strong>Your active login address remains unchanged until the new address is verified.</strong>
               </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-md-surface-container-low border border-md-outline/10 space-y-1">
-              <div className="flex items-center gap-1.5 text-md-on-surface-variant">
-                <ShieldCheck size={14} className="text-emerald-600" />
-                <span>Account Status</span>
+            <div className="flex justify-end pt-4 border-t border-md-outline/10">
+              <Button type="submit" variant="filled" disabled={savingProfile} className="gap-2">
+                <Save size={16} />
+                {savingProfile ? 'Saving...' : 'Save Contact Changes'}
+              </Button>
+            </div>
+          </form>
+
+          {/* ── Change Password Form ────────────────────────────────────── */}
+          <form
+            onSubmit={handlePasswordSubmit}
+            className="bg-md-surface-container border border-md-outline/15 rounded-xl p-5 sm:p-7 shadow-sm space-y-5"
+          >
+            <div className="flex items-center gap-3 pb-3 border-b border-md-outline/10">
+              <div className="w-10 h-10 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center shrink-0">
+                <KeyRound size={20} />
               </div>
-              <div className="font-semibold text-sm text-emerald-600 dark:text-emerald-400">
-                Active Verified Citizen
+              <div>
+                <h3 className="text-base font-bold text-md-on-surface">Change Account Password</h3>
+                <p className="text-xs text-md-on-surface-variant">
+                  Update your permanent portal access credential with real-time policy compliance.
+                </p>
               </div>
             </div>
-          </div>
+
+            {/* Password success / error banners */}
+            {passwordSuccess && (
+              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 text-sm flex items-start gap-3">
+                <CheckCircle2 size={18} className="shrink-0 mt-0.5" />
+                <div>{passwordSuccess}</div>
+              </div>
+            )}
+            {passwordError && (
+              <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-700 text-sm flex items-start gap-3">
+                <XCircle size={18} className="shrink-0 mt-0.5" />
+                <div>{passwordError}</div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {/* Current password */}
+              <div>
+                <label className="block text-xs font-semibold text-md-on-surface uppercase tracking-wider mb-1.5">
+                  Current Password *
+                </label>
+                <div className="relative">
+                  <input
+                    type={showCurrentPw ? 'text' : 'password'}
+                    required
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Enter current password"
+                    disabled={savingPassword}
+                    className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-md-outline/40 bg-white text-md-on-surface text-sm focus:border-md-primary focus:ring-1 focus:ring-md-primary outline-none transition-all disabled:opacity-60"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPw(!showCurrentPw)}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                  >
+                    {showCurrentPw ? <EyeOff size={17} /> : <Eye size={17} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* New password */}
+              <div>
+                <label className="block text-xs font-semibold text-md-on-surface uppercase tracking-wider mb-1.5">
+                  New Password *
+                </label>
+                <div className="relative">
+                  <input
+                    type={showNewPw ? 'text' : 'password'}
+                    required
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Enter new strong password"
+                    disabled={savingPassword}
+                    className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-md-outline/40 bg-white text-md-on-surface text-sm focus:border-md-primary focus:ring-1 focus:ring-md-primary outline-none transition-all disabled:opacity-60"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPw(!showNewPw)}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                  >
+                    {showNewPw ? <EyeOff size={17} /> : <Eye size={17} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Confirm new password */}
+              <div>
+                <label className="block text-xs font-semibold text-md-on-surface uppercase tracking-wider mb-1.5">
+                  Confirm New Password *
+                </label>
+                <div className="relative">
+                  <input
+                    type={showConfirmPw ? 'text' : 'password'}
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-type new password"
+                    disabled={savingPassword}
+                    className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-md-outline/40 bg-white text-md-on-surface text-sm focus:border-md-primary focus:ring-1 focus:ring-md-primary outline-none transition-all disabled:opacity-60"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPw(!showConfirmPw)}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                  >
+                    {showConfirmPw ? <EyeOff size={17} /> : <Eye size={17} />}
+                  </button>
+                </div>
+                {confirmPassword && newPassword !== confirmPassword && (
+                  <p className="text-xs text-rose-500 mt-1.5 flex items-center gap-1">
+                    <AlertTriangle size={13} /> Passwords do not match
+                  </p>
+                )}
+              </div>
+
+              {/* Live policy checklist */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-2">
+                <div className="flex items-center text-md-primary font-semibold mb-2">
+                  <Shield size={14} className="mr-1.5" />
+                  <span>Password Policy</span>
+                </div>
+                {[
+                  { met: policy.length, label: 'Minimum 8 characters' },
+                  { met: policy.upper, label: 'At least one uppercase letter (A-Z)' },
+                  { met: policy.lower, label: 'At least one lowercase letter (a-z)' },
+                  { met: policy.digit, label: 'At least one number digit (0-9)' },
+                  { met: policy.special, label: 'At least one special character (@$!%*?&)' },
+                ].map(({ met, label }) => (
+                  <div key={label} className="flex items-center gap-2">
+                    {met ? (
+                      <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+                    ) : (
+                      <XCircle size={14} className="text-slate-300 shrink-0" />
+                    )}
+                    <span className={met ? 'text-emerald-700 font-medium' : 'text-slate-500'}>
+                      {label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-4 border-t border-md-outline/10">
+              <Button
+                type="submit"
+                variant="filled"
+                disabled={savingPassword || !isPasswordPolicyMet || newPassword !== confirmPassword || !currentPassword}
+                className="gap-2"
+              >
+                <Lock size={16} />
+                {savingPassword ? 'Updating Password...' : 'Update Password'}
+              </Button>
+            </div>
+          </form>
         </div>
       )}
+
       <ConfirmSubmitModal
         isOpen={showSaveConfirm}
         title="Confirm Default Payout Account"
         loading={saving}
-        confirmLabel="Confirm & Save Default"
+        confirmLabel="Confirm &amp; Save Default"
         onConfirm={handleConfirmedSave}
         onCancel={() => setShowSaveConfirm(false)}
         summary={

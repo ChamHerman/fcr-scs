@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MD3Button, MD3Input, MD3Card, MD3BlurBackground } from '../MD3Components';
-import { LogIn, AlertCircle, CheckCircle2, RotateCw, ArrowLeft, ShieldCheck } from 'lucide-react';
+import { LogIn, AlertCircle, CheckCircle2, RotateCw, ArrowLeft, ShieldCheck, Home } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { authService } from '../../services/auth.service';
@@ -78,23 +78,26 @@ export const Login: React.FC = () => {
     e.preventDefault();
     setError(null);
     setInfoMessage(null);
-
-    const cleanOtp = otp.trim();
-    if (cleanOtp.length !== 6) {
-      setError('Please enter a valid 6-digit verification code.');
-      return;
-    }
-
     setIsLoading(true);
+
     try {
-      const res = await authService.verifyOtp(tempToken, cleanOtp);
-      login(res.token, res.user);
-      navigate('/admin');
+      const response = await authService.verifyOtp(tempToken, otp);
+      if (response.token && response.user) {
+        login(response.token, response.user);
+        const role = (response.user.role || '').toUpperCase();
+        if (role === 'DISPLACED_COMMUNITY_MEMBER' || role.includes('MEMBER')) {
+          navigate('/member');
+        } else {
+          navigate('/admin');
+        }
+      } else {
+        setError('OTP verification failed. Please try again.');
+      }
     } catch (err: any) {
       if (err.response?.data?.error) {
         setError(err.response.data.error);
       } else {
-        setError('Verification failed. Please try again.');
+        setError('Invalid or expired verification code.');
       }
     } finally {
       setIsLoading(false);
@@ -103,28 +106,37 @@ export const Login: React.FC = () => {
 
   const handleResendOtp = async () => {
     if (countdown > 0 || isResending) return;
-
-    setError(null);
-    setInfoMessage(null);
     setIsResending(true);
-
+    setError(null);
     try {
       const res = await authService.resendOtp(tempToken);
       setCountdown(res.resendCooldownSeconds || 60);
-      setInfoMessage(res.message || 'A new verification code has been sent.');
+      setInfoMessage(res.message || 'A fresh verification code has been dispatched to your email.');
     } catch (err: any) {
-      if (err.response?.data?.remainingSeconds) {
-        setCountdown(err.response.data.remainingSeconds);
-      }
-      setError(err.response?.data?.error || 'Failed to resend code. Please try again.');
+      setError(err.response?.data?.error || 'Failed to resend OTP. Please return to login.');
     } finally {
       setIsResending(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative z-0">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 relative z-0">
       <MD3BlurBackground />
+
+      <div className="w-full max-w-md mb-3 flex items-center justify-between z-10">
+        <a
+          href="/"
+          onClick={(e) => {
+            e.preventDefault();
+            navigate('/');
+          }}
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-md-on-surface-variant hover:text-md-primary transition-colors py-1.5 px-3 rounded-xl hover:bg-md-surface-container bg-md-surface-container-low/80 border border-md-outline/10 shadow-sm"
+          title="Return to Public Homepage"
+        >
+          <Home size={14} />
+          <span>Back to Homepage</span>
+        </a>
+      </div>
       
       <MD3Card elevation={2} className="w-full max-w-md z-10">
         <div className="text-center mb-8">

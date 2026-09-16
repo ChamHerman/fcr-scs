@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import * as compensationService from "../services/compensation-report.service";
 import { validateCreateCompensationReport } from "../validators/compensation.validator";
+import { logAudit } from "../../../user_management_service/src/services/audit.service";
 
 export async function getAllReports(req: Request, res: Response): Promise<void> {
   try {
@@ -66,6 +67,24 @@ export async function createReport(req: Request, res: Response): Promise<void> {
       remarks,
       createdById: userId,
     });
+
+    logAudit({
+      userId: (req as any).user?.userId || userId,
+      userRole: (req as any).user?.role || "GOVERNMENT_OFFICER",
+      activityType: "COMPENSATION_REPORT_CREATED",
+      moduleName: "COMPENSATION_MANAGEMENT",
+      caseReference: caseId,
+      severity: "INFO",
+      ipAddress: req.ip || "127.0.0.1",
+      deviceInfo: (req.headers["user-agent"] as string) || "Unknown",
+      activityDetails: {
+        reportId: (result as any)?.report?.reportId,
+        caseId,
+        totalCompensation: (result as any)?.report?.totalCompensation,
+      },
+      systemResponse: "CREATED (201)",
+    });
+
     res.status(201).json(result);
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -90,6 +109,20 @@ export async function approveReport(req: Request, res: Response): Promise<void> 
 
   try {
     const report = await compensationService.approveReport(reportId, userId);
+
+    logAudit({
+      userId: (req as any).user?.userId || userId,
+      userRole: (req as any).user?.role || "GOVERNMENT_ADMINISTRATOR",
+      activityType: "COMPENSATION_REPORT_APPROVED",
+      moduleName: "COMPENSATION_MANAGEMENT",
+      caseReference: (report as any)?.caseId || undefined,
+      severity: "INFO",
+      ipAddress: req.ip || "127.0.0.1",
+      deviceInfo: (req.headers["user-agent"] as string) || "Unknown",
+      activityDetails: { reportId, caseId: (report as any)?.caseId },
+      systemResponse: "SUCCESS (200)",
+    });
+
     res.json({ report });
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -114,6 +147,20 @@ export async function rejectReport(req: Request, res: Response): Promise<void> {
 
   try {
     const report = await compensationService.rejectReport(reportId, reason, userId);
+
+    logAudit({
+      userId: (req as any).user?.userId || userId,
+      userRole: (req as any).user?.role || "GOVERNMENT_ADMINISTRATOR",
+      activityType: "COMPENSATION_REPORT_REJECTED",
+      moduleName: "COMPENSATION_MANAGEMENT",
+      caseReference: (report as any)?.caseId || undefined,
+      severity: "WARNING",
+      ipAddress: req.ip || "127.0.0.1",
+      deviceInfo: (req.headers["user-agent"] as string) || "Unknown",
+      activityDetails: { reportId, caseId: (report as any)?.caseId, reason },
+      systemResponse: "SUCCESS (200)",
+    });
+
     res.json({ report });
   } catch (e: unknown) {
     const msg = (e as Error).message;

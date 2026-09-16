@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../prisma';
 import { User, UserRole } from '@prisma/client';
+import { logAudit } from '../services/audit.service';
 
 export interface AuthenticatedRequest extends Request {
   user?: User;
@@ -56,11 +57,37 @@ export const requireRole = (...allowedRoles: UserRole[]) => {
     }
 
     if (user.role === UserRole.SYSTEM_ADMINISTRATOR && !allowedRoles.includes(UserRole.SYSTEM_ADMINISTRATOR)) {
+      logAudit({
+        userId: user.userId,
+        userRole: user.role,
+        actorName: user.name,
+        actorEmail: user.email,
+        activityType: 'UNAUTHORIZED_API_ACCESS',
+        moduleName: 'ACCESS_CONTROL',
+        severity: 'SECURITY',
+        ipAddress: req.ip || '127.0.0.1',
+        deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+        activityDetails: { attemptedPath: req.originalUrl, method: req.method, reason: 'System Administrator mutation restriction' },
+        systemResponse: 'FORBIDDEN (403)',
+      });
       res.status(403).json({ error: 'System Administrators have view-only access and cannot perform disbursement mutations.' });
       return;
     }
 
     if (!allowedRoles.includes(user.role)) {
+      logAudit({
+        userId: user.userId,
+        userRole: user.role,
+        actorName: user.name,
+        actorEmail: user.email,
+        activityType: 'UNAUTHORIZED_API_ACCESS',
+        moduleName: 'ACCESS_CONTROL',
+        severity: 'SECURITY',
+        ipAddress: req.ip || '127.0.0.1',
+        deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+        activityDetails: { attemptedPath: req.originalUrl, method: req.method, userRole: user.role, allowedRoles },
+        systemResponse: 'FORBIDDEN (403)',
+      });
       res.status(403).json({ error: 'Forbidden: Insufficient role permissions' });
       return;
     }
@@ -115,6 +142,19 @@ export const enforcePageAccess = async (req: Request, res: Response, next: NextF
 
     // If there is an explicit permission blocking access, or no permission found, deny
     if (!permission || !permission.canAccess) {
+      logAudit({
+        userId: session.user.userId,
+        userRole: session.user.role,
+        actorName: session.user.name,
+        actorEmail: session.user.email,
+        activityType: 'UNAUTHORIZED_PAGE_ACCESS',
+        moduleName: 'ACCESS_CONTROL',
+        severity: 'SECURITY',
+        ipAddress: req.ip || '127.0.0.1',
+        deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+        activityDetails: { pagePath, userRole: role },
+        systemResponse: 'FORBIDDEN (403)',
+      });
       res.status(403).json({ error: 'Forbidden: Role does not have access to this page' });
       return;
     }

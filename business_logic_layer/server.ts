@@ -49,6 +49,7 @@ import emailTemplateRoutes from "./user_management_service/src/routes/email-temp
 import auditRoutes from "./user_management_service/src/routes/audit.routes";
 import alertRoutes from "./user_management_service/src/routes/alert.routes";
 import predictionRoutes from "./ai_prediction_service/src/routes/ai-prediction.routes";
+import { getDashboardStats } from "./land_acquisition_service/src/controllers/case.controller";
 
 import { enforcePageAccess } from "./user_management_service/src/middleware/auth.middleware";
 
@@ -86,6 +87,14 @@ app.use("/api/email-templates", emailTemplateRoutes);
 app.use("/api/audit-logs", auditRoutes);
 app.use("/api/alerts", alertRoutes);
 app.use("/api/prediction", predictionRoutes);
+
+// Unified Dashboard and compatibility routes
+app.get("/api/dashboard/stats", getDashboardStats);
+app.get("/api/cases/stats", getDashboardStats);
+app.get("/api/audit/alerts/stats", (req, res, next) => {
+  req.url = "/stats";
+  alertRoutes(req, res, next);
+});
 
 if (process.env.NODE_ENV !== "test") {
   app.listen(PORT, () => {

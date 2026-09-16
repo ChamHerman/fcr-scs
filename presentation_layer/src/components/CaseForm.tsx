@@ -605,6 +605,8 @@ export const CaseForm: React.FC<CaseFormProps> = ({
     clearError("owners");
     clearError("ownersShareTotal");
     clearError("duplicateIc");
+    clearError("duplicatePhone");
+    clearError("duplicateEmail");
 
     if (field === "icNumber") {
       const seenIcs: Record<string, string[]> = {};
@@ -631,6 +633,68 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                 "Duplicate Identification Number. Each owner must have a unique NRIC.";
             });
             next.duplicateIc = `Duplicate Identification Number detected across multiple owners. Each owner must have a unique NRIC.`;
+          }
+        });
+        return next;
+      });
+    }
+
+    if (field === "phone") {
+      const seenPhones: Record<string, string[]> = {};
+      updated.forEach((o) => {
+        const raw = o.phone.replace(/[\s\-+]/g, "");
+        if (raw.length >= 9) {
+          if (!seenPhones[raw]) seenPhones[raw] = [];
+          seenPhones[raw].push(o.id);
+        }
+      });
+
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.duplicatePhone;
+        updated.forEach((o) => {
+          if (next[`owner_${o.id}_phone`]?.includes("Duplicate")) {
+            delete next[`owner_${o.id}_phone`];
+          }
+        });
+        Object.entries(seenPhones).forEach(([phoneDigits, ownerIds]) => {
+          if (ownerIds.length > 1) {
+            ownerIds.forEach((oid) => {
+              next[`owner_${oid}_phone`] =
+                "Duplicate phone number. Each owner must have a unique phone number.";
+            });
+            next.duplicatePhone = "Duplicate phone number detected across multiple owners. Each owner must have a unique phone number.";
+          }
+        });
+        return next;
+      });
+    }
+
+    if (field === "email") {
+      const seenEmails: Record<string, string[]> = {};
+      updated.forEach((o) => {
+        const norm = o.email.trim().toLowerCase();
+        if (norm.length > 3) {
+          if (!seenEmails[norm]) seenEmails[norm] = [];
+          seenEmails[norm].push(o.id);
+        }
+      });
+
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.duplicateEmail;
+        updated.forEach((o) => {
+          if (next[`owner_${o.id}_email`]?.includes("Duplicate")) {
+            delete next[`owner_${o.id}_email`];
+          }
+        });
+        Object.entries(seenEmails).forEach(([normEmail, ownerIds]) => {
+          if (ownerIds.length > 1) {
+            ownerIds.forEach((oid) => {
+              next[`owner_${oid}_email`] =
+                "Duplicate email address. Each owner must have a unique email address.";
+            });
+            next.duplicateEmail = "Duplicate email address detected across multiple owners. Each owner must have a unique email address.";
           }
         });
         return next;
@@ -856,6 +920,18 @@ export const CaseForm: React.FC<CaseFormProps> = ({
         const uniqueIcs = new Set(cleanIcs);
         if (uniqueIcs.size !== cleanIcs.length) return false;
 
+        const cleanPhones = owners
+          .map((o) => o.phone.replace(/[\s\-+]/g, ""))
+          .filter(Boolean);
+        const uniquePhones = new Set(cleanPhones);
+        if (uniquePhones.size !== cleanPhones.length) return false;
+
+        const cleanEmails = owners
+          .map((o) => o.email.trim().toLowerCase())
+          .filter(Boolean);
+        const uniqueEmails = new Set(cleanEmails);
+        if (uniqueEmails.size !== cleanEmails.length) return false;
+
         const total = calculateTotalShare(owners);
         if (Math.abs(total - 100) >= 0.01) return false;
       }
@@ -930,6 +1006,8 @@ export const CaseForm: React.FC<CaseFormProps> = ({
       } else {
         let totalShare = 0;
         const seenIcs: Record<string, string> = {};
+        const seenPhones: Record<string, string> = {};
+        const seenEmails: Record<string, string> = {};
 
         for (const owner of owners) {
           if (!owner.name.trim()) stepErrors[`owner_${owner.id}_name`] = "Full name is required.";
@@ -963,6 +1041,19 @@ export const CaseForm: React.FC<CaseFormProps> = ({
             const phoneErr = validatePhoneNumber(owner.phone);
             if (phoneErr) {
               stepErrors[`owner_${owner.id}_phone`] = phoneErr;
+            } else {
+              const rawPhone = owner.phone.replace(/[\s\-+]/g, "");
+              if (seenPhones[rawPhone]) {
+                const prevOwnerId = seenPhones[rawPhone];
+                stepErrors[`owner_${owner.id}_phone`] =
+                  "Duplicate phone number. Each owner must have a unique phone number.";
+                stepErrors[`owner_${prevOwnerId}_phone`] =
+                  "Duplicate phone number. Each owner must have a unique phone number.";
+                stepErrors.duplicatePhone =
+                  `Duplicate phone number (${owner.phone}) detected across multiple owners. Each owner must have a unique phone number.`;
+              } else {
+                seenPhones[rawPhone] = owner.id;
+              }
             }
           }
 
@@ -972,6 +1063,19 @@ export const CaseForm: React.FC<CaseFormProps> = ({
             const emailErr = validateEmailFormat(owner.email);
             if (emailErr) {
               stepErrors[`owner_${owner.id}_email`] = emailErr;
+            } else {
+              const normEmail = owner.email.trim().toLowerCase();
+              if (seenEmails[normEmail]) {
+                const prevOwnerId = seenEmails[normEmail];
+                stepErrors[`owner_${owner.id}_email`] =
+                  "Duplicate email address. Each owner must have a unique email address.";
+                stepErrors[`owner_${prevOwnerId}_email`] =
+                  "Duplicate email address. Each owner must have a unique email address.";
+                stepErrors.duplicateEmail =
+                  `Duplicate email address (${owner.email}) detected across multiple owners. Each owner must have a unique email address.`;
+              } else {
+                seenEmails[normEmail] = owner.id;
+              }
             }
           }
 
@@ -1038,6 +1142,18 @@ export const CaseForm: React.FC<CaseFormProps> = ({
             type: "error",
             title: "Duplicate Identification Number",
             message: stepErrors.duplicateIc,
+          });
+        } else if (stepErrors.duplicatePhone) {
+          notify({
+            type: "error",
+            title: "Duplicate Phone Number",
+            message: stepErrors.duplicatePhone,
+          });
+        } else if (stepErrors.duplicateEmail) {
+          notify({
+            type: "error",
+            title: "Duplicate Email Address",
+            message: stepErrors.duplicateEmail,
           });
         } else {
           notify({

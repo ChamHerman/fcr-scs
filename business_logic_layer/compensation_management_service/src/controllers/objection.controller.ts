@@ -5,6 +5,7 @@ import crypto from "crypto";
 import * as objectionService from "../services/objection.service";
 import { validateCreateObjection } from "../validators/compensation.validator";
 import { getObjectionStorageDir } from "../utils/storage.utils";
+import { logAudit } from "../../../user_management_service/src/services/audit.service";
 
 export async function getAllObjections(req: Request, res: Response): Promise<void> {
   try {
@@ -92,6 +93,26 @@ export async function createObjection(req: Request, res: Response): Promise<void
       createdById: userId,
       documents: documents.length > 0 ? documents : undefined,
     });
+
+    logAudit({
+      userId: (req as any).user?.userId || userId,
+      userRole: (req as any).user?.role || "DISPLACED_COMMUNITY_MEMBER",
+      activityType: "OBJECTION_FILED",
+      moduleName: "COMPENSATION_MANAGEMENT",
+      caseReference: caseId,
+      severity: "WARNING",
+      ipAddress: req.ip || "127.0.0.1",
+      deviceInfo: (req.headers["user-agent"] as string) || "Unknown",
+      activityDetails: {
+        objectionId: (objection as any)?.objectionId,
+        caseId,
+        offerId,
+        requestedAmount: parseFloat(requestedAmount),
+        reason: objectionReason,
+      },
+      systemResponse: "CREATED (201)",
+    });
+
     res.status(201).json({ objection });
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -119,6 +140,25 @@ export async function approveObjection(req: Request, res: Response): Promise<voi
       reviewRemarks: reviewRemarks || "Objection approved.",
       reviewedById: reviewedById || undefined,
     });
+
+    logAudit({
+      userId: (req as any).user?.userId || reviewedById || undefined,
+      userRole: (req as any).user?.role || "GOVERNMENT_ADMINISTRATOR",
+      activityType: "OBJECTION_REVIEWED",
+      moduleName: "COMPENSATION_MANAGEMENT",
+      caseReference: (objection as any)?.caseId || undefined,
+      severity: "INFO",
+      ipAddress: req.ip || "127.0.0.1",
+      deviceInfo: (req.headers["user-agent"] as string) || "Unknown",
+      activityDetails: {
+        objectionId,
+        decision: "APPROVED",
+        revisedCompensation,
+        reviewRemarks,
+      },
+      systemResponse: "SUCCESS (200)",
+    });
+
     res.json({ objection });
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -146,6 +186,24 @@ export async function rejectObjection(req: Request, res: Response): Promise<void
       reviewRemarks: reviewRemarks || "Objection rejected after review.",
       reviewedById: reviewedById || undefined,
     });
+
+    logAudit({
+      userId: (req as any).user?.userId || reviewedById || undefined,
+      userRole: (req as any).user?.role || "GOVERNMENT_ADMINISTRATOR",
+      activityType: "OBJECTION_REVIEWED",
+      moduleName: "COMPENSATION_MANAGEMENT",
+      caseReference: (objection as any)?.caseId || undefined,
+      severity: "INFO",
+      ipAddress: req.ip || "127.0.0.1",
+      deviceInfo: (req.headers["user-agent"] as string) || "Unknown",
+      activityDetails: {
+        objectionId,
+        decision: "REJECTED",
+        reviewRemarks,
+      },
+      systemResponse: "SUCCESS (200)",
+    });
+
     res.json({ objection });
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -193,6 +251,20 @@ export async function deleteObjection(req: Request, res: Response): Promise<void
 
   try {
     const result = await objectionService.deleteObjection(objectionId);
+
+    logAudit({
+      userId: (req as any).user?.userId || undefined,
+      userRole: (req as any).user?.role || "DISPLACED_COMMUNITY_MEMBER",
+      activityType: "OBJECTION_WITHDRAWN",
+      moduleName: "COMPENSATION_MANAGEMENT",
+      caseReference: (result as any)?.caseId || undefined,
+      severity: "INFO",
+      ipAddress: req.ip || "127.0.0.1",
+      deviceInfo: (req.headers["user-agent"] as string) || "Unknown",
+      activityDetails: { objectionId },
+      systemResponse: "SUCCESS (200)",
+    });
+
     res.json(result);
   } catch (e: unknown) {
     const msg = (e as Error).message;

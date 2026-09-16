@@ -25,6 +25,7 @@ import {
   Sun,
   BrainCircuit,
   Sparkles,
+  Bell,
   Send,
   PenLine,
   AlertTriangle,
@@ -34,7 +35,6 @@ import {
   LogOut
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { getRoleShortForm, getRoleTitle } from '../../utils/roleUtils';
 import { FirstTimePasswordModal } from '../auth/FirstTimePasswordModal';
 
 export const AdminLayout: React.FC = () => {
@@ -385,14 +385,9 @@ export const AdminLayout: React.FC = () => {
         <FirstTimePasswordModal />
         <aside className="admin-sidebar">
           <div className="admin-sidebar-header">
-            <div 
-              className="admin-sidebar-brand" 
-              style={{ display: isCollapsed ? 'none' : 'flex', cursor: 'pointer' }}
-              onClick={() => navigate('/admin/profile')}
-              title={`Logged in as ${getRoleTitle(user?.role)} (${getRoleShortForm(user?.role)}) — Click to view Profile`}
-            >
-              <div className="brand-icon" style={{ fontWeight: 800, fontSize: '13px', letterSpacing: '0.5px' }}>
-                {getRoleShortForm(user?.role)}
+            <div className="admin-sidebar-brand" style={{ display: isCollapsed ? 'none' : 'flex' }}>
+              <div className="brand-icon">
+                <Scale size={24} />
               </div>
               <span>FCR·SCS Admin</span>
             </div>
@@ -401,13 +396,11 @@ export const AdminLayout: React.FC = () => {
                 className="brand-icon" 
                 style={{
                   width: 40, height: 40, background: 'var(--md-primary)', borderRadius: 12,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0,
-                  fontWeight: 800, fontSize: '13px', letterSpacing: '0.5px', cursor: 'pointer'
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0
                 }}
-                onClick={() => navigate('/admin/profile')}
-                title={`Logged in as ${getRoleTitle(user?.role)} (${getRoleShortForm(user?.role)}) — Click to view Profile`}
+                title="FCR·SCS Admin"
               >
-                {getRoleShortForm(user?.role)}
+                <Scale size={24} />
               </div>
             )}
             <button
@@ -692,7 +685,7 @@ export const AdminLayout: React.FC = () => {
               )}
               {(allowedPages.includes('*') || allowedPages.includes('/admin/alerts')) && (
                 <NavLink to="/admin/alerts" className="nav-item" title={isCollapsed ? "Alerts" : ""}>
-                  <Sparkles size={22} className="nav-icon" />
+                  <Bell size={22} className="nav-icon" />
                   {!isCollapsed && <span>Alerts</span>}
                 </NavLink>
               )}

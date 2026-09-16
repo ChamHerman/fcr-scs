@@ -52,6 +52,7 @@ import SubmitBankDetails from './pages/Member/SubmitBankDetails';
 import MemberPaymentStatus from './pages/Member/MemberPaymentStatus';
 import VerifyAuditTrail from './pages/Member/VerifyAuditTrail';
 import { MemberSettings } from './pages/Member/MemberSettings';
+import { MemberNotifications } from './pages/Member/MemberNotifications';
 import { CaseManagementDashboard } from './pages/LandAcquisition/CaseDashboard';
 import { CaseCreate } from './pages/LandAcquisition/CaseCreate';
 import { CaseEdit } from './pages/LandAcquisition/CaseEdit';
@@ -188,6 +189,7 @@ function App() {
               <Route path="payment-status" element={<MemberPaymentStatus />} />
               <Route path="verify-audit" element={<VerifyAuditTrail />} />
               <Route path="settings" element={<MemberSettings />} />
+              <Route path="notifications" element={<MemberNotifications />} />
             </Route>
           </Route>
         </Routes>

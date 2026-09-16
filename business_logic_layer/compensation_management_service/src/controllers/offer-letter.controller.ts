@@ -4,6 +4,7 @@ import fs from "fs";
 import path from "path";
 import * as offerService from "../services/offer-letter.service";
 import { getOfferLetterStorageDir } from "../utils/storage.utils";
+import { logAudit } from "../../../user_management_service/src/services/audit.service";
 
 export async function getAllOfferLetters(req: Request, res: Response): Promise<void> {
   try {
@@ -86,6 +87,25 @@ export async function createOfferLetter(req: Request, res: Response): Promise<vo
       remarks,
       createdById: userId,
     });
+
+    logAudit({
+      userId: (req as any).user?.userId || userId,
+      userRole: (req as any).user?.role || "GOVERNMENT_OFFICER",
+      activityType: "OFFER_LETTER_CREATED",
+      moduleName: "COMPENSATION_MANAGEMENT",
+      caseReference: caseId,
+      severity: "INFO",
+      ipAddress: req.ip || "127.0.0.1",
+      deviceInfo: (req.headers["user-agent"] as string) || "Unknown",
+      activityDetails: {
+        offerId: (offer as any)?.offerLetterId,
+        caseId,
+        offerAmount,
+        offerType,
+      },
+      systemResponse: "CREATED (201)",
+    });
+
     res.status(201).json({ offerLetter: offer, offer });
   } catch (e: unknown) {
     res.status(400).json({ error: (e as Error).message });
@@ -141,6 +161,20 @@ export async function acceptOffer(req: Request, res: Response): Promise<void> {
       Boolean(forceAccept === true || forceAccept === "true"),
       { ownerNric, ownerId, userId, documentHash }
     );
+
+    logAudit({
+      userId: (req as any).user?.userId || userId || undefined,
+      userRole: (req as any).user?.role || "DISPLACED_COMMUNITY_MEMBER",
+      activityType: "OFFER_LETTER_ACCEPTED",
+      moduleName: "COMPENSATION_MANAGEMENT",
+      caseReference: caseId || undefined,
+      severity: "INFO",
+      ipAddress: req.ip || "127.0.0.1",
+      deviceInfo: (req.headers["user-agent"] as string) || "Unknown",
+      activityDetails: { offerId, caseId, signedDocument },
+      systemResponse: "SUCCESS (200)",
+    });
+
     res.json({ offerLetter: offer });
   } catch (e: any) {
     const msg = e.message || "Accept offer failed";
@@ -177,6 +211,21 @@ export async function rejectOffer(req: Request, res: Response): Promise<void> {
       userId,
       remarks,
     });
+
+    const offerCaseId = (offer as any)?.caseId || (await offerService.getOfferCaseId(offerId).catch(() => undefined));
+    logAudit({
+      userId: (req as any).user?.userId || userId || undefined,
+      userRole: (req as any).user?.role || "DISPLACED_COMMUNITY_MEMBER",
+      activityType: "OFFER_LETTER_REJECTED",
+      moduleName: "COMPENSATION_MANAGEMENT",
+      caseReference: offerCaseId,
+      severity: "WARNING",
+      ipAddress: req.ip || "127.0.0.1",
+      deviceInfo: (req.headers["user-agent"] as string) || "Unknown",
+      activityDetails: { offerId, caseId: offerCaseId, remarks },
+      systemResponse: "SUCCESS (200)",
+    });
+
     res.json({ offerLetter: offer });
   } catch (e: unknown) {
     const msg = (e as Error).message;
