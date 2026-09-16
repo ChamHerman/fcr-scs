@@ -284,21 +284,34 @@ export const CaseForm: React.FC<CaseFormProps> = ({
     setSelectedProjectId(projectId);
   };
 
-  const [owners, setOwners] = useState<Owner[]>(
-    initialValues?.owners && initialValues.owners.length > 0
-      ? initialValues.owners
-      : [
-          {
-            id: "1",
-            name: "",
-            icNumber: "",
-            address: "",
-            phone: "",
-            email: "",
-            share: "100",
-          },
-        ]
-  );
+  const sanitizeOwnerList = (list: Owner[]): Owner[] => {
+    const seen = new Set<string>();
+    return list.map((o, idx) => {
+      let uid = o.id || `owner_${idx + 1}`;
+      if (seen.has(uid)) {
+        uid = `${uid}_${idx}_${Date.now()}`;
+      }
+      seen.add(uid);
+      return { ...o, id: uid };
+    });
+  };
+
+  const [owners, setOwners] = useState<Owner[]>(() => {
+    if (initialValues?.owners && initialValues.owners.length > 0) {
+      return sanitizeOwnerList(initialValues.owners);
+    }
+    return [
+      {
+        id: "1",
+        name: "",
+        icNumber: "",
+        address: "",
+        phone: "",
+        email: "",
+        share: "100",
+      },
+    ];
+  });
 
   const [documents, setDocuments] = useState<Document[]>(() => {
     return MANDATORY_DOCUMENT_TYPES.map((mDoc, idx) => {
@@ -341,7 +354,7 @@ export const CaseForm: React.FC<CaseFormProps> = ({
       }
     }
     if (initialValues?.owners && initialValues.owners.length > 0) {
-      setOwners(initialValues.owners);
+      setOwners(sanitizeOwnerList(initialValues.owners));
     }
     if (initialValues?.documents && initialValues.documents.length > 0) {
       setDocuments(initialValues.documents);
@@ -418,9 +431,9 @@ export const CaseForm: React.FC<CaseFormProps> = ({
   const handleOwnershipTypeChange = (val: string) => {
     handleFieldChange("ownershipType", val);
     if (val === "Individual Citizen" || val === "Corporate Entity") {
-      setOwners((prev) => [
-        { ...(prev[0] || {}), share: "100" }
-      ]);
+      if (owners.length === 1) {
+        setOwners([{ ...(owners[0] || {}), share: "100" }]);
+      }
       setErrors((prev) => {
         const next = { ...prev };
         delete next.ownersShareTotal;
@@ -429,67 +442,31 @@ export const CaseForm: React.FC<CaseFormProps> = ({
         });
         return next;
       });
-    } else if (val === "Trustee") {
-      if (owners.length > 4) {
-        setOwners((prev) => prev.slice(0, 4));
-      }
     } else if (val === "Joint Ownership") {
-      setOwners((prev) => {
-        const owner1 = prev[0] || {
-          id: Date.now().toString(),
+      if (owners.length === 1) {
+        const secondOwner: Owner = {
+          id: `${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
           name: "",
           icNumber: "",
           address: "",
           phone: "",
           email: "",
-          share: "100",
+          share: "50",
         };
-
-        const rawShare1 = parseFloat(owner1.share);
-        let share1 = "50";
-        let share2 = "50";
-
-        if (!isNaN(rawShare1) && rawShare1 > 0 && rawShare1 < 100) {
-          share1 = String(rawShare1);
-          share2 = String(Number((100 - rawShare1).toFixed(2)));
-        }
-
-        const updatedOwner1 = { ...owner1, share: share1 };
-
-        if (prev.length >= 2) {
-          const updatedOwner2 = { ...prev[1], share: share2 };
-          return [updatedOwner1, updatedOwner2, ...prev.slice(2)];
-        } else {
-          const secondOwner: Owner = {
-            id: (Date.now() + 1).toString(),
-            name: "",
-            icNumber: "",
-            address: "",
-            phone: "",
-            email: "",
-            share: share2,
-          };
-          return [updatedOwner1, secondOwner];
-        }
-      });
+        setOwners([{ ...owners[0], share: "50" }, secondOwner]);
+      }
     }
   };
 
   const canAddOwner = () => {
-    const type = formData.ownershipType || "Individual Citizen";
-    if (type === "Individual Citizen" || type === "Corporate Entity") {
-      return false;
-    }
-    if (type === "Trustee" && owners.length >= 4) {
-      return false;
-    }
-    return true;
+    return owners.length < 20;
   };
 
   const addOwner = () => {
     if (!canAddOwner()) return;
+    const newOwnerId = `${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
     const newOwner: Owner = {
-      id: Date.now().toString(),
+      id: newOwnerId,
       name: "",
       icNumber: "",
       address: "",
@@ -497,13 +474,24 @@ export const CaseForm: React.FC<CaseFormProps> = ({
       email: "",
       share: "",
     };
-    setOwners([...owners, newOwner]);
+
+    if (owners.length === 1 && (formData.ownershipType === "Individual Citizen" || !formData.ownershipType)) {
+      handleFieldChange("ownershipType", "Joint Ownership");
+      setOwners([
+        { ...owners[0], share: "50" },
+        { ...newOwner, share: "50" },
+      ]);
+    } else {
+      setOwners([...owners, newOwner]);
+    }
   };
 
   const removeOwner = (id: string) => {
-    const minOwners = formData.ownershipType === "Joint Ownership" ? 2 : 1;
-    if (owners.length <= minOwners) return;
+    if (owners.length <= 1) return;
     const updated = owners.filter((o) => o.id !== id);
+    if (updated.length === 1) {
+      updated[0] = { ...updated[0], share: "100" };
+    }
     setOwners(updated);
 
     // Recheck total share after owner removal
@@ -528,6 +516,38 @@ export const CaseForm: React.FC<CaseFormProps> = ({
     clearError(`owner_${id}_${field}`);
     clearError("owners");
     clearError("ownersShareTotal");
+    clearError("duplicateIc");
+
+    if (field === "icNumber") {
+      const seenIcs: Record<string, string[]> = {};
+      updated.forEach((o) => {
+        const raw = o.icNumber.replace(/\D/g, "");
+        if (raw.length === 12) {
+          if (!seenIcs[raw]) seenIcs[raw] = [];
+          seenIcs[raw].push(o.id);
+        }
+      });
+
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.duplicateIc;
+        updated.forEach((o) => {
+          if (next[`owner_${o.id}_icNumber`]?.includes("Duplicate")) {
+            delete next[`owner_${o.id}_icNumber`];
+          }
+        });
+        Object.entries(seenIcs).forEach(([icDigits, ownerIds]) => {
+          if (ownerIds.length > 1) {
+            ownerIds.forEach((oid) => {
+              next[`owner_${oid}_icNumber`] =
+                "Duplicate Identification Number. Each owner must have a unique NRIC.";
+            });
+            next.duplicateIc = `Duplicate Identification Number detected across multiple owners. Each owner must have a unique NRIC.`;
+          }
+        });
+        return next;
+      });
+    }
 
     if (field === "share") {
       const valNum = parseFloat(value);
@@ -630,16 +650,25 @@ export const CaseForm: React.FC<CaseFormProps> = ({
         (owner) =>
           owner.name.trim() &&
           owner.icNumber.trim() &&
+          owner.icNumber.replace(/\D/g, "").length === 12 &&
           owner.address.trim() &&
           owner.phone.trim() &&
           !validatePhoneNumber(owner.phone) &&
           owner.email.trim() &&
           !validateEmailFormat(owner.email) &&
-          owner.share.trim()
+          (owners.length === 1 || Boolean(owner.share.trim() && parseFloat(owner.share) > 0))
       );
       if (!allFilled) return false;
-      const total = calculateTotalShare(owners);
-      if (total !== 100) return false;
+      if (owners.length > 1) {
+        const cleanIcs = owners
+          .map((o) => o.icNumber.replace(/\D/g, ""))
+          .filter((ic) => ic.length === 12);
+        const uniqueIcs = new Set(cleanIcs);
+        if (uniqueIcs.size !== cleanIcs.length) return false;
+
+        const total = calculateTotalShare(owners);
+        if (Math.abs(total - 100) >= 0.01) return false;
+      }
       return true;
     } else if (stepIndex === 3) {
       return MANDATORY_DOCUMENT_TYPES.every((mDoc) => {
@@ -710,6 +739,8 @@ export const CaseForm: React.FC<CaseFormProps> = ({
         stepErrors.owners = "Please add at least one owner.";
       } else {
         let totalShare = 0;
+        const seenIcs: Record<string, string> = {};
+
         for (const owner of owners) {
           if (!owner.name.trim()) stepErrors[`owner_${owner.id}_name`] = "Full name is required.";
           
@@ -719,6 +750,18 @@ export const CaseForm: React.FC<CaseFormProps> = ({
             const rawDigits = owner.icNumber.replace(/\D/g, "");
             if (rawDigits.length !== 12) {
               stepErrors[`owner_${owner.id}_icNumber`] = "Identification number must be exactly 12 digits (e.g. 900101-14-5532).";
+            } else {
+              if (seenIcs[rawDigits]) {
+                const prevOwnerId = seenIcs[rawDigits];
+                stepErrors[`owner_${owner.id}_icNumber`] =
+                  "Duplicate Identification Number. Each owner must have a unique NRIC.";
+                stepErrors[`owner_${prevOwnerId}_icNumber`] =
+                  "Duplicate Identification Number. Each owner must have a unique NRIC.";
+                stepErrors.duplicateIc =
+                  `Duplicate Identification Number (${owner.icNumber}) detected across multiple owners. Each owner must have a unique NRIC.`;
+              } else {
+                seenIcs[rawDigits] = owner.id;
+              }
             }
           }
 
@@ -742,20 +785,24 @@ export const CaseForm: React.FC<CaseFormProps> = ({
             }
           }
 
-          if (!owner.share.trim()) {
-            stepErrors[`owner_${owner.id}_share`] = "Ownership share (%) is required.";
+          if (owners.length === 1) {
+            totalShare = 100;
           } else {
-            const shareNum = parseFloat(owner.share);
-            if (isNaN(shareNum) || shareNum <= 0) {
-              stepErrors[`owner_${owner.id}_share`] = "Ownership share cannot be 0%. Each owner must have a share greater than 0%.";
-            } else if (shareNum > 100) {
-              stepErrors[`owner_${owner.id}_share`] = "Share cannot exceed 100%.";
+            if (!owner.share.trim()) {
+              stepErrors[`owner_${owner.id}_share`] = "Ownership share (%) is required.";
+            } else {
+              const shareNum = parseFloat(owner.share);
+              if (isNaN(shareNum) || shareNum <= 0) {
+                stepErrors[`owner_${owner.id}_share`] = "Ownership share cannot be 0%. Each owner must have a share greater than 0%.";
+              } else if (shareNum > 100) {
+                stepErrors[`owner_${owner.id}_share`] = "Share cannot exceed 100%.";
+              }
+              totalShare += isNaN(shareNum) ? 0 : shareNum;
             }
-            totalShare += isNaN(shareNum) ? 0 : shareNum;
           }
         }
 
-        if (totalShare !== 100) {
+        if (owners.length > 1 && Math.abs(totalShare - 100) >= 0.01) {
           const formattedTotal = Number(totalShare.toFixed(2)).toString();
           if (totalShare > 100) {
             for (const owner of owners) {
@@ -795,11 +842,20 @@ export const CaseForm: React.FC<CaseFormProps> = ({
       if (showAlert) {
         const firstKey = Object.keys(stepErrors)[0];
         const firstMessage = stepErrors[firstKey];
-        notify({
-          type: "error",
-          title: "Incomplete Form Details",
-          message: firstMessage,
-        });
+
+        if (stepErrors.duplicateIc) {
+          notify({
+            type: "error",
+            title: "Duplicate Identification Number",
+            message: stepErrors.duplicateIc,
+          });
+        } else {
+          notify({
+            type: "error",
+            title: "Incomplete Form Details",
+            message: firstMessage,
+          });
+        }
 
         // Automatically focus and scroll into view the first invalid input
         setTimeout(() => {
@@ -899,13 +955,20 @@ export const CaseForm: React.FC<CaseFormProps> = ({
       };
     }
 
+    const resolvedOwnershipType =
+      formData.ownershipType || (owners.length > 1 ? "Joint Ownership" : "Individual Citizen");
+
     const resolvedOwners = owners.map((o) => ({
       ...o,
-      ownershipType: formData.ownershipType || "Individual Citizen",
-      share: o.share || "1/1",
+      ownershipType: resolvedOwnershipType,
+      share: owners.length === 1 ? "100" : (o.share || "50"),
     }));
 
-    await onSubmit({ formData: finalFormData, owners: resolvedOwners, documents });
+    await onSubmit({
+      formData: { ...finalFormData, ownershipType: resolvedOwnershipType },
+      owners: resolvedOwners,
+      documents,
+    });
   };
 
   const getUserInitials = (name?: string) => {
@@ -1306,28 +1369,23 @@ export const CaseForm: React.FC<CaseFormProps> = ({
             </div>
 
             {/* Total Share Summary Banner */}
-            {(() => {
-              if (
-                formData.ownershipType === "Individual Citizen" ||
-                formData.ownershipType === "Corporate Entity"
-              ) {
-                return null;
-              }
+            {owners.length > 1 && (() => {
               const currentTotal = calculateTotalShare(owners);
+              const isExact = Math.abs(currentTotal - 100) < 0.01;
               const isOver = currentTotal > 100;
               const isUnder = currentTotal < 100;
               const formatted = Number(currentTotal.toFixed(2)).toString();
               return (
                 <div
                   className={`p-4 rounded-xl border flex items-center justify-between gap-2 transition-colors ${
-                    isOver || isUnder
+                    !isExact
                       ? "bg-md-error/10 border-md-error/40 text-md-error"
                       : "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
                   }`}
                 >
                   <div className="flex items-center gap-2 font-medium text-xs sm:text-sm">
                     <span>Total Ownership Share Allocated:</span>
-                    <span className={`font-bold ${isOver || isUnder ? "text-md-error" : ""}`}>
+                    <span className={`font-bold ${!isExact ? "text-md-error" : ""}`}>
                       {formatted}% / 100%
                     </span>
                     {isOver && (
@@ -1361,9 +1419,7 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                     <div className="text-sm font-bold text-md-primary">
                       Owner #{index + 1}
                     </div>
-                    {(formData.ownershipType === "Joint Ownership"
-                      ? owners.length > 2 && index >= 2
-                      : owners.length > 1) && (
+                    {owners.length > 1 && (
                       <IconButton
                         title="Remove Owner"
                         size="sm"
@@ -1463,21 +1519,13 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                         min="0"
                         max="100"
                         step="any"
-                        disabled={
-                          formData.ownershipType === "Individual Citizen" ||
-                          formData.ownershipType === "Corporate Entity"
-                        }
-                        value={
-                          formData.ownershipType === "Individual Citizen" ||
-                          formData.ownershipType === "Corporate Entity"
-                            ? "100"
-                            : owner.share
-                        }
+                        disabled={owners.length === 1}
+                        value={owners.length === 1 ? "100" : owner.share}
                         error={errors[`owner_${owner.id}_share`]}
                         onChange={(e) =>
                           handleOwnerChange(owner.id, "share", e.target.value)
                         }
-                        placeholder="e.g., 50 or 100"
+                        placeholder={owners.length === 1 ? "100" : "e.g., 50"}
                       />
                     </div>
                   </div>

@@ -197,6 +197,22 @@ export const OfferLetterReview: React.FC = () => {
         parcelOwners.length > 0
           ? parcelOwners.map((ow: any) => ow.nric).join(", ")
           : o.landOwnership?.landOwner?.nric || "—";
+      const matchingOwner =
+        (userIcClean
+          ? parcelOwners.find(
+              (ow: any) =>
+                (ow.nric || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase() === userIcClean.toLowerCase()
+            )
+          : null) ||
+        parcelOwners.find((ow: any) => ow.ownerId === user?.userId || ow.landOwnerId === user?.userId) ||
+        parcelOwners[0] ||
+        o.landOwnership?.landOwner;
+
+      const declarationOwnerName =
+        matchingOwner?.name || parcelOwners[0]?.name || (o.landOwnership?.landOwner?.name) || ownerName;
+      const declarationOwnerIc =
+        matchingOwner?.nric || parcelOwners[0]?.nric || (o.landOwnership?.landOwner?.nric) || ownerIc;
+
       const ownerAddress = o.landOwnership?.landOwner?.address || parcelOwners[0]?.address || "—";
       const ownerPhone =
         parcelOwners.length > 0
@@ -215,6 +231,8 @@ export const OfferLetterReview: React.FC = () => {
           c?.project?.acquiringAgency || "Department of Lands and Mines (JKPTG)",
         ownerName,
         ownerIc,
+        declarationOwnerName,
+        declarationOwnerIc,
         ownerAddress,
         ownerPhone,
         landTitle: lp?.landTitleNo || "—",

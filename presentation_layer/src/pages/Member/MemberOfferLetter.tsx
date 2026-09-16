@@ -315,6 +315,22 @@ export const MemberOfferLetter: React.FC = () => {
         parcelOwners.length > 0
           ? parcelOwners.map((ow: any) => ow.nric).join(', ')
           : o.landOwnership?.landOwner?.nric || identificationNumber || '—';
+      const matchingOwner =
+        (userIcClean
+          ? parcelOwners.find(
+              (ow: any) =>
+                (ow.nric || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === userIcClean.toLowerCase()
+            )
+          : null) ||
+        parcelOwners.find((ow: any) => ow.ownerId === user?.userId || ow.landOwnerId === user?.userId) ||
+        parcelOwners[0] ||
+        o.landOwnership?.landOwner;
+
+      const declarationOwnerName =
+        matchingOwner?.name || userName || user?.name || parcelOwners[0]?.name || 'Land Owner';
+      const declarationOwnerIc =
+        matchingOwner?.nric || identificationNumber || user?.identificationNumber || parcelOwners[0]?.nric || '—';
+
       const ownerAddress = o.landOwnership?.landOwner?.address || parcelOwners[0]?.address || 'Registered Address on File';
       const ownerPhone =
         parcelOwners.length > 0
@@ -333,6 +349,8 @@ export const MemberOfferLetter: React.FC = () => {
           c?.project?.acquiringAgency || 'Department of Lands and Mines (JKPTG)',
         ownerName,
         ownerIc,
+        declarationOwnerName,
+        declarationOwnerIc,
         ownerAddress,
         ownerPhone,
         landTitle: lp?.landTitleNo || '—',
@@ -705,31 +723,6 @@ export const MemberOfferLetter: React.FC = () => {
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* CASE SWITCHER — always a dropdown, labels carry case details   */}
-      {/* ------------------------------------------------------------- */}
-      {casesList.length > 0 && (
-        <div className="bg-white border-b border-slate-200 px-4 sm:px-6 lg:px-8 py-3">
-          <div className="max-w-7xl mx-auto sm:w-[460px]">
-            <Select
-              label="Select Case"
-              placeholder="Select an acquisition case…"
-              options={casesList.map((c: any) => {
-                const lot = c.landParcel?.lotNo ? `Lot ${c.landParcel.lotNo}` : c.caseTitle || c.caseId;
-                const statusLabel = c.status ? String(c.status).replace(/_/g, ' ') : '';
-                return {
-                  value: c.caseId,
-                  label: `${c.caseId} — ${lot}${statusLabel ? ` [${statusLabel}]` : ''}`,
-                };
-              })}
-              value={selectedCaseId}
-              onChange={handleCaseChange}
-              wrapLabels
-            />
-          </div>
-        </div>
-      )}
-
-      {/* ------------------------------------------------------------- */}
       {/* MAIN CONTAINER                                                */}
       {/* ------------------------------------------------------------- */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
@@ -738,7 +731,7 @@ export const MemberOfferLetter: React.FC = () => {
           <div className="bg-white rounded-3xl p-16 border border-slate-200 text-center shadow-sm space-y-3">
             <div className="w-12 h-12 rounded-full border-4 border-violet-600 border-t-transparent animate-spin mx-auto" />
             <h3 className="text-sm font-bold text-slate-900">Retrieving Official Form H Offer Letter...</h3>
-            <p className="text-xs text-slate-500">Connecting to national land acquisition registry database</p>
+            <p className="text-xs text-slate-500">Connecting to national land acquisitio registry database</p>
           </div>
         ) : !offer ? (
           <div className="bg-white rounded-3xl p-16 border border-slate-200 text-center shadow-sm space-y-4">

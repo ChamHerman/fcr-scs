@@ -295,6 +295,8 @@ export const useMemberWorkflow = ({
       acquiringAuthority: 'Department of Lands and Mines (JKPTG)',
       ownerName: claimantName,
       ownerIc: claimantNric,
+      declarationOwnerName: claimantName,
+      declarationOwnerIc: claimantNric,
       ownerAddress: parcel?.address || 'Registered Address on Title',
       ownerPhone: user?.contactNumber || '+6012-3456789',
       landTitle: parcel?.landTitleNo || '—',
