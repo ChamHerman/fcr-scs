@@ -10,18 +10,30 @@ export interface ReportFilterParams {
   projectType?: string;
 }
 
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/* CaseStatus values grouped into statutory pipeline stages — every value of the
+   enum belongs to exactly one bucket, so no case can hide from the KPIs. */
+const VALUATION_STAGE_STATUSES = ["CASE_REGISTERED", "VALUER_ASSIGNED", "VALUATION_IN_PROGRESS", "PENDING_VALUATION_APPROVAL"];
+const COMPENSATION_STAGE_STATUSES = ["VALUATION_APPROVED", "PENDING_COMPENSATION_APPROVAL"];
+const OFFER_STAGE_STATUSES = ["COMPENSATION_APPROVED", "OFFER_ISSUED", "OFFER_ACCEPTED"];
+const PAYMENT_STAGE_STATUSES = ["PAYMENT_IN_PROGRESS"];
+const REJECTED_CASE_STATUSES = ["VALUATION_REJECTED", "COMPENSATION_REJECTED", "OFFER_REJECTED"];
+const COMPLETED_CASE_STATUSES = ["PAYMENT_COMPLETED", "CASE_CLOSED"];
+
+/* Money that actually left the bank: PAID is member-confirmed, TRANSFER_SUCCEED
+   is bank-cleared and awaiting confirmation. */
+const SETTLED_PAYMENT_STATUSES: PaymentStatus[] = [PaymentStatus.PAID, PaymentStatus.TRANSFER_SUCCEED];
+
 export const getDashboardOverviewStats = async () => {
   const [
     totalCases,
     caseByStatus,
     totalPayments,
-    totalCompensationAmount,
-    totalPaidAmount,
+    paymentByStatus,
     blockchainTotal,
     blockchainByStatus,
-    recentCases,
-    recentPayments,
-    recentBlockchain
+    caseDates
   ] = await Promise.all([
     prisma.acquisitionCase.count({ where: { deletedAt: null } }),
     prisma.acquisitionCase.groupBy({
@@ -30,13 +42,11 @@ export const getDashboardOverviewStats = async () => {
       where: { deletedAt: null },
     }),
     prisma.paymentCase.count({ where: { deletedAt: null } }),
-    prisma.paymentCase.aggregate({
+    prisma.paymentCase.groupBy({
+      by: ["status"],
+      _count: { _all: true },
       _sum: { amount: true },
       where: { deletedAt: null },
-    }),
-    prisma.paymentCase.aggregate({
-      _sum: { amount: true },
-      where: { status: PaymentStatus.PAID, deletedAt: null },
     }),
     prisma.blockchainRecord.count({ where: { deletedAt: null } }),
     prisma.blockchainRecord.groupBy({
@@ -46,24 +56,10 @@ export const getDashboardOverviewStats = async () => {
     }),
     prisma.acquisitionCase.findMany({
       where: { deletedAt: null },
-      take: 5,
-      orderBy: { registrationDate: "desc" },
-      include: { landParcel: true },
+      select: { registrationDate: true },
     }),
-    prisma.paymentCase.findMany({
-      where: { deletedAt: null },
-      take: 5,
-      orderBy: { updatedAt: "desc" },
-      include: { receipt: true },
-    }),
-    prisma.blockchainRecord.findMany({
-      where: { deletedAt: null },
-      take: 5,
-      orderBy: { publishedAt: "desc" }
-    })
   ]);
 
-  // Format Status map
   const caseStatusDistribution: Record<string, number> = {};
   caseByStatus.forEach((s) => {
     caseStatusDistribution[s.status] = s._count._all;
@@ -74,69 +70,67 @@ export const getDashboardOverviewStats = async () => {
     blockchainStatusDistribution[b.status] = b._count._all;
   });
 
-  const sumTotal = Number(totalCompensationAmount?._sum?.amount || 0);
-  const sumPaid = Number(totalPaidAmount?._sum?.amount || 0);
+  /* Real per-status ledger: count + amount, straight from the payment table. */
+  const paymentStatusDistribution: Record<string, { count: number; total: number }> = {};
+  paymentByStatus.forEach((p) => {
+    paymentStatusDistribution[p.status] = {
+      count: p._count._all,
+      total: Number(p._sum.amount || 0),
+    };
+  });
+
+  const countCasesByStatus = (statuses: string[]) =>
+    statuses.reduce((acc, status) => acc + (caseStatusDistribution[status] ?? 0), 0);
+
+  const sumPaymentsByStatus = (statuses: PaymentStatus[]) =>
+    statuses.reduce((acc, status) => acc + (paymentStatusDistribution[status]?.total ?? 0), 0);
+
+  const totalCompensationAmount = Object.values(paymentStatusDistribution).reduce((acc, p) => acc + p.total, 0);
+  const completedCases = countCasesByStatus(COMPLETED_CASE_STATUSES);
+
+  /* Real monthly registration counts for the last 7 months. */
+  const now = new Date();
+  const monthBuckets: { key: string; label: string }[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    monthBuckets.push({
+      key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+      label: MONTH_LABELS[d.getMonth()],
+    });
+  }
+  const monthlyTrends: Record<string, number> = {};
+  monthBuckets.forEach((m) => {
+    monthlyTrends[m.label] = 0;
+  });
+  caseDates.forEach((c) => {
+    const d = new Date(c.registrationDate);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const bucket = monthBuckets.find((m) => m.key === key);
+    if (bucket) monthlyTrends[bucket.label] += 1;
+  });
 
   return {
     kpis: {
       totalCases,
       totalPayments,
-      totalCompensationAmount: sumTotal,
-      totalPaidAmount: sumPaid,
+      totalCompensationAmount,
+      totalPaidAmount: sumPaymentsByStatus([PaymentStatus.PAID]),
+      totalSettledAmount: sumPaymentsByStatus(SETTLED_PAYMENT_STATUSES),
       totalBlockchainRecords: blockchainTotal,
-      publishedBlockchainRecords: blockchainStatusDistribution[BlockchainStatus.PUBLISHED] || blockchainStatusDistribution["Published"] || 0,
-      readyToPublishBlockchainRecords: blockchainStatusDistribution[BlockchainStatus.READY_TO_PUBLISH] || blockchainStatusDistribution["Ready to Publish"] || 0,
-      completedCases: caseStatusDistribution["CASE_CLOSED"] || caseStatusDistribution["PAYMENT_COMPLETED"] || 0,
-      pendingValuation: (caseStatusDistribution["CASE_REGISTERED"] || 0) + (caseStatusDistribution["VALUATION_IN_PROGRESS"] || 0),
-      pendingCompensation: caseStatusDistribution["VALUATION_APPROVED"] || 0,
+      publishedBlockchainRecords: blockchainStatusDistribution[BlockchainStatus.PUBLISHED] || 0,
+      readyToPublishBlockchainRecords: blockchainStatusDistribution[BlockchainStatus.READY_TO_PUBLISH] || 0,
+      completedCases,
+      activeCases: Math.max(0, totalCases - completedCases),
+      inValuation: countCasesByStatus(VALUATION_STAGE_STATUSES),
+      inCompensation: countCasesByStatus(COMPENSATION_STAGE_STATUSES),
+      inOffer: countCasesByStatus(OFFER_STAGE_STATUSES),
+      inPayment: countCasesByStatus(PAYMENT_STAGE_STATUSES),
+      rejectedCases: countCasesByStatus(REJECTED_CASE_STATUSES),
     },
     caseStatusDistribution,
-    paymentStatusDistribution: {
-      "Paid": { count: 0, total: sumPaid },
-      "Approved": { count: 0, total: Math.max(0, sumTotal - sumPaid) },
-      "Pending": { count: 0, total: 0 }
-    },
+    paymentStatusDistribution,
     blockchainStatusDistribution,
-    monthlyTrends: {
-      "Feb": Math.max(1, Math.floor(totalCases * 0.1)),
-      "Mar": Math.max(2, Math.floor(totalCases * 0.2)),
-      "Apr": Math.max(3, Math.floor(totalCases * 0.4)),
-      "May": Math.max(4, Math.floor(totalCases * 0.6)),
-      "Jun": Math.max(5, Math.floor(totalCases * 0.8)),
-      "Jul": totalCases,
-      "Aug": totalCases
-    },
-    recentActivity: [
-      ...recentCases.map((c) => ({
-        id: c.caseId,
-        title: c.caseTitle,
-        category: "Case Status",
-        location: `${c.landParcel?.state || "Selangor"} / ${c.landParcel?.district || "Petaling"}`,
-        date: c.registrationDate.toISOString().slice(0, 10),
-        status: c.status,
-        agingDays: Math.max(0, Math.floor((Date.now() - new Date(c.registrationDate).getTime()) / (1000 * 60 * 60 * 24))) + 'd'
-      })),
-      ...recentPayments.map((p) => ({
-        id: `PAY-${p.caseId}`,
-        title: `Payment for ${p.caseId}`,
-        category: "Payment",
-        location: "National / Bank Transfer",
-        date: p.updatedAt.toISOString().slice(0, 10),
-        status: p.status,
-        bankDetails: `${p.bankName || 'Maybank'} (••••${p.accountNumber?.slice(-4) || '1234'})`,
-        bankReference: p.receipt?.bankReferenceNumber || "Pending Clearance"
-      })),
-      ...recentBlockchain.map((b) => ({
-        id: `BC-${b.caseId.substring(0, 8)}`,
-        title: `Blockchain Record for ${b.caseId}`,
-        category: "Blockchain Audit",
-        location: "Ethereum Sepolia",
-        date: b.publishedAt.toISOString().slice(0, 10),
-        status: b.status,
-        transactionHash: b.transactionHash ? `${b.transactionHash.slice(0, 10)}...${b.transactionHash.slice(-8)}` : "Pending",
-        documentHash: b.documentHash ? `${b.documentHash.slice(0, 10)}...${b.documentHash.slice(-8)}` : "N/A"
-      }))
-    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10),
+    monthlyTrends,
   };
 };
 
@@ -146,9 +140,18 @@ export const generateCaseStatusData = async (filters: ReportFilterParams) => {
   if (filters.status && filters.status !== "All") {
     where.status = filters.status;
   }
+
+  const landParcelWhere: Record<string, string> = {};
   if (filters.state && filters.state !== "All") {
-    where.landParcel = { state: filters.state };
+    landParcelWhere.state = filters.state;
   }
+  if (filters.location && filters.location !== "All") {
+    landParcelWhere.district = filters.location;
+  }
+  if (Object.keys(landParcelWhere).length > 0) {
+    where.landParcel = landParcelWhere;
+  }
+
   if (filters.startDate && filters.endDate) {
     where.registrationDate = {
       gte: new Date(filters.startDate),
@@ -189,8 +192,8 @@ export const generateCaseStatusData = async (filters: ReportFilterParams) => {
     details: cases.map((c) => ({
       caseId: c.caseId,
       title: c.caseTitle,
-      state: c.landParcel?.state || "Selangor",
-      district: c.landParcel?.district || "Petaling",
+      state: c.landParcel?.state || "Not recorded",
+      district: c.landParcel?.district || "Not recorded",
       status: c.status,
       date: c.registrationDate.toISOString().slice(0, 10),
       lifecycleAging: `${Math.max(0, Math.floor((Date.now() - new Date(c.registrationDate).getTime()) / (1000 * 60 * 60 * 24)))} days`,
@@ -218,9 +221,11 @@ export const generatePaymentData = async (filters: ReportFilterParams) => {
     take: 100,
   });
 
-  const totalDisbursementNum = payments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
-  const successfulPayments = payments.filter((p) => p.status === PaymentStatus.PAID || (p.status as any) === "Paid").length;
-  const successRate = payments.length > 0 ? Math.round((successfulPayments / payments.length) * 100) : 100;
+  const settledPayments = payments.filter((p) => SETTLED_PAYMENT_STATUSES.includes(p.status));
+  const totalPaymentVolume = payments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
+  const totalDisbursementNum = settledPayments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
+  const successfulPayments = settledPayments.length;
+  const successRate = payments.length > 0 ? Math.round((successfulPayments / payments.length) * 100) : 0;
 
   return {
     reportType: "Payment Report",
@@ -230,6 +235,7 @@ export const generatePaymentData = async (filters: ReportFilterParams) => {
     summary: {
       totalRecords: payments.length,
       totalDisbursement: `RM ${totalDisbursementNum.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      totalPaymentVolume: `RM ${totalPaymentVolume.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       successfulPayments,
       pendingPayments: payments.length - successfulPayments,
       successRate: `${successRate}%`,
@@ -266,8 +272,8 @@ export const generateBlockchainAuditData = async (filters: ReportFilterParams) =
     take: 100,
   });
 
-  const publishedRecords = records.filter((r) => r.status === BlockchainStatus.PUBLISHED || (r.status as any) === "Published").length;
-  const readyToPublishRecords = records.filter((r) => r.status === BlockchainStatus.READY_TO_PUBLISH || (r.status as any) === "Ready to Publish").length;
+  const publishedRecords = records.filter((r) => r.status === BlockchainStatus.PUBLISHED).length;
+  const readyToPublishRecords = records.filter((r) => r.status === BlockchainStatus.READY_TO_PUBLISH).length;
 
   return {
     reportType: "Blockchain Audit Report",
@@ -278,11 +284,15 @@ export const generateBlockchainAuditData = async (filters: ReportFilterParams) =
       totalRecords: records.length,
       publishedRecords,
       readyToPublishRecords,
-      integrityStatus: "100% Cryptographically Verified",
+      integrityStatus:
+        records.length > 0 && publishedRecords === records.length
+          ? "100% Cryptographically Verified"
+          : `${publishedRecords}/${records.length} Notarized On-Chain`,
       network: "Ethereum Sepolia Testnet",
     },
     details: records.map((r) => ({
       caseId: r.caseId,
+      milestone: r.milestone,
       transactionHash: r.transactionHash || "Pending Confirmation",
       documentHash: r.documentHash || "N/A",
       status: r.status,
