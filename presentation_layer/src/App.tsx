@@ -16,12 +16,16 @@ import { Register } from './pages/Login/Register';
 import { ForgotPassword } from './pages/Login/ForgotPassword';
 import { ResetPassword } from './pages/Login/ResetPassword';
 import { AccountActivation } from './pages/Login/AccountActivation';
+import { VerifyEmailChange } from './pages/Login/VerifyEmailChange';
 import { Unauthorized } from './pages/Login/Unauthorized';
 
 import { DashboardOverview } from './pages/Dashboard/DashboardOverview';
 import { UserProfile } from './pages/Dashboard/UserProfile';
 import { UserAdministration } from './pages/Dashboard/UserAdministration';
+import { UserDetails } from './pages/Dashboard/UserDetails';
 import { RoleManagement } from './pages/Dashboard/RoleManagement';
+import { EmailTemplates } from './pages/Dashboard/EmailTemplates';
+import { EmailTemplateCreate } from './pages/Dashboard/EmailTemplateCreate';
 
 import { AuditLogs } from './pages/Audit/AuditLogs';
 import { AlertMonitoring } from './pages/Audit/AlertMonitoring';
@@ -92,6 +96,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/activate" element={<AccountActivation />} />
+          <Route path="/verify-email-change" element={<VerifyEmailChange />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/unauthorized" element={<Unauthorized />} />
@@ -131,9 +136,12 @@ function App() {
               {/* Dashboard & User Management */}
               <Route path="profile" element={<UserProfile />} />
               <Route path="users" element={<UserAdministration />} />
+              <Route path="users/details/:id" element={<UserDetails />} />
               <Route path="role-management" element={<RoleManagement />} />
 
               {/* System Audit & Monitoring */}
+              <Route path="email-templates" element={<EmailTemplates />} />
+              <Route path="email-templates/new" element={<EmailTemplateCreate />} />
               <Route path="audit-logs" element={<AuditLogs />} />
               <Route path="alerts" element={<AlertMonitoring />} />
               <Route path="system-reports" element={<SystemReports />} />

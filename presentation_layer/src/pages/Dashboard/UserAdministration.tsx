@@ -1,15 +1,32 @@
-import React, { useState, useEffect } from 'react';
-import { MD3Card, MD3Button, MD3Input } from '../MD3Components';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { MD3Button, MD3Input } from '../MD3Components';
 import { Select, type SelectOption } from '../../components/ui/Select';
 import { IdentificationInput } from '../../components/ui/IdentificationInput';
-import { Search, Filter, Shield, Eye, EyeOff, MoreVertical, X, CheckCircle } from 'lucide-react';
+import { Modal } from '../../components/ui/Modal';
+import { SearchInput } from '../../components/ui/SearchInput';
+import { Pagination } from '../../components/ui/Pagination';
+import { PageHeader } from '../../components/ui/PageHeader';
+import { Search, Shield, MoreVertical, CheckCircle, Users, UserCheck, UserX, UserCog, ChevronLeft, ChevronRight, ArrowUpDown, Sparkles, KeyRound, Info } from 'lucide-react';
+import { resolveMalaysianIdentity, parseRawIc, type MalaysianIdentity } from '../../utils/malaysianIdentity';
+import '../LandAcquisition/case_management.css';
 
 export const UserAdministration: React.FC = () => {
+  const navigate = useNavigate();
+
   const ROLE_OPTIONS: SelectOption[] = [
+    { value: '', label: 'All Roles' },
+    { value: 'SYSTEM_ADMINISTRATOR', label: 'System Administrator' },
     { value: 'GOVERNMENT_ADMINISTRATOR', label: 'Government Administrator' },
     { value: 'GOVERNMENT_OFFICER', label: 'Government Officer' },
     { value: 'LAND_VALUER', label: 'Land Valuer' },
     { value: 'DISPLACED_COMMUNITY_MEMBER', label: 'Displaced Community Member' },
+  ];
+
+  const STATUS_OPTIONS: SelectOption[] = [
+    { value: '', label: 'All Statuses' },
+    { value: 'Active', label: 'Active' },
+    { value: 'Inactive', label: 'Inactive' },
   ];
 
   const roleFormatMap: Record<string, string> = {
@@ -25,7 +42,14 @@ export const UserAdministration: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [unmaskedId, setUnmaskedId] = useState<string | null>(null);
+
+  // Pagination & Filtering & Sorting
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const itemsPerPage = 10;
 
   // Form state
   const [formData, setFormData] = useState({
@@ -33,10 +57,28 @@ export const UserAdministration: React.FC = () => {
     email: '',
     contactNumber: '',
     identificationNumber: '',
+    address: '',
     role: 'GOVERNMENT_OFFICER'
   });
+  const [identityInfo, setIdentityInfo] = useState<MalaysianIdentity | null>(null);
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
+
+  // Auto-resolve fixed name and state-accurate address when 12-digit Malaysian IC is entered
+  useEffect(() => {
+    const rawDigits = parseRawIc(formData.identificationNumber);
+    if (rawDigits.length === 12) {
+      const identity = resolveMalaysianIdentity(rawDigits);
+      setIdentityInfo(identity);
+      setFormData(prev => ({
+        ...prev,
+        name: identity.name,
+        address: identity.address
+      }));
+    } else {
+      setIdentityInfo(null);
+    }
+  }, [formData.identificationNumber]);
 
   const fetchUsers = async () => {
     try {
@@ -72,7 +114,8 @@ export const UserAdministration: React.FC = () => {
       
       if (res.ok && json.success) {
         setFormSuccess('User created successfully with default password "Password$123"!');
-        setFormData({ name: '', email: '', contactNumber: '', identificationNumber: '', role: 'GOVERNMENT_OFFICER' });
+        setFormData({ name: '', email: '', contactNumber: '', identificationNumber: '', address: '', role: 'GOVERNMENT_OFFICER' });
+        setIdentityInfo(null);
         fetchUsers();
         setTimeout(() => {
           setIsModalOpen(false);
@@ -86,161 +129,341 @@ export const UserAdministration: React.FC = () => {
     }
   };
 
-  const toggleMask = (id: string) => {
-    // Simulate privilege check (FR-UMD-026)
-    if (unmaskedId === id) {
-      setUnmaskedId(null);
-    } else {
-      const isAuthorized = window.confirm("Authorize unmasking of sensitive data?");
-      if (isAuthorized) setUnmaskedId(id);
-    }
+  const filteredAndSortedUsers = useMemo(() => {
+    let result = users.filter(u => {
+      const matchesSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                            u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            (u.id || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            (u.identificationNumber || '').includes(searchQuery) ||
+                            (u.address || '').toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesRole = roleFilter ? u.role === roleFilter : true;
+      const matchesStatus = statusFilter ? u.status === statusFilter : true;
+      return matchesSearch && matchesRole && matchesStatus;
+    });
+
+    result.sort((a, b) => {
+      const compareResult = a.name.localeCompare(b.name);
+      return sortOrder === 'asc' ? compareResult : -compareResult;
+    });
+
+    return result;
+  }, [users, searchQuery, roleFilter, statusFilter, sortOrder]);
+
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredAndSortedUsers.slice(start, start + itemsPerPage);
+  }, [filteredAndSortedUsers, currentPage]);
+
+  const totalPages = Math.ceil(filteredAndSortedUsers.length / itemsPerPage) || 1;
+
+  const stats = useMemo(() => {
+    return {
+      total: users.length,
+      active: users.filter(u => u.status === 'Active').length,
+      inactive: users.filter(u => u.status === 'Inactive').length,
+      admins: users.filter(u => u.role === 'SYSTEM_ADMINISTRATOR').length,
+    };
+  }, [users]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, roleFilter, statusFilter, sortOrder]);
+
+  const toggleSort = () => {
+    setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
   };
 
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
-        <div>
-          <h1 className="text-3xl font-medium text-md-on-surface mb-2">User Administration</h1>
-          <p className="text-md-on-surface-variant">Search, filter, and manage system user accounts.</p>
+    <div className="main blur-shape-bg">
+      <PageHeader
+        title="User Administration"
+        subtitle="Search, filter, and manage system user accounts."
+      />
+
+      {/* Statistics */}
+      <div className="stats-grid">
+        <div className="stat-card">
+          <Users className="stat-icon text-md-primary" size={32} />
+          <div className="stat-label">Total Users</div>
+          <div className="stat-number">{users.length}</div>
         </div>
-        <MD3Button icon={<Shield size={18} />} onClick={() => setIsModalOpen(true)}>
-          Add New User
-        </MD3Button>
+
+        <div className="stat-card">
+          <UserCheck className="stat-icon text-green-700 dark:text-green-500" size={32} />
+          <div className="stat-label">Active Users</div>
+          <div className="stat-number">{users.filter(u => u.status === 'Active').length}</div>
+        </div>
+
+        <div className="stat-card">
+          <UserX className="stat-icon text-md-error" size={32} />
+          <div className="stat-label">Inactive Users</div>
+          <div className="stat-number">{users.filter(u => u.status === 'Inactive').length}</div>
+        </div>
+
+        <div className="stat-card">
+          <UserCog className="stat-icon text-md-secondary" size={32} />
+          <div className="stat-label">System Admins</div>
+          <div className="stat-number">{users.filter(u => u.role === 'SYSTEM_ADMINISTRATOR').length}</div>
+        </div>
       </div>
 
-      <MD3Card elevation={1} className="mb-8">
-        <div className="flex flex-col md:flex-row gap-4 items-end">
-          <MD3Input label="Search users..." className="flex-1" />
-          <MD3Input label="Role Filter" className="w-full md:w-64" />
-          <MD3Input label="Status" className="w-full md:w-48" />
-          <MD3Button variant="tonal" className="h-14" icon={<Search size={18} />}>
-            Search
+      {/* Filter Bar */}
+      <div className="filter-bar">
+        <SearchInput 
+          placeholder="Search by name, email or IC..." 
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+        <div className="filter-group">
+          <Select 
+            label="Role Filter" 
+            options={ROLE_OPTIONS} 
+            value={roleFilter}
+            onChange={(val) => setRoleFilter(val)}
+            wrapLabels
+          />
+          <Select 
+            label="Status Filter" 
+            options={STATUS_OPTIONS} 
+            value={statusFilter}
+            onChange={(val) => setStatusFilter(val)}
+          />
+          <MD3Button
+            variant="outlined"
+            className="h-10 px-4"
+            onClick={() => {
+              setRoleFilter('');
+              setStatusFilter('');
+              setSearchQuery('');
+              setCurrentPage(1);
+            }}
+          >
+            Clear
           </MD3Button>
         </div>
-      </MD3Card>
+      </div>
 
-      <MD3Card elevation={2} className="overflow-hidden p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+      {/* Action Bar */}
+      <div className="action-bar">
+        <div className="left">
+          <span className="count">{filteredAndSortedUsers.length}</span> users found
+          <span style={{ opacity: 0.4, margin: "0 4px" }}>·</span>
+          <span style={{ fontSize: "13px" }}>
+            Showing {filteredAndSortedUsers.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}–
+            {Math.min(currentPage * itemsPerPage, filteredAndSortedUsers.length)} of {filteredAndSortedUsers.length}
+          </span>
+        </div>
+
+        <div className="right">
+          <MD3Button icon={<Shield size={18} />} onClick={() => setIsModalOpen(true)}>
+            Add New User
+          </MD3Button>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="table-wrap">
+        <div className="table-scroll md-scroll-thin">
+          <table className="w-full table-fixed">
             <thead>
-              <tr className="border-b border-md-outline/30 text-md-on-surface-variant text-sm font-medium">
-                <th className="p-4 pl-6">User Name</th>
-                <th className="p-4">Role</th>
-                <th className="p-4">Sensitive Data (Email)</th>
-                <th className="p-4">Status</th>
-                <th className="p-4 pr-6 text-right">Actions</th>
+              <tr>
+                <th 
+                  style={{ width: "20%" }} 
+                  className="cursor-pointer select-none"
+                  onClick={toggleSort}
+                >
+                  <div className="flex items-center gap-1">
+                    User Name
+                    <ArrowUpDown size={14} className="opacity-50" />
+                  </div>
+                </th>
+                <th style={{ width: "26%" }}>Role</th>
+                <th style={{ width: "14%" }}>IC Number</th>
+                <th style={{ width: "14%" }}>Contact No</th>
+                <th style={{ width: "16%" }}>Email Address</th>
+                <th style={{ width: "10%" }}>Status</th>
               </tr>
             </thead>
             <tbody>
-              {users.map((user) => (
-                <tr key={user.id} className="border-b border-md-outline/10 hover:bg-md-surface-variant/10 transition-colors">
-                  <td className="p-4 pl-6 font-medium text-md-on-surface">{user.name}</td>
-                  <td className="p-4 text-md-on-surface-variant">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-md-secondary-container text-md-on-secondary-container whitespace-nowrap">
-                      {formatRole(user.role)}
-                    </span>
-                  </td>
-                  <td className="p-4 text-md-on-surface-variant flex items-center">
-                    {unmaskedId === user.id ? user.sensitive : '••••••@••••.•••'}
-                    <button 
-                      onClick={() => toggleMask(user.id)}
-                      className="ml-3 p-1.5 rounded-full hover:bg-md-surface-variant/20 text-md-primary transition-colors"
-                      title="Toggle visibility"
-                    >
-                      {unmaskedId === user.id ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </td>
-                  <td className="p-4">
-                    <div className="flex items-center">
-                      <div className={`w-2 h-2 rounded-full mr-2 ${user.status === 'Active' ? 'bg-md-success' : 'bg-md-error'}`}></div>
-                      <span className="text-sm">{user.status}</span>
-                    </div>
-                  </td>
-                  <td className="p-4 pr-6 text-right">
-                    <MD3Button variant="text" icon={<MoreVertical size={18} />} className="w-10 h-10 px-0 rounded-full" />
+              {isLoading ? (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: "center", padding: "32px", color: "var(--md-on-surface-variant)" }}>
+                    Loading...
                   </td>
                 </tr>
-              ))}
+              ) : paginatedUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: "center", padding: "36px", color: "var(--md-on-surface-variant)", opacity: 0.7 }}>
+                    No users found.
+                  </td>
+                </tr>
+              ) : (
+                paginatedUsers.map((user) => (
+                  <tr 
+                    key={user.id} 
+                    className="case-row row-clickable"
+                    onClick={() => navigate(`/admin/users/details/${user.id}`)}
+                  >
+                    <td className="truncate font-medium">
+                      <div>{user.name}</div>
+                      {user.id && (
+                        <div className="text-[11px] font-mono text-md-primary font-semibold opacity-90">{user.id}</div>
+                      )}
+                    </td>
+                    <td>
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-md-secondary-container text-md-on-secondary-container whitespace-nowrap">
+                        {formatRole(user.role)}
+                      </span>
+                    </td>
+                    <td className="truncate">
+                      <div className="font-mono">{user.identificationNumber || '-'}</div>
+                      {user.address && (
+                        <div className="text-[11px] text-md-on-surface-variant/70 truncate max-w-[190px]" title={user.address}>
+                          {user.address}
+                        </div>
+                      )}
+                    </td>
+                    <td className="truncate">
+                      {user.contactNumber || '-'}
+                    </td>
+                    <td className="truncate min-w-0" title={user.email}>
+                      {user.email}
+                    </td>
+                    <td>
+                      <div className="flex items-center">
+                        <span className={`status-badge ${user.status === 'Active' ? 'status-valuation-approved' : 'status-valuation-rejected'}`}>
+                          <span className="dot"></span> {user.status}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
-      </MD3Card>
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <MD3Card elevation={3} className="w-full max-w-lg p-0 overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="flex items-center justify-between p-6 border-b border-md-outline/20">
-              <h2 className="text-xl font-medium text-md-on-surface">Add New User</h2>
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                className="p-2 rounded-full hover:bg-md-surface-variant/50 text-md-on-surface-variant transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="p-6 overflow-y-auto flex-1">
-              {formError && (
-                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 rounded-xl text-sm flex items-center">
-                  <Shield size={16} className="mr-2 flex-shrink-0" />
-                  {formError}
-                </div>
-              )}
-              {formSuccess && (
-                <div className="mb-4 p-3 bg-md-success/10 border border-md-success/20 text-md-success rounded-xl text-sm flex items-center">
-                  <CheckCircle size={16} className="mr-2 flex-shrink-0" />
-                  {formSuccess}
-                </div>
-              )}
-              
-              <form id="addUserForm" onSubmit={handleCreateUser} className="space-y-4">
-                <MD3Input 
-                  label="Full Name" 
-                  required 
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                />
-                <MD3Input 
-                  label="Email Address" 
-                  type="email" 
-                  required 
-                  value={formData.email}
-                  onChange={(e) => setFormData({...formData, email: e.target.value})}
-                />
-                <MD3Input 
-                  label="Contact Number" 
-                  required 
-                  value={formData.contactNumber}
-                  onChange={(e) => setFormData({...formData, contactNumber: e.target.value})}
-                />
-                <IdentificationInput 
-                  label="Identification Number (IC) *" 
-                  value={formData.identificationNumber}
-                  onChange={(e) => setFormData({...formData, identificationNumber: e.target.value})}
-                  placeholder="900101-14-5532"
-                />
-                
-                <div className="flex flex-col gap-1.5 mt-2 z-10 relative">
-                  <Select
-                    label="Assigned Role"
-                    value={formData.role}
-                    options={ROLE_OPTIONS}
-                    onChange={(val) => setFormData({...formData, role: val})}
-                  />
-                </div>
-              </form>
-            </div>
-            
-            <div className="p-6 border-t border-md-outline/20 bg-md-surface-variant/5 flex justify-end gap-3">
-              <MD3Button variant="outlined" onClick={() => setIsModalOpen(false)}>
-                Cancel
-              </MD3Button>
-              <MD3Button form="addUserForm" type="submit">
-                Create User
-              </MD3Button>
-            </div>
-          </MD3Card>
+        
+        <div style={{ padding: '0 16px 16px' }}>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalCount={filteredAndSortedUsers.length}
+            pageSize={itemsPerPage}
+            onPageChange={setCurrentPage}
+            itemLabel="entries"
+          />
         </div>
-      )}
+      </div>
+
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setIdentityInfo(null);
+        }}
+        title="Add New User"
+        footer={
+          <div className="flex gap-3">
+            <MD3Button variant="text" onClick={() => {
+              setIsModalOpen(false);
+              setIdentityInfo(null);
+            }}>
+              Cancel
+            </MD3Button>
+            <MD3Button form="addUserForm" type="submit">
+              Create User
+            </MD3Button>
+          </div>
+        }
+      >
+        <div className="pt-2">
+          {formError && (
+            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 rounded-xl text-sm flex items-center">
+              <Shield size={16} className="mr-2 flex-shrink-0" />
+              {formError}
+            </div>
+          )}
+          {formSuccess && (
+            <div className="mb-4 p-3 bg-md-success/10 border border-md-success/20 text-md-success rounded-xl text-sm flex items-center">
+              <CheckCircle size={16} className="mr-2 flex-shrink-0" />
+              {formSuccess}
+            </div>
+          )}
+          
+          <form id="addUserForm" onSubmit={handleCreateUser} className="space-y-4">
+            <div>
+              <IdentificationInput 
+                label="Identification Number (IC) *" 
+                value={formData.identificationNumber}
+                onChange={(e) => setFormData({...formData, identificationNumber: e.target.value})}
+                placeholder="900101-14-5532"
+              />
+              {identityInfo?.isValid ? (
+                <div className="mt-2 p-2.5 rounded-xl bg-md-primary/10 border border-md-primary/20 text-md-primary text-xs flex items-center justify-between animate-fadeIn">
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle size={14} className="flex-shrink-0 text-md-primary" />
+                    <span>Verified: <strong>{identityInfo.state}</strong> • <strong>{identityInfo.gender}</strong> • Born {identityInfo.dateOfBirth}</span>
+                  </div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider bg-md-primary/20 text-md-primary px-1.5 py-0.5 rounded flex items-center gap-1">
+                    <Sparkles size={10} /> Auto-filled
+                  </span>
+                </div>
+              ) : (
+                <div className="mt-1 text-[11px] text-md-on-surface-variant/70 pl-1">
+                  Enter 12-digit IC to auto-resolve verified name and residential address.
+                </div>
+              )}
+            </div>
+
+            <MD3Input 
+              label="Full Name (Locked to IC) *" 
+              required 
+              value={formData.name} 
+              readOnly 
+              placeholder="Auto-populated from IC"
+            />
+            <MD3Input 
+              label="Residential Address (Locked to IC) *" 
+              required 
+              value={formData.address} 
+              readOnly 
+              placeholder="Auto-populated from IC"
+            />
+            <MD3Input 
+              label="Email Address *" 
+              type="email" 
+              required 
+              value={formData.email}
+              onChange={(e) => setFormData({...formData, email: e.target.value})}
+            />
+
+            {/* Temporary password notice container placed below email input */}
+            <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-900 dark:text-blue-200 flex items-start gap-2.5">
+              <KeyRound size={16} className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+              <div className="leading-relaxed">
+                <span>A secure temporary password will be auto-generated and emailed to this address. The user will be required to set a permanent password on first login.</span>
+              </div>
+            </div>
+
+            <MD3Input 
+              label="Contact Number *" 
+              required 
+              value={formData.contactNumber}
+              onChange={(e) => setFormData({...formData, contactNumber: e.target.value})}
+              placeholder="0123456789"
+            />
+            
+            <div className="flex flex-col gap-1.5 mt-2 z-10 relative">
+              <Select
+                label="Assigned Role"
+                value={formData.role}
+                options={ROLE_OPTIONS.filter(o => o.value !== '' && o.value !== 'SYSTEM_ADMINISTRATOR')}
+                onChange={(val) => setFormData({...formData, role: val})}
+              />
+            </div>
+          </form>
+        </div>
+      </Modal>
     </div>
   );
 };

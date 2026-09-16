@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import classNames from 'classnames';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Lock } from 'lucide-react';
 
 // --- MD3 Button ---
 export interface MD3ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -8,15 +8,15 @@ export interface MD3ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonEle
   icon?: React.ReactNode;
 }
 
-export const MD3Button: React.FC<MD3ButtonProps> = ({ 
-  variant = 'filled', 
-  children, 
-  icon, 
+export const MD3Button: React.FC<MD3ButtonProps> = ({
+  variant = 'filled',
+  children,
+  icon,
   className,
-  ...props 
+  ...props
 }) => {
   const baseClasses = "relative overflow-hidden inline-flex items-center justify-center font-medium transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] active:scale-95 group focus-visible:ring-2 focus-visible:ring-md-primary focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100";
-  
+
   let variantClasses = "";
   switch (variant) {
     case 'filled':
@@ -56,7 +56,8 @@ export const MD3Input: React.FC<MD3InputProps> = ({ label, error, className, id,
   const [showPassword, setShowPassword] = useState(false);
   const isPasswordType = type === 'password';
   const currentType = isPasswordType ? (showPassword ? 'text' : 'password') : type;
-  
+  const isLocked = Boolean(props.readOnly || props.disabled);
+
   return (
     <div className={classNames("relative flex flex-col", className)}>
       <div className="relative group">
@@ -64,9 +65,14 @@ export const MD3Input: React.FC<MD3InputProps> = ({ label, error, className, id,
           id={inputId}
           type={currentType}
           className={classNames(
-            "peer w-full h-14 px-4 pt-4 pb-1 text-md-on-surface bg-md-surface-container-low rounded-t-xl rounded-b-none border-b-2 outline-none transition-colors duration-200 focus:border-md-primary placeholder-transparent",
-            error ? "border-md-error focus:border-md-error" : "border-md-outline",
-            isPasswordType ? "pr-12" : ""
+            "peer w-full h-14 px-4 pt-4 pb-1 rounded-xl outline-none transition-all duration-200 placeholder-transparent",
+            isLocked
+              ? "bg-slate-200/95 dark:bg-gray-800 text-gray-600 dark:text-gray-400 cursor-not-allowed border border-slate-300 dark:border-gray-700 select-none focus:ring-0"
+              : classNames(
+                  "bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-gray-300/80 dark:border-gray-700",
+                  error ? "border-md-error focus:ring-2 focus:ring-md-error" : "focus:ring-2 focus:ring-md-primary focus:border-transparent"
+                ),
+            isPasswordType ? "pr-12" : props.readOnly ? "pr-10" : ""
           )}
           placeholder={label}
           {...props}
@@ -75,7 +81,11 @@ export const MD3Input: React.FC<MD3InputProps> = ({ label, error, className, id,
           htmlFor={inputId}
           className={classNames(
             "absolute left-4 top-2 text-xs font-medium transition-all duration-200 pointer-events-none peer-placeholder-shown:text-base peer-placeholder-shown:top-4 peer-focus:top-2 peer-focus:text-xs",
-            error ? "text-md-error peer-focus:text-md-error" : "text-md-on-surface-variant peer-focus:text-md-primary"
+            isLocked
+              ? "text-gray-500 dark:text-gray-400"
+              : error
+              ? "text-md-error peer-focus:text-md-error"
+              : "text-gray-500 dark:text-gray-400 peer-focus:text-md-primary"
           )}
         >
           {label}
@@ -89,6 +99,11 @@ export const MD3Input: React.FC<MD3InputProps> = ({ label, error, className, id,
             {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
           </button>
         )}
+        {props.readOnly && !isPasswordType && (
+          <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none flex items-center">
+            <Lock size={16} />
+          </div>
+        )}
       </div>
       {error && <span className="text-xs text-md-error mt-1 px-4">{error}</span>}
     </div>
@@ -96,15 +111,15 @@ export const MD3Input: React.FC<MD3InputProps> = ({ label, error, className, id,
 };
 
 // --- MD3 Card ---
-export const MD3Card: React.FC<React.HTMLAttributes<HTMLDivElement> & { elevation?: number, interactive?: boolean }> = ({ 
-  children, 
-  className, 
+export const MD3Card: React.FC<React.HTMLAttributes<HTMLDivElement> & { elevation?: number, interactive?: boolean }> = ({
+  children,
+  className,
   elevation = 1,
   interactive = false,
-  ...props 
+  ...props
 }) => {
   const baseClasses = "bg-md-surface-container rounded-3xl p-6 transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] text-md-on-surface";
-  
+
   const shadowClasses = {
     0: "shadow-none",
     1: "shadow-sm",

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MD3Button, MD3Input, MD3Card, MD3BlurBackground } from '../MD3Components';
-import { UserPlus, Info, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { UserPlus, Info, AlertTriangle, CheckCircle2, XCircle, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../../services/auth.service';
 import { IdentificationInput } from '../../components/ui/IdentificationInput';
+import { resolveMalaysianIdentity, parseRawIc, type MalaysianIdentity } from '../../utils/malaysianIdentity';
 
 export const Register: React.FC = () => {
   const navigate = useNavigate();
@@ -14,11 +15,29 @@ export const Register: React.FC = () => {
     email: '',
     contactNumber: '',
     identificationNumber: '',
+    address: '',
     password: ''
   });
+  const [identityInfo, setIdentityInfo] = useState<MalaysianIdentity | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Auto-resolve fixed name and state-accurate address when 12-digit Malaysian IC is entered
+  useEffect(() => {
+    const rawDigits = parseRawIc(formData.identificationNumber);
+    if (rawDigits.length === 12) {
+      const identity = resolveMalaysianIdentity(rawDigits);
+      setIdentityInfo(identity);
+      setFormData(prev => ({
+        ...prev,
+        name: identity.name,
+        address: identity.address
+      }));
+    } else {
+      setIdentityInfo(null);
+    }
+  }, [formData.identificationNumber]);
 
   const validatePassword = (pwd: string) => {
     // Minimum 8 characters, 1 uppercase, 1 lowercase, 1 number, 1 special character
@@ -31,13 +50,23 @@ export const Register: React.FC = () => {
     setError(null);
     setSuccessMessage(null);
 
-    if (!/^\d{10,11}$/.test(formData.contactNumber.replace(/[-\s]/g, ''))) {
-      setError("Contact number must be 10 or 11 digits.");
+    if (!/^\d{12}$/.test(formData.identificationNumber.replace(/[-\s]/g, ''))) {
+      setError("Identification number must be exactly 12 digits.");
       return;
     }
 
-    if (!/^\d{12}$/.test(formData.identificationNumber.replace(/[-\s]/g, ''))) {
-      setError("Identification number must be exactly 12 digits.");
+    if (!formData.name.trim()) {
+      setError("Full name is required.");
+      return;
+    }
+
+    if (!formData.address.trim()) {
+      setError("Residential address is required.");
+      return;
+    }
+
+    if (!/^\d{10,11}$/.test(formData.contactNumber.replace(/[-\s]/g, ''))) {
+      setError("Contact number must be 10 or 11 digits.");
       return;
     }
 
@@ -71,7 +100,7 @@ export const Register: React.FC = () => {
       <MD3BlurBackground />
       
       <MD3Card elevation={2} className="w-full max-w-lg z-10">
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <div className="w-16 h-16 bg-md-tertiary/10 text-md-tertiary rounded-full flex items-center justify-center mx-auto mb-4">
             <UserPlus size={32} />
           </div>
@@ -93,17 +122,74 @@ export const Register: React.FC = () => {
             </div>
           )}
 
-          <MD3Input type="text" label="Full Name" name="name" required value={formData.name} onChange={handleChange} disabled={isLoading} />
-          <MD3Input type="email" label="Email Address" name="email" required value={formData.email} onChange={handleChange} disabled={isLoading} />
-          <div className="grid grid-cols-2 gap-4">
-            <MD3Input type="tel" label="Contact Number" name="contactNumber" required value={formData.contactNumber} onChange={handleChange} disabled={isLoading} />
+          {/* IC Input with automatic name & address resolution */}
+          <div>
             <IdentificationInput 
-              label="Identification Number *" 
+              label="Malaysian IC Number *" 
               name="identificationNumber" 
               value={formData.identificationNumber} 
               onChange={handleChange} 
               disabled={isLoading} 
               placeholder="900101-14-5532"
+            />
+            {identityInfo?.isValid ? (
+              <div className="mt-2 p-2.5 rounded-xl bg-md-primary/10 border border-md-primary/20 text-md-primary text-xs flex items-center justify-between animate-fadeIn">
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 size={15} className="flex-shrink-0 text-md-primary" />
+                  <span>Verified: <strong>{identityInfo.state}</strong> • <strong>{identityInfo.gender}</strong> • Born {identityInfo.dateOfBirth}</span>
+                </div>
+                <span className="text-[10px] font-semibold uppercase tracking-wider bg-md-primary/20 text-md-primary px-1.5 py-0.5 rounded flex items-center gap-1">
+                  <Sparkles size={10} /> Auto-filled
+                </span>
+              </div>
+            ) : (
+              <div className="mt-1 text-[11px] text-md-on-surface-variant/70 pl-1">
+                Enter your 12-digit IC to automatically resolve your verified full name and residential address.
+              </div>
+            )}
+          </div>
+
+          <MD3Input 
+            type="text" 
+            label="Full Name (Locked to IC) *" 
+            name="name" 
+            required 
+            value={formData.name} 
+            readOnly 
+            disabled={isLoading} 
+            placeholder="Auto-populated from IC"
+          />
+
+          <MD3Input 
+            type="text" 
+            label="Residential Address (Locked to IC) *" 
+            name="address" 
+            required 
+            value={formData.address} 
+            readOnly 
+            disabled={isLoading} 
+            placeholder="Auto-populated state address from IC"
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <MD3Input 
+              type="email" 
+              label="Email Address *" 
+              name="email" 
+              required 
+              value={formData.email} 
+              onChange={handleChange} 
+              disabled={isLoading} 
+            />
+            <MD3Input 
+              type="tel" 
+              label="Contact Number *" 
+              name="contactNumber" 
+              required 
+              value={formData.contactNumber} 
+              onChange={handleChange} 
+              disabled={isLoading} 
+              placeholder="0123456789"
             />
           </div>
           
@@ -111,7 +197,7 @@ export const Register: React.FC = () => {
             <MD3Input 
               type="password" 
               name="password"
-              label="Password" 
+              label="Password *" 
               required 
               value={formData.password}
               onChange={handleChange}
@@ -151,7 +237,7 @@ export const Register: React.FC = () => {
             )}
           </div>
 
-          <MD3Button type="submit" className="w-full mt-8" disabled={isLoading}>
+          <MD3Button type="submit" className="w-full mt-6" disabled={isLoading}>
             {isLoading ? 'Registering...' : 'Submit Registration'}
           </MD3Button>
           

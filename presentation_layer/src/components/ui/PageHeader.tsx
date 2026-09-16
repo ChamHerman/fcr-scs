@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Calendar, User } from "lucide-react";
 import { Button } from "./Button";
 import { useAuth } from "../../context/AuthContext";
+import { getRoleShortForm, getRoleTitle } from "../../utils/roleUtils";
 
 interface PageHeaderProps {
   title: string;
@@ -15,7 +16,7 @@ interface PageHeaderProps {
 export const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, backPath, actions }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const initials = user?.name?.split(/\s+/).map((n: string) => n[0]).slice(0, 2).join("") || "";
+  const roleShortForm = getRoleShortForm(user?.role);
 
   return (
     <div className="topbar" style={{ marginBottom: "20px" }}>
@@ -34,8 +35,13 @@ export const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, backPat
           <Calendar size={16} className="inline mr-1" />
           {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
         </span>
-        <div className="avatar" title={user ? `${user.name} (${user.role?.replace(/_/g, " ")})` : "User"}>
-          {initials ? <span className="text-xs font-bold uppercase">{initials}</span> : <User size={16} />}
+        <div 
+          className="avatar cursor-pointer hover:opacity-85 hover:scale-105 transition-all bg-md-primary text-white flex items-center justify-center font-bold text-xs rounded-full shadow-sm select-none" 
+          onClick={() => navigate('/admin/profile')}
+          title={user ? `${user.name} (${getRoleTitle(user.role)}) — Click to view Profile` : "User Profile"}
+          style={{ width: 36, height: 36, background: 'var(--md-primary)', color: 'white' }}
+        >
+          {roleShortForm}
         </div>
       </div>
     </div>

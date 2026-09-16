@@ -1,8 +1,10 @@
 import React from 'react';
 import { MD3Card, MD3Button, MD3Input } from '../MD3Components';
 import { Activity, Server, Clock, DownloadCloud } from 'lucide-react';
+import { Select } from '../../components/ui/Select';
 
 export const SystemReports: React.FC = () => {
+  const [reportType, setReportType] = React.useState('System Performance Report');
 
   const handleGenerateReport = (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,14 +56,18 @@ export const SystemReports: React.FC = () => {
         <h2 className="text-xl font-medium mb-6">Generate New Report</h2>
         <MD3Card elevation={2}>
           <form onSubmit={handleGenerateReport} className="space-y-6">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-md-on-surface">Report Type</label>
-              <select className="w-full h-14 px-4 bg-md-surface-container-low rounded-t-xl border-b-2 border-md-outline outline-none focus:border-md-primary transition-colors">
-                <option>System Performance Report</option>
-                <option>Periodic Audit Summary</option>
-                <option>Regulatory Compliance Log</option>
-                <option>Backup Status Report</option>
-              </select>
+            <div className="space-y-2 relative z-20">
+              <Select 
+                label="Report Type" 
+                value={reportType}
+                onChange={setReportType}
+                options={[
+                  { value: 'System Performance Report', label: 'System Performance Report' },
+                  { value: 'Periodic Audit Summary', label: 'Periodic Audit Summary' },
+                  { value: 'Regulatory Compliance Log', label: 'Regulatory Compliance Log' },
+                  { value: 'Backup Status Report', label: 'Backup Status Report' },
+                ]}
+              />
             </div>
             
             <div className="grid grid-cols-2 gap-6">

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { MD3Card, MD3Button } from '../MD3Components';
 import { ADMIN_PAGES, type AdminPageInfo } from '../../constants/pages';
 import { Select } from '../../components/ui/Select';
+import { PageHeader } from '../../components/ui/PageHeader';
+import '../LandAcquisition/case_management.css';
 import { Check, Save } from 'lucide-react';
 
 const ROLES = [
@@ -11,6 +13,23 @@ const ROLES = [
   'LAND_VALUER',
   'DISPLACED_COMMUNITY_MEMBER'
 ];
+
+const getDefaultPermissions = (role: string): string[] => {
+  switch (role) {
+    case 'SYSTEM_ADMINISTRATOR':
+      return ADMIN_PAGES.map(p => p.path);
+    case 'GOVERNMENT_ADMINISTRATOR':
+      return ADMIN_PAGES.filter(p => !p.path.startsWith('/member') && p.category !== 'User Management').map(p => p.path);
+    case 'GOVERNMENT_OFFICER':
+      return ADMIN_PAGES.filter(p => ['Main', 'Land Acquisition', 'Compensation', 'Reporting'].includes(p.category) && !p.path.startsWith('/member')).map(p => p.path);
+    case 'LAND_VALUER':
+      return ADMIN_PAGES.filter(p => ['Main', 'Land Acquisition', 'AI Valuation'].includes(p.category)).map(p => p.path);
+    case 'DISPLACED_COMMUNITY_MEMBER':
+      return ADMIN_PAGES.filter(p => p.path.startsWith('/member')).map(p => p.path);
+    default:
+      return [];
+  }
+};
 
 export const RoleManagement: React.FC = () => {
   const [selectedRole, setSelectedRole] = useState<string>(ROLES[1]); // Default to first non-sysadmin role
@@ -34,9 +53,17 @@ export const RoleManagement: React.FC = () => {
           permMap[page.path] = false;
         });
 
-        if (json.success && json.data) {
+        if (json.success && json.data && json.data.length > 0) {
           json.data.forEach((p: any) => {
             permMap[p.pagePath] = p.canAccess;
+          });
+        } else {
+          // Initialize with default permissions if no saved permissions exist
+          const defaultPaths = getDefaultPermissions(role);
+          defaultPaths.forEach(path => {
+            if (permMap[path] !== undefined) {
+              permMap[path] = true;
+            }
           });
         }
         setPermissions(permMap);
@@ -116,11 +143,11 @@ export const RoleManagement: React.FC = () => {
   const isSysAdmin = selectedRole === 'SYSTEM_ADMINISTRATOR';
 
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-medium text-md-on-surface mb-2">Role Management</h1>
-        <p className="text-md-on-surface-variant">Configure access control for different system roles.</p>
-      </div>
+    <div className="main blur-shape-bg">
+      <PageHeader
+        title="Role Management"
+        subtitle="Configure access control for different system roles."
+      />
 
       <MD3Card elevation={1}>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">

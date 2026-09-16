@@ -58,7 +58,7 @@ enum UserRole {
 }
 
 model RolePermission {
-  id        String   @id @default(uuid())
+  id        String   @id @db.VarChar(50)
   role      UserRole
   pagePath  String   @map("page_path")
   canAccess Boolean  @default(true) @map("can_access")
@@ -200,7 +200,7 @@ model PaymentCase {
 model PaymentAuthorisation {
   id            String      @id @default(uuid())
   paymentCaseId String      @map("payment_case_id")
-  adminId       String      @db.Uuid @map("admin_id")
+  adminId       String      @map("admin_id") @db.VarChar(50)
   action        String
   reason        String?
   // Cycle this signature belongs to (FR-020): SoD checks scope to the active cycle.
@@ -266,7 +266,7 @@ model ReceiverBankDetails {
 /// admin portal; GA sees bank details only after a per-case submission.
 model MemberPayoutDetail {
   id                String   @id @default(uuid())
-  userId            String   @unique @map("user_id") @db.Uuid
+  userId            String   @unique @map("user_id") @db.VarChar(50)
   bankName          String
   accountNumber     String
   accountHolderName String
@@ -296,7 +296,7 @@ model Project {
   createdAt     DateTime          @default(now()) @map("created_at")
   updatedAt     DateTime          @updatedAt @map("updated_at")
   deletedAt     DateTime?         @map("deleted_at")
-  createdById   String            @db.Uuid @map("created_by_id")
+  createdById   String            @map("created_by_id") @db.VarChar(50)
   createdBy     User              @relation("ProjectCreatedBy", fields: [createdById], references: [userId])
 
   @@map("project")
@@ -322,7 +322,7 @@ model AcquisitionCase {
   createdAt           DateTime             @default(now()) @map("created_at")
   updatedAt           DateTime             @updatedAt @map("updated_at")
   deletedAt           DateTime?            @map("deleted_at")
-  createdById         String               @db.Uuid @map("created_by_id")
+  createdById         String               @map("created_by_id") @db.VarChar(50)
   createdBy           User                 @relation("CreatedCases", fields: [createdById], references: [userId])
 
   @@index([projectId])
@@ -360,7 +360,7 @@ model LandParcel {
   createdAt       DateTime        @default(now()) @map("created_at")
   updatedAt       DateTime        @updatedAt @map("updated_at")
   deletedAt       DateTime?       @map("deleted_at")
-  createdById     String          @db.Uuid @map("created_by_id")
+  createdById     String          @map("created_by_id") @db.VarChar(50)
   createdBy       User            @relation("LandParcelCreatedBy", fields: [createdById], references: [userId])
 
   @@index([caseId])
@@ -390,7 +390,7 @@ model LandOwner {
   createdAt      DateTime              @default(now()) @map("created_at")
   updatedAt      DateTime              @updatedAt @map("updated_at")
   deletedAt      DateTime?             @map("deleted_at")
-  createdById    String                @db.Uuid @map("created_by_id")
+  createdById    String                @map("created_by_id") @db.VarChar(50)
   createdBy      User                  @relation("LandOwnerCreatedBy", fields: [createdById], references: [userId])
 
   @@map("land_owner")
@@ -411,7 +411,7 @@ model LandOwnership {
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
   deletedAt      DateTime?     @map("deleted_at")
-  createdById    String        @db.Uuid @map("created_by_id")
+  createdById    String        @map("created_by_id") @db.VarChar(50)
   createdBy      User          @relation("LandOwnershipCreatedBy", fields: [createdById], references: [userId])
 
   @@index([landId])
@@ -432,7 +432,7 @@ model CaseDocument {
   createdAt       DateTime        @default(now()) @map("created_at")
   updatedAt       DateTime        @updatedAt @map("updated_at")
   deletedAt       DateTime?       @map("deleted_at")
-  createdById     String          @db.Uuid @map("created_by_id")
+  createdById     String          @map("created_by_id") @db.VarChar(50)
   createdBy       User            @relation(fields: [createdById], references: [userId])
 
   @@index([caseId])
@@ -442,7 +442,7 @@ model CaseDocument {
 model ValuationReport {
   reportId                   String               @id @default(uuid()) @db.Uuid @map("report_id")
   caseId                     String               @db.VarChar(255) @map("case_id")
-  valuerId                   String               @db.Uuid @map("valuer_id")
+  valuerId                   String               @map("valuer_id") @db.VarChar(50)
   valuationDate              DateTime?            @map("valuation_date")
   valuationMethod            String?              @db.VarChar(100) @map("valuation_method")
   locationType               String?              @db.VarChar(100) @map("location_type")
@@ -464,7 +464,7 @@ model ValuationReport {
   createdAt                  DateTime             @default(now()) @map("created_at")
   updatedAt                  DateTime             @updatedAt @map("updated_at")
   deletedAt                  DateTime?            @map("deleted_at")
-  createdById                String               @db.Uuid @map("created_by_id")
+  createdById                String               @map("created_by_id") @db.VarChar(50)
   createdBy                  User                 @relation("CreatedValuationReport", fields: [createdById], references: [userId])
 
   @@index([caseId])
@@ -476,7 +476,7 @@ model ValuationReport {
 model CaseAssignment {
   assignmentId      String           @id @default(uuid()) @db.Uuid @map("assignment_id")
   caseId            String           @db.VarChar(255) @map("case_id")
-  assignedToId      String           @db.Uuid @map("assigned_to_id")
+  assignedToId      String           @map("assigned_to_id") @db.VarChar(50)
   assignmentDate    DateTime         @map("assignment_date")
   dueDate           DateTime         @map("due_date")
   remarks           String?
@@ -487,7 +487,7 @@ model CaseAssignment {
   createdAt         DateTime         @default(now()) @map("created_at")
   updatedAt         DateTime         @updatedAt @map("updated_at")
   deletedAt         DateTime?        @map("deleted_at")
-  createdById       String           @db.Uuid @map("created_by_id")
+  createdById       String           @map("created_by_id") @db.VarChar(50)
   createdBy         User             @relation("AssignedByUser", fields: [createdById], references: [userId])
 
   @@map("case_assignment")
@@ -497,8 +497,8 @@ model CompensationReport {
   compensationReportId    String          @id @default(uuid()) @db.Uuid @map("compensation_report_id")
   caseId                  String          @db.VarChar(255) @map("case_id")
   valuationReportId       String          @db.Uuid @map("valuation_report_id")
-  reviewedById            String?         @db.Uuid @map("reviewed_by_id")
-  approvedById            String?         @db.Uuid @map("approved_by_id")
+  reviewedById            String?         @map("reviewed_by_id") @db.VarChar(50)
+  approvedById            String?         @map("approved_by_id") @db.VarChar(50)
   approvedAt              DateTime?       @map("approved_at")
   landValue               Decimal?        @db.Decimal(20, 2) @map("land_value")
   buildingValue           Decimal?        @db.Decimal(20, 2) @map("building_value")
@@ -518,7 +518,7 @@ model CompensationReport {
   createdAt               DateTime        @default(now()) @map("created_at")
   updatedAt               DateTime        @updatedAt @map("updated_at")
   deletedAt               DateTime?       @map("deleted_at")
-  createdById             String          @db.Uuid @map("created_by_id")
+  createdById             String          @map("created_by_id") @db.VarChar(50)
   createdBy               User            @relation("PreparedByUser", fields: [createdById], references: [userId])
 
   @@index([caseId])
@@ -551,7 +551,7 @@ model OfferLetter {
   createdAt            DateTime           @default(now()) @map("created_at")
   updatedAt            DateTime           @updatedAt @map("updated_at")
   deletedAt            DateTime?          @map("deleted_at")
-  createdById          String             @db.Uuid @map("created_by_id")
+  createdById          String             @map("created_by_id") @db.VarChar(50)
   createdBy            User               @relation("OfferLetterCreatedBy", fields: [createdById], references: [userId])
 
   @@index([caseId])
@@ -585,7 +585,7 @@ model Objection {
   objectionReason     String              @map("objection_reason")
   requestedAmount     Decimal             @db.Decimal(20, 2) @map("requested_amount")
   status              ObjectionStatus     @map("status")
-  reviewedById        String?             @db.Uuid @map("reviewed_by_id")
+  reviewedById        String?             @map("reviewed_by_id") @db.VarChar(50)
   reviewDate          DateTime?           @map("review_date")
   reviewRemarks       String?             @map("review_remarks")
   decision            Decision?           @map("decision")
@@ -598,7 +598,7 @@ model Objection {
   createdAt           DateTime            @default(now()) @map("created_at")
   updatedAt           DateTime            @updatedAt @map("updated_at")
   deletedAt           DateTime?           @map("deleted_at")
-  createdById         String              @db.Uuid @map("created_by_id")
+  createdById         String              @map("created_by_id") @db.VarChar(50)
   createdBy           User                @relation("SubmittedByUser", fields: [createdById], references: [userId])
 
   @@index([caseId])
@@ -617,24 +617,28 @@ model ObjectionDocument {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
   deletedAt   DateTime? @map("deleted_at")
-  createdById String    @db.Uuid @map("created_by_id")
+  createdById String    @map("created_by_id") @db.VarChar(50)
   createdBy   User      @relation(fields: [createdById], references: [userId])
 
   @@map("objection_document")
 }
 
 model User {
-  userId               String    @id @default(uuid()) @db.Uuid @map("user_id")
+  userId               String    @id @map("user_id") @db.VarChar(50)
   name                 String    @db.VarChar(255)
   email                String    @unique @db.VarChar(255)
   contactNumber        String    @db.VarChar(100) @map("contact_number")
   identificationNumber String    @db.VarChar(100) @map("identification_number")
+  address              String?   @db.Text
   passwordHash         String    @map("password_hash")
   role                 UserRole
   isActive             Boolean   @default(true) @map("is_active")
+  mustChangePassword   Boolean   @default(false) @map("must_change_password")
+  pendingEmail         String?   @map("pending_email") @db.VarChar(255)
+  emailChangeToken     String?   @map("email_change_token") @db.VarChar(255)
+  emailChangeExpiresAt DateTime? @map("email_change_expires_at")
   profilePictureUrl    String?   @map("profile_picture_url")
   mfaEnabled           Boolean   @default(false) @map("mfa_enabled")
-  mfaSecret            String?   @map("mfa_secret")
   lastLoginAt          DateTime? @map("last_login_at")
 
   createdProjects         Project[]             @relation("ProjectCreatedBy")
@@ -661,6 +665,8 @@ model User {
   auditLogs               AuditLog[]
   alerts                  SystemAlert[]
   createdEmailTemplates   EmailTemplate[]
+  createdAlertRules       AlertRule[]           @relation("CreatedAlertRules")
+  targetAlertRules        AlertRule[]           @relation("TargetAlertRules")
   payoutDetail            MemberPayoutDetail?
   paymentAuthorisations   PaymentAuthorisation[] @relation("AdminPaymentAuthorisations")
 
@@ -674,8 +680,8 @@ model User {
 }
 
 model UserSession {
-  sessionId    String   @id @default(uuid()) @db.Uuid @map("session_id")
-  userId       String   @db.Uuid @map("user_id")
+  sessionId    String   @id @map("session_id") @db.VarChar(50)
+  userId       String   @map("user_id") @db.VarChar(50)
   sessionToken String   @unique @db.VarChar(255) @map("session_token")
   ipAddress    String   @db.VarChar(45) @map("ip_address")
   deviceInfo   String?  @map("device_info")
@@ -690,8 +696,8 @@ model UserSession {
 }
 
 model PasswordReset {
-  resetId    String   @id @default(uuid()) @db.Uuid @map("reset_id")
-  userId     String   @db.Uuid @map("user_id")
+  resetId    String   @id @map("reset_id") @db.VarChar(50)
+  userId     String   @map("user_id") @db.VarChar(50)
   resetToken String   @unique @db.VarChar(255) @map("reset_token")
   expiresAt  DateTime @map("expires_at")
   isUsed     Boolean  @default(false) @map("is_used")
@@ -704,8 +710,8 @@ model PasswordReset {
 }
 
 model AccountActivation {
-  activationId String   @id @default(uuid()) @db.Uuid @map("activation_id")
-  userId       String   @db.Uuid @map("user_id")
+  activationId String   @id @map("activation_id") @db.VarChar(50)
+  userId       String   @map("user_id") @db.VarChar(50)
   token        String   @unique @db.VarChar(255)
   expiresAt    DateTime @map("expires_at")
   isUsed       Boolean  @default(false) @map("is_used")
@@ -718,11 +724,12 @@ model AccountActivation {
 }
 
 model AuditLog {
-  logId           String   @id @default(uuid()) @db.Uuid @map("log_id")
-  userId          String?  @db.Uuid @map("user_id")
+  logId           String   @id @map("log_id") @db.VarChar(50)
+  userId          String?  @map("user_id") @db.VarChar(50)
   userRole        String?  @db.VarChar(100) @map("user_role")
   activityType    String   @db.VarChar(100) @map("activity_type")
   moduleName      String   @db.VarChar(100) @map("module_name")
+  severity        String   @default("INFO") @db.VarChar(50) @map("severity")
   caseReference   String?  @db.VarChar(255) @map("case_reference")
   ipAddress       String   @db.VarChar(45) @map("ip_address")
   deviceInfo      String?  @map("device_info")
@@ -736,14 +743,15 @@ model AuditLog {
   @@index([userId])
   @@index([activityType])
   @@index([moduleName])
+  @@index([severity])
   @@index([caseReference])
   @@index([createdAt])
   @@map("audit_log")
 }
 
 model SystemAlert {
-  alertId        String       @id @default(uuid()) @db.Uuid @map("alert_id")
-  recipientId    String       @db.Uuid @map("recipient_id")
+  alertId        String       @id @map("alert_id") @db.VarChar(50)
+  recipientId    String       @map("recipient_id") @db.VarChar(50)
   alertType      String       @db.VarChar(100) @map("alert_type")
   channel        AlertChannel @map("channel")
   urgencyLevel   AlertUrgency @default(MEDIUM) @map("urgency_level")
@@ -760,8 +768,34 @@ model SystemAlert {
   @@map("system_alert")
 }
 
+model AlertRule {
+  ruleId            String       @id @map("rule_id") @db.VarChar(50)
+  ruleName          String       @db.VarChar(150) @map("rule_name")
+  description       String?
+  activityType      String       @default("*") @db.VarChar(100) @map("activity_type")
+  moduleName        String       @default("*") @db.VarChar(100) @map("module_name")
+  minSeverity       String       @default("INFO") @db.VarChar(50) @map("min_severity")
+  triggerInApp      Boolean      @default(true) @map("trigger_in_app")
+  triggerEmail      Boolean      @default(false) @map("trigger_email")
+  urgencyLevel      AlertUrgency @default(MEDIUM) @map("urgency_level")
+  emailTemplateName String?      @db.VarChar(100) @map("email_template_name")
+  targetRole        String?      @db.VarChar(100) @map("target_role")
+  targetUserId      String?      @map("target_user_id") @db.VarChar(50)
+  isEnabled         Boolean      @default(true) @map("is_enabled")
+  createdById       String?      @map("created_by_id") @db.VarChar(50)
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  createdBy         User?        @relation("CreatedAlertRules", fields: [createdById], references: [userId], onDelete: SetNull)
+  targetUser        User?        @relation("TargetAlertRules", fields: [targetUserId], references: [userId], onDelete: SetNull)
+
+  @@index([isEnabled])
+  @@index([activityType])
+  @@map("alert_rule")
+}
+
 model ProcessDeadline {
-  deadlineId    String         @id @default(uuid()) @db.Uuid @map("deadline_id")
+  deadlineId    String         @id @map("deadline_id") @db.VarChar(50)
   caseReference String         @db.VarChar(255) @map("case_reference")
   processType   String         @db.VarChar(100) @map("process_type")
   issuanceDate  DateTime       @map("issuance_date")
@@ -776,11 +810,11 @@ model ProcessDeadline {
 }
 
 model EmailTemplate {
-  templateId   String   @id @default(uuid()) @db.Uuid @map("template_id")
+  templateId   String   @id @map("template_id") @db.VarChar(50)
   templateName String   @unique @db.VarChar(100) @map("template_name")
   subject      String   @db.VarChar(255)
   bodyContent  String   @map("body_content")
-  createdById  String   @db.Uuid @map("created_by_id")
+  createdById  String   @map("created_by_id") @db.VarChar(50)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -790,7 +824,7 @@ model EmailTemplate {
 }
 
 model SystemMetric {
-  metricId            String   @id @default(uuid()) @db.Uuid @map("metric_id")
+  metricId            String   @id @map("metric_id") @db.VarChar(50)
   uptimeSeconds       BigInt   @map("uptime_seconds")
   averageResponseTime Decimal  @db.Decimal(10, 2) @map("average_response_time")
   peakUsagePeriod     String?  @db.VarChar(100) @map("peak_usage_period")
@@ -804,7 +838,7 @@ model SystemMetric {
 }
 
 model ComplianceBackupLog {
-  logId     String   @id @default(uuid()) @db.Uuid @map("log_id")
+  logId     String   @id @map("log_id") @db.VarChar(50)
   logType   LogType  @map("log_type")
   status    String   @db.VarChar(50)
   details   String

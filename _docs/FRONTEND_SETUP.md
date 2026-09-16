@@ -32,7 +32,7 @@ SMTP_PASS="your-16-char-app-password"
 A seeder script (`data_layer/database/seed.ts`) was executed to insert an initial System Administrator account into the database. You can use these credentials to log in:
 
 - **Email**: `admin@fcrscs.gov.my`
-- **Password**: `password123`
+- **Password**: `password$123`
 
 ## 4. How the Authentication Works
 1. **Login**: User enters credentials on `/login`. The frontend calls `/api/users/login`.

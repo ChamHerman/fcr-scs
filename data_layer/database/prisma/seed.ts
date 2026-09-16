@@ -16,10 +16,13 @@ import {
   UserRole,
   PaymentStatus,
   BlockchainStatus,
+  AlertChannel,
+  AlertUrgency,
 } from '@prisma/client';
 import { Pool } from 'pg';
 import * as crypto from 'crypto';
 import bcrypt from 'bcrypt';
+import { resolveMalaysianIdentity } from './malaysianIdentity';
 
 // Load environment variables from workspace root or local .env
 const rootEnv = path.resolve(__dirname, '../../../.env');
@@ -133,81 +136,81 @@ async function main() {
   console.log('\n--- 1. Seeding Users ---');
 
   const usersToSeed: {
-    name: string;
     email: string;
     role: UserRole;
-  }[] = [];
+    ic: string;
+    contactNumber: string;
+  }[] = [
+    // 1 System Admin (KL)
+    { email: 'admin@fcrscs.gov.my', role: UserRole.SYSTEM_ADMINISTRATOR, ic: '800101-14-5123', contactNumber: '0123456789' },
 
-  // 1 System Admin
-  usersToSeed.push({
-    name: 'Sys Admin 1',
-    email: 'admin@fcrscs.gov.my',
-    role: UserRole.SYSTEM_ADMINISTRATOR,
-  });
+    // 5 Government Admins
+    { email: 'ga1@fcrscs.gov.my', role: UserRole.GOVERNMENT_ADMINISTRATOR, ic: '850512-10-5431', contactNumber: '0129876543' },
+    { email: 'ga2@fcrscs.gov.my', role: UserRole.GOVERNMENT_ADMINISTRATOR, ic: '870318-01-6228', contactNumber: '0134567890' },
+    { email: 'ga3@fcrscs.gov.my', role: UserRole.GOVERNMENT_ADMINISTRATOR, ic: '820924-08-5545', contactNumber: '0145678901' },
+    { email: 'ga4@fcrscs.gov.my', role: UserRole.GOVERNMENT_ADMINISTRATOR, ic: '891104-07-5992', contactNumber: '0167890123' },
+    { email: 'ga5@fcrscs.gov.my', role: UserRole.GOVERNMENT_ADMINISTRATOR, ic: '910214-04-5133', contactNumber: '0178901234' },
 
-  // 5 Government Admins (ga)
-  for (let i = 1; i <= 5; i++) {
-    usersToSeed.push({
-      name: `Gov Admin ${i}`,
-      email: `ga${i}@fcrscs.gov.my`,
-      role: UserRole.GOVERNMENT_ADMINISTRATOR,
-    });
-  }
+    // 5 Government Officers
+    { email: 'go1@fcrscs.gov.my', role: UserRole.GOVERNMENT_OFFICER, ic: '860719-10-5221', contactNumber: '0189012345' },
+    { email: 'go2@fcrscs.gov.my', role: UserRole.GOVERNMENT_OFFICER, ic: '880422-14-5334', contactNumber: '0190123456' },
+    { email: 'go3@fcrscs.gov.my', role: UserRole.GOVERNMENT_OFFICER, ic: '901205-01-5115', contactNumber: '0111234567' },
+    { email: 'go4@fcrscs.gov.my', role: UserRole.GOVERNMENT_OFFICER, ic: '930611-08-5442', contactNumber: '0112345678' },
+    { email: 'go5@fcrscs.gov.my', role: UserRole.GOVERNMENT_OFFICER, ic: '850830-07-5771', contactNumber: '0113456789' },
 
-  // 5 Government Officers (go)
-  for (let i = 1; i <= 5; i++) {
-    usersToSeed.push({
-      name: `Gov Officer ${i}`,
-      email: `go${i}@fcrscs.gov.my`,
-      role: UserRole.GOVERNMENT_OFFICER,
-    });
-  }
+    // 5 Land Valuers
+    { email: 'lv1@fcrscs.gov.my', role: UserRole.LAND_VALUER, ic: '810314-10-5981', contactNumber: '0124567891' },
+    { email: 'lv2@fcrscs.gov.my', role: UserRole.LAND_VALUER, ic: '840925-14-5120', contactNumber: '0135678902' },
+    { email: 'lv3@fcrscs.gov.my', role: UserRole.LAND_VALUER, ic: '871201-01-5663', contactNumber: '0146789013' },
+    { email: 'lv4@fcrscs.gov.my', role: UserRole.LAND_VALUER, ic: '890518-08-5332', contactNumber: '0168901235' },
+    { email: 'lv5@fcrscs.gov.my', role: UserRole.LAND_VALUER, ic: '920407-07-5885', contactNumber: '0179012346' },
 
-  // 5 Land Valuers (lv)
-  for (let i = 1; i <= 5; i++) {
-    usersToSeed.push({
-      name: `Land Valuer ${i}`,
-      email: `lv${i}@fcrscs.gov.my`,
-      role: UserRole.LAND_VALUER,
-    });
-  }
-
-  // 5 Members (m)
-  for (let i = 1; i <= 5; i++) {
-    usersToSeed.push({
-      name: `Member ${i}`,
-      email: `m${i}@fcrscs.gov.my`,
-      role: UserRole.DISPLACED_COMMUNITY_MEMBER,
-    });
-  }
+    // 5 Displaced Community Members
+    { email: 'm1@fcrscs.gov.my', role: UserRole.DISPLACED_COMMUNITY_MEMBER, ic: '780215-10-5119', contactNumber: '0181234567' },
+    { email: 'm2@fcrscs.gov.my', role: UserRole.DISPLACED_COMMUNITY_MEMBER, ic: '820621-10-5442', contactNumber: '0192345678' },
+    { email: 'm3@fcrscs.gov.my', role: UserRole.DISPLACED_COMMUNITY_MEMBER, ic: '851014-10-5883', contactNumber: '0114567890' },
+    { email: 'm4@fcrscs.gov.my', role: UserRole.DISPLACED_COMMUNITY_MEMBER, ic: '900329-10-5334', contactNumber: '0115678901' },
+    { email: 'm5@fcrscs.gov.my', role: UserRole.DISPLACED_COMMUNITY_MEMBER, ic: '940718-10-5991', contactNumber: '0116789012' },
+  ];
 
   const seededUsers: Record<string, any> = {};
 
+  let userSeq = 1;
   for (const u of usersToSeed) {
-    const contactNumber = generateContactNumber();
-    const identificationNumber = generateIdentificationNumber();
+    const identity = resolveMalaysianIdentity(u.ic);
+    const userId = `USR-2026-09-${String(userSeq++).padStart(4, '0')}`;
+
+    // Update existing user_id if it differs (cascades to all referencing foreign keys)
+    await pool.query('UPDATE "user" SET user_id = $1 WHERE email = $2 AND user_id != $1', [userId, u.email]);
 
     const user = await prisma.user.upsert({
       where: { email: u.email },
       update: {
-        name: u.name,
+        name: identity.name,
+        address: identity.address,
+        identificationNumber: identity.rawDigits,
+        contactNumber: u.contactNumber,
         role: u.role,
         passwordHash: hashedPassword,
         isActive: true,
+        mfaEnabled: u.role === UserRole.SYSTEM_ADMINISTRATOR,
       },
       create: {
-        name: u.name,
+        userId,
+        name: identity.name,
         email: u.email,
-        contactNumber,
-        identificationNumber,
+        contactNumber: u.contactNumber,
+        identificationNumber: identity.rawDigits,
+        address: identity.address,
         role: u.role,
         passwordHash: hashedPassword,
         isActive: true,
+        mfaEnabled: u.role === UserRole.SYSTEM_ADMINISTRATOR,
       },
     });
 
     seededUsers[u.email] = user;
-    console.log(`✅ Upserted User: ${user.email} | ${user.role} | ${user.name}`);
+    console.log(`✅ Upserted User: ${user.email} | ${user.role} | ${user.name} | IC: ${identity.formattedIc} | ${user.userId}`);
   }
 
   const defaultAdmin = seededUsers['admin@fcrscs.gov.my'];
@@ -297,14 +300,16 @@ async function main() {
     '/admin/profile',
   ]);
 
+  let rpmSeq = 1;
   // Seed Government Administrator permissions:
   // Allowed to access all admin portal pages EXCEPT for role management page only.
   for (const pagePath of ALL_ADMIN_PAGES) {
     const canAccess = pagePath !== '/admin/role-management';
+    const id = `RPM-2026-09-${String(rpmSeq++).padStart(4, '0')}`;
     await prisma.rolePermission.upsert({
       where: { role_pagePath: { role: UserRole.GOVERNMENT_ADMINISTRATOR, pagePath } },
       update: { canAccess },
-      create: { role: UserRole.GOVERNMENT_ADMINISTRATOR, pagePath, canAccess },
+      create: { id, role: UserRole.GOVERNMENT_ADMINISTRATOR, pagePath, canAccess },
     });
   }
 
@@ -312,20 +317,23 @@ async function main() {
   // Finance & Ledger permissions removed; operational pages granted; role management & user admin denied.
   for (const pagePath of ALL_ADMIN_PAGES) {
     const canAccess = OFFICER_ALLOWED_PAGES.has(pagePath);
+    const id = `RPM-2026-09-${String(rpmSeq++).padStart(4, '0')}`;
     await prisma.rolePermission.upsert({
       where: { role_pagePath: { role: UserRole.GOVERNMENT_OFFICER, pagePath } },
       update: { canAccess },
-      create: { role: UserRole.GOVERNMENT_OFFICER, pagePath, canAccess },
+      create: { id, role: UserRole.GOVERNMENT_OFFICER, pagePath, canAccess },
     });
   }
 
   // Seed Land Valuer permissions:
+  // Operational pages only (Forms, Case, Valuation, AI Valuation); all admin functions denied.
   for (const pagePath of ALL_ADMIN_PAGES) {
     const canAccess = VALUER_ALLOWED_PAGES.has(pagePath);
+    const id = `RPM-2026-09-${String(rpmSeq++).padStart(4, '0')}`;
     await prisma.rolePermission.upsert({
       where: { role_pagePath: { role: UserRole.LAND_VALUER, pagePath } },
       update: { canAccess },
-      create: { role: UserRole.LAND_VALUER, pagePath, canAccess },
+      create: { id, role: UserRole.LAND_VALUER, pagePath, canAccess },
     });
   }
 
@@ -336,10 +344,25 @@ async function main() {
   // ===========================================================================
   console.log('\n--- 2. Seeding Email Templates ---');
 
+  const templateIdMap: Record<string, string> = {
+    'PASSWORD_RESET': 'EMT-2026-09-0001',
+    'ACCOUNT_ACTIVATION': 'EMT-2026-09-0002',
+    'OFFER_LETTER_NOTIFICATION': 'EMT-2026-09-0003',
+    'PAYMENT_DISBURSED': 'EMT-2026-09-0004',
+    'OBJECTION_UPDATE': 'EMT-2026-09-0005',
+    'SYSTEM_ADMIN_OTP': 'EMT-2026-09-0006',
+    'TEMPORARY_CREDENTIALS': 'EMT-2026-09-0007',
+    'SYSTEM_ALERT': 'EMT-2026-09-0008',
+  };
+  for (const [name, tid] of Object.entries(templateIdMap)) {
+    await prisma.$executeRawUnsafe(`UPDATE email_template SET template_id = $1 WHERE template_name = $2`, tid, name);
+  }
+
   const passwordResetTemplate = await prisma.emailTemplate.upsert({
     where: { templateName: 'PASSWORD_RESET' },
-    update: {},
+    update: { templateId: 'EMT-2026-09-0001' },
     create: {
+      templateId: 'EMT-2026-09-0001',
       templateName: 'PASSWORD_RESET',
       subject: 'FCR-SCS: Password Reset Request',
       bodyContent: `
@@ -362,6 +385,7 @@ async function main() {
     where: { templateName: 'ACCOUNT_ACTIVATION' },
     update: {},
     create: {
+      templateId: 'EMT-2026-09-0002',
       templateName: 'ACCOUNT_ACTIVATION',
       subject: 'FCR-SCS: Activate Your Account',
       bodyContent: `
@@ -379,6 +403,158 @@ async function main() {
     },
   });
   console.log(`✅ Upserted Email Template: ${activationTemplate.templateName}`);
+
+  const offerLetterTemplate = await prisma.emailTemplate.upsert({
+    where: { templateName: 'OFFER_LETTER_NOTIFICATION' },
+    update: {},
+    create: {
+      templateId: 'EMT-2026-09-0003',
+      templateName: 'OFFER_LETTER_NOTIFICATION',
+      subject: 'FCR-SCS: Compensation Offer Notice - Case {{caseId}}',
+      bodyContent: `
+        <div style="font-family: sans-serif; padding: 20px;">
+          <h2>Official Compensation Offer Notice</h2>
+          <p>Dear {{name}},</p>
+          <p>An official compensation offer has been published for Land Acquisition Case <strong>{{caseId}}</strong>.</p>
+          <p>Total awarded amount: <strong>{{amount}}</strong></p>
+          <p>Please log in to your Member Portal to review the formal offer letter and select your response (Accept / Dispute) within the statutory window:</p>
+          <a href="{{portalLink}}" style="background-color: #2e7d32; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0;">View Offer Letter</a>
+          <br>
+          <p>Regards,<br>Land Acquisition & Compensation Department</p>
+        </div>
+      `,
+      createdById: defaultAdmin.userId,
+    },
+  });
+  console.log(`✅ Upserted Email Template: ${offerLetterTemplate.templateName}`);
+
+  const paymentDisbursedTemplate = await prisma.emailTemplate.upsert({
+    where: { templateName: 'PAYMENT_DISBURSED' },
+    update: {},
+    create: {
+      templateId: 'EMT-2026-09-0004',
+      templateName: 'PAYMENT_DISBURSED',
+      subject: 'FCR-SCS: Payment Disbursed for Case {{caseId}}',
+      bodyContent: `
+        <div style="font-family: sans-serif; padding: 20px;">
+          <h2>Compensation Payment Disbursed</h2>
+          <p>Dear {{name}},</p>
+          <p>Your compensation payment of <strong>{{amount}}</strong> for Case <strong>{{caseId}}</strong> has been approved and processed.</p>
+          <p>Reference Transaction ID: <code>{{transactionId}}</code></p>
+          <p>Payment Method: Direct Bank Transfer (EFT)</p>
+          <p>Please allow 1-3 business days for the funds to reflect in your designated bank account.</p>
+          <br>
+          <p>Regards,<br>Finance & Disbursement Division</p>
+        </div>
+      `,
+      createdById: defaultAdmin.userId,
+    },
+  });
+  console.log(`✅ Upserted Email Template: ${paymentDisbursedTemplate.templateName}`);
+
+  const objectionUpdateTemplate = await prisma.emailTemplate.upsert({
+    where: { templateName: 'OBJECTION_UPDATE' },
+    update: {},
+    create: {
+      templateId: 'EMT-2026-09-0005',
+      templateName: 'OBJECTION_UPDATE',
+      subject: 'FCR-SCS: Status Update on Objection - Case {{caseId}}',
+      bodyContent: `
+        <div style="font-family: sans-serif; padding: 20px;">
+          <h2>Update on Your Compensation Objection</h2>
+          <p>Dear {{name}},</p>
+          <p>Your objection submitted for Case <strong>{{caseId}}</strong> has been reviewed.</p>
+          <p>Current Status: <strong>{{status}}</strong></p>
+          <p>Review Remarks: {{remarks}}</p>
+          <p>Please visit the portal for full details or to communicate with your assigned officer:</p>
+          <a href="{{portalLink}}" style="background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0;">View Objection Details</a>
+          <br>
+          <p>Regards,<br>Objections & Appeals Board</p>
+        </div>
+      `,
+      createdById: defaultAdmin.userId,
+    },
+  });
+  console.log(`✅ Upserted Email Template: ${objectionUpdateTemplate.templateName}`);
+
+  const adminOtpTemplate = await prisma.emailTemplate.upsert({
+    where: { templateName: 'SYSTEM_ADMIN_OTP' },
+    update: {},
+    create: {
+      templateId: 'EMT-2026-09-0006',
+      templateName: 'SYSTEM_ADMIN_OTP',
+      subject: 'FCR-SCS: System Admin Login OTP Verification Code',
+      bodyContent: `
+        <div style="font-family: sans-serif; padding: 24px; max-width: 600px; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <h2 style="color: #6750A4; margin-top: 0;">System Administrator Authentication</h2>
+          <p>Dear {{name}},</p>
+          <p>A sign-in request to the Federal Compensation System Administrator Console was initiated for your account.</p>
+          <div style="background-color: #F3EDF7; padding: 16px; border-radius: 8px; text-align: center; margin: 24px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #1D192B;">{{otp}}</span>
+          </div>
+          <p style="color: #49454F; font-size: 14px;">This one-time passcode is valid for <strong>{{expiresInMinutes}} minutes</strong>. Do NOT disclose this code to anyone.</p>
+          <p style="color: #b3261e; font-size: 13px;">If you did not attempt this sign-in, please immediately notify the Chief Security Officer and rotate your administrative password.</p>
+          <br>
+          <p style="margin-bottom: 0;">Regards,<br><strong>FCR-SCS Identity & Access Management</strong></p>
+        </div>
+      `,
+      createdById: defaultAdmin.userId,
+    },
+  });
+  console.log(`✅ Upserted Email Template: ${adminOtpTemplate.templateName}`);
+
+  const temporaryCredentialsTemplate = await prisma.emailTemplate.upsert({
+    where: { templateName: 'TEMPORARY_CREDENTIALS' },
+    update: {},
+    create: {
+      templateId: 'EMT-2026-09-0007',
+      templateName: 'TEMPORARY_CREDENTIALS',
+      subject: 'FCR-SCS: Your Account Has Been Created (Temporary Credentials)',
+      bodyContent: `
+        <div style="font-family: sans-serif; padding: 24px; max-width: 600px; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <h2 style="color: #6750A4; margin-top: 0;">Welcome to FCR-SCS</h2>
+          <p>Dear {{name}},</p>
+          <p>An administrative account has been provisioned for you on the <strong>Federal Compensation & Resettlement - Statutory Case Management System (FCR-SCS)</strong> with the role of <strong>{{role}}</strong>.</p>
+          <div style="background-color: #F3EDF7; padding: 18px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Email / Username:</strong> {{email}}</p>
+            <p style="margin: 0; font-size: 14px;"><strong>Temporary Password:</strong> <code style="background: #E8DEF8; padding: 2px 6px; border-radius: 4px; font-size: 15px; font-weight: bold;">{{temporaryPassword}}</code></p>
+          </div>
+          <p style="color: #49454F; font-size: 14px;">For security compliance, you are required to change this temporary password immediately upon your first sign-in.</p>
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="{{loginUrl}}" style="background-color: #6750A4; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Log In to Your Account</a>
+          </div>
+          <br>
+          <p style="margin-bottom: 0;">Regards,<br><strong>FCR-SCS Identity & Administration</strong></p>
+        </div>
+      `,
+      createdById: defaultAdmin.userId,
+    },
+  });
+  console.log(`✅ Upserted Email Template: ${temporaryCredentialsTemplate.templateName}`);
+
+  const systemAlertTemplate = await prisma.emailTemplate.upsert({
+    where: { templateName: 'SYSTEM_ALERT' },
+    update: {},
+    create: {
+      templateId: 'EMT-2026-09-0008',
+      templateName: 'SYSTEM_ALERT',
+      subject: 'FCR-SCS: System Notification - {{alertType}}',
+      bodyContent: `
+        <div style="font-family: sans-serif; padding: 20px;">
+          <h2>System Notification</h2>
+          <p>Hello {{name}},</p>
+          <p>This is an automated system notice: <strong>{{message}}</strong></p>
+          <p>Timestamp: {{timestamp}}</p>
+          <p>If you require assistance, please reach out to the System Administrator.</p>
+          <br>
+          <p>FCR-SCS Administrative Services</p>
+        </div>
+      `,
+      createdById: defaultAdmin.userId,
+    },
+  });
+  console.log(`✅ Upserted Email Template: ${systemAlertTemplate.templateName}`);
+
 
   // ===========================================================================
   // 3. Seed Land Acquisition Cases & Compensation Pipeline (5 Cases)
@@ -1714,6 +1890,435 @@ async function main() {
     '  - LAC-2026-08-0016 to 0020: 5 Cases at OFFER_ISSUED (all 4 supporting documents + Form H generated, awaiting response)\n' +
     '  - Payment & Blockchain: Pre-seeded PMT-2026-09-0001..0011 and BCN-2026-09-0001..0011 for 11 accepted cases.'
   );
+
+  // ===========================================================================
+  // 5. Seed Compliance Audit Logs
+  // ===========================================================================
+  console.log('\n--- 5. Seeding Compliance Audit Logs ---');
+  await prisma.auditLog.deleteMany({});
+
+  const now = new Date();
+  const hoursAgo = (h: number) => new Date(now.getTime() - h * 3600 * 1000);
+  const daysAgo = (d: number) => new Date(now.getTime() - d * 24 * 3600 * 1000);
+
+  const minutesAgo = (m: number) => new Date(now.getTime() - m * 60 * 1000);
+
+  const initialAuditLogs = [
+    // 1. Sys Admin Login & 2FA OTP
+    {
+      userId: defaultAdmin.userId,
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'USER_LOGIN_SUCCESS',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({ actorName: defaultAdmin.name, actorEmail: defaultAdmin.email, loginMethod: 'PASSWORD_AUTHENTICATION', sessionRole: 'SYSTEM_ADMINISTRATOR' }),
+      systemResponse: 'SUCCESS (200)',
+      isArchived: false,
+      createdAt: minutesAgo(12),
+    },
+    {
+      userId: defaultAdmin.userId,
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'SYSTEM_ADMIN_OTP_VERIFIED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'SECURITY',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({ actorName: defaultAdmin.name, actorEmail: defaultAdmin.email, authMethod: '2FA_EMAIL_OTP', accessScope: 'FULL_SUPERUSER_ADMIN', status: 'VERIFIED' }),
+      systemResponse: 'SUCCESS (200)',
+      isArchived: false,
+      createdAt: minutesAgo(10),
+    },
+    // 2. Email Templates Provisioning & Updates
+    {
+      userId: defaultAdmin.userId,
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'EMAIL_TEMPLATE_UPDATED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({ actorName: defaultAdmin.name, actorEmail: defaultAdmin.email, templateName: 'SYSTEM_ADMIN_OTP', subject: 'FCR-SCS Security: Your Administrator Verification Code is {{otp}}' }),
+      systemResponse: 'SUCCESS (200)',
+      isArchived: false,
+      createdAt: hoursAgo(1),
+    },
+    {
+      userId: defaultAdmin.userId,
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'EMAIL_TEMPLATE_UPDATED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({ actorName: defaultAdmin.name, actorEmail: defaultAdmin.email, templateName: 'ACCOUNT_ACTIVATION', subject: 'FCR-SCS: Activate Your Account' }),
+      systemResponse: 'SUCCESS (200)',
+      isArchived: false,
+      createdAt: hoursAgo(2),
+    },
+    {
+      userId: defaultAdmin.userId,
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'EMAIL_TEMPLATE_UPDATED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({ actorName: defaultAdmin.name, actorEmail: defaultAdmin.email, templateName: 'PASSWORD_RESET', subject: 'FCR-SCS: Password Reset Request' }),
+      systemResponse: 'SUCCESS (200)',
+      isArchived: false,
+      createdAt: hoursAgo(3),
+    },
+    // 3. Staff Users Provisioning by Admin
+    ...[1, 2, 3, 4, 5].map((i) => ({
+      userId: defaultAdmin.userId,
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'ADMIN_USER_PROVISIONED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({
+        actorName: defaultAdmin.name,
+        actorEmail: defaultAdmin.email,
+        provisionedUserId: seededUsers[`ga${i}@fcrscs.gov.my`]?.userId,
+        provisionedUserEmail: `ga${i}@fcrscs.gov.my`,
+        provisionedUserName: `Gov Admin ${i}`,
+        roleAssigned: 'GOVERNMENT_ADMINISTRATOR',
+        department: 'Federal Land Governance Authority',
+      }),
+      systemResponse: 'CREATED (201)',
+      isArchived: false,
+      createdAt: hoursAgo(4 + i),
+    })),
+    ...[1, 2, 3, 4, 5].map((i) => ({
+      userId: defaultAdmin.userId,
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'ADMIN_USER_PROVISIONED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({
+        actorName: defaultAdmin.name,
+        actorEmail: defaultAdmin.email,
+        provisionedUserId: seededUsers[`go${i}@fcrscs.gov.my`]?.userId,
+        provisionedUserEmail: `go${i}@fcrscs.gov.my`,
+        provisionedUserName: `Gov Officer ${i}`,
+        roleAssigned: 'GOVERNMENT_OFFICER',
+      }),
+      systemResponse: 'CREATED (201)',
+      isArchived: false,
+      createdAt: daysAgo(1 + i * 0.2),
+    })),
+    ...[1, 2, 3, 4, 5].map((i) => ({
+      userId: defaultAdmin.userId,
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'ADMIN_USER_PROVISIONED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({
+        actorName: defaultAdmin.name,
+        actorEmail: defaultAdmin.email,
+        provisionedUserId: seededUsers[`lv${i}@fcrscs.gov.my`]?.userId,
+        provisionedUserEmail: `lv${i}@fcrscs.gov.my`,
+        provisionedUserName: `Land Valuer ${i}`,
+        roleAssigned: 'LAND_VALUER',
+        licenseNo: `VAL-MY-${1000 + i * 24}`,
+      }),
+      systemResponse: 'CREATED (201)',
+      isArchived: false,
+      createdAt: daysAgo(2 + i * 0.2),
+    })),
+    // 4. Community Member Registrations & Activations
+    ...[1, 2, 3, 4, 5].flatMap((i) => [
+      {
+        userId: seededUsers[`m${i}@fcrscs.gov.my`]?.userId,
+        userRole: 'DISPLACED_COMMUNITY_MEMBER',
+        activityType: 'USER_REGISTERED',
+        moduleName: 'USER_MANAGEMENT',
+        severity: 'INFO',
+        ipAddress: '127.0.0.1',
+        deviceInfo: i % 2 === 0 ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X)' : 'Mozilla/5.0 (Linux; Android 14)',
+        activityDetails: JSON.stringify({
+          actorName: `Member ${i}`,
+          actorEmail: `m${i}@fcrscs.gov.my`,
+          registrationChannel: 'PORTAL_PUBLIC_FORM',
+          icMasked: '******-**-****',
+        }),
+        systemResponse: 'CREATED (201)',
+        isArchived: false,
+        createdAt: daysAgo(3 + i * 0.5),
+      },
+      {
+        userId: seededUsers[`m${i}@fcrscs.gov.my`]?.userId,
+        userRole: 'DISPLACED_COMMUNITY_MEMBER',
+        activityType: 'ACCOUNT_ACTIVATED',
+        moduleName: 'USER_MANAGEMENT',
+        severity: 'INFO',
+        ipAddress: '127.0.0.1',
+        deviceInfo: i % 2 === 0 ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X)' : 'Mozilla/5.0 (Linux; Android 14)',
+        activityDetails: JSON.stringify({
+          actorName: `Member ${i}`,
+          actorEmail: `m${i}@fcrscs.gov.my`,
+          tokenType: 'EMAIL_VERIFICATION_TOKEN',
+          verifiedAt: new Date(now.getTime() - (3 + i * 0.5) * 24 * 3600 * 1000 + 15 * 60 * 1000).toISOString(),
+        }),
+        systemResponse: 'SUCCESS (200)',
+        isArchived: false,
+        createdAt: daysAgo(3 + i * 0.5 - 0.01),
+      },
+    ]),
+    // 5. Staff Successful Logins
+    {
+      userId: seededUsers['ga1@fcrscs.gov.my']?.userId,
+      userRole: 'GOVERNMENT_ADMINISTRATOR',
+      activityType: 'USER_LOGIN_SUCCESS',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({ actorName: 'Gov Admin 1', actorEmail: 'ga1@fcrscs.gov.my', userRole: 'GOVERNMENT_ADMINISTRATOR', authType: 'CREDENTIALS' }),
+      systemResponse: 'SUCCESS (200)',
+      isArchived: false,
+      createdAt: hoursAgo(3),
+    },
+    {
+      userId: seededUsers['go1@fcrscs.gov.my']?.userId,
+      userRole: 'GOVERNMENT_OFFICER',
+      activityType: 'USER_LOGIN_SUCCESS',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({ actorName: 'Gov Officer 1', actorEmail: 'go1@fcrscs.gov.my', userRole: 'GOVERNMENT_OFFICER', authType: 'CREDENTIALS' }),
+      systemResponse: 'SUCCESS (200)',
+      isArchived: false,
+      createdAt: hoursAgo(2),
+    },
+    {
+      userId: seededUsers['lv1@fcrscs.gov.my']?.userId,
+      userRole: 'LAND_VALUER',
+      activityType: 'USER_LOGIN_SUCCESS',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'INFO',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+      activityDetails: JSON.stringify({ actorName: 'Land Valuer 1', actorEmail: 'lv1@fcrscs.gov.my', userRole: 'LAND_VALUER', authType: 'CREDENTIALS' }),
+      systemResponse: 'SUCCESS (200)',
+      isArchived: false,
+      createdAt: hoursAgo(1),
+    },
+    // 6. Role Permission Matrix Update
+    {
+      userId: defaultAdmin.userId,
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'ROLE_PERMISSIONS_UPDATED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'CRITICAL',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({ actorName: defaultAdmin.name, actorEmail: defaultAdmin.email, targetRole: 'GOVERNMENT_ADMINISTRATOR', updatedByRole: defaultAdmin.role, permissionCount: 14 }),
+      systemResponse: 'SUCCESS (200)',
+      isArchived: false,
+      createdAt: hoursAgo(5),
+    },
+    // 7. User Status Toggle
+    {
+      userId: defaultAdmin.userId,
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'USER_STATUS_TOGGLED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'WARNING',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({ actorName: defaultAdmin.name, actorEmail: defaultAdmin.email, targetUserId: seededUsers['m5@fcrscs.gov.my']?.userId, targetEmail: 'm5@fcrscs.gov.my', targetName: 'Member 5', newStatus: 'Active', reason: 'Periodic statutory identity document re-verification cleared' }),
+      systemResponse: 'SUCCESS (200)',
+      isArchived: false,
+      createdAt: daysAgo(1),
+    },
+    // 8. Security Throttling Alert
+    {
+      userId: null,
+      userRole: null,
+      activityType: 'SECURITY_ALERT_BRUTE_FORCE_THROTTLED',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'SECURITY',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      activityDetails: JSON.stringify({ attemptedEmail: defaultAdmin.email, reason: '3 consecutive invalid password entries detected', actionTaken: 'TEMPORARY_RATE_LIMIT_APPLIED', gateway: 'Local development gateway' }),
+      systemResponse: 'FAILED (429)',
+      isArchived: false,
+      createdAt: hoursAgo(10),
+    },
+    // 9. Annual Compliance Archive
+    {
+      userId: defaultAdmin.userId,
+      userRole: 'SYSTEM_ADMINISTRATOR',
+      activityType: 'ANNUAL_COMPLIANCE_ARCHIVE',
+      moduleName: 'USER_MANAGEMENT',
+      severity: 'WARNING',
+      ipAddress: '127.0.0.1',
+      deviceInfo: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      activityDetails: JSON.stringify({ actorName: defaultAdmin.name, actorEmail: defaultAdmin.email, archivedBatchCount: 1420, policy: 'STATUTORY_DATA_RETENTION_7_YEARS', retentionNotice: 'Prior annual records archived to cold audit vault' }),
+      systemResponse: 'SUCCESS (200)',
+      isArchived: true,
+      createdAt: daysAgo(210),
+    },
+  ];
+
+  let logSeq = 1;
+  for (const log of initialAuditLogs) {
+    await prisma.auditLog.create({
+      data: {
+        ...log,
+        logId: `AUD-2026-09-${String(logSeq++).padStart(4, '0')}`,
+      },
+    });
+  }
+  console.log(`📋 Seeded ${initialAuditLogs.length} Compliance Audit Logs`);
+
+  // --- Seed Notification Routing Rules (AlertRule) ---
+  const initialAlertRules = [
+    {
+      ruleName: 'Critical Security Anomalies',
+      description: 'Dispatch high-priority in-app alert and email notification on unauthorized brute force attempts or security triggers.',
+      activityType: 'SECURITY_ALERT_BRUTE_FORCE_THROTTLED',
+      moduleName: 'USER_MANAGEMENT',
+      minSeverity: 'SECURITY',
+      triggerInApp: true,
+      triggerEmail: true,
+      urgencyLevel: AlertUrgency.CRITICAL,
+      emailTemplateName: 'SYSTEM_ALERT',
+      targetRole: 'SYSTEM_ADMINISTRATOR',
+      isEnabled: true,
+      createdById: defaultAdmin.userId,
+    },
+    {
+      ruleName: 'Administrative User Lifecycle',
+      description: 'Notify system admins whenever a new administrator or government officer is provisioned in the system.',
+      activityType: 'ADMIN_USER_PROVISIONED',
+      moduleName: 'USER_MANAGEMENT',
+      minSeverity: 'INFO',
+      triggerInApp: true,
+      triggerEmail: false,
+      urgencyLevel: AlertUrgency.MEDIUM,
+      targetRole: 'SYSTEM_ADMINISTRATOR',
+      isEnabled: true,
+      createdById: defaultAdmin.userId,
+    },
+    {
+      ruleName: 'Role Permission Modifications',
+      description: 'Immediate in-app and email alert on any updates to role-based access control (RBAC) permissions.',
+      activityType: 'ROLE_PERMISSIONS_UPDATED',
+      moduleName: 'USER_MANAGEMENT',
+      minSeverity: 'WARNING',
+      triggerInApp: true,
+      triggerEmail: true,
+      urgencyLevel: AlertUrgency.HIGH,
+      emailTemplateName: 'SYSTEM_ALERT',
+      targetRole: 'SYSTEM_ADMINISTRATOR',
+      isEnabled: true,
+      createdById: defaultAdmin.userId,
+    },
+    {
+      ruleName: 'Account Security & Status Changes',
+      description: 'Generate in-app notification when user accounts are deactivated, suspended, or reactivated.',
+      activityType: 'USER_STATUS_CHANGE',
+      moduleName: 'USER_MANAGEMENT',
+      minSeverity: 'INFO',
+      triggerInApp: true,
+      triggerEmail: false,
+      urgencyLevel: AlertUrgency.MEDIUM,
+      targetRole: 'ALL_ADMINS',
+      isEnabled: true,
+      createdById: defaultAdmin.userId,
+    },
+    {
+      ruleName: 'System Email Template Modifications',
+      description: 'In-app notification when statutory email templates are edited by administrators.',
+      activityType: 'EMAIL_TEMPLATE_MODIFIED',
+      moduleName: 'USER_MANAGEMENT',
+      minSeverity: 'INFO',
+      triggerInApp: true,
+      triggerEmail: false,
+      urgencyLevel: AlertUrgency.LOW,
+      targetRole: 'SYSTEM_ADMINISTRATOR',
+      isEnabled: true,
+      createdById: defaultAdmin.userId,
+    },
+  ];
+
+  await prisma.systemAlert.deleteMany();
+  await prisma.alertRule.deleteMany();
+
+  let ruleSeq = 1;
+  for (const rule of initialAlertRules) {
+    await prisma.alertRule.create({
+      data: {
+        ...rule,
+        ruleId: `ARL-2026-09-${String(ruleSeq++).padStart(4, '0')}`,
+      },
+    });
+  }
+  console.log(`🔔 Seeded ${initialAlertRules.length} Alert Routing Rules`);
+
+  // --- Seed Initial System Alerts (SystemAlert) ---
+  const initialSystemAlerts = [
+    {
+      recipientId: defaultAdmin.userId,
+      alertType: 'SECURITY_ALERT_BRUTE_FORCE_THROTTLED',
+      channel: AlertChannel.IN_APP,
+      urgencyLevel: AlertUrgency.CRITICAL,
+      message: 'Security Alert: 3 consecutive invalid password entries detected from IP 127.0.0.1. Temporary rate limiting applied.',
+      isAcknowledged: false,
+      createdAt: hoursAgo(10),
+    },
+    {
+      recipientId: defaultAdmin.userId,
+      alertType: 'ADMIN_USER_PROVISIONED',
+      channel: AlertChannel.IN_APP,
+      urgencyLevel: AlertUrgency.MEDIUM,
+      message: 'New administrator provisioned: Siti Nurhaliza (gov_admin_1@fcrscs.gov.my) assigned GOVERNMENT_ADMINISTRATOR.',
+      isAcknowledged: false,
+      createdAt: daysAgo(3),
+    },
+    {
+      recipientId: defaultAdmin.userId,
+      alertType: 'ROLE_PERMISSIONS_UPDATED',
+      channel: AlertChannel.IN_APP,
+      urgencyLevel: AlertUrgency.HIGH,
+      message: 'RBAC permissions updated for GOVERNMENT_OFFICER: /admin/case/edit set to allowed.',
+      isAcknowledged: true,
+      acknowledgedAt: daysAgo(1),
+      createdAt: daysAgo(2),
+    },
+    {
+      recipientId: defaultAdmin.userId,
+      alertType: 'EMAIL_TEMPLATE_MODIFIED',
+      channel: AlertChannel.IN_APP,
+      urgencyLevel: AlertUrgency.LOW,
+      message: 'System template updated: SYSTEM_ADMIN_OTP modified with enhanced security disclaimer.',
+      isAcknowledged: true,
+      acknowledgedAt: daysAgo(4),
+      createdAt: daysAgo(5),
+    },
+  ];
+
+  let alertSeq = 1;
+  for (const alert of initialSystemAlerts) {
+    await prisma.systemAlert.create({
+      data: {
+        ...alert,
+        alertId: `ALT-2026-09-${String(alertSeq++).padStart(4, '0')}`,
+      },
+    });
+  }
+  console.log(`🚨 Seeded ${initialSystemAlerts.length} In-App System Alerts`);
 
   console.log('\n✨ Database seeding completed successfully!');
 }

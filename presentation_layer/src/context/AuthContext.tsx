@@ -1,12 +1,17 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 export interface User {
+  id?: string;
   userId: string;
   name: string;
   email: string;
   role: string;
   identificationNumber?: string;
   contactNumber?: string;
+  address?: string;
+  status?: string;
+  pendingEmail?: string | null;
+  mustChangePassword?: boolean;
 }
 
 interface AuthContextType {
@@ -15,6 +20,7 @@ interface AuthContextType {
   allowedPages: string[];
   login: (token: string, userData: User) => void;
   logout: () => void;
+  updateUser: (fields: Partial<User>) => void;
   refreshPermissions: () => Promise<void>;
   isLoadingPermissions: boolean;
 }
@@ -112,8 +118,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAllowedPages([]);
   };
 
+  const updateUser = (fields: Partial<User>) => {
+    setUser(prev => {
+      if (!prev) return null;
+      const updated = { ...prev, ...fields };
+      localStorage.setItem('user_data', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, allowedPages, login, logout, refreshPermissions, isLoadingPermissions }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, allowedPages, login, logout, updateUser, refreshPermissions, isLoadingPermissions }}>
       {children}
     </AuthContext.Provider>
   );

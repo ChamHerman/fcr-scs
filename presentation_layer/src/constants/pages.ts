@@ -32,10 +32,18 @@ export const ADMIN_PAGES: AdminPageInfo[] = [
   { path: '/admin/reports/payment', name: 'Payment Reports', category: 'Reporting' },
   { path: '/admin/reports/blockchain-audit', name: 'Blockchain Audit', category: 'Reporting' },
 
+  { path: '/admin/users', name: 'User Admin', category: 'User Management' },
+  { path: '/admin/role-management', name: 'Role Management', category: 'User Management' },
   { path: '/admin/profile', name: 'My Profile', category: 'System' },
-  { path: '/admin/users', name: 'User Admin', category: 'System' },
-  { path: '/admin/role-management', name: 'Role Management', category: 'System' },
+  { path: '/admin/email-templates', name: 'Email Templates', category: 'System' },
   { path: '/admin/audit-logs', name: 'Audit Logs', category: 'System' },
   { path: '/admin/alerts', name: 'Alerts', category: 'System' },
   { path: '/admin/settings', name: 'Settings', category: 'System' },
+
+  { path: '/member', name: 'Member Dashboard', category: 'Member Portal' },
+  { path: '/member/offer-letter', name: 'Offer Letter', category: 'Member Portal' },
+  { path: '/member/bank-details', name: 'Bank Details', category: 'Member Portal' },
+  { path: '/member/payment-status', name: 'Payment Status', category: 'Member Portal' },
+  { path: '/member/verify-audit', name: 'Verify Audit Trail', category: 'Member Portal' },
+  { path: '/member/settings', name: 'Member Settings', category: 'Member Portal' },
 ];
