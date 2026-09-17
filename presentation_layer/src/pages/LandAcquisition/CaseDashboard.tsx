@@ -12,6 +12,7 @@ import { CopyButton } from "../../components/ui/CopyButton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
+import { useDocumentTitle } from "../../hooks/useDocumentTitle";
 import { ValuerAssignmentModal } from "./components/ValuerAssignmentModal";
 import { useCaseList } from "./hooks/useCaseList";
 import "../../index.css";
@@ -33,6 +34,7 @@ const PROJECT_TYPE_OPTIONS: SelectOption[] = [
 ];
 
 export const CaseManagementDashboard: React.FC = () => {
+  useDocumentTitle('Case Management');
   const containerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { notify } = useNotification();

@@ -28,6 +28,7 @@ import {
 import { CaseDetailsModal } from './CaseDetailsModal';
 import { PaymentRowActions } from './PaymentRowActions';
 import type { PaymentRow } from './paymentModals';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 type ModalState =
   | { type: 'view'; caseId: string }
@@ -37,6 +38,7 @@ type ModalState =
   | null;
 
 export default function PendingAuthorisations() {
+  useDocumentTitle('Pending Authorisations');
   const [searchParams] = useSearchParams();
   const deepLink = searchParams.get('caseId');
   const [cases, setCases] = useState<PaymentRow[]>([]);

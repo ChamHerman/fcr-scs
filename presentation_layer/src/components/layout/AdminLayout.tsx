@@ -7,7 +7,6 @@ import {
   Map,
   CreditCard,
   Link as LinkIcon,
-  Scale,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -36,6 +35,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { FirstTimePasswordModal } from '../auth/FirstTimePasswordModal';
+import { BrandLogo } from '../ui/Logo';
 
 export const AdminLayout: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -250,6 +250,14 @@ export const AdminLayout: React.FC = () => {
           color: white;
           flex-shrink: 0;
         }
+        /* When the brand-icon holds a BrandLogo image, drop the purple
+           square so the circular brand photo is visible. */
+        .admin-sidebar-brand .brand-icon:has(img),
+        aside.admin-sidebar > .admin-sidebar-header > .brand-icon:has(img) {
+          background: transparent;
+          color: inherit;
+          border-radius: 9999px;
+        }
         .collapse-btn {
           background: transparent;
           border: none;
@@ -398,20 +406,16 @@ export const AdminLayout: React.FC = () => {
           <div className="admin-sidebar-header">
             <div className="admin-sidebar-brand" style={{ display: isCollapsed ? 'none' : 'flex' }}>
               <div className="brand-icon">
-                <Scale size={24} />
+                <BrandLogo size={40} ringOn={false} />
               </div>
               <span>FCR·SCS Admin</span>
             </div>
             {isCollapsed && (
-              <div 
-                className="brand-icon" 
-                style={{
-                  width: 40, height: 40, background: 'var(--md-primary)', borderRadius: 12,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0
-                }}
+              <div
+                className="brand-icon"
                 title="FCR·SCS Admin"
               >
-                <Scale size={24} />
+                <BrandLogo size={40} ringOn={false} />
               </div>
             )}
             <button

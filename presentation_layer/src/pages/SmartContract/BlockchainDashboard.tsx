@@ -37,6 +37,7 @@ import {
   formatClaimElapsed,
 } from './blockchainModals';
 import type { LedgerRow, PublishLockState } from './blockchainModals';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 type ModalState =
   | { type: 'view'; row: LedgerRow }
@@ -51,6 +52,7 @@ const SORT_OPTIONS = [
 ] as const;
 
 export const BlockchainDashboard: React.FC = () => {
+  useDocumentTitle('Blockchain Overview');
   const { walletAddress, walletConnected, error: walletError, setError: setWalletError, connectWallet: handleConnectWallet } = useWallet();
   const { identityId } = useAdminIdentity();
   // Live cross-admin publish locks, polled so a record another admin is

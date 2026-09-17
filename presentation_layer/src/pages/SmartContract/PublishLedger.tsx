@@ -35,6 +35,7 @@ import {
   formatClaimElapsed,
 } from './blockchainModals';
 import type { LedgerRow, PublishLockState } from './blockchainModals';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 type ModalState = { type: 'view'; row: LedgerRow } | { type: 'publish'; row: LedgerRow } | null;
 type TabKey = 'm1' | 'm2';
@@ -58,6 +59,7 @@ export const formatGraceCountdown = (msRemaining: number): string => {
 };
 
 export const PublishLedger: React.FC = () => {
+  useDocumentTitle('Publish Ledger');
   const [searchParams, setSearchParams] = useSearchParams();
   const deepLink = searchParams.get('caseId');
   const rawMilestone = (searchParams.get('milestone') || searchParams.get('tab') || '').toLowerCase().trim();

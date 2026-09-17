@@ -40,6 +40,7 @@ import { RefreshButton } from '../Payment/RefreshButton';
 import type { PaymentRow } from '../Payment/paymentModals';
 import '../LandAcquisition/case_management.css';
 import '../Payment/payment.css';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 export const CATEGORY_A_REASONS: SelectOption[] = [
   { value: 'RECIPIENT_ACCOUNT_INVALID_OR_NOT_FOUND', label: 'Recipient account number not found or routing code invalid' },
@@ -69,6 +70,7 @@ const FAILURE_SOLUTIONS: Record<string, string> = {
 const ITEMS_PER_PAGE = 10;
 
 export default function BankPortal() {
+  useDocumentTitle('Bank Portal');
   const [pendingCases, setPendingCases] = useState<PaymentRow[]>([]);
   const [historyCases, setHistoryCases] = useState<PaymentRow[]>([]);
   const [loading, setLoading] = useState(true);

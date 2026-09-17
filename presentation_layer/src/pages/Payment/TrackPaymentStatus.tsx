@@ -10,8 +10,10 @@ import { Input } from '../../components/ui/Input';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { useSearchParams } from 'react-router-dom';
 import { normalizePaymentStatus } from './statusMaps';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 export default function TrackPaymentStatus() {
+  useDocumentTitle('Track Payment Status');
   const [searchParams, setSearchParams] = useSearchParams();
   const [caseId, setCaseId] = useState(searchParams.get('caseId') || '');
   const [loading, setLoading] = useState(false);

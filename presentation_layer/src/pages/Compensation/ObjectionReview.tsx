@@ -15,6 +15,7 @@ import { EditObjectionModal, DeleteObjectionModal } from "../../components/objec
 import { formatCurrencyRM } from "../../utils/currency";
 import "../../index.css";
 import "./objection.css";
+import { useDocumentTitle } from "../../hooks/useDocumentTitle";
 
 type ObjectionDetail = {
   id: string;
@@ -45,6 +46,7 @@ import {
 } from "../../constants";
 
 export const ObjectionReview: React.FC = () => {
+  useDocumentTitle("Objection Review");
   const { objectionId: paramId } = useParams<{ objectionId: string }>();
   const location = useLocation();
   const navigate = useNavigate();

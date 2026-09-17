@@ -37,6 +37,7 @@ import type {
   ReportGeneratedResponse,
   ReportFilterOptions
 } from '../../services/reportApi';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 const SUPPORTED_TYPES = ['Case Status Report', 'Payment Report', 'Blockchain Audit Report'];
 
@@ -48,6 +49,7 @@ const REPORT_DESCRIPTIONS: Record<string, string> = {
 };
 
 export const GenerateReports: React.FC = () => {
+  useDocumentTitle('Generate Report');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { notify } = useNotification();

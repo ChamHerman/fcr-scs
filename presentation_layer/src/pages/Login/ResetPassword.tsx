@@ -3,8 +3,10 @@ import { MD3Button, MD3Input, MD3Card, MD3BlurBackground } from '../MD3Component
 import { Lock, ArrowLeft, AlertCircle, CheckCircle } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { authService } from '../../services/auth.service';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 export const ResetPassword: React.FC = () => {
+  useDocumentTitle('Reset Password');
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
   const [newPassword, setNewPassword] = useState('');

@@ -5,8 +5,10 @@ import { useNavigate } from 'react-router-dom';
 import { authService } from '../../services/auth.service';
 import { IdentificationInput } from '../../components/ui/IdentificationInput';
 import { resolveMalaysianIdentity, parseRawIc, type MalaysianIdentity } from '../../utils/malaysianIdentity';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 export const Register: React.FC = () => {
+  useDocumentTitle('Register');
   const navigate = useNavigate();
   const [showPasswordPolicy, setShowPasswordPolicy] = useState(false);
   

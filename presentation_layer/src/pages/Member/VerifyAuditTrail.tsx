@@ -24,8 +24,10 @@ import { landAcquisitionApi } from '../../services/landAcquisitionApi';
 import { Button } from '../../components/ui/Button';
 import { CopyButton } from '../../components/ui/CopyButton';
 import { formatDateTime } from '../../utils/dateFormat';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 export default function VerifyAuditTrail() {
+  useDocumentTitle('Verify Audit Trail');
   const [dragActive, setDragActive] = useState<boolean>(false);
   const [file, setFile] = useState<File | null>(null);
   const [verifying, setVerifying] = useState<boolean>(false);

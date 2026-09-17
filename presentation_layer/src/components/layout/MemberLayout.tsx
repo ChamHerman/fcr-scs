@@ -96,8 +96,8 @@ export const MemberLayout: React.FC = () => {
             to="/member"
             className="flex items-center gap-3 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-primary rounded-full px-1 py-1"
           >
-            <div className="w-10 h-10 rounded-full bg-md-secondary-container flex items-center justify-center text-md-primary group-hover:scale-105 transition-transform duration-200">
-              <Logo size={24} className="text-md-primary" />
+            <div className="w-10 h-10 rounded-full flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
+              <Logo size={40} ringOn={false} />
             </div>
             <div>
               <span className="text-base sm:text-lg font-bold tracking-tight text-md-on-surface block leading-tight">

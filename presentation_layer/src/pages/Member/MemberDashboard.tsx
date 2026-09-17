@@ -39,8 +39,10 @@ import {
 } from './components';
 import { useMemberWorkflow } from './hooks/useMemberWorkflow';
 import { blockchainApi } from '../../services/blockchainApi';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 export const MemberDashboard: React.FC = () => {
+  useDocumentTitle('Member Dashboard');
   const { user, userName, identificationNumber, userId, role, isMember, isSysAdmin } = useRole();
   const { notify } = useNotification();
   const [searchParams, setSearchParams] = useSearchParams();

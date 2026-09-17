@@ -3,8 +3,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MD3Card, MD3BlurBackground, MD3Button } from '../MD3Components';
 import { CheckCircle2, XCircle, Loader2, MailCheck } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 export const VerifyEmailChange: React.FC = () => {
+  useDocumentTitle('Verify Email Change');
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user, updateUser } = useAuth();

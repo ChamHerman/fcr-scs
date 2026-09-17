@@ -3,6 +3,7 @@ import { MD3Card, MD3Button } from '../MD3Components';
 import { ADMIN_PAGES, type AdminPageInfo } from '../../constants/pages';
 import { Select } from '../../components/ui/Select';
 import { PageHeader } from '../../components/ui/PageHeader';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import '../LandAcquisition/case_management.css';
 import { Check, Save } from 'lucide-react';
 
@@ -32,6 +33,7 @@ const getDefaultPermissions = (role: string): string[] => {
 };
 
 export const RoleManagement: React.FC = () => {
+  useDocumentTitle('Role Management');
   const [selectedRole, setSelectedRole] = useState<string>(ROLES[1]); // Default to first non-sysadmin role
   const [permissions, setPermissions] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState<boolean>(false);

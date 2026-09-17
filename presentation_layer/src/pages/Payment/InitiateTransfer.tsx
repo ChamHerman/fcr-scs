@@ -29,6 +29,7 @@ import { CaseDetailsModal } from './CaseDetailsModal';
 import { PaymentRowActions } from './PaymentRowActions';
 import { normalizePaymentStatus } from './statusMaps';
 import type { PaymentRow } from './paymentModals';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 type ModalState =
   | { type: 'view'; caseId: string }
@@ -37,6 +38,7 @@ type ModalState =
   | null;
 
 export default function InitiateTransfer() {
+  useDocumentTitle('Initiate Transfer');
   const [searchParams] = useSearchParams();
   const deepLink = searchParams.get('caseId');
   const [cases, setCases] = useState<PaymentRow[]>([]);

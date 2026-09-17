@@ -3,8 +3,10 @@ import { CalendarRange, Mail, Repeat } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 export const ScheduleReportsGeneration: React.FC = () => {
+  useDocumentTitle('Schedule Reports');
   const [template, setTemplate] = useState('Compensation summary');
   const [frequency, setFrequency] = useState('Weekly');
   const [email, setEmail] = useState('operations@agency.gov');

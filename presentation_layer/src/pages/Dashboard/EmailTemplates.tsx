@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { MD3Card, MD3Button } from '../MD3Components';
 import { Modal } from '../../components/ui/Modal';
 import { PageHeader } from '../../components/ui/PageHeader';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import '../LandAcquisition/case_management.css';
 import {
   Mail,
@@ -155,6 +156,7 @@ const GLOBAL_PLACEHOLDERS = [
 ];
 
 export const EmailTemplates: React.FC = () => {
+  useDocumentTitle('Email Templates');
   const navigate = useNavigate();
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [selectedTemplateName, setSelectedTemplateName] = useState<string>('');

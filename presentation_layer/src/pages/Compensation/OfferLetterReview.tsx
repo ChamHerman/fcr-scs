@@ -56,10 +56,12 @@ import "../../index.css";
 import "./compensation.css";
 import "./offer_letter.css";
 import "../../styles/shared-report.css";
+import { useDocumentTitle } from "../../hooks/useDocumentTitle";
 
 export type { OwnerApprovalStatus, OfferDetail };
 
 export const OfferLetterReview: React.FC = () => {
+  useDocumentTitle("Offer Letter Review");
   const { offerId: paramOfferId } = useParams<{ offerId: string }>();
   const location = useLocation();
   const navigate = useNavigate();

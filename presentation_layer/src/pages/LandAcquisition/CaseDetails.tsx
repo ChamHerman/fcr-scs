@@ -20,6 +20,7 @@ import { Modal } from "../../components/ui/Modal";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
+import { useDocumentTitle } from "../../hooks/useDocumentTitle";
 import "../../index.css";
 import "./case_management.css";
 
@@ -32,6 +33,7 @@ import {
 } from "../../constants";
 
 export const CaseView: React.FC = () => {
+  useDocumentTitle('Case Details');
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams<{ caseId?: string }>();

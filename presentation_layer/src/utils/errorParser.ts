@@ -225,17 +225,23 @@ export function parseAppError(error: any, fallbackTitle = 'Operation Failed'): P
   };
 }
 
-/** True when the logged-in user is a member-portal audience (not admin/officer/valuer). */
-export function isMemberAudience(): boolean {
+/**
+ * True when the current page belongs to the admin portal — the only place that
+ * keeps the full diagnostic treatment (SYSTEM ERROR chip, Error Details modal,
+ * "contact technical support" guidance). Every other page (public, member, bank)
+ * uses the plain short-message toast.
+ */
+export function isAdminAudience(): boolean {
   try {
-    const stored = localStorage.getItem('user_data');
-    if (!stored) return false;
-    const role = (JSON.parse(stored)?.role || '').toString().toUpperCase();
-    return role === 'DISPLACED_COMMUNITY_MEMBER' || role.includes('MEMBER');
+    const path = typeof window !== 'undefined' ? window.location.pathname : '';
+    return path.startsWith('/admin');
   } catch {
     return false;
   }
 }
+
+/** Back-compat alias kept for any external import sites. */
+export const isMemberAudience = isAdminAudience;
 
 const MEMBER_NEXT_STEP = 'Please try again. If it keeps happening, find our support team.';
 

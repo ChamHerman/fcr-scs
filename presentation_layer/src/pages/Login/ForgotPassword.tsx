@@ -3,8 +3,10 @@ import { MD3Button, MD3Input, MD3Card, MD3BlurBackground } from '../MD3Component
 import { Mail, ArrowLeft, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../../services/auth.service';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 export const ForgotPassword: React.FC = () => {
+  useDocumentTitle('Forgot Password');
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);

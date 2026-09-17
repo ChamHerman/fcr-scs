@@ -23,6 +23,7 @@ import { useRole } from '../../hooks/useRole';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { alertService } from '../../services/alert.service';
 import type { SystemAlertItem } from '../../services/alert.service';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types & helpers
@@ -98,6 +99,7 @@ function formatDate(iso: string): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const MemberNotifications: React.FC = () => {
+  useDocumentTitle('Notifications');
   const { userName } = useRole();
   const { notify } = useNotification();
 

@@ -36,8 +36,10 @@ import { CompensationSuccessState } from "./components/CompensationSuccessState"
 import "../../index.css";
 import "./compensation.css";
 import "../../styles/shared-report.css";
+import { useDocumentTitle } from "../../hooks/useDocumentTitle";
 
 export const CompensationCreate: React.FC = () => {
+  useDocumentTitle("Create Compensation");
   const { userId } = useRole();
   const navigate = useNavigate();
   const location = useLocation();

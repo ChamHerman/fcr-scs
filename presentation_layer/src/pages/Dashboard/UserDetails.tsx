@@ -4,9 +4,11 @@ import { MD3Card, MD3Button } from '../MD3Components';
 import { ArrowLeft, User, Mail, Phone, CreditCard, Calendar, Shield, AlertTriangle, Key, Edit, Power, PowerOff, MapPin, Copy, Check, CheckCircle } from 'lucide-react';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { Modal } from '../../components/ui/Modal';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import '../LandAcquisition/case_management.css';
 
 export const UserDetails: React.FC = () => {
+  useDocumentTitle('User Details');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { notify } = useNotification();

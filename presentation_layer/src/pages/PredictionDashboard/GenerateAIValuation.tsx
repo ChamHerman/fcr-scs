@@ -28,6 +28,7 @@ import {
   TENURE_TYPE_OPTIONS,
 } from '../../constants';
 import type { SelectOption } from '../../components/ui/Select';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 type FormShape = Record<keyof ValuationInput, string>;
 type LockedShape = Partial<Record<keyof ValuationInput, boolean>>;
@@ -64,6 +65,7 @@ const AREA_TO_M2: Record<string, number> = {
 };
 
 export const GenerateAIValuation: React.FC = () => {
+  useDocumentTitle('AI Valuation');
   const { notify } = useNotification();
   const [form, setForm] = useState<FormShape>({ ...EMPTY_FORM });
   const [locked, setLocked] = useState<LockedShape>({});

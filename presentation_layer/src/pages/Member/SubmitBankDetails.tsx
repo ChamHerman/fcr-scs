@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 /**
  * The bank details submission form migrated into the member payment-status
@@ -7,6 +8,7 @@ import { Navigate, useSearchParams } from 'react-router-dom';
  * now forwards to it, preserving any ?caseId= target.
  */
 export default function MemberSubmitBankDetails() {
+  useDocumentTitle('Submit Bank Details');
   const [searchParams] = useSearchParams();
   const caseId = searchParams.get('caseId');
 

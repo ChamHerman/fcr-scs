@@ -31,6 +31,7 @@ import { BankDetailsForm, formatLocalContactNumber } from './components/BankDeta
 import { formatDateTime } from '../../utils/dateFormat';
 import { CopyButton } from '../../components/ui/CopyButton';
 import { formatCurrencyRM } from '../../utils/currency';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 interface CaseOption {
   caseId: string;
@@ -62,6 +63,7 @@ interface PaymentCaseDetails {
 }
 
 export default function MemberPaymentStatus() {
+  useDocumentTitle('Payment Status');
   const { user } = useAuth();
   const { notify } = useNotification();
   const [searchParams, setSearchParams] = useSearchParams();

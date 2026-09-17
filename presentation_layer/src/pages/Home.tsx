@@ -1,11 +1,12 @@
 import React, { useRef } from 'react';
-import { 
-  Building2, 
-  Map, 
-  Database, 
-  BrainCircuit, 
-  ChevronRight, 
-  ShieldCheck, 
+import { useNavigate } from 'react-router-dom';
+import {
+  Building2,
+  Map,
+  Database,
+  BrainCircuit,
+  ChevronRight,
+  ShieldCheck,
   Wallet,
   FileText
 } from 'lucide-react';
@@ -14,11 +15,14 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useGSAP } from '@gsap/react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
 export const Home: React.FC = () => {
+  useDocumentTitle('Home');
   const containerRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   useGSAP(() => {
     const mm = gsap.matchMedia();
@@ -174,10 +178,14 @@ export const Home: React.FC = () => {
               A transparent, secure, and AI-driven smart contract system designed to support equitable land acquisition and relocation for communities affected by tourism infrastructure development.
             </p>
             <div className="hero-actions flex flex-wrap gap-4">
-              <Button size="lg" className="gap-2">
+              <Button size="lg" className="gap-2" onClick={() => navigate('/login')}>
                 Get Started <ChevronRight size={20} />
               </Button>
-              <Button variant="tonal" size="lg">
+              <Button
+                variant="tonal"
+                size="lg"
+                onClick={() => window.open('https://sepolia.etherscan.io/address/0x5539d016e1A4Bd1e51d17D976D1ff05cb452B428#events', '_blank', 'noopener,noreferrer')}
+              >
                 View Public Ledger
               </Button>
             </div>

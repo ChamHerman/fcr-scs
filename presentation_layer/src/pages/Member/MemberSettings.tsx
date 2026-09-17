@@ -41,6 +41,7 @@ import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Select, type SelectOption } from '../../components/ui/Select';
 import { ConfirmSubmitModal, ConfirmRow } from '../../components/member/ConfirmSubmitModal';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 const MALAYSIAN_BANKS: SelectOption[] = SUPPORTED_MALAYSIAN_BANKS.map((b) => ({
   value: b.key,
@@ -57,6 +58,7 @@ function getNameInitials(name: string | undefined | null): string {
 }
 
 export const MemberSettings: React.FC = () => {
+  useDocumentTitle('Settings');
   const { user, updateUser } = useAuth();
   const { userName, identificationNumber } = useRole();
   const { notify } = useNotification();

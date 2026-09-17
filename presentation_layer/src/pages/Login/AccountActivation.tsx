@@ -3,8 +3,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MD3Card, MD3BlurBackground, MD3Button } from '../MD3Components';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { authService } from '../../services/auth.service';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 export const AccountActivation: React.FC = () => {
+  useDocumentTitle('Account Activation');
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const token = searchParams.get('token');

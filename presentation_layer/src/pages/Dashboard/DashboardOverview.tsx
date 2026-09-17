@@ -18,9 +18,11 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import api from '../../services/api';
 
 export const DashboardOverview: React.FC = () => {
+  useDocumentTitle('Admin Dashboard');
   const navigate = useNavigate();
   const { user } = useAuth();
 

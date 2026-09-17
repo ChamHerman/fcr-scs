@@ -18,6 +18,7 @@ import { useNotification } from "../../components/ui/NotificationSystem";
 import { formatCurrencyRM } from "../../utils/currency";
 import "../../index.css";
 import "./objection.css";
+import { useDocumentTitle } from "../../hooks/useDocumentTitle";
 
 type OfferOption = {
   offerId: string;
@@ -38,6 +39,7 @@ type FileAttachment = {
 import { OBJECTION_FORM_TYPE_OPTIONS as OBJECTION_TYPE_OPTIONS } from "../../constants";
 
 export const ObjectionCreate: React.FC = () => {
+  useDocumentTitle("File Objection");
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, userId, isMember } = useRole();

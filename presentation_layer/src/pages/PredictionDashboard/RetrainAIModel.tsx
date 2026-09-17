@@ -25,6 +25,7 @@ import {
   retrainModel,
 } from '../../services/predictionApi';
 import type { ModelInfo, ModelMetrics, RetrainComparison } from '../../services/predictionApi';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 const formatRM = (value: number) => `RM ${Math.round(value).toLocaleString('en-US')}`;
 const formatAccuracy = (r2: number) => `${(r2 * 100).toFixed(2)}%`;
@@ -108,6 +109,7 @@ const CompareColumn: React.FC<{
 );
 
 export const RetrainAIModel: React.FC = () => {
+  useDocumentTitle('Retrain AI Model');
   const { notify } = useNotification();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);

@@ -33,6 +33,7 @@ import { CaseDetailsModal } from './CaseDetailsModal';
 import { PaymentRowActions } from './PaymentRowActions';
 import type { PaymentRow } from './paymentModals';
 import { normalizePaymentStatus, byFailedTransactionPriority, isFailedRegisterStatus } from './statusMaps';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 type ModalState =
   | { type: 'view'; caseId: string }
   | { type: 'error-log'; caseId: string }
@@ -45,6 +46,7 @@ type ModalState =
   | null;
 
 export default function FailedTransactions() {
+  useDocumentTitle('Failed Transactions');
   const [searchParams] = useSearchParams();
   const deepLink = searchParams.get('caseId');
   const [cases, setCases] = useState<PaymentRow[]>([]);

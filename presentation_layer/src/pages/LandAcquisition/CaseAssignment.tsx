@@ -11,6 +11,7 @@ import { Input } from "../../components/ui/Input";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
+import { useDocumentTitle } from "../../hooks/useDocumentTitle";
 import "../../index.css";
 import "./case_management.css";
 
@@ -41,6 +42,7 @@ type AssignmentRecord = {
 };
 
 export const CaseAssignment: React.FC = () => {
+  useDocumentTitle('Case Assignment');
   const { user, canAssignValuer, isAdmin } = useRole();
   const { notify } = useNotification();
   // --- State ---
