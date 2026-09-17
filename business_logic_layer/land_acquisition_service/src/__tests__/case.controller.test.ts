@@ -45,14 +45,14 @@ describe("Land Acquisition API - Phase 1 to 4 Integration Tests", () => {
       expect(res.body).toHaveProperty("error");
     });
 
-    it("PUT /api/land-acquisition/cases/:caseId/title - should validate missing title", async () => {
-      const res = await request.put("/api/land-acquisition/cases/00000000-0000-0000-0000-000000000000/title").send({});
+    it("PATCH /api/land-acquisition/cases/:caseId/title - should validate missing title", async () => {
+      const res = await request.patch("/api/land-acquisition/cases/00000000-0000-0000-0000-000000000000/title").send({});
       expect(res.status).toBe(400);
       expect(res.body.error).toContain("Case title is required");
     });
 
-    it("PUT /api/land-acquisition/cases/:caseId/title - should return 404 for non-existent case", async () => {
-      const res = await request.put("/api/land-acquisition/cases/00000000-0000-0000-0000-000000000000/title").send({
+    it("PATCH /api/land-acquisition/cases/:caseId/title - should return 404 for non-existent case", async () => {
+      const res = await request.patch("/api/land-acquisition/cases/00000000-0000-0000-0000-000000000000/title").send({
         caseTitle: "Updated Case Title",
       });
       expect(res.status).toBe(404);

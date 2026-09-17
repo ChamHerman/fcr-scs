@@ -59,7 +59,7 @@ function readNetworkConfig(): Record<NetworkKey, NetworkConfig> {
       key: "sepolia",
       label: "Sepolia Testnet",
       rpcUrl: process.env.SEPOLIA_RPC_URL ?? "https://sepolia.infura.io/v3/b4aa988d9c9b443987922954de0f7de9",
-      contractAddress: process.env.SEPOLIA_CONTRACT_ADDRESS || process.env.CONTRACT_ADDRESS || "0x5539d016e1A4Bd1e51d17D976D1ff05cb452B428",
+      contractAddress: process.env.SEPOLIA_CONTRACT_ADDRESS || process.env.CONTRACT_ADDRESS || "0x2C70972aB361481fc2cc6602E04F1A579F87b565",
       chainId: 11155111,
     },
     mainnet: {

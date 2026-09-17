@@ -10,6 +10,7 @@ import {
   formatPaymentResponse,
 } from "../services/payment.service";
 import { prisma } from "../prisma";
+import { profileSavedAccountsStore } from "../services/payment.service";
 import { CaseStatus, PaymentStatus } from "@prisma/client";
 import { inflateSync } from "zlib";
 import { generateReceipt } from "../services/receipt.service";
@@ -156,6 +157,13 @@ describe("Bank Account Uniqueness & Decoupled Profile Storage", () => {
   let testCreatedById: string;
 
   beforeAll(async () => {
+    // The saved-accounts store is module-level and survives across suites in a
+    // jest worker, so a row written here can leak into the next describe block.
+    profileSavedAccountsStore.clear();
+    await prisma.memberPayoutDetail.deleteMany({
+      where: { user: { email: { in: ["m1@fcrscs.gov.my", "m2@fcrscs.gov.my"] } } },
+    });
+
     const existingAc = await prisma.acquisitionCase.findFirst();
     testProjectId = existingAc!.projectId;
     testCreatedById = existingAc!.createdById;
@@ -339,19 +347,36 @@ describe("Bank Account Uniqueness & Decoupled Profile Storage", () => {
     const member = await prisma.user.findUnique({ where: { email: "m1@fcrscs.gov.my" } });
     expect(member).toBeDefined();
 
+    // Use the member's REAL MyKad: the service resolves the owning user from it,
+    // and a synthetic value makes the lookup fall through to another member.
+    const memberMyKad = member!.identificationNumber || member1MyKad;
+    const memberName = member!.name;
+
     const defaultAcc = "99" + Date.now().toString().slice(-11); // 13 digits for AmBank
     const anotherAcc = "88" + Date.now().toString().slice(-10); // 12 digits for Maybank
+
+    // Start from a clean slate so a leftover row from another test cannot decide
+    // which account looks like the "established default".
+    profileSavedAccountsStore.clear();
+    await prisma.memberPayoutDetail.deleteMany({ where: { userId: member!.userId } });
+    await prisma.receiverBankDetails.deleteMany({
+      where: { paymentCase: { caseId: { in: [testCaseId1, testCaseId2, testCaseId3] } } },
+    });
+    await prisma.paymentCase.updateMany({
+      where: { caseId: { in: [testCaseId1, testCaseId2, testCaseId3] } },
+      data: { status: PaymentStatus.BANK_DETAILS_PENDING },
+    });
 
     // 1. Establish default saved account (AmBank)
     await saveMemberBankDetails(member!.userId, {
       bankName: "AmBank",
       accountNumber: defaultAcc,
-      accountHolderName: "Member 1",
+      accountHolderName: memberName,
       phoneNumber: "0123456789",
-      myKadNumber: member1MyKad,
+      myKadNumber: memberMyKad,
     });
 
-    const defaultCheck = await getSavedBankDetails(member!.userId, member1MyKad, "Member 1");
+    const defaultCheck = await getSavedBankDetails(member!.userId, memberMyKad, memberName);
     expect(defaultCheck.length).toBeGreaterThan(0);
     expect(defaultCheck[0].bankName).toBe("AmBank");
     expect(defaultCheck[0].accountNumber).toBe(defaultAcc);
@@ -361,9 +386,9 @@ describe("Bank Account Uniqueness & Decoupled Profile Storage", () => {
       caseId: testCaseId1,
       bankName: "Maybank",
       accountNumber: anotherAcc,
-      accountHolderName: "Member 1",
+      accountHolderName: memberName,
       phoneNumber: "0123456789",
-      myKadNumber: member1MyKad,
+      myKadNumber: memberMyKad,
       userId: member!.userId,
       isAnotherAccount: true,
     });
@@ -371,7 +396,7 @@ describe("Bank Account Uniqueness & Decoupled Profile Storage", () => {
     expect(subRes.bankName).toBe("Maybank");
 
     // 3. Verify getSavedBankDetails STILL returns AmBank at index 0
-    const afterSub = await getSavedBankDetails(member!.userId, member1MyKad, "Member 1");
+    const afterSub = await getSavedBankDetails(member!.userId, memberMyKad, memberName);
     expect(afterSub[0].bankName).toBe("AmBank");
     expect(afterSub[0].accountNumber).toBe(defaultAcc);
 

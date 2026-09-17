@@ -152,9 +152,12 @@ model BlockchainRecord {
 // Deliberately has no deletedAt: a claim is transient state that is hard-deleted
 // on release or lazily ignored once older than the TTL.
 model PublishClaim {
+  // adminId mirrors User.userId, which is a custom `USR-YYYY-MM-NNNN` string —
+  // not a uuid. @db.Uuid here was left over from before that migration and broke
+  // every write (Postgres rejected "USR-2026-09-0002" as an invalid uuid input).
   caseId    String   @map("case_id") @db.VarChar(255)
   milestone String
-  adminId   String   @map("admin_id") @db.Uuid
+  adminId   String   @map("admin_id") @db.VarChar(50)
   adminName String
   claimedAt DateTime @default(now()) @map("claimed_at")
 

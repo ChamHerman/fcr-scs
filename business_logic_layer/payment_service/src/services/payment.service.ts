@@ -20,11 +20,32 @@ export function calculateRequiredSignatures(amount: number, totalActiveGAs = 5):
 const isUuid = (id: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
+// User ids are custom `USR-YYYY-MM-NNNN` strings (see the replace-uuid-with-
+// custom-formatted-id migration). Several guards still tested for a bare uuid,
+// so they silently skipped every real user — the payout default was never
+// persisted, only held in memory.
+const isUserId = (id: string) => /^USR-\d{4}-\d{2}-\d{4}$/i.test(id) || isUuid(id);
+
 export async function resolveAdminUuid(adminId: string): Promise<string> {
   if (isUuid(adminId)) return adminId;
 
-  const match = adminId.match(/\d+/);
-  const index = match ? parseInt(match[0], 10) : 1;
+  // A real user id (USR-YYYY-MM-NNNN) is already authoritative — resolve it
+  // directly. Deriving a ga<N> index from it was catastrophic: the old
+  // `match(/\d+/)` grabbed the YEAR ("2026") rather than the sequence, so
+  // every GA collapsed onto ga5 and the segregation-of-duties check compared
+  // one admin against itself, silently defeating multi-signature approval.
+  if (/^USR-\d{4}-\d{2}-\d{4}$/i.test(adminId)) {
+    const direct = await prisma.user.findUnique({
+      where: { userId: adminId },
+      select: { userId: true },
+    });
+    if (direct) return direct.userId;
+  }
+
+  // Fallback for synthetic ids such as `ga2` or a test-session token: take the
+  // LAST digit run, which is the sequence number, never the leading year.
+  const runs = adminId.match(/\d+/g);
+  const index = runs && runs.length > 0 ? parseInt(runs[runs.length - 1], 10) : 1;
   const targetEmail = `ga${Math.min(Math.max(index, 1), 5)}@fcrscs.gov.my`;
 
   const ga = await prisma.user.findFirst({
@@ -425,7 +446,7 @@ export async function validateAccountNumberUniqueness(
   }
 
   // 4. Check MemberPayoutDetail
-  const isUserValidUuid = Boolean(userId && isUuid(userId));
+  const isUserValidUuid = Boolean(userId && isUserId(userId));
   const existingPayouts = await prisma.memberPayoutDetail.findMany({
     where: isUserValidUuid ? { userId: { not: userId } } : {},
   });
@@ -625,7 +646,7 @@ export async function submitBankDetails(data: {
 
   // Resolve actual User record for member payout detail
   let targetUser: { userId: string; name: string; email: string; identificationNumber: string | null; contactNumber: string | null } | null = null;
-  if (data.userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.userId)) {
+  if (data.userId && isUserId(data.userId)) {
     targetUser = await prisma.user.findUnique({
       where: { userId: data.userId },
       select: { userId: true, name: true, email: true, identificationNumber: true, contactNumber: true },
@@ -676,8 +697,11 @@ export async function submitBankDetails(data: {
     existingDefault = profileSavedAccountsStore.get(`mykad:${cleanMyKad}`);
   }
 
-  // Also check if member has ANY prior submitted PaymentCase with bank details
-  if (!existingDefault && (effectiveUserId || cleanMyKad || owner)) {
+  // Also check if member has ANY prior submitted PaymentCase with bank details.
+  // Skipped for "Enter Another Bank Account" submissions: that flow deliberately
+  // keeps the member's established default and must never let an arbitrary prior
+  // case at the same bank/MyKad re-seed it (which used to flip the default).
+  if (!existingDefault && !data.isAnotherAccount && (effectiveUserId || cleanMyKad || owner)) {
     const priorCase = await prisma.paymentCase.findFirst({
       where: {
         caseId: { not: data.caseId },
@@ -687,9 +711,10 @@ export async function submitBankDetails(data: {
           notIn: [PaymentStatus.BANK_DETAILS_PENDING, PaymentStatus.NEW_BANK_DETAILS_PENDING],
         },
         OR: [
-          ...(effectiveUserId ? [{ beneficiaryId: effectiveUserId }] : []),
+          // beneficiaryId is a LandOwner.ownerId, never a User.userId — matching it
+          // against effectiveUserId made Postgres reject the UUID comparison.
+          ...(owner?.ownerId ? [{ beneficiaryId: owner.ownerId }] : []),
           ...(cleanMyKad ? [{ myKadNumber: cleanMyKad }] : []),
-          ...(targetUser?.name ? [{ accountHolderName: targetUser.name }] : []),
           ...(owner?.name ? [{ accountHolderName: owner.name }] : []),
         ],
       },
@@ -725,9 +750,11 @@ export async function submitBankDetails(data: {
   const hasSavedDefault = Boolean(existingDefault);
   const isAnother = Boolean(data.isAnotherAccount) || hasSavedDefault;
 
-  if (isAnother && existingDefault) {
-    // Under "Enter Another Bank Account", preserve the user's existing default account in memory store
-    if (effectiveUserId) {
+  // "Enter Another Bank Account" always keeps the established default untouched,
+  // even when no default was found — the submission is per-case only.
+  if (isAnother) {
+    // preserve the user's existing default account in memory store
+    if (effectiveUserId && existingDefault) {
       profileSavedAccountsStore.set(`user:${effectiveUserId}`, {
         userId: effectiveUserId,
         bankName: existingDefault.bankName,
@@ -738,7 +765,7 @@ export async function submitBankDetails(data: {
         verified: true,
       });
     }
-    if (cleanMyKad) {
+    if (cleanMyKad && existingDefault) {
       profileSavedAccountsStore.set(`mykad:${cleanMyKad}`, {
         userId: effectiveUserId,
         bankName: existingDefault.bankName,
@@ -749,7 +776,7 @@ export async function submitBankDetails(data: {
         verified: true,
       });
     }
-  } else if (!hasSavedDefault && !data.isAnotherAccount) {
+  } else if (!hasSavedDefault) {
     // Only the FIRST per-case submission seeds the member's default payout account.
     if (effectiveUserId) {
       profileSavedAccountsStore.set(`user:${effectiveUserId}`, {
@@ -1407,7 +1434,8 @@ export async function getPaymentStatus(caseId: string, userRole?: string, userId
 
       const isDirectMatch =
         (pc.accountHolderName && pc.accountHolderName.toLowerCase() === memberName) ||
-        pc.beneficiaryId === currentUser.userId ||
+        // beneficiaryId is a LandOwner uuid and currentUser.userId a
+        // USR-YYYY-MM-NNNN string — comparing them can never be true.
         (pc.myKadNumber && cleanIc && pc.myKadNumber.replace(/[^a-zA-Z0-9]/g, "").toLowerCase() === cleanIc);
 
       if (!isDirectMatch) {
@@ -1419,7 +1447,8 @@ export async function getPaymentStatus(caseId: string, userRole?: string, userId
                 some: {
                   landOwner: {
                     OR: [
-                      { ownerId: currentUser.userId },
+                      // ownerId is a LandOwner uuid — never equal to a User's
+                      // USR-YYYY-MM-NNNN id. Identity is name/email/NRIC only.
                       { name: currentUser.name },
                       { email: currentUser.email },
                       ...(currentUser.identificationNumber ? [{ nric: currentUser.identificationNumber }, { nric: cleanIc }] : []),
@@ -1627,7 +1656,7 @@ export async function getAllCases(userRole?: string, userId?: string) {
 
   if (userRole === UserRole.DISPLACED_COMMUNITY_MEMBER || userRole === "DISPLACED_COMMUNITY_MEMBER") {
     let currentUser: { userId: string; name: string; email: string; identificationNumber: string | null } | null = null;
-    if (userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+    if (userId && isUserId(userId)) {
       currentUser = await prisma.user.findUnique({
         where: { userId },
         select: { userId: true, name: true, email: true, identificationNumber: true },
@@ -1646,7 +1675,8 @@ export async function getAllCases(userRole?: string, userId?: string) {
               some: {
                 landOwner: {
                   OR: [
-                    { ownerId: currentUser.userId },
+                    // ownerId is a LandOwner uuid — never equal to a User's
+                    // USR-YYYY-MM-NNNN id. Identity is name/email/NRIC only.
                     { name: currentUser.name },
                     { email: memberEmail },
                     ...(currentUser.identificationNumber ? [{ nric: currentUser.identificationNumber }, { nric: cleanIc }] : []),
@@ -1663,7 +1693,7 @@ export async function getAllCases(userRole?: string, userId?: string) {
       const filtered = cases.filter((pc) => {
         if (ownedCaseIds.has(pc.caseId)) return true;
         if (pc.accountHolderName && pc.accountHolderName.toLowerCase() === memberName) return true;
-        if (pc.beneficiaryId === currentUser.userId) return true;
+        // pc.beneficiaryId is a LandOwner uuid; currentUser.userId is not.
         if (pc.myKadNumber && cleanIc && pc.myKadNumber.replace(/[^a-zA-Z0-9]/g, "").toLowerCase() === cleanIc) return true;
         return false;
       });
@@ -1716,7 +1746,7 @@ export async function getAllCases(userRole?: string, userId?: string) {
 
 export async function getSavedBankDetails(userId?: string, myKadNumber?: string, userName?: string) {
   let currentUser: { userId: string; name: string; email: string; identificationNumber: string | null } | null = null;
-  if (userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+  if (userId && isUserId(userId)) {
     currentUser = await prisma.user.findUnique({
       where: { userId },
       select: { userId: true, name: true, email: true, identificationNumber: true },
@@ -1783,7 +1813,9 @@ export async function getSavedBankDetails(userId?: string, myKadNumber?: string,
             some: {
               landOwner: {
                 OR: [
-                  { ownerId: currentUser.userId },
+                  // ownerId is a LandOwner uuid; currentUser.userId is a custom
+                  // USR-YYYY-MM-NNNN string, so comparing them made Postgres
+                  // reject the query. Identity is matched on name/email/NRIC.
                   { name: currentUser.name },
                   { email: currentUser.email.toLowerCase() },
                   ...(cleanIc ? [{ nric: cleanIc }] : []),
@@ -1809,7 +1841,8 @@ export async function getSavedBankDetails(userId?: string, myKadNumber?: string,
         },
         OR: [
           ...(ownedCaseIds.size > 0 ? [{ caseId: { in: Array.from(ownedCaseIds) } }] : []),
-          { beneficiaryId: currentUser.userId },
+          // beneficiaryId is a LandOwner uuid — never equal to a User's
+          // USR-YYYY-MM-NNNN id, so this branch used to poison the whole query.
           ...(cleanIc ? [{ myKadNumber: cleanIc }] : []),
           { accountHolderName: { equals: currentUser.name, mode: "insensitive" } },
         ],
@@ -1889,7 +1922,7 @@ export async function getSavedBankDetails(userId?: string, myKadNumber?: string,
   const matchingCases = paymentCasesWithBank.filter((pc) => {
     if (ownedCaseIds.has(pc.caseId)) return true;
     if (pc.accountHolderName && pc.accountHolderName.toLowerCase() === name) return true;
-    if (pc.beneficiaryId === userId) return true;
+    // pc.beneficiaryId is a LandOwner uuid; userId is not.
     if (pc.myKadNumber && cleanIc && pc.myKadNumber.replace(/[^a-zA-Z0-9]/g, "").toLowerCase() === cleanIc) return true;
     return false;
   });
@@ -1928,7 +1961,7 @@ export async function saveMemberBankDetails(
   const cleanAccountNumber = data.accountNumber.replace(/[\s-]/g, "");
   await bankService.validateBankAccount(data.bankName, cleanAccountNumber);
 
-  const user = userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)
+  const user = userId && isUserId(userId)
     ? await prisma.user.findUnique({ where: { userId } })
     : null;
   const cleanIc = normalizeNric(user?.identificationNumber || data.myKadNumber);
@@ -1962,7 +1995,7 @@ export async function saveMemberBankDetails(
   }
 
   // FR-016 flow 2: persist the default payout account so it survives restarts.
-  if (userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+  if (userId && isUserId(userId)) {
     try {
       await prisma.memberPayoutDetail.upsert({
         where: { userId },
@@ -2013,7 +2046,9 @@ export async function saveMemberBankDetails(
       const owners = ac?.landParcel?.ownerships?.map((o: any) => o.landOwner).filter(Boolean) || [];
       isOwner = isOwnedBy(owners, identity);
     }
-    if (isOwner || pc.beneficiaryId === userId) {
+    // pc.beneficiaryId is a LandOwner uuid; userId is not — isOwnedBy above is
+    // the authoritative ownership check.
+    if (isOwner) {
       try {
         const encryptedBankDetails = Buffer.from(cleanAccountNumber).toString("base64");
         await prisma.receiverBankDetails.upsert({

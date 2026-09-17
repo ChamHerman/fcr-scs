@@ -16,7 +16,7 @@ const NETWORK_OPTIONS = [
 ];
 
 const NETWORK_DESCRIPTIONS: Record<string, string> = {
-  sepolia: 'Active Default Network: Public Ethereum Sepolia Testnet (chainId 11155111). Uses deployed contract 0x5539d016e1A4Bd1e51d17D976D1ff05cb452B428 and Infura RPC.',
+  sepolia: 'Active Default Network: Public Ethereum Sepolia Testnet (chainId 11155111). Uses deployed contract 0x2C70972aB361481fc2cc6602E04F1A579F87b565 and Infura RPC.',
   mainnet: 'Real Ethereum mainnet (chainId 1). Requires MAINNET_RPC_URL and real funds.',
 };
 
