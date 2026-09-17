@@ -332,16 +332,16 @@ export default function InitiateTransfer() {
             </tbody>
           </table>
         </div>
-      </div>
 
-      <Pagination
-        currentPage={safePage}
-        totalPages={totalPages}
-        totalCount={totalCount}
-        pageSize={pageSize}
-        onPageChange={setCurrentPage}
-        itemLabel="eligible cases"
-      />
+        <Pagination
+          currentPage={safePage}
+          totalPages={totalPages}
+          totalCount={totalCount}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          itemLabel="eligible cases"
+        />
+      </div>
 
       <div style={{ height: '32px' }} />
 

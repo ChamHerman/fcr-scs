@@ -743,16 +743,16 @@ export const BlockchainDashboard: React.FC = () => {
             </tbody>
           </table>
         </div>
-      </div>
 
-      <Pagination
-        currentPage={safePage}
-        totalPages={totalPages}
-        totalCount={totalCount}
-        pageSize={pageSize}
-        onPageChange={setCurrentPage}
-        itemLabel="ledger records"
-      />
+        <Pagination
+          currentPage={safePage}
+          totalPages={totalPages}
+          totalCount={totalCount}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          itemLabel="ledger records"
+        />
+      </div>
 
       <div style={{ height: '32px' }} />
 

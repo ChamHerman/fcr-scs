@@ -295,16 +295,16 @@ export default function FailedTransactions() {
             </tbody>
           </table>
         </div>
-      </div>
 
-      <Pagination
-        currentPage={safePage}
-        totalPages={totalPages}
-        totalCount={totalCount}
-        pageSize={pageSize}
-        onPageChange={setCurrentPage}
-        itemLabel="failed transactions"
-      />
+        <Pagination
+          currentPage={safePage}
+          totalPages={totalPages}
+          totalCount={totalCount}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          itemLabel="failed transactions"
+        />
+      </div>
 
       <div style={{ height: '32px' }} />
 
