@@ -11,6 +11,7 @@ import {
   CreditCard,
   FolderKanban,
   Archive,
+  Layers,
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -33,7 +34,7 @@ import { Select } from '../../components/ui/Select';
 import { Modal } from '../../components/ui/Modal';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { usePollingRefresh } from '../../hooks/usePollingRefresh';
-import { STATES } from './reportConstants';
+import { caseStatusLabel, paymentStatusLabel } from './reportConstants';
 import { ReportSummaryCards, ReportDataTable } from './reportComponents';
 import {
   fetchDashboardOverview,
@@ -119,7 +120,7 @@ const StatCard: React.FC<{
 );
 
 export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCategory }) => {
-  useDocumentTitle('Reports Dashboard');
+  useDocumentTitle(reportCategory ? `${reportCategory} Report` : 'Reports Overview');
   const navigate = useNavigate();
   const location = useLocation();
   const { notify } = useNotification();
@@ -131,6 +132,23 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
   const [selectedState, setSelectedState] = useState('All states');
   const [fullReportOpen, setFullReportOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
+
+  // Dynamically derive available states strictly from loaded table records
+  const availableStates = useMemo(() => {
+    const set = new Set<string>();
+    (categoryData?.details || []).forEach((row: any) => {
+      if (row.state && row.state !== 'Not recorded') {
+        set.add(row.state);
+      }
+    });
+    return ['All states', ...Array.from(set).sort()];
+  }, [categoryData?.details]);
+
+  useEffect(() => {
+    if (selectedState !== 'All states' && !availableStates.includes(selectedState)) {
+      setSelectedState('All states');
+    }
+  }, [availableStates, selectedState]);
 
   const categorySeqRef = useRef(0);
   const { user } = useAuth();
@@ -256,7 +274,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
   };
 
   // Case Status Chart Data
-  const caseLabels = data ? Object.keys(data.caseStatusDistribution).map(k => k.replace(/_/g, ' ')) : [];
+  const caseLabels = data ? Object.keys(data.caseStatusDistribution).map(k => caseStatusLabel(k)) : [];
   const caseValues = data ? Object.values(data.caseStatusDistribution) : [];
   const doughnutData = {
     labels: caseLabels.length ? caseLabels : ['Registered', 'In Valuation', 'Approved', 'Paid'],
@@ -269,7 +287,9 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
           '#7D5260',
           '#4CAF50',
           '#FF9800',
-          '#03A9F4'
+          '#03A9F4',
+          '#009688',
+          '#9C27B0',
         ],
         borderWidth: 2,
         borderColor: '#ffffff',
@@ -297,15 +317,16 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
   };
 
   // Payment Breakdown Bar Chart Data
-  const paymentLabels = data ? Object.keys(data.paymentStatusDistribution) : ['Paid', 'Approved', 'Initiated'];
+  const paymentLabels = data ? Object.keys(data.paymentStatusDistribution).map(k => paymentStatusLabel(k)) : ['Paid', 'Approved', 'Initiated'];
   const paymentTotals = data ? Object.values(data.paymentStatusDistribution).map(p => p.total / 1000) : [2450, 950, 450];
+  const barChartColors = ['#4CAF50', '#6750A4', '#FF9800', '#0277BD', '#7D5260', '#9C27B0', '#009688'];
   const barChartData = {
     labels: paymentLabels,
     datasets: [
       {
         label: 'Disbursement Volume (RM in Thousands)',
         data: paymentTotals,
-        backgroundColor: ['#4CAF50', '#6750A4', '#FF9800'],
+        backgroundColor: paymentLabels.map((_, i) => barChartColors[i % barChartColors.length]),
         borderRadius: 8,
       },
     ],
@@ -361,8 +382,8 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
       };
     }
     return {
-      title: 'Reporting & Analytics Dashboard',
-      subtitle: 'Real-time analytics and statutory compliance overview.',
+      title: 'Reports Overview',
+      subtitle: 'Comprehensive overview of land acquisition cases, disbursement progress, and blockchain notarization.',
     };
   };
 
@@ -377,7 +398,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
       />
 
       {/* KPI Cards Grid */}
-      <div className={`grid gap-4 ${reportCategory === 'Case Status' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5' : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-4'}`}>
+      <div className={`grid gap-4 ${reportCategory === 'Case Status' || reportCategory === 'Payment' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5' : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-4'}`}>
         {/* Case Status View Specific KPIs */}
         {reportCategory === 'Case Status' && (
           <>
@@ -390,37 +411,82 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
         )}
 
         {/* Payment View Specific KPIs */}
-        {reportCategory === 'Payment' && (
-          <>
-            <StatCard icon={<CreditCard size={16} className="text-[#1e7b4a]" />} label="Total Disbursements" value={categoryData?.summary?.totalDisbursement ?? 'RM 0.00'} sub="Cleared to Beneficiary" />
-            <StatCard icon={<TrendingUp size={16} className="text-[#a8600b]" />} label="Undisbursed Amount" value={categoryData?.summary?.undisbursedAmount ?? 'RM 0.00'} sub="Awaiting Settlement" />
-            <StatCard icon={<CheckCircle2 size={16} className="text-[#0b5b8c]" />} label="Disbursement Rate" value={categoryData?.summary?.disbursementRate ?? categoryData?.summary?.successRate ?? '0%'} sub="Disbursed / Pipeline Volume" />
-            <StatCard icon={<FolderKanban size={16} className="text-[#6750A4]" />} label="Settled Records" value={`${categoryData?.summary?.successfulPayments ?? 0} Paid`} sub={`${categoryData?.summary?.pendingPayments ?? 0} Pending Clearance`} />
-          </>
-        )}
+        {reportCategory === 'Payment' && (() => {
+          const details = categoryData?.details || [];
+          const parseAmt = (val: any): number => {
+            if (typeof val === "number") return val;
+            const clean = String(val || "").replace(/[^0-9.-]+/g, "");
+            const parsed = parseFloat(clean);
+            return isNaN(parsed) ? 0 : parsed;
+          };
+
+          const pendingClearanceRows = details.filter((d: any) => {
+            const cs = String(d.clearanceStatus || "").toLowerCase();
+            const ref = String(d.bankReference || "").toLowerCase();
+            const st = String(d.status || "").toUpperCase();
+            return cs === "pending clearance" || ref.includes("pending") || (!st.includes("PAID") && !st.includes("SUCCEED"));
+          });
+          const dynamicUndisbursedNum = pendingClearanceRows.reduce((sum: number, d: any) => sum + parseAmt(d.amount), 0);
+
+          const settledRows = details.filter((d: any) => {
+            const cs = String(d.clearanceStatus || "").toLowerCase();
+            const st = String(d.status || "").toUpperCase();
+            return cs === "cleared" || st === "PAID" || st === "TRANSFER_SUCCEED";
+          });
+          const dynamicDisbursedNum = settledRows.reduce((sum: number, d: any) => sum + parseAmt(d.amount), 0);
+          const dynamicTotalVolNum = dynamicDisbursedNum + dynamicUndisbursedNum;
+          const dynamicRate = dynamicTotalVolNum > 0 ? Math.round((dynamicDisbursedNum / dynamicTotalVolNum) * 100) : 0;
+
+          const totalVolStr = dynamicTotalVolNum > 0
+            ? `RM ${dynamicTotalVolNum.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : "RM 0.00";
+          const disbursedStr = dynamicDisbursedNum > 0
+            ? `RM ${dynamicDisbursedNum.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : (categoryData?.summary?.totalDisbursement ?? "RM 0.00");
+          const undisbursedStr = dynamicUndisbursedNum > 0
+            ? `RM ${dynamicUndisbursedNum.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : (categoryData?.summary?.undisbursedAmount ?? "RM 0.00");
+
+          return (
+            <>
+              <StatCard icon={<Layers size={16} className="text-[#6750A4]" />} label="Total Volume" value={totalVolStr} sub="Total Pipeline Volume" />
+              <StatCard icon={<CreditCard size={16} className="text-[#1e7b4a]" />} label="Total Disbursements" value={disbursedStr} sub="Cleared to Beneficiary" />
+              <StatCard icon={<TrendingUp size={16} className="text-[#a8600b]" />} label="Undisbursed Amount" value={undisbursedStr} sub="Pending Clearance" />
+              <StatCard icon={<CheckCircle2 size={16} className="text-[#0b5b8c]" />} label="Disbursement Rate" value={`${dynamicRate}%`} sub="Disbursed / Pipeline Volume" />
+              <StatCard icon={<FolderKanban size={16} className="text-[#5B4296]" />} label="Settled Records" value={`${settledRows.length} Paid`} sub={`${pendingClearanceRows.length} Pending Clearance`} />
+            </>
+          );
+        })()}
 
         {/* Blockchain Audit View Specific KPIs */}
-        {reportCategory === 'Blockchain Audit' && (
-          <>
-            <StatCard icon={<ShieldCheck size={16} className="text-[#0b5b8c]" />} label="Total Ledger Records" value={categoryData?.summary?.totalRecords ?? 0} sub="Smart Contract Events" />
-            <StatCard icon={<CheckCircle2 size={16} className="text-[#1e7b4a]" />} label="Published On-Chain" value={categoryData?.summary?.publishedRecords ?? 0} sub="Ethereum Sepolia Verified" />
-            <StatCard icon={<Clock size={16} className="text-[#a8600b]" />} label="Ready to Publish" value={categoryData?.summary?.readyToPublishRecords ?? 0} sub="Pending Publication" />
-            <StatCard
-              icon={<ShieldCheck size={16} className="text-[#6750A4]" />}
-              label="Cryptographic Proof"
-              value={categoryData?.summary?.notarizedPercentage ?? '100%'}
-              sub={categoryData?.summary?.notarizedRatio ?? `${categoryData?.summary?.publishedRecords ?? 0}/${categoryData?.summary?.totalRecords ?? 0} Notarized`}
-            />
-          </>
-        )}
+        {reportCategory === 'Blockchain Audit' && (() => {
+          const totalRecs = Number(categoryData?.summary?.totalRecords ?? (categoryData?.details?.length ?? 0));
+          const publishedRecs = Number(categoryData?.summary?.publishedRecords ?? (categoryData?.details?.filter((r: any) => String(r.status).toUpperCase() === 'PUBLISHED').length ?? 0));
+          const dynamicCryptoPercentage = totalRecs > 0 ? `${Math.round((publishedRecs / totalRecs) * 100)}%` : '0%';
+          const dynamicCryptoRatio = `${publishedRecs}/${totalRecs} Notarized`;
+
+          return (
+            <>
+              <StatCard icon={<ShieldCheck size={16} className="text-[#0b5b8c]" />} label="Total Ledger Records" value={totalRecs} sub="Smart Contract Events" />
+              <StatCard icon={<CheckCircle2 size={16} className="text-[#1e7b4a]" />} label="Published On-Chain" value={publishedRecs} sub="Ethereum Sepolia Verified" />
+              <StatCard icon={<Clock size={16} className="text-[#a8600b]" />} label="Ready to Publish" value={categoryData?.summary?.readyToPublishRecords ?? (totalRecs - publishedRecs)} sub="Pending Publication" />
+              <StatCard
+                icon={<ShieldCheck size={16} className="text-[#6750A4]" />}
+                label="Cryptographic Proof"
+                value={dynamicCryptoPercentage}
+                sub={dynamicCryptoRatio}
+              />
+            </>
+          );
+        })()}
 
         {/* Overview (All) Default KPIs */}
         {!reportCategory && (
           <>
             <StatCard icon={<FolderKanban size={16} className="text-[#6750A4]" />} label="Total Acquisition Cases" value={data?.kpis.totalCases ?? 0} sub={`${data?.kpis.paymentCompletedCases ?? (data?.kpis.completedCases ?? 0)} Completed • ${data?.kpis.closedCases ?? 0} Closed`} />
-            <StatCard icon={<CreditCard size={16} className="text-[#1e7b4a]" />} label="Total Paid Out" value={`RM ${((data?.kpis.totalSettledAmount || 0) / 1000000).toFixed(2)}M`} sub={`of RM ${((data?.kpis.totalCompensationAmount || 0) / 1000000).toFixed(2)}M payment volume`} />
+            <StatCard icon={<CreditCard size={16} className="text-[#1e7b4a]" />} label="Total Disbursements" value={`RM ${((data?.kpis.totalSettledAmount || 0) / 1000000).toFixed(2)}M`} sub={`of RM ${((data?.kpis.totalCompensationAmount || 0) / 1000000).toFixed(2)}M Total Pipeline Volume`} />
             <StatCard icon={<ShieldCheck size={16} className="text-[#0b5b8c]" />} label="Blockchain Notarized" value={data?.kpis.publishedBlockchainRecords ?? 0} sub={`${data?.kpis.readyToPublishBlockchainRecords ?? 0} ready to publish`} />
-            <StatCard icon={<TrendingUp size={16} className="text-[#a8600b]" />} label="Active Pipeline" value={data?.kpis.activeCases ?? 0} sub="Cases not yet closed" />
+            <StatCard icon={<TrendingUp size={16} className="text-[#a8600b]" />} label="Active in Pipeline" value={data?.kpis.activeCases ?? 0} sub="In Progress / Review" />
           </>
         )}
       </div>
@@ -497,10 +563,10 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
                   label="State"
                   value={selectedState}
                   onChange={setSelectedState}
-                  options={[
-                    { value: 'All states', label: 'All States' },
-                    ...Object.keys(STATES).map((s) => ({ value: s, label: s })),
-                  ]}
+                  options={availableStates.map((s) => ({
+                    value: s,
+                    label: s === 'All states' ? 'All States' : s,
+                  }))}
                 />
               </div>
             )}

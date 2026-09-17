@@ -24,7 +24,6 @@ import { useRole } from '../../hooks/useRole';
 import { getRoleTitle } from '../../utils/roleUtils';
 import {
   ALL_OPTION,
-  STATES,
   caseStatusLabel,
   paymentStatusLabel,
   blockchainStatusLabel
@@ -116,14 +115,48 @@ export const GenerateReports: React.FC = () => {
     return null;
   }, [isBlockchain, startDate, endDate]);
 
+  // Dynamically derive available states strictly from loaded table records
+  const availableStateValues = useMemo(() => {
+    const set = new Set<string>();
+    baseRecords.forEach((r: any) => {
+      if (r.state && r.state !== 'Not recorded') {
+        set.add(r.state);
+      }
+    });
+    return Array.from(set).sort();
+  }, [baseRecords]);
+
+  // Dropdown shows "All States" plus only the states that exist in active records
+  const currentStateOptions = useMemo<SelectOption[]>(() => {
+    return [
+      { value: 'All', label: 'All States' },
+      ...availableStateValues.map((s) => ({ value: s, label: s })),
+    ];
+  }, [availableStateValues]);
+
+  // Revert state to 'All' if selected state is not present in available records
+  useEffect(() => {
+    if (state !== 'All' && !availableStateValues.includes(state)) {
+      setState('All');
+    }
+  }, [availableStateValues, state]);
+
+  // Scope status records: for Case Status Report with a specific state selected, narrow down to that state
+  const recordsForStatus = useMemo(() => {
+    if (category === 'Case Status Report' && state !== 'All') {
+      return baseRecords.filter((r: any) => r.state === state);
+    }
+    return baseRecords;
+  }, [baseRecords, category, state]);
+
   // Dynamically derive available statuses strictly from loaded table records
   const availableStatusValues = useMemo(() => {
     const set = new Set<string>();
-    baseRecords.forEach((r: any) => {
+    recordsForStatus.forEach((r: any) => {
       if (r.status) set.add(r.status);
     });
-    return Array.from(set);
-  }, [baseRecords]);
+    return Array.from(set).sort();
+  }, [recordsForStatus]);
 
   // Dropdown shows "All statuses" plus only the statuses that exist in the active records
   const currentStatusOptions = useMemo<SelectOption[]>(() => {
@@ -183,7 +216,7 @@ export const GenerateReports: React.FC = () => {
       setPreviewData(res);
 
       // Keep baseRecords populated with the complete unfiltered set for this scope
-      if (status === 'All') {
+      if (status === 'All' && state === 'All') {
         setBaseRecords(res.details || []);
       }
     } catch (err: any) {
@@ -194,13 +227,18 @@ export const GenerateReports: React.FC = () => {
     } finally {
       if (seq === seqRef.current) setLoading(false);
     }
-  }, [category, buildFilters, dateError, isRoleRestricted, status]);
+  }, [category, buildFilters, dateError, isRoleRestricted, status, state]);
 
-  // On category, date range or state change, fetch the base dataset to discover available statuses
+  // On category or date range change, fetch the baseline dataset without state/status constraints
+  // so the dropdown filters can dynamically discover all available states and statuses for the scope
   useEffect(() => {
     if (isRoleRestricted || dateError) return;
     let isMounted = true;
-    const baseFilters = buildFilters('All');
+    const baseFilters: ReportFilterOptions = {
+      startDate: isBlockchain ? undefined : startDate,
+      endDate: isBlockchain ? undefined : endDate,
+      operator,
+    };
 
     const fetchBase = async () => {
       try {
@@ -224,7 +262,7 @@ export const GenerateReports: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [category, startDate, endDate, state, buildFilters, isRoleRestricted, dateError]);
+  }, [category, startDate, endDate, operator, isRoleRestricted, dateError, isBlockchain]);
 
   // Real-time preview: debounce filter changes
   useEffect(() => {
@@ -309,10 +347,7 @@ export const GenerateReports: React.FC = () => {
               label="State / Territory"
               value={state}
               onChange={setState}
-              options={[
-                { value: 'All', label: 'All States' },
-                ...Object.keys(STATES).map((s) => ({ value: s, label: s })),
-              ]}
+              options={currentStateOptions}
             />
           )}
 

@@ -9,6 +9,7 @@ import {
 import { generatePdfBuffer } from "../services/pdf.service";
 import { logAudit } from "../../../user_management_service/src/services/audit.service";
 import { AuthenticatedRequest } from "../../../user_management_service/src/middleware/auth.middleware";
+import { prisma } from "../../../user_management_service/src/prisma";
 
 export const getOverviewStats = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -20,11 +21,28 @@ export const getOverviewStats = async (req: Request, res: Response): Promise<voi
   }
 };
 
-const resolveOperator = (req: Request, defaultRole: 'officer' | 'admin'): string => {
-  if (req.query.operator && typeof req.query.operator === 'string') {
-    return req.query.operator;
+const resolveOperator = async (req: Request, defaultRole: 'officer' | 'admin'): Promise<string> => {
+  if (req.query.operator && typeof req.query.operator === 'string' && req.query.operator.trim()) {
+    return req.query.operator.trim();
   }
-  const user = (req as AuthenticatedRequest).user;
+  let user = (req as AuthenticatedRequest).user;
+  if (!user && req.headers.authorization) {
+    try {
+      const authHeader = req.headers.authorization;
+      const sessionToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader.split(' ')[1];
+      if (sessionToken) {
+        const session = await prisma.userSession.findUnique({
+          where: { sessionToken },
+          include: { user: true },
+        });
+        if (session && session.user && session.expiresAt > new Date()) {
+          user = session.user;
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }
   if (user?.name) {
     const roleTitle = user.role === 'GOVERNMENT_OFFICER'
       ? 'Government Officer'
@@ -38,7 +56,8 @@ const resolveOperator = (req: Request, defaultRole: 'officer' | 'admin'): string
 
 export const getCaseStatusReport = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { format, startDate, endDate, state, status, location, projectType, operator } = req.query;
+    const { format, startDate, endDate, state, status, location, projectType } = req.query;
+    const resolvedOperator = await resolveOperator(req, 'officer');
     const filters: ReportFilterParams = {
       startDate: startDate as string,
       endDate: endDate as string,
@@ -46,7 +65,7 @@ export const getCaseStatusReport = async (req: Request, res: Response): Promise<
       status: status as string,
       location: location as string,
       projectType: projectType as string,
-      operator: resolveOperator(req, 'officer'),
+      operator: resolvedOperator,
     };
 
     const data = await generateCaseStatusData(filters);
@@ -92,12 +111,13 @@ export const getCaseStatusReport = async (req: Request, res: Response): Promise<
 
 export const getPaymentReport = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { format, startDate, endDate, status, operator } = req.query;
+    const { format, startDate, endDate, status } = req.query;
+    const resolvedOperator = await resolveOperator(req, 'admin');
     const filters: ReportFilterParams = {
       startDate: startDate as string,
       endDate: endDate as string,
       status: status as string,
-      operator: resolveOperator(req, 'admin'),
+      operator: resolvedOperator,
     };
 
     const data = await generatePaymentData(filters);
@@ -143,12 +163,13 @@ export const getPaymentReport = async (req: Request, res: Response): Promise<voi
 
 export const getBlockchainAuditReport = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { format, startDate, endDate, status, operator } = req.query;
+    const { format, startDate, endDate, status } = req.query;
+    const resolvedOperator = await resolveOperator(req, 'admin');
     const filters: ReportFilterParams = {
       startDate: startDate as string,
       endDate: endDate as string,
       status: status as string,
-      operator: resolveOperator(req, 'admin'),
+      operator: resolvedOperator,
     };
 
     const data = await generateBlockchainAuditData(filters);

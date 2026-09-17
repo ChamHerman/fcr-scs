@@ -35,8 +35,14 @@ export const generatePdfBuffer = async (reportTitle: string, reportData: any): P
       doc.fillColor("#FFFFFF").fontSize(11.5).font("Helvetica-Bold")
         .text("FAIR COMPENSATION & RESETTLEMENT SMART CONTRACT SYSTEM", pageMargin + 14, bannerY + 22);
 
+      const subsystemTitle = reportData.reportType === "Case Status Report"
+        ? "Government Land Acquisition Reporting & Statutory Lifecycle Subsystem (Act 486)"
+        : (reportData.reportType === "Payment Report"
+          ? "Government Financial Disbursement & Compensation Subsystem (Act 486)"
+          : "Government Administration Reporting & Statutory Audit Subsystem (Act 486)");
+
       doc.fillColor("#D0BCFF").fontSize(8).font("Helvetica")
-        .text("Government Administration Reporting & Statutory Audit Subsystem (Act 486)", pageMargin + 14, bannerY + 38);
+        .text(subsystemTitle, pageMargin + 14, bannerY + 38);
 
       // Security Classification Pill on Banner Right
       const pillWidth = 100;
@@ -54,6 +60,7 @@ export const generatePdfBuffer = async (reportTitle: string, reportData: any): P
       doc.moveDown(0.25);
 
       const genDate = new Date(reportData.generatedAt || Date.now()).toLocaleString("en-GB", {
+        timeZone: "Asia/Kuala_Lumpur",
         day: "2-digit",
         month: "short",
         year: "numeric",
@@ -64,14 +71,18 @@ export const generatePdfBuffer = async (reportTitle: string, reportData: any): P
 
       const reportId = reportData.reportId || `RPT-${Date.now().toString().slice(-6)}`;
       const operatorText = reportData.operator || (reportData.reportType === "Case Status Report" ? "Government Officer (JKPTG)" : "Gov Administrator (Government Administrator)");
+      
       doc.fillColor(secondaryTextColor).fontSize(8).font("Helvetica")
-        .text(`Report ID: ${reportId}   •   Generated: ${genDate}   •   Classification: OFFICIAL (SULIT)   •   Operator: ${operatorText}`, pageMargin, doc.y);
+        .text(`Report ID: ${reportId}   •   Generated: ${genDate}   •   Classification: OFFICIAL (SULIT)`, pageMargin, doc.y);
+      doc.moveDown(0.2);
+      doc.fillColor(secondaryTextColor).fontSize(8).font("Helvetica")
+        .text(`Operator: ${operatorText}`, pageMargin, doc.y);
 
       // Filter scope line
       let filterSummary = "All records (National Scope — Unrestricted)";
       if (reportData.filterApplied && typeof reportData.filterApplied === "object") {
         const activeEntries = Object.entries(reportData.filterApplied).filter(
-          ([_, v]) => v && v !== "All" && v !== "All states" && v !== "All Statuses" && v !== "All statuses"
+          ([k, v]) => k !== "operator" && k !== "format" && v && v !== "All" && v !== "All states" && v !== "All Statuses" && v !== "All statuses"
         );
         if (activeEntries.length > 0) {
           filterSummary = activeEntries
@@ -80,7 +91,7 @@ export const generatePdfBuffer = async (reportTitle: string, reportData: any): P
         }
       }
 
-      doc.moveDown(0.3);
+      doc.moveDown(0.25);
       doc.fillColor(primaryColor).fontSize(8).font("Helvetica-Bold")
         .text("Filter Scope: ", pageMargin, doc.y, { continued: true })
         .font("Helvetica").fillColor(secondaryTextColor).text(filterSummary);
@@ -106,22 +117,65 @@ export const generatePdfBuffer = async (reportTitle: string, reportData: any): P
             { label: "Avg Lifecycle", value: String(reportData.summary.averageAgingDays ?? "0 days") },
           ];
         } else if (reportData.reportType === "Payment Report") {
+          const details = reportData.details || [];
+          const parseAmt = (val: any): number => {
+            if (typeof val === "number") return val;
+            const clean = String(val || "").replace(/[^0-9.-]+/g, "");
+            const parsed = parseFloat(clean);
+            return isNaN(parsed) ? 0 : parsed;
+          };
+
+          const pendingClearanceRows = details.filter((d: any) => {
+            const cs = String(d.clearanceStatus || "").toLowerCase();
+            const ref = String(d.bankReference || "").toLowerCase();
+            const st = String(d.status || "").toUpperCase();
+            return cs === "pending clearance" || ref.includes("pending") || (!st.includes("PAID") && !st.includes("SUCCEED"));
+          });
+          const dynamicUndisbursedNum = pendingClearanceRows.reduce((sum: number, d: any) => sum + parseAmt(d.amount), 0);
+
+          const settledRows = details.filter((d: any) => {
+            const cs = String(d.clearanceStatus || "").toLowerCase();
+            const st = String(d.status || "").toUpperCase();
+            return cs === "cleared" || st === "PAID" || st === "TRANSFER_SUCCEED";
+          });
+          const dynamicDisbursedNum = settledRows.reduce((sum: number, d: any) => sum + parseAmt(d.amount), 0);
+          const dynamicTotalVolNum = dynamicDisbursedNum + dynamicUndisbursedNum;
+          const dynamicRate = dynamicTotalVolNum > 0 ? Math.round((dynamicDisbursedNum / dynamicTotalVolNum) * 100) : 0;
+
+          const totalVolStr = dynamicTotalVolNum > 0
+            ? `RM ${dynamicTotalVolNum.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : (reportData.summary.totalPaymentVolume ?? "RM 0.00");
+          const disbursedStr = dynamicDisbursedNum > 0
+            ? `RM ${dynamicDisbursedNum.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : (reportData.summary.totalDisbursement ?? "RM 0.00");
+          const undisbursedStr = dynamicUndisbursedNum > 0
+            ? `RM ${dynamicUndisbursedNum.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : (reportData.summary.undisbursedAmount ?? "RM 0.00");
+
           statItems = [
-            { label: "Total Volume", value: String(reportData.summary.totalPaymentVolume ?? "RM 0.00") },
-            { label: "Total Disbursed", value: String(reportData.summary.totalDisbursement ?? "RM 0.00") },
-            { label: "Undisbursed", value: String(reportData.summary.undisbursedAmount ?? "RM 0.00") },
-            { label: "Disbursement Rate", value: String(reportData.summary.disbursementRate ?? reportData.summary.successRate ?? "0%") },
-            { label: "Paid / Pending", value: `${reportData.summary.successfulPayments ?? 0} Paid`, sub: `${reportData.summary.pendingPayments ?? 0} Pending` },
+            { label: "Total Volume", value: totalVolStr },
+            { label: "Total Disbursed", value: disbursedStr },
+            { label: "Undisbursed", value: undisbursedStr },
+            {
+              label: "Disbursed Rate",
+              value: `${dynamicRate}%`,
+              sub: `${settledRows.length} Paid / ${details.length} Total`,
+            },
           ];
         } else if (reportData.reportType === "Blockchain Audit Report") {
+          const totalRecs = Number(reportData.summary.totalRecords ?? (reportData.details?.length ?? 0));
+          const publishedRecs = Number(reportData.summary.publishedRecords ?? (reportData.details?.filter((r: any) => String(r.status).toUpperCase() === "PUBLISHED").length ?? 0));
+          const dynamicCryptoPercentage = totalRecs > 0 ? `${Math.round((publishedRecs / totalRecs) * 100)}%` : "0%";
+          const dynamicCryptoRatio = `${publishedRecs}/${totalRecs} Notarized`;
+
           statItems = [
-            { label: "Total Ledger Records", value: String(reportData.summary.totalRecords ?? 0) },
-            { label: "Published to Sepolia", value: String(reportData.summary.publishedRecords ?? 0) },
-            { label: "Ready to Publish", value: String(reportData.summary.readyToPublishRecords ?? 0) },
+            { label: "Total Records", value: String(totalRecs) },
+            { label: "Published to Sepolia", value: String(publishedRecs) },
+            { label: "Ready to Publish", value: String(reportData.summary.readyToPublishRecords ?? (totalRecs - publishedRecs)) },
             {
               label: "Cryptographic Proof",
-              value: String(reportData.summary.notarizedPercentage ?? "100%"),
-              sub: String(reportData.summary.notarizedRatio ?? `${reportData.summary.publishedRecords ?? 0}/${reportData.summary.totalRecords ?? 0} Notarized`),
+              value: dynamicCryptoPercentage,
+              sub: dynamicCryptoRatio,
             },
           ];
         }
@@ -194,14 +248,15 @@ export const generatePdfBuffer = async (reportTitle: string, reportData: any): P
           .text("No records found matching the specified report criteria.", pageMargin, doc.y + 10);
       }
 
-      // Add Footer with Page Numbers
+      // Add Footer with Page Numbers without triggering automatic blank pages
       const totalPages = doc.bufferedPageRange().count;
       for (let i = 0; i < totalPages; i++) {
         doc.switchToPage(i);
+        doc.page.margins.bottom = 0;
         doc.rect(pageMargin, doc.page.height - 30, printableWidth, 0.5).fill(borderColor);
         doc.fillColor(secondaryTextColor).fontSize(7).font("Helvetica")
-          .text("Federal Land Acquisition & Compensation System (FCR-SCS)  •  Governed by Land Acquisition Act 1960  •  Confidential Audit Record", pageMargin, doc.page.height - 22, { align: "left" });
-        doc.text(`Page ${i + 1} of ${totalPages}`, doc.page.width - pageMargin - 80, doc.page.height - 22, { width: 80, align: "right" });
+          .text("Federal Land Acquisition & Compensation System (FCR-SCS)  •  Governed by Land Acquisition Act 1960  •  Confidential Audit Record", pageMargin, doc.page.height - 22, { align: "left", lineBreak: false });
+        doc.text(`Page ${i + 1} of ${totalPages}`, doc.page.width - pageMargin - 80, doc.page.height - 22, { width: 80, align: "right", lineBreak: false });
       }
 
       doc.end();
@@ -340,7 +395,15 @@ function renderPaymentTable(
       { header: "Bank Details", width: 80, value: (i) => i.bankName || "Commercial Bank" },
       { header: "Disbursement", width: 85, value: (i) => i.amount || i.formattedAmount || "-" },
       { header: "Bank Ref Number", width: 100, value: (i) => i.bankReference || "Pending Clearance" },
-      { header: "Clearance Status", width: 80, value: (i) => formatStatusText(i.status) },
+      {
+        header: "Clearance Status",
+        width: 80,
+        value: (i) =>
+          i.clearanceStatus ||
+          (["PAID", "TRANSFER_SUCCEED", "Paid", "Transfer Succeed"].includes(i.status)
+            ? "Cleared"
+            : "Pending Clearance"),
+      },
     ],
     items,
     headerBg,

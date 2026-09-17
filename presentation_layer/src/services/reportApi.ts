@@ -98,7 +98,12 @@ export async function fetchReportPdfBlob(
   const query = buildQuery(queryParams);
   const url = `${BASE_URL}/api/reports/${endpoint}${query}`;
 
-  const response = await fetch(url);
+  const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+  const headers: Record<string, string> = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  const response = await fetch(url, { headers });
   if (!response.ok) {
     throw new Error(`Failed to generate report PDF (${response.status})`);
   }

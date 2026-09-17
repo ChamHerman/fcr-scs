@@ -141,8 +141,18 @@ export const getDashboardOverviewStats = async () => {
 };
 
 const generateReportId = (prefix: string) => {
-  const d = new Date();
-  const dateStr = d.toISOString().slice(0, 10).replace(/-/g, "");
+  let dateStr: string;
+  try {
+    dateStr = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur" })
+      .format(new Date())
+      .replace(/-/g, "");
+  } catch {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    dateStr = `${year}${month}${day}`;
+  }
   const timeSuffix = Date.now().toString().slice(-4);
   return `RPT-${prefix}-${dateStr}-${timeSuffix}`;
 };
@@ -252,15 +262,19 @@ export const generatePaymentData = async (filters: ReportFilterParams) => {
     take: 100,
   });
 
-  const settledPayments = payments.filter((p) => SETTLED_PAYMENT_STATUSES.includes(p.status));
-  const totalPaymentVolume = payments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
+  const isSettledStatus = (st: PaymentStatus) => SETTLED_PAYMENT_STATUSES.includes(st);
+  const settledPayments = payments.filter((p) => isSettledStatus(p.status));
+  const pendingClearancePayments = payments.filter((p) => !isSettledStatus(p.status));
+
+  // 'Undisbursed Amount' dynamically calculates the sum of 'Disbursement' values for all rows where Clearance Status is Pending Clearance
   const totalDisbursementNum = settledPayments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
-  const undisbursedAmountNum = Math.max(0, totalPaymentVolume - totalDisbursementNum);
+  const undisbursedAmountNum = pendingClearancePayments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
+  const totalPaymentVolume = totalDisbursementNum + undisbursedAmountNum;
   const successfulPayments = settledPayments.length;
-  const pendingPayments = payments.length - successfulPayments;
+  const pendingPayments = pendingClearancePayments.length;
   const disbursementRate = totalPaymentVolume > 0
     ? Math.round((totalDisbursementNum / totalPaymentVolume) * 100)
-    : (payments.length > 0 ? Math.round((successfulPayments / payments.length) * 100) : 0);
+    : 0;
 
   return {
     reportType: "Payment Report",
@@ -279,15 +293,19 @@ export const generatePaymentData = async (filters: ReportFilterParams) => {
       disbursementRate: `${disbursementRate}%`,
       notes: "Audited disbursement records with national banking references.",
     },
-    details: payments.map((p) => ({
-      caseId: p.caseId,
-      payeeName: p.accountHolderName || "Beneficiary",
-      bankName: p.bankName || "National Bank",
-      amount: `RM ${Number(p.amount || 0).toLocaleString("en-MY", { minimumFractionDigits: 2 })}`,
-      status: p.status,
-      bankReference: p.receipt?.bankReferenceNumber || "Pending Clearance",
-      date: p.updatedAt.toISOString().slice(0, 10),
-    })),
+    details: payments.map((p) => {
+      const isSettled = isSettledStatus(p.status);
+      return {
+        caseId: p.caseId,
+        payeeName: p.accountHolderName || "Beneficiary",
+        bankName: p.bankName || "National Bank",
+        amount: `RM ${Number(p.amount || 0).toLocaleString("en-MY", { minimumFractionDigits: 2 })}`,
+        status: p.status,
+        clearanceStatus: isSettled ? "Cleared" : "Pending Clearance",
+        bankReference: p.receipt?.bankReferenceNumber || "Pending Clearance",
+        date: p.updatedAt.toISOString().slice(0, 10),
+      };
+    }),
   };
 };
 
@@ -328,7 +346,7 @@ export const generateBlockchainAuditData = async (filters: ReportFilterParams) =
 
   const publishedRecords = records.filter((r) => r.status === BlockchainStatus.PUBLISHED).length;
   const readyToPublishRecords = records.filter((r) => r.status === BlockchainStatus.READY_TO_PUBLISH).length;
-  const notarizedPercentageNum = records.length > 0 ? Math.round((publishedRecords / records.length) * 100) : 100;
+  const notarizedPercentageNum = records.length > 0 ? Math.round((publishedRecords / records.length) * 100) : 0;
   const notarizedRatio = `${publishedRecords}/${records.length} Notarized`;
 
   return {

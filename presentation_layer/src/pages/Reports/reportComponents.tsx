@@ -99,22 +99,63 @@ export const ReportSummaryCards: React.FC<{ data: ReportGeneratedResponse }> = (
       { label: 'Avg Lifecycle Duration', value: s.averageAgingDays ?? '0 days' },
     ];
   } else if (data.reportType === "Payment Report") {
+    const details = data.details || [];
+    const parseAmt = (val: any): number => {
+      if (typeof val === "number") return val;
+      const clean = String(val || "").replace(/[^0-9.-]+/g, "");
+      const parsed = parseFloat(clean);
+      return isNaN(parsed) ? 0 : parsed;
+    };
+
+    // Dynamically calculate sum of 'Disbursement' values for all rows where Clearance Status is 'Pending Clearance'
+    const pendingClearanceRows = details.filter((d: any) => {
+      const cs = String(d.clearanceStatus || "").toLowerCase();
+      const ref = String(d.bankReference || "").toLowerCase();
+      const st = String(d.status || "").toUpperCase();
+      return cs === "pending clearance" || ref.includes("pending") || (!st.includes("PAID") && !st.includes("SUCCEED"));
+    });
+    const dynamicUndisbursedNum = pendingClearanceRows.reduce((sum: number, d: any) => sum + parseAmt(d.amount), 0);
+
+    const settledRows = details.filter((d: any) => {
+      const cs = String(d.clearanceStatus || "").toLowerCase();
+      const st = String(d.status || "").toUpperCase();
+      return cs === "cleared" || st === "PAID" || st === "TRANSFER_SUCCEED";
+    });
+    const dynamicDisbursedNum = settledRows.reduce((sum: number, d: any) => sum + parseAmt(d.amount), 0);
+    const dynamicTotalVolNum = dynamicDisbursedNum + dynamicUndisbursedNum;
+    const dynamicRate = dynamicTotalVolNum > 0 ? Math.round((dynamicDisbursedNum / dynamicTotalVolNum) * 100) : 0;
+
+    const totalVolStr = dynamicTotalVolNum > 0
+      ? `RM ${dynamicTotalVolNum.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : (s.totalPaymentVolume ?? "RM 0.00");
+    const disbursedStr = dynamicDisbursedNum > 0
+      ? `RM ${dynamicDisbursedNum.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : (s.totalDisbursement ?? "RM 0.00");
+    const undisbursedStr = dynamicUndisbursedNum > 0
+      ? `RM ${dynamicUndisbursedNum.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : (s.undisbursedAmount ?? "RM 0.00");
+
     cards = [
-      { label: 'Total Volume', value: s.totalPaymentVolume ?? 'RM 0.00', sub: 'Pipeline Allocation' },
-      { label: 'Total Disbursed', value: s.totalDisbursement ?? 'RM 0.00', sub: 'Cleared to Beneficiary' },
-      { label: 'Undisbursed Amount', value: s.undisbursedAmount ?? 'RM 0.00', sub: 'Awaiting Settlement' },
-      { label: 'Disbursement Rate', value: s.disbursementRate ?? s.successRate ?? '0%', sub: 'Disbursed / Pipeline' },
-      { label: 'Settled Records', value: `${s.successfulPayments ?? 0} Paid`, sub: `${s.pendingPayments ?? 0} Pending Clearance` },
+      { label: 'Total Volume', value: totalVolStr, sub: 'Pipeline Allocation' },
+      { label: 'Total Disbursed', value: disbursedStr, sub: 'Cleared to Beneficiary' },
+      { label: 'Undisbursed Amount', value: undisbursedStr, sub: 'Pending Clearance' },
+      { label: 'Disbursement Rate', value: `${dynamicRate}%`, sub: 'Disbursed / Pipeline' },
+      { label: 'Settled Records', value: `${settledRows.length} Paid`, sub: `${pendingClearanceRows.length} Pending Clearance` },
     ];
   } else {
+    const totalRecs = Number(s.totalRecords ?? (data.details?.length ?? 0));
+    const publishedRecs = Number(s.publishedRecords ?? (data.details?.filter((r: any) => String(r.status).toUpperCase() === 'PUBLISHED').length ?? 0));
+    const dynamicCryptoPercentage = totalRecs > 0 ? `${Math.round((publishedRecs / totalRecs) * 100)}%` : '0%';
+    const dynamicCryptoRatio = `${publishedRecs}/${totalRecs} Notarized`;
+
     cards = [
-      { label: 'Total Ledger Records', value: s.totalRecords ?? 0 },
-      { label: 'Published On-Chain', value: s.publishedRecords ?? 0 },
-      { label: 'Ready to Publish', value: s.readyToPublishRecords ?? 0 },
+      { label: 'Total Ledger Records', value: totalRecs },
+      { label: 'Published On-Chain', value: publishedRecs },
+      { label: 'Ready to Publish', value: s.readyToPublishRecords ?? (totalRecs - publishedRecs) },
       {
         label: 'Cryptographic Proof',
-        value: s.notarizedPercentage ?? '100%',
-        sub: s.notarizedRatio ?? `${s.publishedRecords ?? 0}/${s.totalRecords ?? 0} Notarized`,
+        value: dynamicCryptoPercentage,
+        sub: dynamicCryptoRatio,
       },
     ];
   }
