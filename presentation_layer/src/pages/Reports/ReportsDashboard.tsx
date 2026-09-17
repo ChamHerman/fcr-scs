@@ -263,7 +263,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
     if (!reportCategory) return;
     setDownloading(true);
     try {
-      await downloadReportPdf(`${reportCategory} Report`, { operator });
+      await downloadReportPdf(`${reportCategory} Report`, { operator }, categoryData?.reportId);
       setDownloading(false);
       setFullReportOpen(false);
       notify({ type: 'success', title: 'Report downloaded', message: 'The full report PDF has been generated and downloaded.' });

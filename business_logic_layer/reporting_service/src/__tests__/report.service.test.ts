@@ -23,11 +23,20 @@ describe("Reporting Service Integration & PDF Generation", () => {
     expect(Array.isArray(res.body.details)).toBe(true);
   });
 
-  it("GET /api/reports/case-status?format=pdf returns PDF buffer", async () => {
+  it("GET /api/reports/case-status?format=pdf returns PDF buffer with reportId filename", async () => {
     const res = await request(app).get("/api/reports/case-status?format=pdf");
     expect(res.status).toBe(200);
     expect(res.headers["content-type"]).toBe("application/pdf");
-    expect(res.headers["content-disposition"]).toContain(".pdf");
+    expect(res.headers["content-disposition"]).toMatch(/filename="RPT-CASE-\d{8}-\d{4}\.pdf"/);
+    expect(res.headers["x-report-id"]).toMatch(/^RPT-CASE-\d{8}-\d{4}$/);
+  });
+
+  it("GET /api/reports/case-status?format=pdf&reportId=RPT-CASE-CUSTOM-9999 preserves given reportId in filename and header", async () => {
+    const res = await request(app).get("/api/reports/case-status?format=pdf&reportId=RPT-CASE-CUSTOM-9999");
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toBe("application/pdf");
+    expect(res.headers["content-disposition"]).toBe('attachment; filename="RPT-CASE-CUSTOM-9999.pdf"');
+    expect(res.headers["x-report-id"]).toBe("RPT-CASE-CUSTOM-9999");
   });
 
   it("GET /api/reports/payment returns JSON and normalizes title case status", async () => {
@@ -38,10 +47,12 @@ describe("Reporting Service Integration & PDF Generation", () => {
     expect(res.body.reportId).toMatch(/^RPT-PAY-\d{8}-\d{4}$/);
   });
 
-  it("GET /api/reports/payment?format=pdf returns PDF buffer", async () => {
+  it("GET /api/reports/payment?format=pdf returns PDF buffer with reportId filename", async () => {
     const res = await request(app).get("/api/reports/payment?format=pdf");
     expect(res.status).toBe(200);
     expect(res.headers["content-type"]).toBe("application/pdf");
+    expect(res.headers["content-disposition"]).toMatch(/filename="RPT-PAY-\d{8}-\d{4}\.pdf"/);
+    expect(res.headers["x-report-id"]).toMatch(/^RPT-PAY-\d{8}-\d{4}$/);
   });
 
   it("GET /api/reports/blockchain-audit returns both published and unpublished records", async () => {
@@ -54,9 +65,11 @@ describe("Reporting Service Integration & PDF Generation", () => {
     expect(res.body.reportId).toMatch(/^RPT-CHAIN-\d{8}-\d{4}$/);
   });
 
-  it("GET /api/reports/blockchain-audit?format=pdf returns PDF buffer", async () => {
+  it("GET /api/reports/blockchain-audit?format=pdf returns PDF buffer with reportId filename", async () => {
     const res = await request(app).get("/api/reports/blockchain-audit?format=pdf");
     expect(res.status).toBe(200);
     expect(res.headers["content-type"]).toBe("application/pdf");
+    expect(res.headers["content-disposition"]).toMatch(/filename="RPT-CHAIN-\d{8}-\d{4}\.pdf"/);
+    expect(res.headers["x-report-id"]).toMatch(/^RPT-CHAIN-\d{8}-\d{4}$/);
   });
 });

@@ -284,7 +284,7 @@ export const GenerateReports: React.FC = () => {
     if (isRoleRestricted || dateError) return;
     setDownloading(true);
     try {
-      await downloadReportPdf(category, buildFilters());
+      await downloadReportPdf(category, buildFilters(), previewData?.reportId);
       setDownloading(false);
       setPreviewOpen(false);
       notify({ type: 'success', title: 'Report downloaded', message: 'The PDF report has been generated and downloaded.' });

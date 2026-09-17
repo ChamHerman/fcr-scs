@@ -10,6 +10,7 @@ export interface ReportFilterParams {
   projectType?: string;
   operator?: string;
   operatorRole?: string;
+  reportId?: string;
 }
 
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -204,7 +205,7 @@ export const generateCaseStatusData = async (filters: ReportFilterParams) => {
 
   return {
     reportType: "Case Status Report",
-    reportId: generateReportId("CASE"),
+    reportId: filters.reportId || generateReportId("CASE"),
     generatedAt: new Date().toISOString(),
     operator: filters.operator || "Government Officer (JKPTG)",
     filterApplied: filters,
@@ -278,7 +279,7 @@ export const generatePaymentData = async (filters: ReportFilterParams) => {
 
   return {
     reportType: "Payment Report",
-    reportId: generateReportId("PAY"),
+    reportId: filters.reportId || generateReportId("PAY"),
     generatedAt: new Date().toISOString(),
     operator: filters.operator || "Gov Administrator (Government Administrator)",
     filterApplied: filters,
@@ -351,7 +352,7 @@ export const generateBlockchainAuditData = async (filters: ReportFilterParams) =
 
   return {
     reportType: "Blockchain Audit Report",
-    reportId: generateReportId("CHAIN"),
+    reportId: filters.reportId || generateReportId("CHAIN"),
     generatedAt: new Date().toISOString(),
     operator: filters.operator || "Gov Administrator (Government Administrator)",
     filterApplied: filters,
