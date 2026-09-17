@@ -9,7 +9,6 @@ import { WalletGate } from './components/admin/WalletGate';
 import { Layout } from './components/layout/Layout';
 import { Home } from './pages/Home';
 import { ContactUs } from './pages/ContactUs';
-import { DesignSystem } from './pages/DesignSystem/DesignSystem';
 
 import { Login } from './pages/Login/Login';
 import { Register } from './pages/Login/Register';
@@ -87,7 +86,6 @@ function App() {
           <Route element={<Layout />}>
             <Route path="/" element={<Home />} />
             <Route path="/contact" element={<ContactUs />} />
-            <Route path="/design-system" element={<DesignSystem />} />
             <Route path="/submit-bank-details" element={<PaymentSubmitBankDetails />} />
             <Route path="/verify-audit-trail" element={<SmartContractVerifyAuditTrail />} />
             <Route path="/track-payment" element={<TrackPaymentStatus />} />

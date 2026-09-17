@@ -176,8 +176,10 @@ const sameAdminIdentity = (a?: string | null, b?: string | null): boolean => {
   if (!x || !y) return false;
   if (x === y) return true;
   const gaOf = (v: string) => {
-    const m = v.match(/^(?:ga(\d+)|ga(\d+)@|gov(?:ernment)?\s*admin\s*(\d+))/);
-    return m ? Number(m[1] || m[2] || m[3]) : null;
+    const usrMatch = v.match(/^usr-2026-09-000([2-6])$/i);
+    if (usrMatch) return Number(usrMatch[1]) - 1;
+    const m = v.match(/^(?:ga(\d+)|ga(\d+)@|admin[-_]?0*(\d+)|gov(?:ernment)?\s*admin\s*(\d+))/i);
+    return m ? Number(m[1] || m[2] || m[3] || m[4]) : null;
   };
   const gx = gaOf(x);
   const gy = gaOf(y);
@@ -635,7 +637,7 @@ export const Milestone1Banner: React.FC<{ caseId: string }> = ({ caseId }) => {
         size="sm"
         variant="filled"
         className="shrink-0 !bg-sky-600 hover:!bg-sky-700 !text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm self-start sm:self-center cursor-pointer"
-        onClick={() => navigate(`/admin/blockchain/publish?caseId=${encodeURIComponent(caseId)}`)}
+        onClick={() => navigate(`/admin/blockchain/publish?caseId=${encodeURIComponent(caseId)}&milestone=m1`)}
       >
         <UploadCloud size={14} />
         <span>Publish Milestone 1</span>
@@ -752,7 +754,7 @@ export const Milestone2Banner: React.FC<{ caseId: string; status?: string }> = (
         size="sm"
         variant="filled"
         className="shrink-0 !bg-sky-600 hover:!bg-sky-700 !text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm self-start sm:self-center cursor-pointer"
-        onClick={() => navigate(`/admin/blockchain/publish?caseId=${encodeURIComponent(caseId)}`)}
+        onClick={() => navigate(`/admin/blockchain/publish?caseId=${encodeURIComponent(caseId)}&milestone=m2`)}
       >
         <UploadCloud size={14} />
         <span>Publish Milestone 2</span>

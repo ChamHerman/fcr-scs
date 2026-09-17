@@ -154,7 +154,7 @@ model BlockchainRecord {
 model PublishClaim {
   caseId    String   @map("case_id") @db.VarChar(255)
   milestone String
-  adminId   String   @map("admin_id") @db.Uuid
+  adminId   String   @map("admin_id") @db.VarChar(50)
   adminName String
   claimedAt DateTime @default(now()) @map("claimed_at")
 

@@ -16,6 +16,7 @@ import {
   Landmark,
   Eye,
   FileText,
+  Clock,
 } from 'lucide-react';
 import { paymentApi } from '../../services/paymentApi';
 import { blockchainApi } from '../../services/blockchainApi';
@@ -240,6 +241,8 @@ export default function MemberPaymentStatus() {
   const isTransferSucceed = memberStatusLabel === 'Payment Completed' || rawStatus === 'TRANSFER_SUCCEED';
   const isPaymentInProgress = memberStatusLabel === 'Payment In Progress';
   const isDisputed = memberStatusLabel === 'Payment Disputed' || rawStatus === 'DISPUTED';
+  const isM2Published = Boolean(m2Record);
+  const isCaseClosed = Boolean(isM2Published || rawStatus === 'CASE_CLOSED' || activeCaseInfo?.status === 'CASE_CLOSED');
 
   // The dispute evidence the member filed is stored as the case's latest dispute
   // document plus a "DISPUTE: <remark>" failure log — surface both back to them.
@@ -264,12 +267,13 @@ export default function MemberPaymentStatus() {
   const isBankVerified = !isBankPending && Boolean(paymentCase?.bankName && paymentCase?.accountNumber);
 
   const currentStep = useMemo(() => {
+    if (isPaid && isCaseClosed) return 5;
     if (isPaid) return 5;
     if (isTransferSucceed) return 4;
     if (isPaymentInProgress) return 3;
     if (isBankVerified) return 2;
     return 1; // Bank details pending -> Step 2 is active, requiring action
-  }, [isPaid, isTransferSucceed, isPaymentInProgress, isBankVerified]);
+  }, [isPaid, isCaseClosed, isTransferSucceed, isPaymentInProgress, isBankVerified]);
 
   const etherscanUrlFor = (txHash?: string | null) =>
     txHash ? `https://sepolia.etherscan.io/tx/${txHash}` : null;
@@ -470,9 +474,13 @@ export default function MemberPaymentStatus() {
     },
     {
       step: 5,
-      title: 'Disbursement Confirmed',
-      subtitle: 'Funds confirmed received by the beneficiary',
-      completed: isPaid,
+      title: isCaseClosed ? 'Settlement & Case Closed' : 'Disbursement Confirmed',
+      subtitle: isCaseClosed
+        ? 'Settlement anchored on-chain · Case closed fully'
+        : isPaid
+        ? 'Funds confirmed received; awaiting blockchain settlement notarization'
+        : 'Funds confirmed received by the beneficiary',
+      completed: isPaid && isCaseClosed,
     },
   ];
 
@@ -1113,6 +1121,54 @@ export default function MemberPaymentStatus() {
                 </div>
               )}
 
+              {/* Case Closed & Fully Settled Banner */}
+              {isCaseClosed && (
+                <div className="p-5 sm:p-6 rounded-2xl bg-emerald-50 border-2 border-emerald-300 shadow-sm space-y-2">
+                  <div className="flex items-start gap-3.5">
+                    <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+                      <CheckCircle2 size={22} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-base sm:text-lg font-bold text-emerald-950">
+                          Case Closed &amp; Fully Settled
+                        </h3>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-emerald-200 text-emerald-900 border border-emerald-300">
+                          Case Closed
+                        </span>
+                      </div>
+                      <p className="text-xs sm:text-sm text-emerald-800 mt-1 leading-relaxed">
+                        Statutory compensation disbursement confirmed and Milestone 2 settlement is notarized on the Ethereum Sepolia blockchain ledger. This land acquisition case is officially closed and ended fully.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Payment Confirmed, Awaiting Milestone 2 Settlement Banner */}
+              {isPaid && !isCaseClosed && (
+                <div className="p-5 sm:p-6 rounded-2xl bg-violet-50 border-2 border-violet-300 shadow-sm space-y-2">
+                  <div className="flex items-start gap-3.5">
+                    <div className="w-10 h-10 rounded-full bg-violet-600 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+                      <Clock size={22} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-base sm:text-lg font-bold text-violet-950">
+                          Payment Confirmed · Awaiting Settlement Notarization
+                        </h3>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-violet-200 text-violet-900 border border-violet-300">
+                          Pending Milestone 2
+                        </span>
+                      </div>
+                      <p className="text-xs sm:text-sm text-violet-800 mt-1 leading-relaxed">
+                        You have confirmed receipt of payment. The case will officially close once Land Administration notarizes the Milestone 2 settlement record on the blockchain.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Case & Registered Bank Account Summary Card */}
               <div className="bg-md-surface-container border border-md-outline/15 rounded-xl p-5 sm:p-6 shadow-sm space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-md-outline/10">
@@ -1129,9 +1185,9 @@ export default function MemberPaymentStatus() {
                       >
                         {copiedId ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
                       </button>
-                      <span className={`payment-badge ${memberBadgeClass}`}>
+                      <span className={`payment-badge ${isCaseClosed ? 'status-paid' : memberBadgeClass}`}>
                         <span className="dot" />
-                        {memberStatusLabel}
+                        {isCaseClosed ? 'Case Closed' : memberStatusLabel}
                       </span>
                     </div>
                     <h2 className="text-sm sm:text-base font-semibold text-md-on-surface mt-1">

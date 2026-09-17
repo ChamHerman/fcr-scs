@@ -10,7 +10,7 @@ import {
   formatPaymentResponse,
 } from "../services/payment.service";
 import { prisma } from "../prisma";
-import { CaseStatus, PaymentStatus } from "@prisma/client";
+import { CaseStatus, PaymentStatus, UserRole } from "@prisma/client";
 import { inflateSync } from "zlib";
 import { generateReceipt } from "../services/receipt.service";
 
@@ -282,6 +282,75 @@ describe("Bank Account Uniqueness & Decoupled Profile Storage", () => {
     });
     expect(res.accountNumber).toBe(uniqueAcc);
     expect(res.status).toBe(PaymentStatus.AWARD_NOTARIZATION_PENDING);
+  });
+
+  it("allows a member with a USR- formatted userId to submit bank details without UUID cast errors", async () => {
+    const testUserId = `USR-TEST-${Date.now()}`;
+    const testMemberUser = await prisma.user.create({
+      data: {
+        userId: testUserId,
+        name: "Test Member USR",
+        email: `usrtest.${Date.now()}@example.com`,
+        contactNumber: "0123456789",
+        identificationNumber: `95010114${Math.floor(1000 + Math.random() * 9000)}`,
+        passwordHash: "dummy",
+        role: UserRole.DISPLACED_COMMUNITY_MEMBER,
+      },
+    });
+
+    const customCaseId = `TEST-USR-${Date.now()}`;
+    const existingAc = await prisma.acquisitionCase.findFirst();
+    const lo = await prisma.landOwner.findFirst();
+
+    await prisma.acquisitionCase.create({
+      data: {
+        caseId: customCaseId,
+        projectId: existingAc!.projectId,
+        createdById: existingAc!.createdById,
+        caseTitle: `USR ID Test ${customCaseId}`,
+        status: CaseStatus.OFFER_ACCEPTED,
+        registrationDate: new Date(),
+        remarks: "Test case for USR format",
+      },
+    });
+
+    await prisma.paymentCase.create({
+      data: {
+        id: `PMT-${customCaseId}`,
+        caseId: customCaseId,
+        beneficiaryId: lo!.ownerId,
+        amount: 50000,
+        status: PaymentStatus.BANK_DETAILS_PENDING,
+      },
+    });
+
+    try {
+      const res = await submitBankDetails({
+        caseId: customCaseId,
+        bankName: "Public Bank",
+        accountNumber: "3999888777",
+        accountHolderName: testMemberUser.name,
+        phoneNumber: "0123456789",
+        myKadNumber: testMemberUser.identificationNumber,
+        userId: testMemberUser.userId, // e.g. USR-2026-09-0022
+      });
+      expect(res.accountNumber).toBe("3999888777");
+      expect(res.bankName).toBe("Public Bank");
+
+      // Verify default payout record was seeded for this USR- userId
+      const payout = await prisma.memberPayoutDetail.findUnique({
+        where: { userId: testMemberUser.userId },
+      });
+      expect(payout).not.toBeNull();
+      expect(payout?.accountNumber).toBe("3999888777");
+    } finally {
+      await prisma.memberPayoutDetail.deleteMany({
+        where: { userId: testMemberUser.userId },
+      });
+      await prisma.paymentCase.deleteMany({ where: { caseId: customCaseId } });
+      await prisma.acquisitionCase.deleteMany({ where: { caseId: customCaseId } });
+      await prisma.user.deleteMany({ where: { userId: testMemberUser.userId } });
+    }
   });
 
   it("saveMemberBankDetails does NOT prematurely mutate unsubmitted PaymentCase records", async () => {

@@ -3,8 +3,6 @@ import * as svc from "../services/blockchain.service";
 import * as ethereumService from "../services/ethereum.service";
 import { AuthenticatedRequest } from "../../../user_management_service/src/middleware/auth.middleware";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /**
  * The acting admin, taken from the session only. The publish route's existing
  * walletAuth compares a body-supplied wallet address against one shared env
@@ -13,7 +11,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  */
 function actingAdmin(req: Request): { adminId: string; adminName: string } | null {
   const user = (req as AuthenticatedRequest).user;
-  if (!user?.userId || !UUID_RE.test(user.userId)) return null;
+  if (!user?.userId || typeof user.userId !== "string" || !user.userId.trim()) return null;
   return { adminId: user.userId, adminName: user.name || "Government Admin" };
 }
 
