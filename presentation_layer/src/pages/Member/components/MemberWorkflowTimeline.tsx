@@ -31,14 +31,16 @@ import { ConfirmSubmitModal, ConfirmRow } from '../../../components/member/Confi
 import { blockchainApi } from '../../../services/blockchainApi';
 import { CopyButton } from '../../../components/ui/CopyButton';
 import { formatDateTime } from '../../../utils/dateFormat';
+import { effectiveRequiredSignatures } from '../../../utils/requiredSignatures';
 
+/**
+ * Delegates to the canonical statutory-tier helper so the member-facing
+ * timeline can never drift from the persisted backend threshold (the previous
+ * local formula diverged from `calculateRequiredSignatures` in the RM 5M–10M
+ * band, showing 3 where the backend requires 4).
+ */
 export function getEffectiveRequiredSigs(amount: number, setReq?: number): number {
-  if (setReq && setReq > 0) return setReq;
-  if (!amount || amount <= 0) return 2;
-  const num = Number(amount);
-  const base = 2;
-  const extra = num >= 1_000_000 ? 1 + Math.floor((num - 1_000_000) / 5_000_000) : 0;
-  return Math.min(base + extra, 5);
+  return effectiveRequiredSignatures(amount, setReq);
 }
 export interface MemberWorkflowTimelineProps {
   workflowSteps: WorkflowStep[];
