@@ -4,7 +4,6 @@ import {
   ShieldCheck,
   Clock,
   UserCircle,
-  Settings,
   FolderPlus,
   FileCheck2,
   Scale,
@@ -244,13 +243,6 @@ export const DashboardOverview: React.FC = () => {
             </div>
 
             <div className="flex gap-2">
-              <MD3Button
-                variant="outlined"
-                icon={<Settings size={16} />}
-                onClick={() => navigate('/admin/settings')}
-              >
-                Settings
-              </MD3Button>
               <MD3Button
                 variant="tonal"
                 icon={<UserCircle size={16} />}

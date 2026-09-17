@@ -241,25 +241,15 @@ export const EmailTemplateCreate: React.FC = () => {
         subtitle="Design a new administrative notification template with live split-screen preview."
         backPath="/admin/email-templates"
         actions={
-          <div className="flex items-center gap-2">
-            <MD3Button
-              type="button"
-              variant="outlined"
-              onClick={() => navigate('/admin/email-templates')}
-              disabled={isSaving}
-            >
-              Cancel
-            </MD3Button>
-            <MD3Button
-              type="button"
-              onClick={handleSave}
-              disabled={isSaving}
-              className="flex items-center gap-2"
-            >
-              <Save size={16} />
-              {isSaving ? 'Saving Template...' : 'Save Template'}
-            </MD3Button>
-          </div>
+          <MD3Button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving}
+            className="flex items-center gap-2"
+          >
+            <Save size={16} />
+            {isSaving ? 'Saving Template...' : 'Save Template'}
+          </MD3Button>
         }
       />
 

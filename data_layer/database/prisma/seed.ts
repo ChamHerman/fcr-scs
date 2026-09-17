@@ -236,8 +236,6 @@ async function main() {
   const ALL_ADMIN_PAGES = [
     // Main
     '/admin',
-    '/admin/valuers',
-    '/admin/forms',
 
     // Land Acquisition
     '/admin/case',
@@ -266,30 +264,63 @@ async function main() {
     '/admin/reports/payment',
     '/admin/reports/blockchain-audit',
 
-    // System
-    '/admin/profile',
+    // User Management
     '/admin/users',
     '/admin/role-management',
+
+    // System
+    '/admin/profile',
+    '/admin/email-templates',
     '/admin/audit-logs',
     '/admin/alerts',
     '/admin/settings',
   ];
 
+  const ALL_MEMBER_PAGES = [
+    '/member',
+    '/member/notifications',
+    '/member/offer-letter',
+    '/member/payment-status',
+    '/member/bank-details',
+    '/member/verify-audit',
+    '/member/settings',
+  ];
+
+  const GA_ALLOWED_PAGES = new Set([
+    '/admin',
+    '/admin/case',
+    '/admin/case/valuation',
+    '/admin/compensation/report',
+    '/admin/compensation/offer',
+    '/admin/compensation/objection',
+    '/admin/payment',
+    '/admin/payment/initiate',
+    '/admin/payment/pending',
+    '/admin/payment/failed',
+    '/admin/blockchain',
+    '/admin/blockchain/publish',
+    '/admin/prediction',
+    '/admin/prediction/retrain',
+    '/admin/reports',
+    '/admin/reports/case-status',
+    '/admin/reports/payment',
+    '/admin/reports/blockchain-audit',
+    '/admin/profile',
+    '/admin/alerts',
+    '/admin/settings',
+  ]);
+
   const OFFICER_ALLOWED_PAGES = new Set([
     '/admin',
-    '/admin/valuers',
-    '/admin/forms',
     '/admin/case',
     '/admin/case/valuation',
     '/admin/compensation/report',
     '/admin/compensation/offer',
     '/admin/compensation/objection',
     '/admin/prediction',
-    '/admin/prediction/retrain',
     '/admin/reports',
     '/admin/reports/case-status',
     '/admin/profile',
-    '/admin/audit-logs',
     '/admin/alerts',
   ]);
 
@@ -299,13 +330,25 @@ async function main() {
     '/admin/case/valuation',
     '/admin/prediction',
     '/admin/profile',
+    '/admin/alerts',
   ]);
 
+  const MEMBER_ALLOWED_PAGES = new Set([
+    '/member',
+    '/member/notifications',
+    '/member/offer-letter',
+    '/member/payment-status',
+    '/member/bank-details',
+    '/member/verify-audit',
+    '/member/settings',
+  ]);
+
+  const ALL_SYSTEM_PAGES = [...ALL_ADMIN_PAGES, ...ALL_MEMBER_PAGES];
   let rpmSeq = 1;
-  // Seed Government Administrator permissions:
-  // Allowed to access all admin portal pages EXCEPT for role management page only.
-  for (const pagePath of ALL_ADMIN_PAGES) {
-    const canAccess = pagePath !== '/admin/role-management';
+
+  // Seed Government Administrator permissions
+  for (const pagePath of ALL_SYSTEM_PAGES) {
+    const canAccess = GA_ALLOWED_PAGES.has(pagePath);
     const id = `RPM-2026-09-${String(rpmSeq++).padStart(4, '0')}`;
     await prisma.rolePermission.upsert({
       where: { role_pagePath: { role: UserRole.GOVERNMENT_ADMINISTRATOR, pagePath } },
@@ -314,9 +357,8 @@ async function main() {
     });
   }
 
-  // Seed Government Officer permissions:
-  // Finance & Ledger permissions removed; operational pages granted; role management & user admin denied.
-  for (const pagePath of ALL_ADMIN_PAGES) {
+  // Seed Government Officer permissions
+  for (const pagePath of ALL_SYSTEM_PAGES) {
     const canAccess = OFFICER_ALLOWED_PAGES.has(pagePath);
     const id = `RPM-2026-09-${String(rpmSeq++).padStart(4, '0')}`;
     await prisma.rolePermission.upsert({
@@ -326,9 +368,8 @@ async function main() {
     });
   }
 
-  // Seed Land Valuer permissions:
-  // Operational pages only (Forms, Case, Valuation, AI Valuation); all admin functions denied.
-  for (const pagePath of ALL_ADMIN_PAGES) {
+  // Seed Land Valuer permissions
+  for (const pagePath of ALL_SYSTEM_PAGES) {
     const canAccess = VALUER_ALLOWED_PAGES.has(pagePath);
     const id = `RPM-2026-09-${String(rpmSeq++).padStart(4, '0')}`;
     await prisma.rolePermission.upsert({
@@ -338,7 +379,18 @@ async function main() {
     });
   }
 
-  console.log('✅ Upserted RolePermissions: Finance & Ledger strictly for Government Admins; Government Admins granted all pages except Role Management; Officers removed from Finance & Ledger');
+  // Seed Displaced Community Member permissions
+  for (const pagePath of ALL_SYSTEM_PAGES) {
+    const canAccess = MEMBER_ALLOWED_PAGES.has(pagePath);
+    const id = `RPM-2026-09-${String(rpmSeq++).padStart(4, '0')}`;
+    await prisma.rolePermission.upsert({
+      where: { role_pagePath: { role: UserRole.DISPLACED_COMMUNITY_MEMBER, pagePath } },
+      update: { canAccess },
+      create: { id, role: UserRole.DISPLACED_COMMUNITY_MEMBER, pagePath, canAccess },
+    });
+  }
+
+  console.log('✅ Upserted RolePermissions matching active Role Management settings: Government Admins, Government Officers, Land Valuers, and Displaced Community Members configured.');
 
   // ===========================================================================
   // 2. Seed Email Templates

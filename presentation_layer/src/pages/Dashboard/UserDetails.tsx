@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MD3Card, MD3Button } from '../MD3Components';
 import { ArrowLeft, User, Mail, Phone, CreditCard, Calendar, Shield, AlertTriangle, Key, Edit, Power, PowerOff, MapPin, Copy, Check, CheckCircle } from 'lucide-react';
+import { PageHeader } from '../../components/ui/PageHeader';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { Modal } from '../../components/ui/Modal';
 import '../LandAcquisition/case_management.css';
@@ -146,12 +147,11 @@ export const UserDetails: React.FC = () => {
 
   return (
     <div className="p-6 md:p-8 max-w-4xl mx-auto">
-      <button 
-        onClick={() => navigate('/admin/users')}
-        className="flex items-center text-md-primary hover:bg-md-primary/20 rounded-full pr-4 pl-2 py-2 mb-6 transition-all duration-200 w-max hover:shadow-md border border-transparent hover:border-md-primary hover:text-[1.05rem]"
-      >
-        <ArrowLeft size={20} className="mr-2" /> Back
-      </button>
+      <PageHeader
+        title="User Details"
+        subtitle={`Viewing profile and administrative permissions for ${user.name}`}
+        backPath="/admin/users"
+      />
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4">
         <div className="flex items-center">

@@ -13,6 +13,7 @@ import { Pagination } from '../../components/ui/Pagination';
 import { Modal } from '../../components/ui/Modal';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { useAuth } from '../../context/AuthContext';
+import { PageHeader } from '../../components/ui/PageHeader';
 import './payment.css';
 import { RefreshButton } from './RefreshButton';
 import {
@@ -139,20 +140,10 @@ export default function FailedTransactions() {
 
   return (
     <div className="main" ref={pageRef}>
-      <div className="topbar failed-header">
-        <div className="topbar-left">
-          <h1>Failed Transactions</h1>
-          <div className="sub">Every bank error / processing anomaly lands here with its error log — resolve via SOP actions.</div>
-        </div>
-        <div className="topbar-right">
-          <div className="date-badge">
-            <Clock size={16} className="inline mr-1" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-          </div>
-          <div className="avatar">
-            <User size={20} />
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title="Failed Transactions"
+        subtitle="Every bank error / processing anomaly lands here with its error log — resolve via SOP actions."
+      />
 
       {user?.role === 'SYSTEM_ADMINISTRATOR' && (
         <div className="my-4 px-4 py-3 rounded-xl bg-md-surface-container-highest border border-md-outline/20 text-md-on-surface text-sm flex items-center gap-3">

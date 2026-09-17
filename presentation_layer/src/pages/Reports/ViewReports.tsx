@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { BarChart3, Clock, Download, PieChart } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
+import { PageHeader } from '../../components/ui/PageHeader';
 import { SearchInput } from '../../components/ui/SearchInput';
 
 type ReportItem = {
@@ -115,23 +116,11 @@ export const ViewReports: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Topbar */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl md:text-3xl font-bold">View Reports</h1>
-            <span className="px-2 py-1 rounded-lg bg-md-primary/15 text-md-primary font-bold text-xs">
-              {selectedReport ? selectedReport.type : 'Report'}
-            </span>
-          </div>
-          <p className="text-md-on-surface-variant mt-1 max-w-2xl">
-            Review the overview for each report and open a detailed breakdown for any record.
-          </p>
-        </div>
-        <span className="inline-flex items-center gap-2 text-sm text-md-on-surface-variant px-3.5 py-2 rounded-full bg-md-surface-container shadow-sm">
-          <Clock size={16} />
-          {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-        </span>
-      </div>
+      <PageHeader
+        title="View Reports"
+        subtitle="Review the overview for each report and open a detailed breakdown for any record."
+        backPath="/admin/reports"
+      />
 
       {!selectedReport ? (
         <div className="bg-md-surface-container rounded-xl p-8 shadow-sm">

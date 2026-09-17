@@ -5,6 +5,7 @@ import { CheckCircle, XCircle, ArrowLeft, Loader2, Edit2, Trash2, FileText, Exte
 import { compensationApi } from "../../services/compensationApi";
 import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
+import { PageHeader } from "../../components/ui/PageHeader";
 import { Input } from "../../components/ui/Input";
 import { CurrencyInput } from "../../components/ui/CurrencyInput";
 import { Textarea } from "../../components/ui/Textarea";
@@ -335,39 +336,11 @@ export const ObjectionReview: React.FC = () => {
       <div className="main blur-shape-bg">
         <div className="objection-review">
           {/* Topbar */}
-          <div className="topbar flex justify-between items-center mb-6 flex-wrap gap-4">
-            <div className="topbar-left">
-              <h1 className="text-2xl font-bold mb-1">Objection Details</h1>
-              <div className="text-xs md:text-sm text-md-on-surface-variant">
-                Objection Ref: <span className="font-mono font-bold text-md-primary">{objection.id}</span>
-              </div>
-            </div>
-            <div className="topbar-right flex items-center gap-3">
-              <Button variant="outlined" size="sm" onClick={() => navigate("/admin/compensation/objection")}>
-                <ArrowLeft size={16} /> Back
-              </Button>
-              <span className="date-badge">
-                <Lucide.Calendar size={16} className="inline mr-1" />
-                {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-              </span>
-              <div
-                className="avatar"
-                title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
-              >
-                {user?.name ? (
-                  <span className="text-xs font-bold uppercase">
-                    {user.name
-                      .split(/\s+/)
-                      .map((n: string) => n[0])
-                      .slice(0, 2)
-                      .join("")}
-                  </span>
-                ) : (
-                  <Lucide.User size={16} />
-                )}
-              </div>
-            </div>
-          </div>
+          <PageHeader
+            title="Objection Details"
+            subtitle={`Objection Ref: ${objection.id}`}
+            backPath="/admin/compensation/objection"
+          />
 
           <div className="header-card flex justify-between items-center p-6 rounded-2xl mb-6 bg-md-surface-container shadow-sm flex-wrap gap-4">
             <div className="left">

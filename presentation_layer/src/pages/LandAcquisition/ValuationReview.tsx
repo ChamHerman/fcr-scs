@@ -5,6 +5,7 @@ import { CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
 import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
+import { PageHeader } from "../../components/ui/PageHeader";
 import { Input } from "../../components/ui/Input";
 import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
@@ -295,39 +296,11 @@ export const ValuationReview: React.FC = () => {
 
       <div className="main blur-shape-bg">
         <div className="review-container">
-            <div className="topbar" style={{ marginBottom: "16px" }}>
-              <div className="topbar-left">
-                <h1 style={{ marginBottom: 0 }}>Review Valuation Report</h1>
-                <div className="sub">
-                  Review the report details and take action
-                </div>
-              </div>
-              <div className="topbar-right flex items-center gap-3">
-                <Button variant="outlined" size="sm" onClick={() => navigate("/admin/case/valuation")}>
-                  <Lucide.ArrowLeft size={16} /> Back
-                </Button>
-                <span className="date-badge">
-                  <Lucide.Calendar size={16} className="inline mr-1" />
-                  {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-                </span>
-                <div
-                  className="avatar"
-                  title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
-                >
-                  {user?.name ? (
-                    <span className="text-xs font-bold uppercase">
-                      {user.name
-                        .split(/\s+/)
-                        .map((n: string) => n[0])
-                        .slice(0, 2)
-                        .join("")}
-                    </span>
-                  ) : (
-                    <Lucide.User size={16} />
-                  )}
-                </div>
-              </div>
-            </div>
+            <PageHeader
+              title="Review Valuation Report"
+              subtitle="Review the report details and take action"
+              backPath="/admin/case/valuation"
+            />
 
             {/* Case Summary */}
             <div className="case-summary">
