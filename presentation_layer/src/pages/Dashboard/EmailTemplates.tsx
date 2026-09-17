@@ -21,7 +21,9 @@ import {
   FileCode,
   CheckCircle2,
   X,
-  ExternalLink
+  ExternalLink,
+  Monitor,
+  Smartphone,
 } from 'lucide-react';
 
 interface EmailTemplate {
@@ -130,29 +132,52 @@ const SAMPLE_VALUES: Record<string, string> = {
   expiresMinutes: '5',
 };
 
-const GLOBAL_PLACEHOLDERS = [
-  'actionUrl',
-  'buttonText',
-  'caseId',
-  'caseTitle',
-  'lotNo',
-  'name',
-  'email',
-  'amount',
-  'compensationAmount',
-  'portalLink',
-  'loginUrl',
-  'status',
-  'remarks',
-  'officerName',
-  'transactionId',
-  'bankName',
-  'accountNumber',
-  'otp',
-  'temporaryPassword',
-  'expiresMinutes',
-  'timestamp',
+export interface PlaceholderItem {
+  key: string;
+  label: string;
+  category: 'Links & Buttons' | 'Case & Land' | 'Recipient' | 'Financial' | 'Security & OTP';
+  sample: string;
+}
+
+const COMMON_PLACEHOLDERS: PlaceholderItem[] = [
+  // Links & Buttons
+  { key: 'actionUrl', label: 'Action Button URL', category: 'Links & Buttons', sample: 'http://localhost:5173/member/cases/LAC-2026-08-0001' },
+  { key: 'buttonText', label: 'Action Button Text', category: 'Links & Buttons', sample: 'View Case & Respond' },
+  { key: 'portalLink', label: 'Member Portal Link', category: 'Links & Buttons', sample: 'http://localhost:5173/member' },
+  { key: 'loginUrl', label: 'Login Page URL', category: 'Links & Buttons', sample: 'http://localhost:5173/login' },
+  { key: 'resetLink', label: 'Password Reset URL', category: 'Links & Buttons', sample: 'http://localhost:5173/reset-password?token=demo_token_87234' },
+  { key: 'activationLink', label: 'Account Activation URL', category: 'Links & Buttons', sample: 'http://localhost:5173/activate?token=demo_activation_19482' },
+  { key: 'verificationLink', label: 'Email Verify URL', category: 'Links & Buttons', sample: 'http://localhost:5173/verify-email?token=demo_verification_45892' },
+
+  // Case & Land
+  { key: 'caseId', label: 'Case Number', category: 'Case & Land', sample: 'LAC-2026-08-0001' },
+  { key: 'caseTitle', label: 'Project / Case Title', category: 'Case & Land', sample: 'Klang Valley Expressway Corridor Acquisition' },
+  { key: 'lotNo', label: 'Lot Number', category: 'Case & Land', sample: 'Lot 4082' },
+  { key: 'mukim', label: 'Mukim / District', category: 'Case & Land', sample: 'Mukim Batu' },
+  { key: 'status', label: 'Case Status', category: 'Case & Land', sample: 'COMPENSATION_APPROVED' },
+  { key: 'remarks', label: 'Official Remarks', category: 'Case & Land', sample: 'Statutory verification completed successfully.' },
+  { key: 'officerName', label: 'Assigned Officer', category: 'Case & Land', sample: 'Puan Siti Aminah' },
+
+  // Recipient
+  { key: 'name', label: 'Recipient Name', category: 'Recipient', sample: 'Ahmad bin Abdullah' },
+  { key: 'email', label: 'Recipient Email', category: 'Recipient', sample: 'ahmad@example.com' },
+  { key: 'role', label: 'Recipient Role', category: 'Recipient', sample: 'Displaced Community Member' },
+  { key: 'timestamp', label: 'Timestamp (MYT)', category: 'Recipient', sample: new Date().toLocaleString() },
+
+  // Financial
+  { key: 'amount', label: 'Amount (RM)', category: 'Financial', sample: 'RM 385,000.00' },
+  { key: 'compensationAmount', label: 'Compensation Award', category: 'Financial', sample: 'RM 385,000.00' },
+  { key: 'transactionId', label: 'Transaction / EFT ID', category: 'Financial', sample: 'TXN-9842104-MY' },
+  { key: 'bankName', label: 'Bank Name', category: 'Financial', sample: 'Malayan Banking Berhad (Maybank)' },
+  { key: 'accountNumber', label: 'Bank Account Number', category: 'Financial', sample: '114012345678' },
+
+  // Security & OTP
+  { key: 'otp', label: '6-Digit OTP', category: 'Security & OTP', sample: '729104' },
+  { key: 'temporaryPassword', label: 'Temporary Password', category: 'Security & OTP', sample: 'Tmp#Pass982' },
+  { key: 'expiresMinutes', label: 'Expiry Minutes', category: 'Security & OTP', sample: '5' },
 ];
+
+const PLACEHOLDER_CATEGORIES = ['ALL', 'Links & Buttons', 'Case & Land', 'Recipient', 'Financial', 'Security & OTP'] as const;
 
 export const EmailTemplates: React.FC = () => {
   const navigate = useNavigate();
@@ -164,6 +189,8 @@ export const EmailTemplates: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [viewMode, setViewMode] = useState<'split' | 'edit' | 'preview'>('split');
+  const [devicePreview, setDevicePreview] = useState<'desktop' | 'mobile'>('desktop');
+  const [placeholderFilter, setPlaceholderFilter] = useState<string>('ALL');
   const [copiedVar, setCopiedVar] = useState<string | null>(null);
 
   // Popup confirmation modal states
@@ -283,7 +310,7 @@ export const EmailTemplates: React.FC = () => {
   };
 
   const handleInsertButtonSnippet = () => {
-    const snippet = `\n<div style="text-align: center; margin: 24px 0;">\n  <a href="{{actionUrl}}" style="background-color: #0066cc; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">{{buttonText}}</a>\n</div>\n`;
+    const snippet = `\n<div style="text-align: center; margin: 24px 0;">\n  <a href="{{actionUrl}}" style="background-color: #6750A4; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(103,80,164,0.2);">{{buttonText}}</a>\n</div>\n`;
 
     const el = textareaRef.current;
     if (el) {
@@ -337,97 +364,294 @@ export const EmailTemplates: React.FC = () => {
 const STOCK_DEFAULTS: Record<string, { subject: string; bodyContent: string }> = {
   PASSWORD_RESET: {
     subject: 'FCR-SCS: Password Reset Request',
-    bodyContent: `<div style="font-family: sans-serif; padding: 20px;">
-  <h2>Password Reset Request</h2>
-  <p>Hi {{name}},</p>
-  <p>You recently requested to reset your password for your FCR-SCS account. Click the button below to reset it:</p>
-  <a href="{{resetLink}}" style="background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0;">Reset Password</a>
-  <p>If you did not request a password reset, please ignore this email or reply to let us know. This password reset link is only valid for the next 60 minutes.</p>
-  <br>
-  <p>Thanks,<br>The FCR-SCS Team</p>
+    bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">SECURITY NOTICE</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Statutory Land Acquisition & Compensation Portal · Government of Malaysia</span>
+  </div>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Dear {{name}},</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    You recently requested to reset your password for your FCR-SCS portal account. Click the button below to proceed with resetting your credentials:
+  </p>
+
+  <div style="text-align: center; margin: 24px 0;">
+    <a href="{{resetLink}}" style="background-color: #6750A4; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(103,80,164,0.2);">Reset Password</a>
+  </div>
+
+  <div style="background-color: #f8fafc; border-left: 4px solid #6750A4; padding: 12px 16px; margin: 20px 0;">
+    <p style="margin: 0; font-size: 13px; color: #475569;">
+      This password reset link is valid for <strong>60 minutes</strong>. If you did not request a password reset, please ignore this email or contact administrative security immediately.
+    </p>
+  </div>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Government of Malaysia
+  </p>
 </div>`,
   },
+
   ACCOUNT_ACTIVATION: {
     subject: 'FCR-SCS: Activate Your Account',
-    bodyContent: `<div style="font-family: sans-serif; padding: 20px;">
-  <h2>Activate Your Account</h2>
-  <p>Hi {{name}},</p>
-  <p>Thank you for registering with FCR-SCS. Please click the button below to activate your account:</p>
-  <a href="{{activationLink}}" style="background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0;">Activate Account</a>
-  <p>If you did not register for an account, please ignore this email. This link is valid for 24 hours.</p>
-  <br>
-  <p>Thanks,<br>The FCR-SCS Team</p>
+    bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">ACCOUNT ACTIVATION</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Statutory Land Acquisition & Compensation Portal · Government of Malaysia</span>
+  </div>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Dear {{name}},</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    Thank you for registering with the FCR-SCS Statutory Land Acquisition & Compensation Portal. Please click the button below to activate your account and verify your email address:
+  </p>
+
+  <div style="text-align: center; margin: 24px 0;">
+    <a href="{{activationLink}}" style="background-color: #6750A4; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(103,80,164,0.2);">Activate Account</a>
+  </div>
+
+  <div style="background-color: #f8fafc; border-left: 4px solid #6750A4; padding: 12px 16px; margin: 20px 0;">
+    <p style="margin: 0; font-size: 13px; color: #475569;">
+      This activation link is valid for <strong>24 hours</strong>. If you did not register for an account, please disregard this communication.
+    </p>
+  </div>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Government of Malaysia
+  </p>
 </div>`,
   },
+
   OFFER_LETTER_NOTIFICATION: {
     subject: 'FCR-SCS: Compensation Offer Notice - Case {{caseId}}',
-    bodyContent: `<div style="font-family: sans-serif; padding: 20px;">
-  <h2>Official Compensation Offer Notice</h2>
-  <p>Dear {{name}},</p>
-  <p>An official compensation offer has been published for Land Acquisition Case <strong>{{caseId}}</strong>.</p>
-  <p>Total awarded amount: <strong>{{amount}}</strong></p>
-  <p>Please log in to your Member Portal to review the formal offer letter and select your response (Accept / Dispute) within the statutory window:</p>
-  <a href="{{portalLink}}" style="background-color: #2e7d32; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0;">View Offer Letter</a>
-  <br>
-  <p>Regards,<br>Land Acquisition & Compensation Department</p>
+    bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">STATUTORY OFFER NOTICE</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Statutory Land Acquisition & Compensation Commission · Government of Malaysia</span>
+  </div>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Dear {{name}},</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    An official compensation award and formal Form H offer notice have been published for Land Acquisition Case <strong>{{caseId}}</strong>.
+  </p>
+
+  <div style="background-color: #F3EDF7; border-left: 4px solid #6750A4; padding: 14px 18px; border-radius: 8px; margin: 20px 0;">
+    <p style="margin: 0 0 6px 0; font-size: 14px; color: #1e293b;">Case Reference: <strong>{{caseId}}</strong></p>
+    <p style="margin: 0; font-size: 14px; color: #1e293b;">Total Compensation Award: <strong style="color: #6750A4; font-size: 16px;">{{amount}}</strong></p>
+  </div>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    Please log in to your Member Portal to review the formal offer letter, examine the valuation breakdown, and select your statutory response (Accept / Dispute) within the designated window.
+  </p>
+
+  <div style="text-align: center; margin: 24px 0;">
+    <a href="{{portalLink}}" style="background-color: #6750A4; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(103,80,164,0.2);">View Offer Letter & Respond</a>
+  </div>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Land Acquisition Act 1960 (Act 486) · Government of Malaysia
+  </p>
 </div>`,
   },
+
   PAYMENT_DISBURSED: {
     subject: 'FCR-SCS: Payment Disbursed for Case {{caseId}}',
-    bodyContent: `<div style="font-family: sans-serif; padding: 20px;">
-  <h2>Compensation Payment Disbursed</h2>
-  <p>Dear {{name}},</p>
-  <p>Your compensation payment of <strong>{{amount}}</strong> for Case <strong>{{caseId}}</strong> has been approved and processed.</p>
-  <p>Reference Transaction ID: <code>{{transactionId}}</code></p>
-  <p>Payment Method: Direct Bank Transfer (EFT)</p>
-  <p>Please allow 1-3 business days for the funds to reflect in your designated bank account.</p>
-  <br>
-  <p>Regards,<br>Finance & Disbursement Division</p>
+    bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">PAYMENT DISBURSEMENT</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Finance & Disbursement Division · Government of Malaysia</span>
+  </div>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Dear {{name}},</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    Your statutory compensation payment for Land Acquisition Case <strong>{{caseId}}</strong> has been approved and successfully processed.
+  </p>
+
+  <div style="background-color: #F3EDF7; border-left: 4px solid #6750A4; padding: 14px 18px; border-radius: 8px; margin: 20px 0;">
+    <p style="margin: 0 0 6px 0; font-size: 14px; color: #1e293b;">Disbursed Amount: <strong style="color: #6750A4; font-size: 16px;">{{amount}}</strong></p>
+    <p style="margin: 0 0 6px 0; font-size: 13px; color: #475569;">EFT Reference ID: <code style="background-color: #EADDFF; padding: 2px 6px; border-radius: 4px; font-family: monospace;">{{transactionId}}</code></p>
+    <p style="margin: 0; font-size: 13px; color: #475569;">Payment Method: Direct Bank Transfer (EFT)</p>
+  </div>
+
+  <p style="font-size: 13px; color: #64748b; line-height: 1.5;">
+    Please allow 1-3 business days for the funds to reflect in your designated bank account depending on interbank clearing windows.
+  </p>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Finance & Statutory Disbursement Division · Government of Malaysia
+  </p>
 </div>`,
   },
+
   OBJECTION_UPDATE: {
     subject: 'FCR-SCS: Status Update on Objection - Case {{caseId}}',
-    bodyContent: `<div style="font-family: sans-serif; padding: 20px;">
-  <h2>Objection Status Update</h2>
-  <p>Dear {{name}},</p>
-  <p>We are writing to update you on your formal objection regarding Land Acquisition Case <strong>{{caseId}}</strong>.</p>
-  <p>Current Status: <strong>{{status}}</strong></p>
-  <p>Remarks: {{remarks}}</p>
-  <a href="{{portalLink}}" style="background-color: #6750a4; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0;">Check Details in Portal</a>
-  <br>
-  <p>Regards,<br>Land Acquisition Hearing Committee</p>
+    bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">OBJECTION UPDATE</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Land Acquisition Hearing Committee & Objections Board</span>
+  </div>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Dear {{name}},</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    This is an official communication regarding your formal Form N objection submitted for Land Acquisition Case <strong>{{caseId}}</strong>.
+  </p>
+
+  <div style="background-color: #F3EDF7; border-left: 4px solid #6750A4; padding: 14px 18px; border-radius: 8px; margin: 20px 0;">
+    <p style="margin: 0 0 6px 0; font-size: 14px; color: #1e293b;">Current Status: <strong style="color: #6750A4;">{{status}}</strong></p>
+    <p style="margin: 0; font-size: 13px; color: #475569;">Hearing / Review Remarks: {{remarks}}</p>
+  </div>
+
+  <div style="text-align: center; margin: 24px 0;">
+    <a href="{{portalLink}}" style="background-color: #6750A4; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(103,80,164,0.2);">Check Details in Portal</a>
+  </div>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Land Acquisition Hearing Committee · Government of Malaysia
+  </p>
 </div>`,
   },
+
   SYSTEM_ALERT: {
     subject: 'FCR-SCS: System Notification - {{alertType}}',
-    bodyContent: `<div style="font-family: sans-serif; padding: 20px;">
-  <h2>System Notification</h2>
-  <p>Hello {{name}},</p>
-  <p>This is an automated system notice: <strong>{{message}}</strong></p>
-  <p>Timestamp: {{timestamp}}</p>
-  <p>If you require assistance, please reach out to the System Administrator.</p>
-  <br>
-  <p>FCR-SCS Administrative Services</p>
+    bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">SYSTEM NOTICE</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Administrative & Compliance Notification System</span>
+  </div>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Hello {{name}},</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    This is an automated system event dispatched by the FCR-SCS Administrative Platform:
+  </p>
+
+  <div style="background-color: #F3EDF7; border-left: 4px solid #6750A4; padding: 14px 18px; border-radius: 8px; margin: 20px 0;">
+    <p style="margin: 0 0 6px 0; font-size: 14px; color: #1e293b;">Event Type: <strong style="color: #6750A4;">{{alertType}}</strong></p>
+    <p style="margin: 0 0 6px 0; font-size: 13px; color: #334155;">{{message}}</p>
+    <p style="margin: 0; font-size: 12px; color: #64748b;">Timestamp: {{timestamp}}</p>
+  </div>
+
+  <p style="font-size: 13px; color: #64748b; line-height: 1.5;">
+    If you require assistance or need to escalate this event, please access the Alert & Notification Center in your administrator console.
+  </p>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Government of Malaysia
+  </p>
 </div>`,
   },
+
   SYSTEM_ADMIN_OTP: {
     subject: 'FCR-SCS Security: Your Administrator Verification Code is {{otp}}',
-    bodyContent: `<div style="font-family: sans-serif; padding: 20px; max-width: 540px; margin: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
-  <h2 style="color: #6750a4; margin-top: 0;">System Administrator Authentication</h2>
-  <p>Dear {{name}},</p>
-  <p>A login request to the FCR-SCS Administrative Console was initiated for your account. Please use the following One-Time Password (OTP) to complete your two-factor verification:</p>
-  <div style="text-align: center; margin: 25px 0;">
-    <span style="display: inline-block; font-family: monospace; font-size: 32px; font-weight: bold; letter-spacing: 6px; padding: 12px 28px; background-color: #f3edf7; color: #21005d; border-radius: 8px; border: 1px dashed #6750a4;">{{otp}}</span>
+    bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">TWO-FACTOR AUTH</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Identity & Access Governance · Government of Malaysia</span>
   </div>
-  <p style="color: #49454f; font-size: 14px;">This code is valid for <strong>{{expiresMinutes}} minutes</strong>. If you did not initiate this login, please immediately notify the security operations team.</p>
-  <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 20px 0;" />
-  <p style="font-size: 12px; color: #79747e;">Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)</p>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Dear {{name}},</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    A sign-in attempt to the FCR-SCS Administrative Console was initiated for your account. Please use the following One-Time Password (OTP) to complete your two-factor verification:
+  </p>
+
+  <div style="text-align: center; margin: 25px 0;">
+    <span style="display: inline-block; font-family: monospace; font-size: 32px; font-weight: bold; letter-spacing: 6px; padding: 14px 32px; background-color: #F3EDF7; color: #21005D; border-radius: 8px; border: 1px dashed #6750A4;">{{otp}}</span>
+  </div>
+
+  <div style="background-color: #f8fafc; border-left: 4px solid #6750A4; padding: 12px 16px; margin: 20px 0;">
+    <p style="margin: 0; font-size: 13px; color: #475569;">
+      This code is valid for <strong>{{expiresMinutes}} minutes</strong>. If you did not initiate this login request, immediately notify the Chief Security Officer and rotate your credentials.
+    </p>
+  </div>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Government of Malaysia
+  </p>
+</div>`,
+  },
+
+  TEMPORARY_CREDENTIALS: {
+    subject: 'FCR-SCS: Your Account Credentials - Land Acquisition Case {{caseId}}',
+    bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">MEMBER PORTAL CREDENTIALS</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Statutory Case Management & Compensation Portal (FCR-SCS)</span>
+  </div>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Dear <strong>{{name}}</strong>,</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    An account has been created for you on the <strong>FCR-SCS Platform</strong> as an affected landowner attached to statutory acquisition case <strong>{{caseTitle}}</strong> (Case ID: <strong>{{caseId}}</strong>).
+  </p>
+
+  <div style="background-color: #F3EDF7; padding: 16px 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #EADDFF;">
+    <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Sign-In Email:</strong> <span style="color: #1e293b; font-weight: 600;">{{email}}</span></p>
+    <p style="margin: 0; font-size: 14px;"><strong>Temporary Password:</strong> <code style="background: #E8DEF8; color: #4a148c; padding: 3px 8px; border-radius: 4px; font-size: 15px; font-weight: bold; font-family: monospace;">{{temporaryPassword}}</code></p>
+  </div>
+
+  <div style="background-color: #fff1f2; border-left: 4px solid #f43f5e; padding: 12px 16px; border-radius: 6px; margin: 16px 0;">
+    <p style="margin: 0; font-size: 13px; color: #9f1239; font-weight: 600;">
+      Security Requirement: For your protection, you must change this temporary password upon your first login.
+    </p>
+  </div>
+
+  <div style="text-align: center; margin: 24px 0;">
+    <a href="{{loginUrl}}" style="background-color: #6750A4; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(103,80,164,0.2);">Sign In to Member Portal</a>
+  </div>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Government of Malaysia
+  </p>
 </div>`,
   },
 };
 
   const handleResetStock = () => {
-    if (!selectedTemplateName) return;
+    if (!selectedTemplateName || !STOCK_DEFAULTS[selectedTemplateName]) return;
     setIsResetModalOpen(true);
   };
 
@@ -805,7 +1029,7 @@ const STOCK_DEFAULTS: Record<string, { subject: string; bodyContent: string }> =
               </div>
 
               {/* Dynamic Variables Pill Bar */}
-              <div className="flex flex-col gap-2 bg-md-surface-container/60 p-3.5 rounded-2xl border border-md-outline/15">
+              <div className="flex flex-col gap-2.5 bg-md-surface-container/60 p-3.5 rounded-2xl border border-md-outline/15">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-md-on-surface-variant pb-1 border-b border-md-outline/10">
                   <div className="flex items-center gap-1.5">
                     <span className="font-semibold flex items-center gap-1.5">
@@ -817,30 +1041,79 @@ const STOCK_DEFAULTS: Record<string, { subject: string; bodyContent: string }> =
                   <button
                     type="button"
                     onClick={handleInsertButtonSnippet}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-sm"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-md-primary hover:bg-md-primary/90 text-white transition-all shadow-sm"
                     title="Insert pre-styled responsive Action Button snippet into editor"
                   >
                     <ExternalLink size={12} />
                     <span>+ Insert Action Button</span>
                   </button>
                 </div>
-                <div className="flex flex-wrap gap-1.5 pt-1 max-h-[140px] overflow-y-auto">
-                  {Array.from(new Set([...(currentMeta?.suggestedVariables || []), ...detectedVariables, ...GLOBAL_PLACEHOLDERS])).map(v => (
+
+                {/* Category Filter Chips */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                  {PLACEHOLDER_CATEGORIES.map((cat) => (
                     <button
-                      key={v}
+                      key={cat}
                       type="button"
-                      onClick={() => handleInsertVariable(v)}
-                      className={`group text-xs font-mono px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1.5 ${
-                        copiedVar === v
-                          ? 'bg-emerald-700 text-white border-emerald-600'
-                          : 'bg-md-surface border-md-outline/30 text-md-on-surface hover:border-md-primary hover:text-md-primary'
+                      onClick={() => setPlaceholderFilter(cat)}
+                      className={`px-2.5 py-1 text-[11px] font-medium rounded-full transition-all ${
+                        placeholderFilter === cat
+                          ? 'bg-md-primary text-white shadow-xs'
+                          : 'bg-md-surface-variant/50 hover:bg-md-surface-variant text-md-on-surface-variant'
                       }`}
-                      title={`Click to insert {{${v}}}`}
                     >
-                      <span>{`{{${v}}}`}</span>
-                      {copiedVar === v ? <Check size={11} /> : <Plus size={11} className="opacity-50 group-hover:opacity-100" />}
+                      {cat}
                     </button>
                   ))}
+                </div>
+
+                {/* Placeholders Grid */}
+                <div className="flex flex-wrap gap-2 pt-1 max-h-[160px] overflow-y-auto pr-1">
+                  {COMMON_PLACEHOLDERS.filter(
+                    (p) => placeholderFilter === 'ALL' || p.category === placeholderFilter
+                  ).map(({ key, label }) => {
+                    const isCopied = copiedVar === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => handleInsertVariable(key)}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono rounded-lg border transition-all ${
+                          isCopied
+                            ? 'bg-emerald-100 border-emerald-500 text-emerald-700 dark:bg-emerald-950 dark:border-emerald-600 dark:text-emerald-300'
+                            : 'bg-md-surface border-md-outline/30 text-md-on-surface hover:border-md-primary hover:text-md-primary'
+                        }`}
+                        title={`Click to insert {{${key}}} (${label})`}
+                      >
+                        {isCopied ? <Check size={12} className="text-emerald-600" /> : <Code2 size={12} className="opacity-70" />}
+                        <span>{`{{${key}}}`}</span>
+                        <span className="text-[10px] text-md-on-surface-variant font-sans">({label})</span>
+                      </button>
+                    );
+                  })}
+                  {/* Any custom detected/suggested variables not already listed */}
+                  {placeholderFilter === 'ALL' &&
+                    Array.from(new Set([...(currentMeta?.suggestedVariables || []), ...detectedVariables]))
+                      .filter(v => !COMMON_PLACEHOLDERS.some(cp => cp.key === v))
+                      .map(v => {
+                        const isCopied = copiedVar === v;
+                        return (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => handleInsertVariable(v)}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono rounded-lg border transition-all ${
+                              isCopied
+                                ? 'bg-emerald-100 border-emerald-500 text-emerald-700 dark:bg-emerald-950 dark:border-emerald-600 dark:text-emerald-300'
+                                : 'bg-md-surface border-md-outline/30 text-md-on-surface hover:border-md-primary hover:text-md-primary'
+                            }`}
+                            title={`Click to insert {{${v}}}`}
+                          >
+                            {isCopied ? <Check size={12} className="text-emerald-600" /> : <Plus size={12} className="opacity-70" />}
+                            <span>{`{{${v}}}`}</span>
+                          </button>
+                        );
+                      })}
                 </div>
               </div>
 
@@ -877,54 +1150,71 @@ const STOCK_DEFAULTS: Record<string, { subject: string; bodyContent: string }> =
                   <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between text-xs font-semibold text-md-on-surface-variant">
                       <span className="flex items-center gap-1.5">
-                        <Eye size={14} />
-                        Simulated In-box Preview
+                        <Eye size={14} className="text-md-primary" />
+                        Live Email Preview
                       </span>
-                      <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
-                        Mock Data Injected
-                      </span>
+
+                      {/* Viewport Switcher */}
+                      <div className="flex items-center gap-1 bg-md-surface-variant/50 p-1 rounded-lg border border-md-outline-variant/40">
+                        <button
+                          type="button"
+                          onClick={() => setDevicePreview('desktop')}
+                          className={`p-1.5 rounded text-xs flex items-center gap-1 transition-colors ${
+                            devicePreview === 'desktop'
+                              ? 'bg-md-surface shadow-sm text-md-on-surface font-medium'
+                              : 'text-md-on-surface-variant hover:text-md-on-surface'
+                          }`}
+                          title="Desktop Preview (620px)"
+                        >
+                          <Monitor size={14} />
+                          <span>Desktop</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDevicePreview('mobile')}
+                          className={`p-1.5 rounded text-xs flex items-center gap-1 transition-colors ${
+                            devicePreview === 'mobile'
+                              ? 'bg-md-surface shadow-sm text-md-on-surface font-medium'
+                              : 'text-md-on-surface-variant hover:text-md-on-surface'
+                          }`}
+                          title="Mobile Preview (375px)"
+                        >
+                          <Smartphone size={14} />
+                          <span>Mobile</span>
+                        </button>
+                      </div>
                     </div>
 
-                    {/* Email Window Mock */}
+                    {/* Email Window Container */}
                     <div className="rounded-2xl border border-md-outline/30 bg-md-surface overflow-hidden shadow-sm flex flex-col" style={{ minHeight: '380px' }}>
-                      {/* Window title bar */}
-                      <div className="bg-md-surface-container-high px-4 py-2.5 border-b border-md-outline/20 flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2.5 h-2.5 rounded-full bg-rose-400" />
-                          <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-                          <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                          <span className="text-md-on-surface-variant text-[11px] font-medium ml-2">Webmail Client Simulator</span>
+                      {/* Email Header Simulation */}
+                      <div className="px-5 py-3.5 bg-md-surface-variant/30 border-b border-md-outline/15 text-xs text-md-on-surface-variant space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-md-on-surface">
+                            From: FCR-SCS Notification &lt;noreply@fcrscs.gov.my&gt;
+                          </span>
+                          <span className="font-mono text-[11px] opacity-75">Just now</span>
+                        </div>
+                        <div className="text-md-on-surface-variant">
+                          To: Ahmad bin Abdullah &lt;ahmad@example.com&gt;
+                        </div>
+                        <div className="pt-1 text-sm font-semibold text-md-on-surface border-t border-md-outline/15">
+                          Subject: {previewSubject || '(No subject)'}
                         </div>
                       </div>
 
-                      {/* Header fields */}
-                      <div className="px-5 py-3.5 bg-md-surface-container/40 border-b border-md-outline/15 text-xs flex flex-col gap-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="text-md-on-surface-variant font-medium w-14">From:</span>
-                          <span className="text-md-on-surface font-semibold font-mono text-[11px]">
-                            FCR-SCS System &lt;noreply@fcrscs.gov.my&gt;
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-md-on-surface-variant font-medium w-14">To:</span>
-                          <span className="text-md-on-surface font-mono text-[11px]">
-                            recipient@example.com
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-md-on-surface-variant font-medium w-14">Subject:</span>
-                          <span className="text-md-on-surface font-semibold">
-                            {previewSubject || '(No subject)'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Rendered Email Body */}
-                      <div className="p-6 overflow-y-auto flex-1 bg-white text-neutral-900 text-sm">
+                      {/* Rendered Email Container */}
+                      <div className="flex-1 bg-gray-100 dark:bg-gray-900/60 p-4 rounded-b-2xl flex justify-center items-start overflow-auto min-h-[460px]">
                         <div
-                          className="email-rendered-preview"
-                          dangerouslySetInnerHTML={{ __html: previewHtml }}
-                        />
+                          className={`w-full bg-white shadow-sm rounded-lg overflow-hidden transition-all duration-200 ${
+                            devicePreview === 'mobile' ? 'max-w-[375px]' : 'max-w-[620px]'
+                          }`}
+                        >
+                          <div
+                            className="email-rendered-preview text-neutral-900"
+                            dangerouslySetInnerHTML={{ __html: previewHtml }}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -934,15 +1224,17 @@ const STOCK_DEFAULTS: Record<string, { subject: string; bodyContent: string }> =
               {/* Action Footer */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-md-outline/15">
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleResetStock}
-                    disabled={isResetting}
-                    className="flex items-center gap-1.5 text-xs text-md-on-surface-variant hover:text-rose-500 font-medium px-3 py-2 rounded-xl transition-colors"
-                  >
-                    <RotateCcw size={14} />
-                    <span>Reset to Stock Default</span>
-                  </button>
+                  {Boolean(selectedTemplateName && STOCK_DEFAULTS[selectedTemplateName]) && (
+                    <button
+                      type="button"
+                      onClick={handleResetStock}
+                      disabled={isResetting}
+                      className="flex items-center gap-1.5 text-xs text-md-on-surface-variant hover:text-rose-500 font-medium px-3 py-2 rounded-xl transition-colors"
+                    >
+                      <RotateCcw size={14} />
+                      <span>Reset to Stock Default</span>
+                    </button>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-3 w-full sm:w-auto justify-end">

@@ -47,7 +47,16 @@ export const AdminLayout: React.FC = () => {
     return localStorage.getItem('admin_theme') === 'dark';
   });
 
+  const canAccessPage = (path: string) => allowedPages.includes('*') || allowedPages.includes(path);
+
+  const hasMainAccess = canAccessPage('/admin');
+  const hasLandAcquisitionAccess = allowedPages.includes('*') || allowedPages.some(p => p.startsWith('/admin/case') || p.startsWith('/admin/land-acquisition'));
+  const hasCompensationAccess = allowedPages.includes('*') || allowedPages.some(p => p.startsWith('/admin/compensation'));
   const hasFinanceAccess = allowedPages.includes('*') || allowedPages.some(p => p.startsWith('/admin/payment') || p.startsWith('/admin/blockchain'));
+  const hasAiValuationAccess = allowedPages.includes('*') || allowedPages.some(p => p.startsWith('/admin/prediction'));
+  const hasReportsAccess = allowedPages.includes('*') || allowedPages.some(p => p.startsWith('/admin/reports'));
+  const hasUserManagementAccess = (user?.role === 'SYSTEM_ADMINISTRATOR' || allowedPages.some(p => p.startsWith('/admin/users') || p.startsWith('/admin/role-management'))) && (allowedPages.includes('*') || allowedPages.some(p => p.startsWith('/admin/users') || p.startsWith('/admin/role-management')));
+  const hasSystemAccess = allowedPages.includes('*') || allowedPages.some(p => ['/admin/profile', '/admin/email-templates', '/admin/audit-logs', '/admin/alerts', '/admin/settings'].includes(p));
 
   // Sidebar groups: expanded = route-pinned ∪ click-pinned ∪ hover-previewed.
   // Hover is a single source of truth, set on label-enter and cleared only when
@@ -428,83 +437,89 @@ export const AdminLayout: React.FC = () => {
             onMouseLeave={scheduleHoverClear}
             onMouseEnter={cancelHoverClear}
           >
-            <div className="nav-section">
-              {!isCollapsed && <span className="nav-label">Main</span>}
-              {(allowedPages.includes('*') || allowedPages.includes('/admin')) && (
-                <NavLink to="/admin" end className="nav-item" title={isCollapsed ? "Dashboard" : ""}>
-                  <LayoutDashboard size={22} className="nav-icon" />
-                  {!isCollapsed && <span>Dashboard</span>}
-                </NavLink>
-              )}
-            </div>
-
-            <div className="nav-section">
-              {!isCollapsed && (
-                <div
-                  className="nav-label"
-                  onClick={() => toggleGroup('landAcquisition')}
-                  onMouseEnter={() => handleGroupEnter('landAcquisition')}
-                >
-                  <span>Land Acquisition</span>
-                  {isGroupExpanded('landAcquisition') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                </div>
-              )}
-              {isCollapsed && <div className="nav-divider" />}
-              <div
-                className="nav-group-items"
-                ref={(el) => { navGroupRefs.current.landAcquisition = el; }}
-              >
-                  {(allowedPages.includes('*') || allowedPages.includes('/admin/case')) && (
-                    <NavLink to="/admin/case" end className="nav-item" title={isCollapsed ? "Cases" : ""}>
-                      <Map size={22} className="nav-icon" />
-                      {!isCollapsed && <span>Cases Dashboard</span>}
-                    </NavLink>
-                  )}
-                  {(allowedPages.includes('*') || allowedPages.includes('/admin/case/valuation')) && (
-                    <NavLink to="/admin/case/valuation" className="nav-item" title={isCollapsed ? "Valuation" : ""}>
-                      <BarChart2 size={22} className="nav-icon" />
-                      {!isCollapsed && <span>Valuation</span>}
-                    </NavLink>
-                  )}
+            {hasMainAccess && (
+              <div className="nav-section">
+                {!isCollapsed && <span className="nav-label">Main</span>}
+                {(allowedPages.includes('*') || allowedPages.includes('/admin')) && (
+                  <NavLink to="/admin" end className="nav-item" title={isCollapsed ? "Dashboard" : ""}>
+                    <LayoutDashboard size={22} className="nav-icon" />
+                    {!isCollapsed && <span>Dashboard</span>}
+                  </NavLink>
+                )}
               </div>
-            </div>
+            )}
 
-            <div className="nav-section">
-              {!isCollapsed && (
+            {hasLandAcquisitionAccess && (
+              <div className="nav-section">
+                {!isCollapsed && (
+                  <div
+                    className="nav-label"
+                    onClick={() => toggleGroup('landAcquisition')}
+                    onMouseEnter={() => handleGroupEnter('landAcquisition')}
+                  >
+                    <span>Land Acquisition</span>
+                    {isGroupExpanded('landAcquisition') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </div>
+                )}
+                {isCollapsed && <div className="nav-divider" />}
                 <div
-                  className="nav-label"
-                  onClick={() => toggleGroup('compensation')}
-                  onMouseEnter={() => handleGroupEnter('compensation')}
+                  className="nav-group-items"
+                  ref={(el) => { navGroupRefs.current.landAcquisition = el; }}
                 >
-                  <span>Compensation</span>
-                  {isGroupExpanded('compensation') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    {(allowedPages.includes('*') || allowedPages.includes('/admin/case')) && (
+                      <NavLink to="/admin/case" end className="nav-item" title={isCollapsed ? "Cases" : ""}>
+                        <Map size={22} className="nav-icon" />
+                        {!isCollapsed && <span>Cases Dashboard</span>}
+                      </NavLink>
+                    )}
+                    {(allowedPages.includes('*') || allowedPages.includes('/admin/case/valuation')) && (
+                      <NavLink to="/admin/case/valuation" className="nav-item" title={isCollapsed ? "Valuation" : ""}>
+                        <BarChart2 size={22} className="nav-icon" />
+                        {!isCollapsed && <span>Valuation</span>}
+                      </NavLink>
+                    )}
                 </div>
-              )}
-              {isCollapsed && <div className="nav-divider" />}
-              <div
-                className="nav-group-items"
-                ref={(el) => { navGroupRefs.current.compensation = el; }}
-              >
-                  {(allowedPages.includes('*') || allowedPages.includes('/admin/compensation/report')) && (
-                    <NavLink to="/admin/compensation/report" className="nav-item" title={isCollapsed ? "Report" : ""}>
-                      <ClipboardList size={22} className="nav-icon" />
-                      {!isCollapsed && <span>Report</span>}
-                    </NavLink>
-                  )}
-                  {(allowedPages.includes('*') || allowedPages.includes('/admin/compensation/offer')) && (
-                    <NavLink to="/admin/compensation/offer" className="nav-item" title={isCollapsed ? "Offer" : ""}>
-                      <Mail size={22} className="nav-icon" />
-                      {!isCollapsed && <span>Offer</span>}
-                    </NavLink>
-                  )}
-                  {(allowedPages.includes('*') || allowedPages.includes('/admin/compensation/objection')) && (
-                    <NavLink to="/admin/compensation/objection" className="nav-item" title={isCollapsed ? "Objection" : ""}>
-                      <FolderOpen size={22} className="nav-icon" />
-                      {!isCollapsed && <span>Objection</span>}
-                    </NavLink>
-                  )}
               </div>
-            </div>
+            )}
+
+            {hasCompensationAccess && (
+              <div className="nav-section">
+                {!isCollapsed && (
+                  <div
+                    className="nav-label"
+                    onClick={() => toggleGroup('compensation')}
+                    onMouseEnter={() => handleGroupEnter('compensation')}
+                  >
+                    <span>Compensation</span>
+                    {isGroupExpanded('compensation') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </div>
+                )}
+                {isCollapsed && <div className="nav-divider" />}
+                <div
+                  className="nav-group-items"
+                  ref={(el) => { navGroupRefs.current.compensation = el; }}
+                >
+                    {(allowedPages.includes('*') || allowedPages.includes('/admin/compensation/report')) && (
+                      <NavLink to="/admin/compensation/report" className="nav-item" title={isCollapsed ? "Report" : ""}>
+                        <ClipboardList size={22} className="nav-icon" />
+                        {!isCollapsed && <span>Report</span>}
+                      </NavLink>
+                    )}
+                    {(allowedPages.includes('*') || allowedPages.includes('/admin/compensation/offer')) && (
+                      <NavLink to="/admin/compensation/offer" className="nav-item" title={isCollapsed ? "Offer" : ""}>
+                        <Mail size={22} className="nav-icon" />
+                        {!isCollapsed && <span>Offer</span>}
+                      </NavLink>
+                    )}
+                    {(allowedPages.includes('*') || allowedPages.includes('/admin/compensation/objection')) && (
+                      <NavLink to="/admin/compensation/objection" className="nav-item" title={isCollapsed ? "Objection" : ""}>
+                        <FolderOpen size={22} className="nav-icon" />
+                        {!isCollapsed && <span>Objection</span>}
+                      </NavLink>
+                    )}
+                </div>
+              </div>
+            )}
 
             {hasFinanceAccess && (
               <div className="nav-section">
@@ -563,83 +578,87 @@ export const AdminLayout: React.FC = () => {
               </div>
             )}
 
-            <div className="nav-section">
-              {!isCollapsed && (
+            {hasAiValuationAccess && (
+              <div className="nav-section">
+                {!isCollapsed && (
+                  <div
+                    className="nav-label"
+                    onClick={() => toggleGroup('aiValuation')}
+                    onMouseEnter={() => handleGroupEnter('aiValuation')}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <span>AI Valuation</span>
+                    {isGroupExpanded('aiValuation') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </div>
+                )}
+                {isCollapsed && <div className="nav-divider" />}
                 <div
-                  className="nav-label"
-                  onClick={() => toggleGroup('aiValuation')}
-                  onMouseEnter={() => handleGroupEnter('aiValuation')}
-                  style={{ cursor: 'pointer' }}
+                  className="nav-group-items"
+                  ref={(el) => { navGroupRefs.current.aiValuation = el; }}
                 >
-                  <span>AI Valuation</span>
-                  {isGroupExpanded('aiValuation') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    {(allowedPages.includes('*') || allowedPages.includes('/admin/prediction')) && (
+                      <NavLink to="/admin/prediction" end className="nav-item" title={isCollapsed ? "Generate AI Valuation" : ""}>
+                        <BrainCircuit size={22} className="nav-icon" />
+                        {!isCollapsed && <span>Generate AI Valuation</span>}
+                      </NavLink>
+                    )}
+                    {(allowedPages.includes('*') || allowedPages.includes('/admin/prediction')) && (
+                      <NavLink to="/admin/prediction/retrain" className="nav-item" title={isCollapsed ? "Retrain Model" : ""}>
+                        <RefreshCw size={22} className="nav-icon" />
+                        {!isCollapsed && <span>Retrain Model</span>}
+                      </NavLink>
+                    )}
                 </div>
-              )}
-              {isCollapsed && <div className="nav-divider" />}
-              <div
-                className="nav-group-items"
-                ref={(el) => { navGroupRefs.current.aiValuation = el; }}
-              >
-                  {(allowedPages.includes('*') || allowedPages.includes('/admin/prediction')) && (
-                    <NavLink to="/admin/prediction" end className="nav-item" title={isCollapsed ? "Generate AI Valuation" : ""}>
-                      <BrainCircuit size={22} className="nav-icon" />
-                      {!isCollapsed && <span>Generate AI Valuation</span>}
-                    </NavLink>
-                  )}
-                  {(allowedPages.includes('*') || allowedPages.includes('/admin/prediction')) && (
-                    <NavLink to="/admin/prediction/retrain" className="nav-item" title={isCollapsed ? "Retrain Model" : ""}>
-                      <RefreshCw size={22} className="nav-icon" />
-                      {!isCollapsed && <span>Retrain Model</span>}
-                    </NavLink>
-                  )}
               </div>
-            </div>
+            )}
 
-            <div className="nav-section">
-              {!isCollapsed && (
+            {hasReportsAccess && (
+              <div className="nav-section">
+                {!isCollapsed && (
+                  <div
+                    className="nav-label"
+                    onClick={() => toggleGroup('reports')}
+                    onMouseEnter={() => handleGroupEnter('reports')}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <span>Reporting</span>
+                    {isGroupExpanded('reports') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </div>
+                )}
+                {isCollapsed && <div className="nav-divider" />}
                 <div
-                  className="nav-label"
-                  onClick={() => toggleGroup('reports')}
-                  onMouseEnter={() => handleGroupEnter('reports')}
-                  style={{ cursor: 'pointer' }}
+                  className="nav-group-items"
+                  ref={(el) => { navGroupRefs.current.reports = el; }}
                 >
-                  <span>Reporting</span>
-                  {isGroupExpanded('reports') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    {(allowedPages.includes('*') || allowedPages.includes('/admin/reports')) && (
+                      <NavLink to="/admin/reports" end className="nav-item" title={isCollapsed ? "Overview" : ""}>
+                        <PieChart size={22} className="nav-icon" />
+                        {!isCollapsed && <span>Overview</span>}
+                      </NavLink>
+                    )}
+                    {(allowedPages.includes('*') || allowedPages.includes('/admin/reports/case-status')) && (
+                      <NavLink to="/admin/reports/case-status" className="nav-item" title={isCollapsed ? "Case Status" : ""}>
+                        <FileText size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                        {!isCollapsed && <span>Case Status</span>}
+                      </NavLink>
+                    )}
+                    {(allowedPages.includes('*') || allowedPages.includes('/admin/reports/payment')) && (
+                      <NavLink to="/admin/reports/payment" className="nav-item" title={isCollapsed ? "Payment" : ""}>
+                        <FileText size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                        {!isCollapsed && <span>Payment</span>}
+                      </NavLink>
+                    )}
+                    {(allowedPages.includes('*') || allowedPages.includes('/admin/reports/blockchain-audit')) && (
+                      <NavLink to="/admin/reports/blockchain-audit" className="nav-item" title={isCollapsed ? "Blockchain Audit" : ""}>
+                        <FileText size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
+                        {!isCollapsed && <span>Blockchain Audit</span>}
+                      </NavLink>
+                    )}
                 </div>
-              )}
-              {isCollapsed && <div className="nav-divider" />}
-              <div
-                className="nav-group-items"
-                ref={(el) => { navGroupRefs.current.reports = el; }}
-              >
-                  {(allowedPages.includes('*') || allowedPages.includes('/admin/reports')) && (
-                    <NavLink to="/admin/reports" end className="nav-item" title={isCollapsed ? "Overview" : ""}>
-                      <PieChart size={22} className="nav-icon" />
-                      {!isCollapsed && <span>Overview</span>}
-                    </NavLink>
-                  )}
-                  {(allowedPages.includes('*') || allowedPages.includes('/admin/reports/case-status')) && (
-                    <NavLink to="/admin/reports/case-status" className="nav-item" title={isCollapsed ? "Case Status" : ""}>
-                      <FileText size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
-                      {!isCollapsed && <span>Case Status</span>}
-                    </NavLink>
-                  )}
-                  {(allowedPages.includes('*') || allowedPages.includes('/admin/reports/payment')) && (
-                    <NavLink to="/admin/reports/payment" className="nav-item" title={isCollapsed ? "Payment" : ""}>
-                      <FileText size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
-                      {!isCollapsed && <span>Payment</span>}
-                    </NavLink>
-                  )}
-                  {(allowedPages.includes('*') || allowedPages.includes('/admin/reports/blockchain-audit')) && (
-                    <NavLink to="/admin/reports/blockchain-audit" className="nav-item" title={isCollapsed ? "Blockchain Audit" : ""}>
-                      <FileText size={18} className="nav-icon" style={{ marginLeft: isCollapsed ? 0 : '12px' }} />
-                      {!isCollapsed && <span>Blockchain Audit</span>}
-                    </NavLink>
-                  )}
               </div>
-            </div>
+            )}
 
-            {user?.role === 'SYSTEM_ADMINISTRATOR' && (
+            {hasUserManagementAccess && (
               <div className="nav-section">
                 {!isCollapsed && (
                   <div
@@ -673,40 +692,42 @@ export const AdminLayout: React.FC = () => {
               </div>
             )}
 
-            <div className="nav-section">
-              {!isCollapsed && <span className="nav-label">System</span>}
-              {isCollapsed && <div className="nav-divider" />}
-              {(allowedPages.includes('*') || allowedPages.includes('/admin/profile')) && (
-                <NavLink to="/admin/profile" className="nav-item" title={isCollapsed ? "Profile" : ""}>
-                  <Users size={22} className="nav-icon" />
-                  {!isCollapsed && <span>My Profile</span>}
-                </NavLink>
-              )}
-              {(allowedPages.includes('*') || allowedPages.includes('/admin/email-templates')) && (
-                <NavLink to="/admin/email-templates" className="nav-item" title={isCollapsed ? "Email Templates" : ""}>
-                  <Mail size={22} className="nav-icon" />
-                  {!isCollapsed && <span>Email Templates</span>}
-                </NavLink>
-              )}
-              {(allowedPages.includes('*') || allowedPages.includes('/admin/audit-logs')) && (
-                <NavLink to="/admin/audit-logs" className="nav-item" title={isCollapsed ? "Audit Logs" : ""}>
-                  <ClipboardList size={22} className="nav-icon" />
-                  {!isCollapsed && <span>Audit Logs</span>}
-                </NavLink>
-              )}
-              {(allowedPages.includes('*') || allowedPages.includes('/admin/alerts')) && (
-                <NavLink to="/admin/alerts" className="nav-item" title={isCollapsed ? "Alerts" : ""}>
-                  <Bell size={22} className="nav-icon" />
-                  {!isCollapsed && <span>Alerts</span>}
-                </NavLink>
-              )}
-              {(allowedPages.includes('*') || allowedPages.includes('/admin/settings')) && (
-                <NavLink to="/admin/settings" className="nav-item" title={isCollapsed ? "Settings" : ""}>
-                  <Settings size={22} className="nav-icon" />
-                  {!isCollapsed && <span>Settings</span>}
-                </NavLink>
-              )}
-            </div>
+            {hasSystemAccess && (
+              <div className="nav-section">
+                {!isCollapsed && <span className="nav-label">System</span>}
+                {isCollapsed && <div className="nav-divider" />}
+                {(allowedPages.includes('*') || allowedPages.includes('/admin/profile')) && (
+                  <NavLink to="/admin/profile" className="nav-item" title={isCollapsed ? "Profile" : ""}>
+                    <Users size={22} className="nav-icon" />
+                    {!isCollapsed && <span>My Profile</span>}
+                  </NavLink>
+                )}
+                {(allowedPages.includes('*') || allowedPages.includes('/admin/email-templates')) && (
+                  <NavLink to="/admin/email-templates" className="nav-item" title={isCollapsed ? "Email Templates" : ""}>
+                    <Mail size={22} className="nav-icon" />
+                    {!isCollapsed && <span>Email Templates</span>}
+                  </NavLink>
+                )}
+                {(allowedPages.includes('*') || allowedPages.includes('/admin/audit-logs')) && (
+                  <NavLink to="/admin/audit-logs" className="nav-item" title={isCollapsed ? "Audit Logs" : ""}>
+                    <ClipboardList size={22} className="nav-icon" />
+                    {!isCollapsed && <span>Audit Logs</span>}
+                  </NavLink>
+                )}
+                {(allowedPages.includes('*') || allowedPages.includes('/admin/alerts')) && (
+                  <NavLink to="/admin/alerts" className="nav-item" title={isCollapsed ? "Alerts" : ""}>
+                    <Bell size={22} className="nav-icon" />
+                    {!isCollapsed && <span>Alerts</span>}
+                  </NavLink>
+                )}
+                {(allowedPages.includes('*') || allowedPages.includes('/admin/settings')) && (
+                  <NavLink to="/admin/settings" className="nav-item" title={isCollapsed ? "Settings" : ""}>
+                    <Settings size={22} className="nav-icon" />
+                    {!isCollapsed && <span>Settings</span>}
+                  </NavLink>
+                )}
+              </div>
+            )}
 
             <div style={{ flex: 1 }} />
 

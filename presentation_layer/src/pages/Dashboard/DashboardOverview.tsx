@@ -21,7 +21,7 @@ import api from '../../services/api';
 
 export const DashboardOverview: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, allowedPages } = useAuth();
 
   const [currentTime, setCurrentTime] = useState<string>('');
   const [currentDate, setCurrentDate] = useState<string>('');
@@ -38,6 +38,42 @@ export const DashboardOverview: React.FC = () => {
     systemUsers: 0,
     alertsToday: 0,
   });
+
+  // Check if active user role is permitted for target path
+  const canAccess = (targetPath: string) => {
+    const activeRole = (user?.role || '').toUpperCase();
+    if (activeRole === 'SYSTEM_ADMINISTRATOR' || (allowedPages && allowedPages.includes('*'))) {
+      return true;
+    }
+    if (!allowedPages || allowedPages.length === 0) return false;
+    return allowedPages.some((p) => {
+      if (targetPath === '/admin/compensation') {
+        return p === '/admin/compensation' || p.startsWith('/admin/compensation');
+      }
+      return p === targetPath || p.startsWith(targetPath + '/');
+    });
+  };
+
+  const showKpiCases = canAccess('/admin/case');
+  const showKpiValuation = canAccess('/admin/case/valuation');
+  const showKpiCompensation = canAccess('/admin/compensation');
+  const showKpiAlerts = canAccess('/admin/alerts');
+  const visibleKpisCount = [showKpiCases, showKpiValuation, showKpiCompensation, showKpiAlerts].filter(Boolean).length;
+
+  const showWorkflowCases = canAccess('/admin/case');
+  const showWorkflowOffer = canAccess('/admin/compensation/offer');
+  const showWorkflowObjection = canAccess('/admin/compensation/objection');
+  const showWorkflowReports = canAccess('/admin/reports');
+  const showWorkflowAudit = canAccess('/admin/audit-logs');
+  const showWorkflowAlerts = canAccess('/admin/alerts');
+  const visibleWorkflowsCount = [
+    showWorkflowCases,
+    showWorkflowOffer,
+    showWorkflowObjection,
+    showWorkflowReports,
+    showWorkflowAudit,
+    showWorkflowAlerts,
+  ].filter(Boolean).length;
 
   // Malaysian Clock
   useEffect(() => {
@@ -255,249 +291,281 @@ export const DashboardOverview: React.FC = () => {
         </div>
 
         {/* Operational KPI Metric Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {/* Card 1: Active Cases */}
+        {visibleKpisCount > 0 && (
           <div
-            onClick={() => navigate('/admin/case')}
-            className="p-5 rounded-2xl bg-md-surface-container border border-md-outline/20 hover:border-md-primary/50 transition-all cursor-pointer group shadow-xs hover:shadow-md"
+            className={`grid grid-cols-1 sm:grid-cols-2 ${
+              visibleKpisCount >= 4
+                ? 'lg:grid-cols-4'
+                : visibleKpisCount === 3
+                ? 'lg:grid-cols-3'
+                : 'lg:grid-cols-2'
+            } gap-5`}
           >
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">
-                Acquisition Cases
-              </span>
-              <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                <FolderPlus size={18} />
+            {/* Card 1: Active Cases */}
+            {showKpiCases && (
+              <div
+                onClick={() => navigate('/admin/case')}
+                className="p-5 rounded-2xl bg-md-surface-container border border-md-outline/20 hover:border-md-primary/50 transition-all cursor-pointer group shadow-xs hover:shadow-md"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">
+                    Acquisition Cases
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                    <FolderPlus size={18} />
+                  </div>
+                </div>
+                <div className="text-3xl font-bold text-md-on-surface">
+                  {loading ? <span className="animate-pulse opacity-40">--</span> : stats.activeCases}
+                </div>
+                <div className="flex items-center justify-between mt-2 pt-2 border-t border-md-outline/10 text-xs text-md-on-surface-variant">
+                  <span>Under active processing</span>
+                  <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform text-md-primary" />
+                </div>
               </div>
-            </div>
-            <div className="text-3xl font-bold text-md-on-surface">
-              {loading ? <span className="animate-pulse opacity-40">--</span> : stats.activeCases}
-            </div>
-            <div className="flex items-center justify-between mt-2 pt-2 border-t border-md-outline/10 text-xs text-md-on-surface-variant">
-              <span>Under active processing</span>
-              <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform text-md-primary" />
-            </div>
-          </div>
+            )}
 
-          {/* Card 2: Valuation Assessments */}
-          <div
-            onClick={() => navigate('/admin/case/valuation')}
-            className="p-5 rounded-2xl bg-md-surface-container border border-md-outline/20 hover:border-amber-500/50 transition-all cursor-pointer group shadow-xs hover:shadow-md"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">
-                Valuation Reports
-              </span>
-              <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                <Scale size={18} />
+            {/* Card 2: Valuation Assessments */}
+            {showKpiValuation && (
+              <div
+                onClick={() => navigate('/admin/case/valuation')}
+                className="p-5 rounded-2xl bg-md-surface-container border border-md-outline/20 hover:border-amber-500/50 transition-all cursor-pointer group shadow-xs hover:shadow-md"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">
+                    Valuation Reports
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                    <Scale size={18} />
+                  </div>
+                </div>
+                <div className="text-3xl font-bold text-md-on-surface">
+                  {loading ? <span className="animate-pulse opacity-40">--</span> : stats.totalValuations}
+                </div>
+                <div className="flex items-center justify-between mt-2 pt-2 border-t border-md-outline/10 text-xs text-md-on-surface-variant">
+                  <span>{stats.pendingValuations} Form C {stats.pendingValuations === 1 ? 'assessment' : 'assessments'} pending</span>
+                  <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform text-amber-600" />
+                </div>
               </div>
-            </div>
-            <div className="text-3xl font-bold text-md-on-surface">
-              {loading ? <span className="animate-pulse opacity-40">--</span> : stats.totalValuations}
-            </div>
-            <div className="flex items-center justify-between mt-2 pt-2 border-t border-md-outline/10 text-xs text-md-on-surface-variant">
-              <span>{stats.pendingValuations} Form C {stats.pendingValuations === 1 ? 'assessment' : 'assessments'} pending</span>
-              <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform text-amber-600" />
-            </div>
-          </div>
+            )}
 
-          {/* Card 3: Compensation & Objections */}
-          <div
-            onClick={() => navigate('/admin/compensation')}
-            className="p-5 rounded-2xl bg-md-surface-container border border-md-outline/20 hover:border-purple-500/50 transition-all cursor-pointer group shadow-xs hover:shadow-md"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">
-                Compensation & Claims
-              </span>
-              <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-                <FileCheck2 size={18} />
+            {/* Card 3: Compensation & Objections */}
+            {showKpiCompensation && (
+              <div
+                onClick={() => navigate('/admin/compensation')}
+                className="p-5 rounded-2xl bg-md-surface-container border border-md-outline/20 hover:border-purple-500/50 transition-all cursor-pointer group shadow-xs hover:shadow-md"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">
+                    Compensation & Claims
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                    <FileCheck2 size={18} />
+                  </div>
+                </div>
+                <div className="text-3xl font-bold text-md-on-surface">
+                  {loading ? <span className="animate-pulse opacity-40">--</span> : stats.totalCompensations}
+                </div>
+                <div className="flex items-center justify-between mt-2 pt-2 border-t border-md-outline/10 text-xs text-md-on-surface-variant">
+                  <span>{stats.activeObjections} Form N {stats.activeObjections === 1 ? 'objection' : 'objections'} filed</span>
+                  <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform text-purple-600" />
+                </div>
               </div>
-            </div>
-            <div className="text-3xl font-bold text-md-on-surface">
-              {loading ? <span className="animate-pulse opacity-40">--</span> : stats.totalCompensations}
-            </div>
-            <div className="flex items-center justify-between mt-2 pt-2 border-t border-md-outline/10 text-xs text-md-on-surface-variant">
-              <span>{stats.activeObjections} Form N {stats.activeObjections === 1 ? 'objection' : 'objections'} filed</span>
-              <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform text-purple-600" />
-            </div>
-          </div>
+            )}
 
-          {/* Card 4: Governance & Alerts */}
-          <div
-            onClick={() => navigate('/admin/alerts')}
-            className="p-5 rounded-2xl bg-md-surface-container border border-md-outline/20 hover:border-emerald-500/50 transition-all cursor-pointer group shadow-xs hover:shadow-md"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">
-                System Alerts
-              </span>
-              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                <Bell size={18} />
+            {/* Card 4: Governance & Alerts */}
+            {showKpiAlerts && (
+              <div
+                onClick={() => navigate('/admin/alerts')}
+                className="p-5 rounded-2xl bg-md-surface-container border border-md-outline/20 hover:border-emerald-500/50 transition-all cursor-pointer group shadow-xs hover:shadow-md"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider">
+                    System Alerts
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                    <Bell size={18} />
+                  </div>
+                </div>
+                <div className="text-3xl font-bold text-md-on-surface">
+                  {loading ? <span className="animate-pulse opacity-40">--</span> : stats.alertsToday}
+                </div>
+                <div className="flex items-center justify-between mt-2 pt-2 border-t border-md-outline/10 text-xs text-md-on-surface-variant">
+                  <span>Unacknowledged events</span>
+                  <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform text-emerald-600" />
+                </div>
               </div>
-            </div>
-            <div className="text-3xl font-bold text-md-on-surface">
-              {loading ? <span className="animate-pulse opacity-40">--</span> : stats.alertsToday}
-            </div>
-            <div className="flex items-center justify-between mt-2 pt-2 border-t border-md-outline/10 text-xs text-md-on-surface-variant">
-              <span>Unacknowledged events</span>
-              <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform text-emerald-600" />
-            </div>
+            )}
           </div>
-        </div>
+        )}
 
         {/* Role-Contextual Quick Navigation Grid */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-xl font-bold text-md-on-surface">Operational Workflows & Modules</h2>
-              <p className="text-xs text-md-on-surface-variant">
-                Direct access to statutory modules provisioned for your role
-              </p>
+        {visibleWorkflowsCount > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-bold text-md-on-surface">Operational Workflows & Modules</h2>
+                <p className="text-xs text-md-on-surface-variant">
+                  Direct access to statutory modules provisioned for your role
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              
+              {/* Workflow 1: Land Acquisition Case Registry */}
+              {showWorkflowCases && (
+                <MD3Card
+                  elevation={1}
+                  interactive
+                  className="group relative overflow-hidden p-6 hover:shadow-md transition-all border border-md-outline/20"
+                  onClick={() => navigate('/admin/case')}
+                >
+                  <div className="absolute top-0 right-0 w-28 h-28 bg-blue-500/10 rounded-bl-full -z-10 transition-transform group-hover:scale-110" />
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-4">
+                    <FolderPlus size={20} />
+                  </div>
+                  <h3 className="text-lg font-bold text-md-on-surface mb-1.5">
+                    Land Acquisition Cases
+                  </h3>
+                  <p className="text-xs text-md-on-surface-variant mb-5 leading-relaxed">
+                    Register Section 4 & 8 gazettes, attach landowners, manage land lot parcels, and assign certified land valuers.
+                  </p>
+                  <div className="mt-auto flex items-center text-xs font-semibold text-blue-600 dark:text-blue-400 gap-1 group-hover:underline">
+                    <span>Manage Cases</span>
+                    <ArrowRight size={14} />
+                  </div>
+                </MD3Card>
+              )}
+
+              {/* Workflow 2: Valuation & Compensation Awards */}
+              {showWorkflowOffer && (
+                <MD3Card
+                  elevation={1}
+                  interactive
+                  className="group relative overflow-hidden p-6 hover:shadow-md transition-all border border-md-outline/20"
+                  onClick={() => navigate('/admin/compensation/offer')}
+                >
+                  <div className="absolute top-0 right-0 w-28 h-28 bg-purple-500/10 rounded-bl-full -z-10 transition-transform group-hover:scale-110" />
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-4">
+                    <FileCheck2 size={20} />
+                  </div>
+                  <h3 className="text-lg font-bold text-md-on-surface mb-1.5">
+                    Compensation & Form H Offers
+                  </h3>
+                  <p className="text-xs text-md-on-surface-variant mb-5 leading-relaxed">
+                    Review statutory compensation valuations, prepare formal Form H offer letters, and process landowner acceptances.
+                  </p>
+                  <div className="mt-auto flex items-center text-xs font-semibold text-purple-600 dark:text-purple-400 gap-1 group-hover:underline">
+                    <span>Review Compensation</span>
+                    <ArrowRight size={14} />
+                  </div>
+                </MD3Card>
+              )}
+
+              {/* Workflow 3: Form N Objections & Legal Review */}
+              {showWorkflowObjection && (
+                <MD3Card
+                  elevation={1}
+                  interactive
+                  className="group relative overflow-hidden p-6 hover:shadow-md transition-all border border-md-outline/20"
+                  onClick={() => navigate('/admin/compensation/objection')}
+                >
+                  <div className="absolute top-0 right-0 w-28 h-28 bg-amber-500/10 rounded-bl-full -z-10 transition-transform group-hover:scale-110" />
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-4">
+                    <Scale size={20} />
+                  </div>
+                  <h3 className="text-lg font-bold text-md-on-surface mb-1.5">
+                    Form N Objections Registry
+                  </h3>
+                  <p className="text-xs text-md-on-surface-variant mb-5 leading-relaxed">
+                    Examine landowner objection grounds, revise statutory compensation awards, and prepare High Court referral files.
+                  </p>
+                  <div className="mt-auto flex items-center text-xs font-semibold text-amber-600 dark:text-amber-400 gap-1 group-hover:underline">
+                    <span>Examine Objections</span>
+                    <ArrowRight size={14} />
+                  </div>
+                </MD3Card>
+              )}
+
+              {/* Workflow 4: Statutory Reports & Analytics */}
+              {showWorkflowReports && (
+                <MD3Card
+                  elevation={1}
+                  interactive
+                  className="group relative overflow-hidden p-6 hover:shadow-md transition-all border border-md-outline/20"
+                  onClick={() => navigate('/admin/reports')}
+                >
+                  <div className="absolute top-0 right-0 w-28 h-28 bg-teal-500/10 rounded-bl-full -z-10 transition-transform group-hover:scale-110" />
+                  <div className="w-10 h-10 rounded-xl bg-teal-500/15 text-teal-600 dark:text-teal-400 flex items-center justify-center mb-4">
+                    <FileSpreadsheet size={20} />
+                  </div>
+                  <h3 className="text-lg font-bold text-md-on-surface mb-1.5">
+                    Statutory Reports & Audits
+                  </h3>
+                  <p className="text-xs text-md-on-surface-variant mb-5 leading-relaxed">
+                    Generate scheduled and on-demand compensation expenditure breakdowns, case progression rates, and state metrics.
+                  </p>
+                  <div className="mt-auto flex items-center text-xs font-semibold text-teal-600 dark:text-teal-400 gap-1 group-hover:underline">
+                    <span>View Reports</span>
+                    <ArrowRight size={14} />
+                  </div>
+                </MD3Card>
+              )}
+
+              {/* Workflow 5: Tamper-Proof Audit Trail */}
+              {showWorkflowAudit && (
+                <MD3Card
+                  elevation={1}
+                  interactive
+                  className="group relative overflow-hidden p-6 hover:shadow-md transition-all border border-md-outline/20"
+                  onClick={() => navigate('/admin/audit-logs')}
+                >
+                  <div className="absolute top-0 right-0 w-28 h-28 bg-rose-500/10 rounded-bl-full -z-10 transition-transform group-hover:scale-110" />
+                  <div className="w-10 h-10 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-4">
+                    <Activity size={20} />
+                  </div>
+                  <h3 className="text-lg font-bold text-md-on-surface mb-1.5">
+                    Cryptographic Audit Logs
+                  </h3>
+                  <p className="text-xs text-md-on-surface-variant mb-5 leading-relaxed">
+                    Inspect immutable system logs, session timestamps, Malaysian Standard Time entries, and security audit verifications.
+                  </p>
+                  <div className="mt-auto flex items-center text-xs font-semibold text-rose-600 dark:text-rose-400 gap-1 group-hover:underline">
+                    <span>Audit Trail</span>
+                    <ArrowRight size={14} />
+                  </div>
+                </MD3Card>
+              )}
+
+              {/* Workflow 6: Alerts & Routing Rules */}
+              {showWorkflowAlerts && (
+                <MD3Card
+                  elevation={1}
+                  interactive
+                  className="group relative overflow-hidden p-6 hover:shadow-md transition-all border border-md-outline/20"
+                  onClick={() => navigate('/admin/alerts')}
+                >
+                  <div className="absolute top-0 right-0 w-28 h-28 bg-emerald-500/10 rounded-bl-full -z-10 transition-transform group-hover:scale-110" />
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-4">
+                    <Bell size={20} />
+                  </div>
+                  <h3 className="text-lg font-bold text-md-on-surface mb-1.5">
+                    Alerts & Routing Rules
+                  </h3>
+                  <p className="text-xs text-md-on-surface-variant mb-5 leading-relaxed">
+                    Configure contextual multi-role routing rules, monitor system anomalies, and verify statutory email dispatches.
+                  </p>
+                  <div className="mt-auto flex items-center text-xs font-semibold text-emerald-600 dark:text-emerald-400 gap-1 group-hover:underline">
+                    <span>Alert Rules</span>
+                    <ArrowRight size={14} />
+                  </div>
+                </MD3Card>
+              )}
+
             </div>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            
-            {/* Workflow 1: Land Acquisition Case Registry */}
-            <MD3Card
-              elevation={1}
-              interactive
-              className="group relative overflow-hidden p-6 hover:shadow-md transition-all border border-md-outline/20"
-              onClick={() => navigate('/admin/case')}
-            >
-              <div className="absolute top-0 right-0 w-28 h-28 bg-blue-500/10 rounded-bl-full -z-10 transition-transform group-hover:scale-110" />
-              <div className="w-10 h-10 rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-4">
-                <FolderPlus size={20} />
-              </div>
-              <h3 className="text-lg font-bold text-md-on-surface mb-1.5">
-                Land Acquisition Cases
-              </h3>
-              <p className="text-xs text-md-on-surface-variant mb-5 leading-relaxed">
-                Register Section 4 & 8 gazettes, attach landowners, manage land lot parcels, and assign certified land valuers.
-              </p>
-              <div className="mt-auto flex items-center text-xs font-semibold text-blue-600 dark:text-blue-400 gap-1 group-hover:underline">
-                <span>Manage Cases</span>
-                <ArrowRight size={14} />
-              </div>
-            </MD3Card>
-
-            {/* Workflow 2: Valuation & Compensation Awards */}
-            <MD3Card
-              elevation={1}
-              interactive
-              className="group relative overflow-hidden p-6 hover:shadow-md transition-all border border-md-outline/20"
-              onClick={() => navigate('/admin/compensation/offer')}
-            >
-              <div className="absolute top-0 right-0 w-28 h-28 bg-purple-500/10 rounded-bl-full -z-10 transition-transform group-hover:scale-110" />
-              <div className="w-10 h-10 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-4">
-                <FileCheck2 size={20} />
-              </div>
-              <h3 className="text-lg font-bold text-md-on-surface mb-1.5">
-                Compensation & Form H Offers
-              </h3>
-              <p className="text-xs text-md-on-surface-variant mb-5 leading-relaxed">
-                Review statutory compensation valuations, prepare formal Form H offer letters, and process landowner acceptances.
-              </p>
-              <div className="mt-auto flex items-center text-xs font-semibold text-purple-600 dark:text-purple-400 gap-1 group-hover:underline">
-                <span>Review Compensation</span>
-                <ArrowRight size={14} />
-              </div>
-            </MD3Card>
-
-            {/* Workflow 3: Form N Objections & Legal Review */}
-            <MD3Card
-              elevation={1}
-              interactive
-              className="group relative overflow-hidden p-6 hover:shadow-md transition-all border border-md-outline/20"
-              onClick={() => navigate('/admin/compensation/objection')}
-            >
-              <div className="absolute top-0 right-0 w-28 h-28 bg-amber-500/10 rounded-bl-full -z-10 transition-transform group-hover:scale-110" />
-              <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-4">
-                <Scale size={20} />
-              </div>
-              <h3 className="text-lg font-bold text-md-on-surface mb-1.5">
-                Form N Objections Registry
-              </h3>
-              <p className="text-xs text-md-on-surface-variant mb-5 leading-relaxed">
-                Examine landowner objection grounds, revise statutory compensation awards, and prepare High Court referral files.
-              </p>
-              <div className="mt-auto flex items-center text-xs font-semibold text-amber-600 dark:text-amber-400 gap-1 group-hover:underline">
-                <span>Examine Objections</span>
-                <ArrowRight size={14} />
-              </div>
-            </MD3Card>
-
-            {/* Workflow 4: Statutory Reports & Analytics */}
-            <MD3Card
-              elevation={1}
-              interactive
-              className="group relative overflow-hidden p-6 hover:shadow-md transition-all border border-md-outline/20"
-              onClick={() => navigate('/admin/reports')}
-            >
-              <div className="absolute top-0 right-0 w-28 h-28 bg-teal-500/10 rounded-bl-full -z-10 transition-transform group-hover:scale-110" />
-              <div className="w-10 h-10 rounded-xl bg-teal-500/15 text-teal-600 dark:text-teal-400 flex items-center justify-center mb-4">
-                <FileSpreadsheet size={20} />
-              </div>
-              <h3 className="text-lg font-bold text-md-on-surface mb-1.5">
-                Statutory Reports & Audits
-              </h3>
-              <p className="text-xs text-md-on-surface-variant mb-5 leading-relaxed">
-                Generate scheduled and on-demand compensation expenditure breakdowns, case progression rates, and state metrics.
-              </p>
-              <div className="mt-auto flex items-center text-xs font-semibold text-teal-600 dark:text-teal-400 gap-1 group-hover:underline">
-                <span>View Reports</span>
-                <ArrowRight size={14} />
-              </div>
-            </MD3Card>
-
-            {/* Workflow 5: Tamper-Proof Audit Trail */}
-            <MD3Card
-              elevation={1}
-              interactive
-              className="group relative overflow-hidden p-6 hover:shadow-md transition-all border border-md-outline/20"
-              onClick={() => navigate('/admin/audit-logs')}
-            >
-              <div className="absolute top-0 right-0 w-28 h-28 bg-rose-500/10 rounded-bl-full -z-10 transition-transform group-hover:scale-110" />
-              <div className="w-10 h-10 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-4">
-                <Activity size={20} />
-              </div>
-              <h3 className="text-lg font-bold text-md-on-surface mb-1.5">
-                Cryptographic Audit Logs
-              </h3>
-              <p className="text-xs text-md-on-surface-variant mb-5 leading-relaxed">
-                Inspect immutable system logs, session timestamps, Malaysian Standard Time entries, and security audit verifications.
-              </p>
-              <div className="mt-auto flex items-center text-xs font-semibold text-rose-600 dark:text-rose-400 gap-1 group-hover:underline">
-                <span>Audit Trail</span>
-                <ArrowRight size={14} />
-              </div>
-            </MD3Card>
-
-            {/* Workflow 6: Alerts & Routing Rules */}
-            <MD3Card
-              elevation={1}
-              interactive
-              className="group relative overflow-hidden p-6 hover:shadow-md transition-all border border-md-outline/20"
-              onClick={() => navigate('/admin/alerts')}
-            >
-              <div className="absolute top-0 right-0 w-28 h-28 bg-emerald-500/10 rounded-bl-full -z-10 transition-transform group-hover:scale-110" />
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-4">
-                <Bell size={20} />
-              </div>
-              <h3 className="text-lg font-bold text-md-on-surface mb-1.5">
-                Alerts & Routing Rules
-              </h3>
-              <p className="text-xs text-md-on-surface-variant mb-5 leading-relaxed">
-                Configure contextual multi-role routing rules, monitor system anomalies, and verify statutory email dispatches.
-              </p>
-              <div className="mt-auto flex items-center text-xs font-semibold text-emerald-600 dark:text-emerald-400 gap-1 group-hover:underline">
-                <span>Alert Rules</span>
-                <ArrowRight size={14} />
-              </div>
-            </MD3Card>
-
-          </div>
-        </div>
+        )}
 
         {/* Operational Guidelines & Compliance Footer Card */}
         <div className="p-5 rounded-2xl bg-md-surface-container-low border border-md-outline/20 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">

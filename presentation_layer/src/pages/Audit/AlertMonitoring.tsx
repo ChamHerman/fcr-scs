@@ -129,6 +129,36 @@ const URGENCY_LEVEL_OPTIONS: SelectOption[] = [
   { value: 'CRITICAL', label: 'CRITICAL' },
 ];
 
+const RULES_ROLE_OPTIONS: SelectOption[] = [
+  { value: 'all', label: 'All Roles' },
+  { value: 'SYSTEM_ADMINISTRATOR', label: 'System Administrator' },
+  { value: 'GOVERNMENT_ADMINISTRATOR', label: 'Government Administrator' },
+  { value: 'GOVERNMENT_OFFICER', label: 'Government Officer' },
+  { value: 'LAND_VALUER', label: 'Land Valuer' },
+  { value: 'DISPLACED_COMMUNITY_MEMBER', label: 'Community Member' },
+];
+
+const RULES_CHANNEL_OPTIONS: SelectOption[] = [
+  { value: 'all', label: 'All Channels' },
+  { value: 'in_app', label: 'In-App Alerts' },
+  { value: 'email', label: 'Statutory Emails' },
+  { value: 'both', label: 'Dual Dispatch (In-App & Email)' },
+];
+
+const RULES_STATUS_OPTIONS: SelectOption[] = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'active', label: 'Active Rules' },
+  { value: 'inactive', label: 'Inactive Rules' },
+];
+
+const RULES_URGENCY_OPTIONS: SelectOption[] = [
+  { value: 'all', label: 'All Severities' },
+  { value: 'CRITICAL', label: 'Critical / Security' },
+  { value: 'HIGH', label: 'High' },
+  { value: 'MEDIUM', label: 'Medium' },
+  { value: 'LOW', label: 'Low / Info' },
+];
+
 export const AlertMonitoring: React.FC = () => {
   const { notify } = useNotification();
   const { user } = useAuth();
@@ -161,8 +191,21 @@ export const AlertMonitoring: React.FC = () => {
   const [isSubmittingRule, setIsSubmittingRule] = useState<boolean>(false);
   const [testingRuleId, setTestingRuleId] = useState<string | null>(null);
 
+  // Rules Search, Filter & Pagination State
+  const [rulesSearchQuery, setRulesSearchQuery] = useState<string>('');
+  const [rulesRoleFilter, setRulesRoleFilter] = useState<string>('all');
+  const [rulesChannelFilter, setRulesChannelFilter] = useState<string>('all');
+  const [rulesStatusFilter, setRulesStatusFilter] = useState<string>('all');
+  const [rulesUrgencyFilter, setRulesUrgencyFilter] = useState<string>('all');
+  const [rulesPage, setRulesPage] = useState<number>(1);
+  const rulesPageSize = 10;
+
   // Inspect Alert Modal
   const [inspectAlert, setInspectAlert] = useState<SystemAlertItem | null>(null);
+
+  // Delete Rule Confirmation Modal
+  const [ruleToDelete, setRuleToDelete] = useState<AlertRuleItem | null>(null);
+  const [isDeletingRule, setIsDeletingRule] = useState<boolean>(false);
 
   // Alert rule options
   const emailTemplateOptions: SelectOption[] = React.useMemo(() => {
@@ -258,6 +301,62 @@ export const AlertMonitoring: React.FC = () => {
       setIsLoadingRules(false);
     }
   }, []);
+
+  // Filtered and paginated notification rules
+  const filteredRules = React.useMemo(() => {
+    return rules.filter((r) => {
+      // Search text
+      if (rulesSearchQuery.trim()) {
+        const q = rulesSearchQuery.toLowerCase();
+        const matchesName = r.ruleName?.toLowerCase().includes(q);
+        const matchesDesc = r.description?.toLowerCase().includes(q);
+        const matchesActivity = r.activityType?.toLowerCase().includes(q);
+        const matchesModule = r.moduleName?.toLowerCase().includes(q);
+        const matchesTemplate = r.emailTemplateName?.toLowerCase().includes(q);
+        const matchesId = r.ruleId?.toLowerCase().includes(q);
+        if (!matchesName && !matchesDesc && !matchesActivity && !matchesModule && !matchesTemplate && !matchesId) {
+          return false;
+        }
+      }
+
+      // Role filter
+      if (rulesRoleFilter !== 'all') {
+        if (!r.targetRole || !r.targetRole.includes(rulesRoleFilter)) {
+          return false;
+        }
+      }
+
+      // Channel filter
+      if (rulesChannelFilter === 'in_app' && !r.triggerInApp) return false;
+      if (rulesChannelFilter === 'email' && !r.triggerEmail) return false;
+      if (rulesChannelFilter === 'both' && (!r.triggerInApp || !r.triggerEmail)) return false;
+
+      // Status filter
+      if (rulesStatusFilter === 'active' && !r.isEnabled) return false;
+      if (rulesStatusFilter === 'inactive' && r.isEnabled) return false;
+
+      // Urgency / Severity filter
+      if (rulesUrgencyFilter !== 'all') {
+        const sev = (r.minSeverity || '').toUpperCase();
+        const urg = (r.urgencyLevel || '').toUpperCase();
+        if (rulesUrgencyFilter === 'CRITICAL') {
+          if (sev !== 'CRITICAL' && sev !== 'SECURITY' && urg !== 'CRITICAL') return false;
+        } else if (rulesUrgencyFilter === 'LOW') {
+          if (sev !== 'LOW' && sev !== 'INFO' && urg !== 'LOW') return false;
+        } else {
+          if (sev !== rulesUrgencyFilter && urg !== rulesUrgencyFilter) return false;
+        }
+      }
+
+      return true;
+    });
+  }, [rules, rulesSearchQuery, rulesRoleFilter, rulesChannelFilter, rulesStatusFilter, rulesUrgencyFilter]);
+
+  const totalRulesPages = Math.ceil(filteredRules.length / rulesPageSize) || 1;
+  const paginatedRules = React.useMemo(() => {
+    const start = (rulesPage - 1) * rulesPageSize;
+    return filteredRules.slice(start, start + rulesPageSize);
+  }, [filteredRules, rulesPage, rulesPageSize]);
 
   useEffect(() => {
     loadStats();
@@ -425,26 +524,33 @@ export const AlertMonitoring: React.FC = () => {
     }
   };
 
-  // Delete rule
-  const handleDeleteRule = async (rule: AlertRuleItem) => {
-    if (!window.confirm(`Are you sure you want to delete the routing rule '${rule.ruleName}'?`)) {
-      return;
-    }
+  // Open delete confirmation modal
+  const handleDeleteRule = (rule: AlertRuleItem) => {
+    setRuleToDelete(rule);
+  };
+
+  // Execute delete rule
+  const confirmDeleteRule = async () => {
+    if (!ruleToDelete) return;
+    setIsDeletingRule(true);
     try {
-      await alertService.deleteAlertRule(rule.ruleId);
-      setRules((prev) => prev.filter((item) => item.ruleId !== rule.ruleId));
+      await alertService.deleteAlertRule(ruleToDelete.ruleId);
+      setRules((prev) => prev.filter((item) => item.ruleId !== ruleToDelete.ruleId));
       loadStats();
       notify({
         type: 'success',
         title: 'Rule Deleted',
-        message: `Routing rule '${rule.ruleName}' has been removed.`,
+        message: `Routing rule '${ruleToDelete.ruleName}' has been removed.`,
       });
+      setRuleToDelete(null);
     } catch {
       notify({
         type: 'error',
         title: 'Deletion Failed',
         message: 'Could not delete rule.',
       });
+    } finally {
+      setIsDeletingRule(false);
     }
   };
 
@@ -809,7 +915,11 @@ export const AlertMonitoring: React.FC = () => {
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
+            totalCount={totalCount}
+            pageSize={pageSize}
             onPageChange={setCurrentPage}
+            showInfo={true}
+            showPageJump={totalPages > 1}
           />
         </>
       )}
@@ -819,15 +929,81 @@ export const AlertMonitoring: React.FC = () => {
       {/* ========================================================================= */}
       {isSystemAdmin && activeTab === 'rules' && (
         <div className="space-y-4">
-          {/* Action Bar */}
-          <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-md-surface-container-lowest border border-md-outline/15 shadow-sm">
-            <div>
-              <h2 className="text-base font-semibold text-md-on-surface">Event-Driven Trigger Rules</h2>
-              <p className="text-xs text-md-on-surface-variant">
-                Configure how audit trail activities trigger automatic in-app alerts and statutory emails.
-              </p>
+          {/* Rules Filter Bar */}
+          <div className="filter-bar">
+            <SearchInput
+              placeholder="Search by rule name, event, module, or template..."
+              value={rulesSearchQuery}
+              onChange={(e) => {
+                setRulesSearchQuery(e.target.value);
+                setRulesPage(1);
+              }}
+            />
+            <div className="filter-group">
+              <Select
+                label="Role"
+                options={RULES_ROLE_OPTIONS}
+                value={rulesRoleFilter}
+                onChange={(val) => {
+                  setRulesRoleFilter(val);
+                  setRulesPage(1);
+                }}
+              />
+              <Select
+                label="Channel"
+                options={RULES_CHANNEL_OPTIONS}
+                value={rulesChannelFilter}
+                onChange={(val) => {
+                  setRulesChannelFilter(val);
+                  setRulesPage(1);
+                }}
+              />
+              <Select
+                label="Severity"
+                options={RULES_URGENCY_OPTIONS}
+                value={rulesUrgencyFilter}
+                onChange={(val) => {
+                  setRulesUrgencyFilter(val);
+                  setRulesPage(1);
+                }}
+              />
+              <Select
+                label="Status"
+                options={RULES_STATUS_OPTIONS}
+                value={rulesStatusFilter}
+                onChange={(val) => {
+                  setRulesStatusFilter(val);
+                  setRulesPage(1);
+                }}
+              />
+              <MD3Button
+                variant="outlined"
+                className="h-10 px-4"
+                onClick={() => {
+                  setRulesSearchQuery('');
+                  setRulesRoleFilter('all');
+                  setRulesChannelFilter('all');
+                  setRulesUrgencyFilter('all');
+                  setRulesStatusFilter('all');
+                  setRulesPage(1);
+                }}
+              >
+                Clear
+              </MD3Button>
             </div>
-            <div className="flex items-center gap-2">
+          </div>
+
+          {/* Action Bar */}
+          <div className="action-bar">
+            <div className="left">
+              <span className="count">{filteredRules.length}</span> routing rules found
+              <span style={{ opacity: 0.4, margin: '0 4px' }}>·</span>
+              <span style={{ fontSize: '13px' }}>
+                Showing {filteredRules.length > 0 ? (rulesPage - 1) * rulesPageSize + 1 : 0}–
+                {Math.min(rulesPage * rulesPageSize, filteredRules.length)} of {filteredRules.length}
+              </span>
+            </div>
+            <div className="right flex items-center gap-2">
               <MD3Button
                 variant="outlined"
                 icon={<RotateCcw size={16} />}
@@ -848,151 +1024,164 @@ export const AlertMonitoring: React.FC = () => {
 
           {/* Rules Table */}
           <div className="table-wrap">
-            <table className="case-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '22%' }}>Rule & Description</th>
-                  <th style={{ width: '22%' }}>Trigger Activity / Module</th>
-                  <th style={{ width: '12%' }}>Min Severity</th>
-                  <th style={{ width: '18%' }}>Dispatch Channels</th>
-                  <th style={{ width: '12%' }}>Target Audience</th>
-                  <th style={{ width: '6%' }}>Active</th>
-                  <th style={{ width: '8%', textAlign: 'center' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {isLoadingRules ? (
+            <div className="table-scroll md-scroll-thin">
+              <table className="w-full table-fixed">
+                <thead>
                   <tr>
-                    <td colSpan={7} className="text-center py-10 text-md-on-surface-variant">
-                      <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-md-primary border-t-transparent mb-2" />
-                      <div>Loading routing rules...</div>
-                    </td>
+                    <th style={{ width: '22%' }}>Rule & Description</th>
+                    <th style={{ width: '22%' }}>Trigger Activity / Module</th>
+                    <th style={{ width: '12%' }}>Min Severity</th>
+                    <th style={{ width: '18%' }}>Dispatch Channels</th>
+                    <th style={{ width: '12%' }}>Target Audience</th>
+                    <th style={{ width: '6%' }}>Active</th>
+                    <th style={{ width: '8%', textAlign: 'center' }}>Actions</th>
                   </tr>
-                ) : rules.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="text-center py-10 text-md-on-surface-variant">
-                      No notification routing rules configured yet. Click "Create New Rule" to get started.
-                    </td>
-                  </tr>
-                ) : (
-                  rules.map((rule) => (
-                    <tr key={rule.ruleId} className="case-row">
-                      {/* Name & Description */}
-                      <td>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-semibold text-sm text-md-on-surface">{rule.ruleName}</span>
-                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20">
-                            {rule.ruleId}
-                          </span>
-                        </div>
-                        {rule.description && (
-                          <div className="text-xs text-md-on-surface-variant/80 line-clamp-1 mt-0.5">
-                            {rule.description}
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Trigger Event */}
-                      <td>
-                        <div className="font-mono text-xs font-bold text-md-primary truncate" title={rule.activityType}>
-                          {rule.activityType}
-                        </div>
-                        <div className="text-[11px] text-md-on-surface-variant mt-0.5">
-                          Module: <span className="font-mono">{rule.moduleName}</span>
-                        </div>
-                      </td>
-
-                      {/* Min Severity */}
-                      <td>
-                        {renderUrgencyBadge(rule.minSeverity === 'SECURITY' ? 'CRITICAL' : rule.minSeverity)}
-                      </td>
-
-                      {/* Channels */}
-                      <td>
-                        <div className="flex flex-col gap-1 text-xs">
-                          {rule.triggerInApp && (
-                            <span className="inline-flex items-center gap-1 font-medium text-md-primary">
-                              <Bell size={13} />
-                              <span>In-App ({rule.urgencyLevel})</span>
-                            </span>
-                          )}
-                          {rule.triggerEmail && (
-                            <span className="inline-flex items-center gap-1 font-medium text-purple-700 dark:text-purple-400">
-                              <Mail size={13} />
-                              <span className="truncate" title={rule.emailTemplateName || 'SYSTEM_ALERT'}>
-                                Email ({rule.emailTemplateName || 'SYSTEM_ALERT'})
-                              </span>
-                            </span>
-                          )}
-                          {!rule.triggerInApp && !rule.triggerEmail && (
-                            <span className="text-md-on-surface-variant text-[11px] italic">No channels enabled</span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Target Audience */}
-                      <td className="max-w-[190px] py-3">
-                        <div className="flex flex-wrap gap-1">
-                          {renderTargetAudiencePills(rule.targetRole)}
-                        </div>
-                      </td>
-
-                      {/* Active Status Toggle */}
-                      <td>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleRuleStatus(rule)}
-                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                            rule.isEnabled ? 'bg-md-primary' : 'bg-gray-300 dark:bg-gray-700'
-                          }`}
-                          title={rule.isEnabled ? 'Click to deactivate rule' : 'Click to activate rule'}
-                        >
-                          <span
-                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                              rule.isEnabled ? 'translate-x-5' : 'translate-x-0'
-                            }`}
-                          />
-                        </button>
-                      </td>
-
-                      {/* Actions */}
-                      <td style={{ textAlign: 'center' }}>
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => handleTestTrigger(rule)}
-                            disabled={testingRuleId === rule.ruleId}
-                            className="p-1.5 rounded-lg text-md-on-surface-variant hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors"
-                            title="Test / simulate trigger"
-                          >
-                            <Play size={16} className={testingRuleId === rule.ruleId ? 'animate-spin' : ''} />
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditRuleModal(rule)}
-                            className="p-1.5 rounded-lg text-md-on-surface-variant hover:text-md-primary hover:bg-md-primary/10 transition-colors"
-                            title="Edit rule"
-                          >
-                            <Edit2 size={16} />
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteRule(rule)}
-                            className="p-1.5 rounded-lg text-md-on-surface-variant hover:text-md-error hover:bg-md-error/10 transition-colors"
-                            title="Delete rule"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
+                </thead>
+                <tbody>
+                  {isLoadingRules ? (
+                    <tr>
+                      <td colSpan={7} className="text-center py-10 text-md-on-surface-variant">
+                        <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-md-primary border-t-transparent mb-2" />
+                        <div>Loading routing rules...</div>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : paginatedRules.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="text-center py-10 text-md-on-surface-variant">
+                        No notification routing rules match your filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedRules.map((rule) => (
+                      <tr key={rule.ruleId} className="case-row">
+                        {/* Name & Description */}
+                        <td>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-semibold text-sm text-md-on-surface">{rule.ruleName}</span>
+                            <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20">
+                              {rule.ruleId}
+                            </span>
+                          </div>
+                          {rule.description && (
+                            <div className="text-xs text-md-on-surface-variant/80 line-clamp-1 mt-0.5">
+                              {rule.description}
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Trigger Event */}
+                        <td>
+                          <div className="font-mono text-xs font-bold text-md-primary truncate" title={rule.activityType}>
+                            {rule.activityType}
+                          </div>
+                          <div className="text-[11px] text-md-on-surface-variant mt-0.5">
+                            Module: <span className="font-mono">{rule.moduleName}</span>
+                          </div>
+                        </td>
+
+                        {/* Min Severity */}
+                        <td>
+                          {renderUrgencyBadge(rule.minSeverity === 'SECURITY' ? 'CRITICAL' : rule.minSeverity)}
+                        </td>
+
+                        {/* Channels */}
+                        <td>
+                          <div className="flex flex-col gap-1 text-xs">
+                            {rule.triggerInApp && (
+                              <span className="inline-flex items-center gap-1 font-medium text-md-primary">
+                                <Bell size={13} />
+                                <span>In-App ({rule.urgencyLevel})</span>
+                              </span>
+                            )}
+                            {rule.triggerEmail && (
+                              <span className="inline-flex items-center gap-1 font-medium text-purple-700 dark:text-purple-400">
+                                <Mail size={13} />
+                                <span className="truncate" title={rule.emailTemplateName || 'SYSTEM_ALERT'}>
+                                  Email ({rule.emailTemplateName || 'SYSTEM_ALERT'})
+                                </span>
+                              </span>
+                            )}
+                            {!rule.triggerInApp && !rule.triggerEmail && (
+                              <span className="text-md-on-surface-variant text-[11px] italic">No channels enabled</span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Target Audience */}
+                        <td className="max-w-[190px] py-3">
+                          <div className="flex flex-wrap gap-1">
+                            {renderTargetAudiencePills(rule.targetRole)}
+                          </div>
+                        </td>
+
+                        {/* Active Status Toggle */}
+                        <td>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleRuleStatus(rule)}
+                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                              rule.isEnabled ? 'bg-md-primary' : 'bg-gray-300 dark:bg-gray-700'
+                            }`}
+                            title={rule.isEnabled ? 'Click to deactivate rule' : 'Click to activate rule'}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                rule.isEnabled ? 'translate-x-5' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </td>
+
+                        {/* Actions */}
+                        <td style={{ textAlign: 'center' }}>
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleTestTrigger(rule)}
+                              disabled={testingRuleId === rule.ruleId}
+                              className="p-1.5 rounded-lg text-md-on-surface-variant hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors"
+                              title="Test / simulate trigger"
+                            >
+                              <Play size={16} className={testingRuleId === rule.ruleId ? 'animate-spin' : ''} />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditRuleModal(rule)}
+                              className="p-1.5 rounded-lg text-md-on-surface-variant hover:text-md-primary hover:bg-md-primary/10 transition-colors"
+                              title="Edit rule"
+                            >
+                              <Edit2 size={16} />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRule(rule)}
+                              className="p-1.5 rounded-lg text-md-on-surface-variant hover:text-md-error hover:bg-md-error/10 transition-colors"
+                              title="Delete rule"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
+
+          {/* Rules Pagination */}
+          <Pagination
+            currentPage={rulesPage}
+            totalPages={totalRulesPages}
+            totalCount={filteredRules.length}
+            pageSize={rulesPageSize}
+            onPageChange={setRulesPage}
+            showInfo={true}
+            showPageJump={totalRulesPages > 1}
+          />
         </div>
       )}
 
@@ -1324,6 +1513,48 @@ export const AlertMonitoring: React.FC = () => {
                 </div>
               </div>
             )}
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete Rule Confirmation Modal */}
+      {ruleToDelete && (
+        <Modal
+          isOpen={!!ruleToDelete}
+          onClose={() => setRuleToDelete(null)}
+          title="Delete Notification Rule"
+          subtitle="This action will permanently remove this automated dispatch rule."
+          confirmText={isDeletingRule ? 'Deleting...' : 'Delete Rule'}
+          confirmVariant="danger"
+          confirmLoading={isDeletingRule}
+          onConfirm={confirmDeleteRule}
+          cancelText="Cancel"
+        >
+          <div className="py-2 space-y-3">
+            <p className="text-sm text-md-on-surface">
+              Are you sure you want to delete the routing rule <strong className="font-semibold text-rose-600 dark:text-rose-400">"{ruleToDelete.ruleName}"</strong>?
+            </p>
+            <div className="p-3.5 bg-md-surface-container rounded-xl border border-md-outline/20 text-xs space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-md-on-surface-variant font-medium">Activity Type:</span>
+                <span className="font-mono font-medium text-md-on-surface">{ruleToDelete.activityType}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-md-on-surface-variant font-medium">Target Role:</span>
+                <span className="font-medium text-md-on-surface">
+                  {ruleToDelete.targetRole ? ruleToDelete.targetRole.replace(/_/g, ' ') : (ruleToDelete.targetUserId ? 'Specific User' : 'All Users')}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-md-on-surface-variant font-medium">Channels:</span>
+                <span className="font-medium text-md-on-surface">
+                  {[ruleToDelete.triggerInApp ? 'In-App' : null, ruleToDelete.triggerEmail ? 'Email' : null].filter(Boolean).join(', ') || 'None'}
+                </span>
+              </div>
+            </div>
+            <p className="text-xs text-md-on-surface-variant opacity-80 leading-relaxed">
+              Once deleted, automated alerts matching this event type will no longer be forwarded to the designated channel.
+            </p>
           </div>
         </Modal>
       )}
