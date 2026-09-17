@@ -31,6 +31,9 @@ router.get("/cases", authenticate, requireRole(UserRole.GOVERNMENT_ADMINISTRATOR
 router.get("/pending-authorisations", authenticate, requireRole(UserRole.GOVERNMENT_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR), ctrl.getPendingAuthorisations);
 router.get("/failed", authenticate, requireRole(UserRole.GOVERNMENT_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR), ctrl.getFailedTransactions);
 router.get("/cases/:caseId/receipt", authenticate, requireRole(UserRole.GOVERNMENT_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR, UserRole.DISPLACED_COMMUNITY_MEMBER), ctrl.downloadReceipt);
+// Combined settlement summary is admin/audit only: it exposes the case total and
+// every co-owner's share, which an individual member must never see.
+router.get("/cases/:caseId/settlement-summary", authenticate, requireRole(UserRole.GOVERNMENT_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR), ctrl.downloadSettlementSummary);
 router.get("/receipt-archive/:archiveId", authenticate, requireRole(UserRole.GOVERNMENT_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR, UserRole.DISPLACED_COMMUNITY_MEMBER), ctrl.downloadArchivedReceipt);
 router.get("/cases/:caseId/dispute-document", authenticate, requireRole(UserRole.GOVERNMENT_ADMINISTRATOR, UserRole.SYSTEM_ADMINISTRATOR, UserRole.DISPLACED_COMMUNITY_MEMBER), ctrl.downloadDisputeDocument);
 

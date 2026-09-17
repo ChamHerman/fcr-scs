@@ -132,7 +132,13 @@ model BlockchainRecord {
   milestone       String           @default("AWARD")
   onChainKey      String?          @unique @map("on_chain_key")
   transactionHash String?          @map("transaction_hash")
+  // Primary/legacy anchor: mirrors documentHashes[0] so single-hash reads and
+  // the existing verify paths keep working unchanged.
   documentHash    String           @map("document_hash")
+  // Every hash anchored in this record's one on-chain transaction. A co-owned
+  // case publishes all its owners' document hashes together (FCRSCSLedger
+  // accepts bytes32[]), so this mirrors the on-chain array exactly.
+  documentHashes  String[]         @default([]) @map("document_hashes")
   status          BlockchainStatus @default(PUBLISHED)
   publishedAt     DateTime?        @map("published_at")
   createdAt       DateTime         @default(now()) @map("created_at")
@@ -193,7 +199,8 @@ model PaymentCase {
   acquisitionCase      AcquisitionCase        @relation(fields: [caseId], references: [caseId], onDelete: Restrict)
   beneficiary          LandOwner              @relation(fields: [beneficiaryId], references: [ownerId], onDelete: Restrict)
   authorisations       PaymentAuthorisation[]
-  receipt              PaymentReceipt?
+  receipts             PaymentReceipt[]
+  settlementSummary    PaymentSettlementSummary?
   receiptArchives      PaymentReceiptArchive[]
   failedTransactions   FailedTransaction[]
   receiverBankDetails  ReceiverBankDetails?
@@ -225,6 +232,7 @@ model PaymentBeneficiary {
 
   paymentCase          PaymentCase @relation(fields: [paymentCaseId], references: [id], onDelete: Cascade)
   owner                LandOwner   @relation(fields: [ownerId], references: [ownerId], onDelete: Restrict)
+  receipts             PaymentReceipt[]
 
   @@unique([paymentCaseId, beneficiaryIndex])
   @@unique([paymentCaseId, ownerId])
@@ -249,9 +257,17 @@ model PaymentAuthorisation {
   @@map("payment_authorisation")
 }
 
+// One receipt per beneficiary (LHDN: a receipt is strictly 1-to-1, issued to a
+// single recipient and tied to their individual NRIC/TIN). A multi-owner case
+// therefore produces N receipts — one per PaymentBeneficiary row — each showing
+// only that owner's share. Admins additionally get a combined case-level summary
+// (see PaymentSettlementSummary), which is never shown to an individual owner.
 model PaymentReceipt {
   id                  String      @id @default(uuid())
-  paymentCaseId       String      @unique @map("payment_case_id")
+  paymentCaseId       String      @map("payment_case_id")
+  // Null for legacy receipts backfilled before multi-owner support; new rows
+  // always carry the beneficiary they were issued to.
+  paymentBeneficiaryId String?    @map("payment_beneficiary_id")
   bankReferenceNumber String      @map("bank_reference_number")
   // Binary SHA-256 of the canonical receipt PDF generated once at
   // TRANSFER_SUCCEED (FR-019): matches the downloaded file byte-for-byte.
@@ -261,8 +277,30 @@ model PaymentReceipt {
   deletedAt           DateTime?   @map("deleted_at")
 
   paymentCase         PaymentCase @relation(fields: [paymentCaseId], references: [id], onDelete: Restrict)
+  beneficiary         PaymentBeneficiary? @relation(fields: [paymentBeneficiaryId], references: [id], onDelete: Restrict)
 
+  // Keyed per beneficiary: one live receipt per owner, many owners per case.
+  @@unique([paymentCaseId, paymentBeneficiaryId])
+  @@index([paymentCaseId])
   @@map("payment_receipt")
+}
+
+// Combined admin/audit-only settlement summary for a multi-owner case. Carries
+// the aggregated transfer detail (datetime, RENTAS reference, per-owner split)
+// that an individual owner's receipt deliberately does not expose.
+model PaymentSettlementSummary {
+  id                  String   @id @default(uuid())
+  paymentCaseId       String   @unique @map("payment_case_id")
+  bankReferenceNumber String   @map("bank_reference_number")
+  documentHash        String?  @map("document_hash")
+  documentPath        String?  @map("document_path")
+  totalAmount         Decimal  @map("total_amount")
+  beneficiaryCount    Int      @map("beneficiary_count")
+  generatedAt         DateTime @default(now()) @map("generated_at")
+
+  paymentCase         PaymentCase @relation(fields: [paymentCaseId], references: [id], onDelete: Cascade)
+
+  @@map("payment_settlement_summary")
 }
 
 // Archived receipts (FR-014 dispute "funds never arrived" resolution): when a GA
@@ -624,6 +662,10 @@ model OfferMemberResponse {
   status         OfferStatus @map("status")
   remarks        String?     @map("remarks")
   signedDocument String?     @map("signed_document")
+  // Binary SHA-256 of THIS owner's signed Form H. Each co-owner signs their own
+  // Form H, so Milestone 1 anchors one hash per owner in a single transaction
+  // and each owner can verify their own document afterwards.
+  documentHash   String?     @map("document_hash")
   respondedAt    DateTime    @default(now()) @map("responded_at")
   createdAt      DateTime    @default(now()) @map("created_at")
   updatedAt      DateTime    @updatedAt @map("updated_at")

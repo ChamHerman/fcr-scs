@@ -55,14 +55,70 @@ interface PaymentCaseDetails {
   failedTransactions?: Array<{ errorLog?: string | null; resolution?: string | null; createdAt?: string }>;
   // Co-owner payout tracking. Seeded once a parcel has more than one owner; the
   // case is only fully banked when every owner has submitted their own details.
-  beneficiaries?: Array<{ ownerId?: string; beneficiaryIndex?: number; sharePercent?: number | string; amount?: number | string; submittedAt?: string | null }>;
+  beneficiaries?: Array<{ id?: string; ownerId?: string; beneficiaryIndex?: number; sharePercent?: number | string; amount?: number | string; submittedAt?: string | null }>;
   beneficiaryTotal?: number;
   beneficiarySubmitted?: number;
+  // One receipt per owner; the member only ever sees their own.
+  receipts?: Array<{ id?: string; paymentBeneficiaryId?: string | null; documentHash?: string | null; bankReferenceNumber?: string }>;
+  receipt?: { id?: string; documentHash?: string | null; bankReferenceNumber?: string } | null;
   disputeDocumentPath?: string | null;
   disputeDocumentName?: string | null;
   disputeUploadedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
+}
+
+/**
+ * One row per document the member owns, matched against the hashes anchored in
+ * the case's single on-chain transaction. A co-owned case anchors every owner's
+ * hashes together, so this confirms which of them is the member's own.
+ */
+function DocumentHashRow({
+  label,
+  hash,
+  anchored,
+}: {
+  label: string;
+  hash?: string | null;
+  anchored?: string[] | null;
+}) {
+  const norm = (v?: string | null) => (v ? String(v).toLowerCase() : '');
+  const isAnchored =
+    Boolean(hash) &&
+    (anchored && anchored.length > 0
+      ? anchored.some((h) => norm(h) === norm(hash))
+      : false);
+
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-md-on-surface-variant shrink-0">{label}</span>
+      {hash ? (
+        <span className="flex items-center gap-1.5 min-w-0">
+          <span className="font-mono text-md-on-surface truncate max-w-[130px] sm:max-w-[170px]">{hash}</span>
+          <CopyButton value={hash} size="sm" title={`Copy ${label} hash`} />
+          {isAnchored ? (
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 shrink-0"
+              title="This hash is present in the on-chain record for this case"
+            >
+              <CheckCircle2 size={11} aria-hidden="true" />
+              <span>Anchored</span>
+            </span>
+          ) : (
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 shrink-0"
+              title="This hash is not part of the on-chain record"
+            >
+              <AlertTriangle size={11} aria-hidden="true" />
+              <span>Not anchored</span>
+            </span>
+          )}
+        </span>
+      ) : (
+        <span className="text-md-on-surface-variant italic">Issued on settlement</span>
+      )}
+    </div>
+  );
 }
 
 export default function MemberPaymentStatus() {
@@ -242,6 +298,25 @@ export default function MemberPaymentStatus() {
   const memberFailureNotice = getMemberFailureNotice(paymentCase);
 
   const isPaid = memberStatusLabel === 'Paid' || rawStatus === 'PAID';
+
+  // The member's OWN document hashes. A receipt is 1-to-1 with its recipient, so
+  // we surface only the receipt issued to this member, never a co-owner's.
+  const ownReceiptHash = useMemo(() => {
+    if (!paymentCase) return null;
+    const mine = paymentCase.receipts?.find((r) => Boolean(r?.documentHash));
+    return mine?.documentHash ?? paymentCase.receipt?.documentHash ?? null;
+  }, [paymentCase]);
+
+  // The member's own signed Form H hash is not carried on the payment payload,
+  // so fall back to matching whichever anchored hash corresponds to this member.
+  const ownFormHHash = useMemo(() => {
+    const anchored: string[] | undefined = m1Record?.documentHashes;
+    if (!anchored || anchored.length === 0) return m1Record?.documentHash ?? null;
+    // Single-owner case: the one anchored hash is theirs.
+    if (anchored.length === 1) return anchored[0];
+    return null;
+  }, [m1Record]);
+
   const isTransferSucceed = memberStatusLabel === 'Payment Completed' || rawStatus === 'TRANSFER_SUCCEED';
   const isPaymentInProgress = memberStatusLabel === 'Payment In Progress';
   const isDisputed = memberStatusLabel === 'Payment Disputed' || rawStatus === 'DISPUTED';
@@ -660,13 +735,14 @@ export default function MemberPaymentStatus() {
                     <CopyButton value={m1Record.transactionHash} size="sm" title="Copy transaction hash" />
                   </dd>
                 </div>
-                <div className="flex items-center justify-between gap-4">
-                  <dt className="text-md-on-surface-variant shrink-0">Form H SHA-256</dt>
-                  <dd className="flex items-center gap-1.5 min-w-0">
-                    <span className="font-mono text-md-on-surface truncate max-w-[150px] sm:max-w-[190px]">
-                      {m1Record.documentHash}
-                    </span>
-                    <CopyButton value={m1Record.documentHash} size="sm" title="Copy Form H hash" />
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="text-md-on-surface-variant shrink-0">Your documents</dt>
+                  <dd className="w-full space-y-1.5">
+                    <DocumentHashRow
+                      label="Signed Form H"
+                      hash={ownFormHHash}
+                      anchored={m1Record.documentHashes}
+                    />
                   </dd>
                 </div>
                 <div className="flex items-center justify-between gap-4 pt-3 border-t border-md-outline/10">
@@ -733,13 +809,14 @@ export default function MemberPaymentStatus() {
                     <CopyButton value={m2Record.transactionHash} size="sm" title="Copy transaction hash" />
                   </dd>
                 </div>
-                <div className="flex items-center justify-between gap-4">
-                  <dt className="text-md-on-surface-variant shrink-0">Receipt SHA-256</dt>
-                  <dd className="flex items-center gap-1.5 min-w-0">
-                    <span className="font-mono text-md-on-surface truncate max-w-[150px] sm:max-w-[190px]">
-                      {m2Record.documentHash}
-                    </span>
-                    <CopyButton value={m2Record.documentHash} size="sm" title="Copy receipt hash" />
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="text-md-on-surface-variant shrink-0">Your documents</dt>
+                  <dd className="w-full space-y-1.5">
+                    <DocumentHashRow
+                      label="Payment receipt"
+                      hash={ownReceiptHash}
+                      anchored={m2Record.documentHashes}
+                    />
                   </dd>
                 </div>
                 <div className="flex items-center justify-between gap-4 pt-3 border-t border-md-outline/10">

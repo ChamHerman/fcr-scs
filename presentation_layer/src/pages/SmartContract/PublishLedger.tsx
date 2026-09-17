@@ -192,6 +192,17 @@ export const PublishLedger: React.FC = () => {
         const graceEndsAtMs = acceptedAtMs != null ? acceptedAtMs + ACCEPTANCE_GRACE_PERIOD_MS : null;
         const graceLocked = graceEndsAtMs != null && now < graceEndsAtMs;
         const m1Sec = Math.floor((acceptedAtMs || now) / 1000);
+        // One signed Form H per owner: anchor every accepting owner's hash in the
+        // same transaction so each co-owner can verify their own document.
+        const formHHashes: string[] = (offer.memberResponses || [])
+          .filter((r: any) => r?.status === 'ACCEPTED')
+          .map((r: any) => r?.documentHash || offer.blockchainHash)
+          .filter(Boolean);
+        const m1Hashes = formHHashes.length > 0
+          ? Array.from(new Set(formHHashes))
+          : offer.blockchainHash
+            ? [offer.blockchainHash]
+            : [];
         awardQueue.push({
           id: existingRec?.id || `M1-${caseId}`,
           caseId,
@@ -201,7 +212,8 @@ export const PublishLedger: React.FC = () => {
           beneficiary: offer.landOwnership?.landOwner?.name || undefined,
           amount: offer.offerAmount,
           status: graceLocked ? 'Grace Period (Locked)' : 'Ready to Publish',
-          documentHash: offer.blockchainHash || existingRec?.documentHash || null,
+          documentHash: m1Hashes[0] || offer.blockchainHash || existingRec?.documentHash || null,
+          documentHashes: m1Hashes.length > 0 ? m1Hashes : null,
           graceEndsAt: graceEndsAtMs,
           acceptedAt: offer.acceptedAt || null,
           createdAt: existingRec?.createdAt || offer.createdAt || undefined,
@@ -221,7 +233,13 @@ export const PublishLedger: React.FC = () => {
         if (norm !== 'Paid') continue;
         if (m2Published.has(pc.caseId)) continue;
         const existingRec = readyRecordsMap.get(`${pc.caseId}#M2`);
-        const docHash = pc.receipt?.documentHash || (await computeSettlementHash(pc.caseId, pc.amount));
+        // One receipt per owner: anchor every owner's frozen receipt hash in the
+        // same transaction so each can verify their own document later.
+        const ownerHashes: string[] = (pc.receipts || [])
+          .map((r: any) => r?.documentHash)
+          .filter(Boolean);
+        const docHash = ownerHashes[0] || pc.receipt?.documentHash || (await computeSettlementHash(pc.caseId, pc.amount));
+        const allHashes = ownerHashes.length > 0 ? ownerHashes : [docHash];
         const paidAtMs = pc.receipt?.generatedAt || pc.updatedAt ? new Date(pc.receipt?.generatedAt || pc.updatedAt).getTime() : now;
         const m2Sec = Math.floor(paidAtMs / 1000);
         settlementQueue.push({
@@ -234,6 +252,7 @@ export const PublishLedger: React.FC = () => {
           amount: pc.amount,
           status: 'Ready to Publish',
           documentHash: docHash,
+          documentHashes: allHashes,
           certificateVersion: 1,
           bankName: pc.bankName,
           accountNumber: pc.accountNumber,

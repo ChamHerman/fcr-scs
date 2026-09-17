@@ -39,14 +39,31 @@ export const paymentApi = {
   getAllCases: () => paymentFetch("/api/payments/cases"),
   getPendingAuthorisations: () => paymentFetch("/api/payments/pending-authorisations"),
   getFailedTransactions: () => paymentFetch("/api/payments/failed"),
-  downloadReceipt: async (caseId: string) => {
+  // Receipts are issued 1-to-1 (LHDN), so a member downloads their own; admins
+  // may pass a beneficiaryId to fetch a specific owner's copy.
+  downloadReceipt: async (caseId: string, beneficiaryId?: string) => {
     const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
-    const res = await fetch(PAYMENT_BASE + "/api/payments/cases/" + encodeURIComponent(caseId) + "/receipt", {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
+    const qs = beneficiaryId ? `?beneficiaryId=${encodeURIComponent(beneficiaryId)}` : "";
+    const res = await fetch(
+      PAYMENT_BASE + "/api/payments/cases/" + encodeURIComponent(caseId) + "/receipt" + qs,
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+    );
     if (!res.ok) {
       const d = await res.json();
       throw new Error(d.error ?? "Receipt unavailable");
+    }
+    return res.blob();
+  },
+  // Admin/audit-only combined statement covering every co-owner of the case.
+  downloadSettlementSummary: async (caseId: string) => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+    const res = await fetch(
+      PAYMENT_BASE + "/api/payments/cases/" + encodeURIComponent(caseId) + "/settlement-summary",
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+    );
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d.error ?? "Settlement summary unavailable");
     }
     return res.blob();
   },

@@ -8,6 +8,7 @@ import { CaseIdCell } from '../../components/admin/CaseIdCell';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Button } from '../../components/ui/Button';
 import { CopyButton } from '../../components/ui/CopyButton';
+import { OwnerStack } from '../../components/payment/OwnerStack';
 import { Pagination } from '../../components/ui/Pagination';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { useAuth } from '../../context/AuthContext';
@@ -240,7 +241,7 @@ export default function PendingAuthorisations() {
                         </div>
                       </td>
                       <td><CaseIdCell caseId={pc.caseId} onClick={(cid) => setCaseDetailsId(cid)} /></td>
-                      <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
+                      <td><OwnerStack owners={pc.beneficiaries} fallback={{ accountHolderName: pc.accountHolderName, myKadNumber: pc.myKadNumber, bankName: pc.bankName, accountNumber: pc.accountNumber, amount: pc.amount }} compact /></td>
                       <td className="font-semibold">{fmtAmount(pc.amount)}</td>
                       <td><span className="meta-text">{initiator || '—'}</span></td>
                       <td>{paymentBadge(pc.status, pc.currentSignatures, pc.requiredSignatures)}</td>

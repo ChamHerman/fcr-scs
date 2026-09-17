@@ -59,20 +59,46 @@ function formatDateTime(date: Date): string {
  * Official RENTAS RTGS settlement receipt rendered on MD3 & Central Bank tokens.
  * Strictly 1-PAGE layout guaranteed: mathematical coordinate pacing eliminates
  * any multi-page overflow, and all statutory disclaimers are set in the Page 1 footer.
+ *
+ * Issued 1-to-1 to a single recipient (LHDN requirement): when a beneficiary id
+ * is supplied the receipt shows only that owner's apportioned share and their own
+ * payout account. Admin-only combined settlement detail lives in
+ * generateSettlementSummary, never here.
  */
-export async function generateReceipt(caseId: string): Promise<Buffer> {
+export async function generateReceipt(caseId: string, paymentBeneficiaryId?: string): Promise<Buffer> {
   const pc = await prisma.paymentCase.findUnique({
     where: { caseId },
-    include: { receipt: true },
+    include: {
+      receipts: paymentBeneficiaryId
+        ? { where: { paymentBeneficiaryId } }
+        : { orderBy: { generatedAt: "asc" } },
+      beneficiaries: { orderBy: { beneficiaryIndex: "asc" } },
+    },
   });
 
   if (!pc) throw new Error("Case not found");
-  if ((pc.status !== PaymentStatus.PAID && pc.status !== PaymentStatus.TRANSFER_SUCCEED) || !pc.receipt) {
+
+  // Resolve the receipt row for this beneficiary (or the case's first receipt /
+  // first beneficiary when the caller did not scope it).
+  const targetBeneficiary = paymentBeneficiaryId
+    ? pc.beneficiaries.find((b) => b.id === paymentBeneficiaryId) ?? null
+    : pc.beneficiaries[0] ?? null;
+  const receipt = paymentBeneficiaryId
+    ? pc.receipts[0] ?? null
+    : pc.receipts[0] ?? null;
+
+  if ((pc.status !== PaymentStatus.PAID && pc.status !== PaymentStatus.TRANSFER_SUCCEED) || !receipt) {
     throw new Error("No receipt available for this case");
   }
 
-  const receipt = pc.receipt;
-  const amount = Number(pc.amount) || 0;
+  // Amount is the owner's own apportioned share, never the case total.
+  const amount = targetBeneficiary ? Number(targetBeneficiary.amount) : Number(pc.amount) || 0;
+  const sharePercent = targetBeneficiary ? Number(targetBeneficiary.sharePercent) : null;
+  const holderName =
+    targetBeneficiary?.accountHolderName || pc.accountHolderName || pc.beneficiaryId;
+  const bankName = targetBeneficiary?.bankName || pc.bankName || "Malayan Banking Berhad";
+  const accountNumber = targetBeneficiary?.accountNumber || pc.accountNumber;
+  const myKad = targetBeneficiary?.myKadNumber || pc.myKadNumber;
   const generatedAt = receipt.generatedAt;
   const digitalSignature = createHash("sha256")
     .update(`${receipt.id}|${pc.caseId}|${amount}|${generatedAt.toISOString()}`)
@@ -152,10 +178,16 @@ export async function generateReceipt(caseId: string): Promise<Buffer> {
     const rows: Array<[string, string, string?]> = [
       ["Land Acquisition Case ID", pc.caseId, "bold"],
       ["Payment ID", pc.id, "bold"],
-      ["Beneficiary / Landowner", pc.accountHolderName || pc.beneficiaryId],
-      ["Beneficiary Commercial Bank", pc.bankName || "Malayan Banking Berhad"],
-      ["Beneficiary Bank Account", maskAccount(pc.accountNumber), "mono"],
-      ["Interbank Clearing Network", "RENTAS (Real-Time Electronic Transfer of Funds and Securities)"],
+      ["Beneficiary / Landowner", holderName],
+      ["Beneficiary MyKad / NRIC", myKad || "On record"],
+      [
+        "Apportioned Share",
+        sharePercent !== null
+          ? `${sharePercent.toLocaleString("en-MY", { maximumFractionDigits: 4 })}% of statutory award`
+          : "100% of statutory award",
+      ],
+      ["Beneficiary Commercial Bank", bankName],
+      ["Beneficiary Bank Account", maskAccount(accountNumber), "mono"],
       ["Settlement Authority", "Bank Negara Malaysia RTGS High-Value Payment Gateway"],
     ];
     const labelColWidth = 195;
@@ -181,7 +213,7 @@ export async function generateReceipt(caseId: string): Promise<Buffer> {
     doc.roundedRect(pageLeft, y, contentWidth, summaryHeight, 6).fill(T.successContainer);
     doc.roundedRect(pageLeft, y, contentWidth, summaryHeight, 6).lineWidth(1).stroke(T.successBorder);
 
-    doc.font("Helvetica-Bold").fontSize(8).fillColor(T.success).text("TOTAL STATUTORY COMPENSATION SETTLED", pageLeft + 14, y + 12, { lineBreak: false });
+    doc.font("Helvetica-Bold").fontSize(8).fillColor(T.success).text("YOUR APPORTIONED COMPENSATION SETTLED", pageLeft + 14, y + 12, { lineBreak: false });
     doc.font("Helvetica-Bold").fontSize(8).fillColor(T.success).text("Gross Settlement Status: PAID & DISBURSED", pageLeft + 14, y + 28, { lineBreak: false });
 
     doc.font("Helvetica-Bold").fontSize(19).fillColor(T.success).text(formatRM(amount), pageLeft, y + 16, {
@@ -265,9 +297,15 @@ function getReceiptStorageDir(caseId: string): string {
   return candidates[0];
 }
 
-async function findReceiptByCaseId(caseId: string) {
-  const pc = await prisma.paymentCase.findUnique({ where: { caseId }, include: { receipt: true } });
-  return pc?.receipt ?? null;
+async function findReceiptByCaseId(caseId: string, paymentBeneficiaryId?: string) {
+  const receipts = await prisma.paymentReceipt.findMany({
+    where: { paymentCaseId: (await prisma.paymentCase.findUnique({ where: { caseId }, select: { id: true } }))?.id ?? "" },
+    orderBy: { generatedAt: "asc" },
+  });
+  if (paymentBeneficiaryId) {
+    return receipts.find((r) => r.paymentBeneficiaryId === paymentBeneficiaryId) ?? null;
+  }
+  return receipts[0] ?? null;
 }
 
 /**
@@ -277,22 +315,34 @@ async function findReceiptByCaseId(caseId: string) {
  * the downloaded file must match it byte-for-byte. Idempotent: an already
  * persisted receipt is never regenerated (the hash would drift if the row
  * changed afterwards).
+ *
+ * Called once per beneficiary: each owner gets their own frozen PDF, hash, and
+ * file path, so one owner regenerating can never invalidate another's anchor.
  */
-export async function persistCanonicalReceipt(caseId: string, forceRegenerate = false): Promise<{ documentHash: string; documentPath: string }> {
-  const existing = await findReceiptByCaseId(caseId);
+export async function persistCanonicalReceipt(
+  caseId: string,
+  paymentBeneficiaryId?: string,
+  forceRegenerate = false
+): Promise<{ documentHash: string; documentPath: string }> {
+  const existing = await findReceiptByCaseId(caseId, paymentBeneficiaryId);
   if (!existing) throw new Error("No receipt available for this case");
   if (!forceRegenerate && existing.documentHash && existing.documentPath && fs.existsSync(existing.documentPath)) {
     return { documentHash: existing.documentHash, documentPath: existing.documentPath };
   }
 
-  const pdfBuffer = await generateReceipt(caseId);
+  const pdfBuffer = await generateReceipt(caseId, paymentBeneficiaryId ?? existing.paymentBeneficiaryId ?? undefined);
   const documentHash = "0x" + createHash("sha256").update(pdfBuffer).digest("hex");
 
   const storageDir = getReceiptStorageDir(caseId);
   if (!fs.existsSync(storageDir)) {
     fs.mkdirSync(storageDir, { recursive: true });
   }
-  const documentPath = path.join(storageDir, "Payment_Receipt.pdf");
+  // Distinct filename per owner: a shared path would let the last writer win
+  // and break every other owner's byte-for-byte verification.
+  const fileName = existing.paymentBeneficiaryId
+    ? `Payment_Receipt_${existing.paymentBeneficiaryId}.pdf`
+    : "Payment_Receipt.pdf";
+  const documentPath = path.join(storageDir, fileName);
   fs.writeFileSync(documentPath, pdfBuffer);
 
   await prisma.paymentReceipt.update({
@@ -304,15 +354,93 @@ export async function persistCanonicalReceipt(caseId: string, forceRegenerate = 
 }
 
 /**
+ * Freezes one receipt per PAYING beneficiary of the case. Owners who never
+ * submitted bank details have nothing settled and are skipped.
+ */
+export async function persistCanonicalReceiptsForCase(
+  caseId: string,
+  forceRegenerate = false
+): Promise<Array<{ paymentBeneficiaryId: string | null; documentHash: string; documentPath: string }>> {
+  const receipts = await prisma.paymentReceipt.findMany({
+    where: { paymentCase: { caseId } },
+    orderBy: { generatedAt: "asc" },
+  });
+  const out: Array<{ paymentBeneficiaryId: string | null; documentHash: string; documentPath: string }> = [];
+  for (const r of receipts) {
+    try {
+      const res = await persistCanonicalReceipt(caseId, r.paymentBeneficiaryId ?? undefined, forceRegenerate);
+      out.push({ paymentBeneficiaryId: r.paymentBeneficiaryId, ...res });
+    } catch (err) {
+      console.error(`[WARN] [receipt.service] Could not persist receipt ${r.id} for ${caseId}:`, (err as Error).message);
+    }
+  }
+  return out;
+}
+
+/**
+ * Freezes the combined admin/audit settlement summary PDF and stamps its hash.
+ * Idempotent: an already frozen summary is returned untouched so its hash stays
+ * byte-stable.
+ */
+export async function persistCanonicalSettlementSummary(
+  caseId: string,
+  forceRegenerate = false
+): Promise<{ documentHash: string; documentPath: string } | null> {
+  const pc = await prisma.paymentCase.findUnique({
+    where: { caseId },
+    include: { settlementSummary: true },
+  });
+  if (!pc) throw new Error("Case not found");
+  const summary = pc.settlementSummary;
+  if (!summary) return null;
+
+  if (!forceRegenerate && summary.documentHash && summary.documentPath && fs.existsSync(summary.documentPath)) {
+    return { documentHash: summary.documentHash, documentPath: summary.documentPath };
+  }
+
+  const pdfBuffer = await generateSettlementSummary(caseId);
+  const documentHash = "0x" + createHash("sha256").update(pdfBuffer).digest("hex");
+
+  const storageDir = getReceiptStorageDir(caseId);
+  if (!fs.existsSync(storageDir)) fs.mkdirSync(storageDir, { recursive: true });
+  const documentPath = path.join(storageDir, "Settlement_Summary.pdf");
+  fs.writeFileSync(documentPath, pdfBuffer);
+
+  await prisma.paymentSettlementSummary.update({
+    where: { id: summary.id },
+    data: { documentHash, documentPath },
+  });
+
+  return { documentHash, documentPath };
+}
+
+/**
+ * Serves the frozen combined summary bytes, falling back to live generation for
+ * rows created before the summary was persisted.
+ */
+export async function getSettlementSummaryBuffer(caseId: string): Promise<Buffer> {
+  const pc = await prisma.paymentCase.findUnique({
+    where: { caseId },
+    include: { settlementSummary: true },
+  });
+  if (!pc) throw new Error("Case not found");
+  const summary = pc.settlementSummary;
+  if (summary?.documentPath && fs.existsSync(summary.documentPath)) {
+    return fs.readFileSync(summary.documentPath);
+  }
+  return generateSettlementSummary(caseId);
+}
+
+/**
  * Serves the FROZEN canonical receipt bytes. Falls back to live generation
  * only when the canonical file has not been persisted yet (legacy rows).
  */
-export async function getCanonicalReceiptBuffer(caseId: string): Promise<Buffer> {
-  const receipt = await findReceiptByCaseId(caseId);
+export async function getCanonicalReceiptBuffer(caseId: string, paymentBeneficiaryId?: string): Promise<Buffer> {
+  const receipt = await findReceiptByCaseId(caseId, paymentBeneficiaryId);
   if (receipt?.documentPath && fs.existsSync(receipt.documentPath)) {
     return fs.readFileSync(receipt.documentPath);
   }
-  return generateReceipt(caseId);
+  return generateReceipt(caseId, paymentBeneficiaryId);
 }
 
 /**
@@ -326,29 +454,40 @@ export async function getCanonicalReceiptBuffer(caseId: string): Promise<Buffer>
  * active receipt cannot overwrite the archived file.
  */
 export async function archiveCanonicalReceipt(caseId: string, reason: string): Promise<void> {
-  const existing = await findReceiptByCaseId(caseId);
-  if (!existing) return;
+  const pc = await prisma.paymentCase.findUnique({ where: { caseId }, select: { id: true } });
+  if (!pc) return;
 
-  let archivePath = existing.documentPath;
-  if (existing.documentPath && fs.existsSync(existing.documentPath)) {
-    const archiveDir = path.join(path.dirname(existing.documentPath), "archive");
-    if (!fs.existsSync(archiveDir)) fs.mkdirSync(archiveDir, { recursive: true });
-    archivePath = path.join(archiveDir, `Payment_Receipt_${Date.now()}.pdf`);
-    fs.copyFileSync(existing.documentPath, archivePath);
-  }
-
-  await prisma.paymentReceiptArchive.create({
-    data: {
-      paymentCaseId: existing.paymentCaseId,
-      bankReferenceNumber: existing.bankReferenceNumber,
-      documentHash: existing.documentHash,
-      documentPath: archivePath,
-      generatedAt: existing.generatedAt,
-      archiveReason: reason,
-    },
+  const actives = await prisma.paymentReceipt.findMany({
+    where: { paymentCaseId: pc.id },
+    orderBy: { generatedAt: "asc" },
   });
 
-  await prisma.paymentReceipt.delete({ where: { id: existing.id } });
+  // Every owner's receipt belongs to the voided cycle, so all of them are
+  // archived and cleared together — leaving one behind would let a stale
+  // receipt survive into the next settlement cycle.
+  for (const existing of actives) {
+    let archivePath = existing.documentPath;
+    if (existing.documentPath && fs.existsSync(existing.documentPath)) {
+      const archiveDir = path.join(path.dirname(existing.documentPath), "archive");
+      if (!fs.existsSync(archiveDir)) fs.mkdirSync(archiveDir, { recursive: true });
+      const suffix = existing.paymentBeneficiaryId || "case";
+      archivePath = path.join(archiveDir, `Payment_Receipt_${suffix}_${Date.now()}.pdf`);
+      fs.copyFileSync(existing.documentPath, archivePath);
+    }
+
+    await prisma.paymentReceiptArchive.create({
+      data: {
+        paymentCaseId: existing.paymentCaseId,
+        bankReferenceNumber: existing.bankReferenceNumber,
+        documentHash: existing.documentHash,
+        documentPath: archivePath,
+        generatedAt: existing.generatedAt,
+        archiveReason: reason,
+      },
+    });
+
+    await prisma.paymentReceipt.delete({ where: { id: existing.id } });
+  }
 }
 
 /** Lists a case's archived receipts, newest first. */
@@ -372,4 +511,147 @@ export async function getArchivedReceiptBuffer(archiveId: string): Promise<Buffe
   const pc = await prisma.paymentCase.findUnique({ where: { id: archive.paymentCaseId } });
   if (!pc) throw new Error("Archived receipt not found");
   return generateReceipt(pc.caseId);
+}
+
+// ---------------------------------------------------------------------------
+// Admin-only combined settlement summary
+// ---------------------------------------------------------------------------
+
+/**
+ * Combined settlement statement for the ADMIN portal and audit. Deliberately
+ * separate from the owner receipt: it shows the transfer detail an individual
+ * owner must not see — the case total, every co-owner's share, the RENTAS
+ * reference and the settlement timestamp. Owners only ever download their own
+ * 1-to-1 receipt.
+ */
+export async function generateSettlementSummary(caseId: string): Promise<Buffer> {
+  const pc = await prisma.paymentCase.findUnique({
+    where: { caseId },
+    include: {
+      beneficiaries: { orderBy: { beneficiaryIndex: "asc" } },
+      receipts: { orderBy: { generatedAt: "asc" } },
+      settlementSummary: true,
+    },
+  });
+  if (!pc) throw new Error("Case not found");
+
+  const createdAt = pc.settlementSummary?.generatedAt ?? new Date();
+  const bankRef = pc.settlementSummary?.bankReferenceNumber ?? pc.receipts[0]?.bankReferenceNumber ?? "BNM-CLEARED";
+  const total = Number(pc.amount) || 0;
+  const settled = pc.beneficiaries.filter((b) => Boolean(b.submittedAt));
+
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({
+      size: "A4",
+      margins: { top: 32, bottom: 20, left: 40, right: 40 },
+      info: {
+        Title: `Settlement Summary ${pc.caseId}`,
+        Author: `${BRAND_NAME} / ${RENTAS_NAME}`,
+        CreationDate: createdAt,
+        ModDate: createdAt,
+      },
+    });
+    const chunks: Buffer[] = [];
+    doc.on("data", (c) => chunks.push(c));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    const pageLeft = 40;
+    const pageRight = doc.page.width - 40;
+    const contentWidth = pageRight - pageLeft;
+
+    doc.rect(0, 0, doc.page.width, doc.page.height).fill(T.background);
+    doc.rect(0, 0, doc.page.width, 95).fill(T.primary);
+    doc.fillColor("#FFFFFF").font("Helvetica-Bold").fontSize(18).text(BRAND_NAME, pageLeft, 24, { lineBreak: false });
+    doc.font("Helvetica").fontSize(9.5).fillColor("#E2E8F0").text(BRAND_LEGAL_NAME, pageLeft, 47, { lineBreak: false });
+    doc.fontSize(8).fillColor("#94A3B8").text(BRAND_SUBLINE, pageLeft, 61, { lineBreak: false });
+    doc.font("Helvetica-Bold").fontSize(13).fillColor("#FCD34D").text("COMBINED SETTLEMENT SUMMARY", pageLeft, 22, { width: contentWidth, align: "right" });
+    doc.font("Helvetica").fontSize(7.5).fillColor("#CBD5E1").text("Administrator & Audit copy · not issued to any individual beneficiary", pageLeft, 42, { width: contentWidth, align: "right" });
+
+    let y = 95 + 14;
+    doc.roundedRect(pageLeft, y, contentWidth, 52, 6).fill(T.surfaceContainerLow);
+    doc.roundedRect(pageLeft, y, contentWidth, 52, 6).lineWidth(0.75).stroke(T.outline);
+    const colWidth = contentWidth / 4;
+    const metaCol = (label: string, value: string, x: number, width: number) => {
+      doc.font("Helvetica-Bold").fontSize(7).fillColor(T.onSurfaceVariant).text(label.toUpperCase(), x, y + 10, { width, lineBreak: false });
+      doc.font("Helvetica-Bold").fontSize(8.5).fillColor(T.onSurface).text(value, x, y + 24, { width, lineBreak: false, ellipsis: true });
+    };
+    metaCol("Land Acquisition Case", pc.caseId, pageLeft + 12, colWidth - 16);
+    metaCol("Payment ID", pc.id, pageLeft + 12 + colWidth, colWidth - 16);
+    metaCol("RENTAS Reference", bankRef, pageLeft + 12 + colWidth * 2, colWidth - 16);
+    metaCol("Settlement Date/Time", formatDateTime(createdAt), pageLeft + 12 + colWidth * 3, colWidth - 16);
+
+    y += 52 + 18;
+    doc.font("Helvetica-Bold").fontSize(10).fillColor(T.onSurface).text("Apportionment & Disbursement Detail", pageLeft, y, { lineBreak: false });
+    y += 18;
+
+    const rowHeight = 22;
+    const labelColWidth = 150;
+    const shareColWidth = 70;
+    const rows: Array<[string, string, string, string]> = settled.length > 0
+      ? settled.map((b) => [
+          b.accountHolderName || "—",
+          `${Number(b.sharePercent).toLocaleString("en-MY", { maximumFractionDigits: 4 })}%`,
+          maskAccount(b.accountNumber),
+          formatRM(Number(b.amount)),
+        ])
+      : [["—", "100%", maskAccount(pc.accountNumber), formatRM(total)]];
+
+    // Header row
+    const headY = y;
+    doc.rect(pageLeft, headY, contentWidth, rowHeight).fill(T.primary);
+    doc.font("Helvetica-Bold").fontSize(7.5).fillColor("#FFFFFF");
+    doc.text("BENEFICIARY", pageLeft + 12, headY + 7, { width: labelColWidth, lineBreak: false });
+    doc.text("SHARE", pageLeft + 12 + labelColWidth, headY + 7, { width: shareColWidth, lineBreak: false });
+    doc.text("BANK ACCOUNT", pageLeft + 12 + labelColWidth + shareColWidth, headY + 7, { width: 150, lineBreak: false });
+    doc.text("AMOUNT", pageLeft, headY + 7, { width: contentWidth - 12, align: "right", lineBreak: false });
+    y += rowHeight;
+
+    rows.forEach(([name, share, acct, amt], idx) => {
+      const rowY = y + rowHeight * idx;
+      doc.rect(pageLeft, rowY, contentWidth, rowHeight).fill(idx % 2 === 0 ? T.surfaceContainer : T.surfaceContainerLow);
+      doc.font("Helvetica-Bold").fontSize(8).fillColor(T.onSurface);
+      doc.text(name, pageLeft + 12, rowY + 7, { width: labelColWidth, ellipsis: true, lineBreak: false });
+      doc.font("Helvetica").fontSize(8).fillColor(T.onSurface);
+      doc.text(share, pageLeft + 12 + labelColWidth, rowY + 7, { width: shareColWidth, lineBreak: false });
+      doc.font("Courier").fontSize(8).text(acct, pageLeft + 12 + labelColWidth + shareColWidth, rowY + 7, { width: 150, lineBreak: false });
+      doc.font("Helvetica-Bold").fontSize(8).text(amt, pageLeft, rowY + 7, { width: contentWidth - 12, align: "right", lineBreak: false });
+    });
+    y += rowHeight * rows.length;
+    doc.rect(pageLeft, y - rowHeight * rows.length, contentWidth, rowHeight * rows.length).lineWidth(0.75).stroke(T.outline);
+
+    // Totals
+    y += 16;
+    doc.roundedRect(pageLeft, y, contentWidth, 52, 6).fill(T.successContainer);
+    doc.roundedRect(pageLeft, y, contentWidth, 52, 6).lineWidth(1).stroke(T.successBorder);
+    doc.font("Helvetica-Bold").fontSize(8).fillColor(T.success).text(`TOTAL STATUTORY COMPENSATION · ${rows.length} BENEFICIARY/IES`, pageLeft + 14, y + 12, { lineBreak: false });
+    doc.font("Helvetica").fontSize(8).fillColor(T.success).text("Settlement Status: PAID & DISBURSED via RENTAS RTGS", pageLeft + 14, y + 28, { lineBreak: false });
+    doc.font("Helvetica-Bold").fontSize(19).fillColor(T.success).text(formatRM(total), pageLeft, y + 16, { width: contentWidth - 16, align: "right", lineBreak: false });
+
+    y += 52 + 18;
+    doc.font("Helvetica-Bold").fontSize(8.5).fillColor(T.onSurface).text("Audit Note", pageLeft, y, { lineBreak: false });
+    doc.font("Helvetica").fontSize(7.5).fillColor(T.onSurfaceVariant).text(
+      "This combined summary is retained for administrative and audit purposes only. Under LHDN requirements every beneficiary instead receives an individual 1-to-1 receipt tied to their own NRIC/TIN, listing only their apportioned share. Per-owner receipt hashes are anchored on the blockchain Milestone 2 record for this case.",
+      pageLeft,
+      y + 14,
+      { width: contentWidth, lineGap: 2.5 }
+    );
+
+    const footerY = 776;
+    doc.moveTo(pageLeft, footerY).lineTo(pageRight, footerY).lineWidth(0.5).stroke(T.outline);
+    doc.font("Helvetica").fontSize(6.5).fillColor(T.onSurfaceVariant).text(
+      "Computer-generated settlement summary issued under the Land Acquisition Act 1960 and cleared via RENTAS RTGS.",
+      pageLeft,
+      footerY + 7,
+      { width: contentWidth, align: "center", lineBreak: false }
+    );
+    doc.font("Helvetica-Bold").fontSize(6.5).fillColor(T.onSurfaceVariant).text(
+      `${BRAND_NAME} · ${BRAND_LEGAL_NAME} · Bank Negara Malaysia RENTAS RTGS Host`,
+      pageLeft,
+      footerY + 20,
+      { width: contentWidth, align: "center", lineBreak: false }
+    );
+
+    doc.end();
+  });
 }

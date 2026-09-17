@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from "crypto";
 import { prisma } from "../prisma";
 import { PaymentStatus, UserRole, CaseStatus, BlockchainStatus } from "@prisma/client";
 import * as bankService from "./bank.service";
-import { persistCanonicalReceipt, archiveCanonicalReceipt } from "./receipt.service";
+import { persistCanonicalReceiptsForCase, persistCanonicalSettlementSummary, archiveCanonicalReceipt } from "./receipt.service";
 import { newRecordId } from "../../../smart_contract_service/src/services/blockchain.service";
 import { isOwnedBy, isSameOwner, normalizeNric, parseSharePercent, type OwnerIdentity } from "../utils/owner-identity";
 
@@ -181,6 +181,7 @@ export function formatPaymentResponse<T extends { id: string; caseId: string }>(
   const anyPc = pc as any;
   const scheduledFor = extractScheduledFor(anyPc);
   const beneficiaries: any[] | undefined = Array.isArray(anyPc.beneficiaries) ? anyPc.beneficiaries : undefined;
+  const receipts: any[] | undefined = Array.isArray(anyPc.receipts) ? anyPc.receipts : undefined;
   return {
     ...pc,
     paymentId: pc.id,
@@ -196,6 +197,16 @@ export function formatPaymentResponse<T extends { id: string; caseId: string }>(
           beneficiaries,
           beneficiaryTotal: beneficiaries.length,
           beneficiarySubmitted: beneficiaries.filter((b) => Boolean(b.submittedAt)).length,
+        }
+      : {}),
+    // Receipts are per-owner now. `receipt` stays populated for the numerous
+    // admin surfaces that still read a single object — it is the case's first
+    // receipt — while `receipts` exposes the full per-owner set.
+    ...(receipts
+      ? {
+          receipts,
+          receipt: receipts[0] ?? null,
+          receiptCount: receipts.filter((r) => !r.deletedAt).length,
         }
       : {}),
   };
@@ -568,8 +579,12 @@ export async function submitBankDetails(data: {
   // submitting owner's row is the one that carries this bank detail; the others
   // stay unsubmitted until they sign in and provide their own, so the case is
   // only fully banked when N-of-M owners have submitted.
-  const allOwners =
-    ac?.landParcel?.ownerships?.map((o: any) => o.landOwner).filter(Boolean) || [owner];
+  // The share lives on the ownership row, not on the owner, so carry it through.
+  // Spreading only the owner made every co-owner fall back to a 100% share.
+  const allOwners: any[] = (ac?.landParcel?.ownerships || [])
+    .map((o: any) => (o.landOwner ? { ...o.landOwner, share: o.share } : null))
+    .filter(Boolean);
+  if (allOwners.length === 0 && owner) allOwners.push(owner);
   const submitterIdentity: OwnerIdentity = {
     userId: data.userId,
     name: data.accountHolderName,
@@ -893,7 +908,7 @@ export async function initiateTransfer(caseId: string, rawAdminId: string) {
       currentSignatures: 1,
       status: PaymentStatus.PENDING_APPROVAL,
     },
-    include: { authorisations: true, receipt: true },
+    include: { authorisations: true, receipts: { orderBy: { generatedAt: "asc" }, include: { beneficiary: true } } },
   });
 
   try {
@@ -951,7 +966,7 @@ export async function authoriseTransfer(caseId: string, rawAdminId: string) {
       currentSignatures: newCurrentSigs,
       status: PaymentStatus.PENDING_APPROVAL,
     },
-    include: { authorisations: true, receipt: true },
+    include: { authorisations: true, receipts: { orderBy: { generatedAt: "asc" }, include: { beneficiary: true } } },
   });
 
   const enriched = await enrichPaymentWithAdminNames(updated);
@@ -1002,7 +1017,7 @@ export async function confirmExecution(caseId: string, rawAdminId: string) {
   const updated = await prisma.paymentCase.update({
     where: { caseId },
     data: { status: PaymentStatus.BANK_APPROVAL_PENDING },
-    include: { authorisations: true, receipt: true },
+    include: { authorisations: true, receipts: { orderBy: { generatedAt: "asc" }, include: { beneficiary: true } } },
   });
   const enriched = await enrichPaymentWithAdminNames(updated);
   return formatPaymentResponse(enriched);
@@ -1364,7 +1379,7 @@ export async function getPaymentStatus(caseId: string, userRole?: string, userId
     where: { caseId, deletedAt: null },
     include: {
       authorisations: true,
-      receipt: true,
+      receipts: { orderBy: { generatedAt: "asc" }, include: { beneficiary: true } },
       receiptArchives: { orderBy: { archivedAt: "desc" } },
       failedTransactions: true,
     },
@@ -1408,12 +1423,17 @@ export async function getPaymentStatus(caseId: string, userRole?: string, userId
       },
       include: {
         authorisations: true,
-        receipt: true,
+        receipts: { orderBy: { generatedAt: "asc" }, include: { beneficiary: true } },
         receiptArchives: { orderBy: { archivedAt: "desc" } },
         failedTransactions: true,
       },
     });
-    const parcelOwners = ac.landParcel?.ownerships?.map((o: any) => o.landOwner).filter(Boolean) || [primaryOwner];
+    // The share lives on the ownership row, not the owner, so carry it through —
+    // dropping it made every co-owner default to a 100% share.
+    const parcelOwners = (ac.landParcel?.ownerships || [])
+      .map((o: any) => (o.landOwner ? { ...o.landOwner, share: o.share } : null))
+      .filter(Boolean);
+    if (parcelOwners.length === 0 && primaryOwner) parcelOwners.push(primaryOwner);
     await seedPaymentBeneficiaries(pc.id, parcelOwners, amount);
   }
 
@@ -1498,7 +1518,7 @@ export async function getPendingAuthorisations() {
     // The receipt is loaded on every payment read: a generated receipt is a
     // historical fact about the case, so the record modal shows it at whatever
     // status the case currently sits at rather than only at Paid.
-    include: { authorisations: true, receipt: true, receiptArchives: { orderBy: { archivedAt: "desc" } }, beneficiaries: { orderBy: { beneficiaryIndex: "asc" } } },
+    include: { authorisations: true, receipts: { orderBy: { generatedAt: "asc" }, include: { beneficiary: true } }, receiptArchives: { orderBy: { archivedAt: "desc" } }, beneficiaries: { orderBy: { beneficiaryIndex: "asc" } } },
     orderBy: { updatedAt: "desc" },
   });
   const enriched = await Promise.all(cases.map(enrichPaymentWithAdminNames));
@@ -1605,7 +1625,12 @@ export async function getAllCases(userRole?: string, userId?: string) {
             currentSignatures: 0,
           },
         });
-        const parcelOwners = ac.landParcel?.ownerships?.map((o: any) => o.landOwner).filter(Boolean) || [primaryOwner];
+        // The share lives on the ownership row, not the owner, so carry it through —
+        // dropping it made every co-owner default to a 100% share.
+        const parcelOwners = (ac.landParcel?.ownerships || [])
+          .map((o: any) => (o.landOwner ? { ...o.landOwner, share: o.share } : null))
+          .filter(Boolean);
+        if (parcelOwners.length === 0 && primaryOwner) parcelOwners.push(primaryOwner);
         await seedPaymentBeneficiaries(created.id, parcelOwners, amount);
       }
 
@@ -1647,9 +1672,12 @@ export async function getAllCases(userRole?: string, userId?: string) {
     },
     include: {
       authorisations: { orderBy: { createdAt: "asc" } },
-      receipt: true,
+      receipts: { orderBy: { generatedAt: "asc" }, include: { beneficiary: true } },
       receiptArchives: { orderBy: { archivedAt: "desc" } },
       failedTransactions: true,
+      // Co-owners and their shares drive the stacked owner cards and the number
+      // of hashes a blockchain publish must anchor for this case.
+      beneficiaries: { orderBy: { beneficiaryIndex: "asc" } },
     },
     orderBy: { id: "asc" },
   });
@@ -2124,7 +2152,7 @@ export async function getFailedTransactions() {
     },
     // receipt: a failed attempt does not un-generate an earlier receipt, so the
     // modal must still be able to show the one that was issued for this case.
-    include: { failedTransactions: true, authorisations: true, receipt: true, receiptArchives: { orderBy: { archivedAt: "desc" } }, beneficiaries: { orderBy: { beneficiaryIndex: "asc" } } },
+    include: { failedTransactions: true, authorisations: true, receipts: { orderBy: { generatedAt: "asc" }, include: { beneficiary: true } }, receiptArchives: { orderBy: { archivedAt: "desc" } }, beneficiaries: { orderBy: { beneficiaryIndex: "asc" } } },
     orderBy: { updatedAt: "desc" },
   });
   const enriched = await Promise.all(cases.map(enrichPaymentWithAdminNames));
@@ -2170,7 +2198,7 @@ export async function disputePayment(
           }
         : {}),
     },
-    include: { authorisations: true, receipt: true, failedTransactions: true },
+    include: { authorisations: true, receipts: { orderBy: { generatedAt: "asc" }, include: { beneficiary: true } }, failedTransactions: true },
   });
   return formatPaymentResponse(updated);
 }
@@ -2221,7 +2249,7 @@ const DISPUTE_RESOLUTION_META: Record<
 export async function resolveDispute(caseId: string, rawAdminId: string, resolution: string) {
   const pc = await prisma.paymentCase.findUnique({
     where: { caseId },
-    include: { authorisations: true, failedTransactions: true, receipt: true },
+    include: { authorisations: true, failedTransactions: true, receipts: { orderBy: { generatedAt: "asc" }, include: { beneficiary: true } } },
   });
   if (!pc) throw new Error("Case not found");
 
@@ -2278,7 +2306,7 @@ export async function resolveDispute(caseId: string, rawAdminId: string, resolut
   const updated = await prisma.paymentCase.update({
     where: { caseId },
     data,
-    include: { authorisations: true, receipt: true, failedTransactions: true },
+    include: { authorisations: true, receipts: { orderBy: { generatedAt: "asc" }, include: { beneficiary: true } }, failedTransactions: true },
   });
   return formatPaymentResponse(updated);
 }
@@ -2291,7 +2319,7 @@ export async function getBankPendingTransfers() {
   await checkAndAutoExecuteScheduledTransfers();
   const cases = await prisma.paymentCase.findMany({
     where: { status: PaymentStatus.BANK_APPROVAL_PENDING },
-    include: { authorisations: true, failedTransactions: true, receipt: true },
+    include: { authorisations: true, failedTransactions: true, receipts: { orderBy: { generatedAt: "asc" }, include: { beneficiary: true } } },
     orderBy: { updatedAt: "desc" },
   });
   return cases.map(formatPaymentResponse);
@@ -2309,27 +2337,87 @@ export async function approveBankTransfer(caseId: string, bankReferenceNumber?: 
   }
 
   const bankRef = bankReferenceNumber || `BNK-${Date.now()}-${caseId}`;
-  await prisma.paymentReceipt.upsert({
+
+  // One receipt per beneficiary: LHDN requires a receipt to be 1-to-1 with a
+  // single recipient, so a co-owned case settles into N receipts that each
+  // carry only their owner's apportioned share. Owners who never submitted bank
+  // details have nothing to settle and are skipped.
+  const payableBeneficiaries = await prisma.paymentBeneficiary.findMany({
+    where: { paymentCaseId: pc.id, submittedAt: { not: null } },
+    orderBy: { beneficiaryIndex: "asc" },
+  });
+
+  for (const beneficiary of payableBeneficiaries) {
+    await prisma.paymentReceipt.upsert({
+      where: {
+        paymentCaseId_paymentBeneficiaryId: {
+          paymentCaseId: pc.id,
+          paymentBeneficiaryId: beneficiary.id,
+        },
+      },
+      // generatedAt is deliberately NOT touched on update: the canonical receipt
+      // (and therefore its binary SHA-256, FR-019) must stay byte-identical.
+      update: { bankReferenceNumber: bankRef },
+      create: {
+        paymentCaseId: pc.id,
+        paymentBeneficiaryId: beneficiary.id,
+        bankReferenceNumber: bankRef,
+      },
+    });
+  }
+
+  // Cases seeded before multi-owner support (or whose beneficiary rows could not
+  // be matched) still settle as a single case-level receipt. Matched manually
+  // because the compound unique key allows exactly one NULL-bearing row and
+  // Prisma will not accept null in the generated `where` shape.
+  if (payableBeneficiaries.length === 0) {
+    const legacy = await prisma.paymentReceipt.findFirst({
+      where: { paymentCaseId: pc.id, paymentBeneficiaryId: null },
+    });
+    if (legacy) {
+      await prisma.paymentReceipt.update({
+        where: { id: legacy.id },
+        data: { bankReferenceNumber: bankRef },
+      });
+    } else {
+      await prisma.paymentReceipt.create({
+        data: { paymentCaseId: pc.id, bankReferenceNumber: bankRef },
+      });
+    }
+  }
+
+  // Combined admin/audit summary alongside the per-owner receipts.
+  await prisma.paymentSettlementSummary.upsert({
     where: { paymentCaseId: pc.id },
-    // generatedAt is deliberately NOT touched on update: the canonical receipt
-    // (and therefore its binary SHA-256, FR-019) must stay byte-identical.
     update: { bankReferenceNumber: bankRef },
-    create: { paymentCaseId: pc.id, bankReferenceNumber: bankRef },
+    create: {
+      paymentCaseId: pc.id,
+      bankReferenceNumber: bankRef,
+      totalAmount: Number(pc.amount) || 0,
+      beneficiaryCount: payableBeneficiaries.length,
+    },
   });
 
   const updated = await prisma.paymentCase.update({
     where: { caseId },
     data: { status: PaymentStatus.TRANSFER_SUCCEED },
-    include: { authorisations: true, receipt: true },
+    include: { authorisations: true, receipts: { orderBy: { generatedAt: "asc" }, include: { beneficiary: true } } },
   });
 
   // FR-019: freeze the canonical receipt at TRANSFER_SUCCEED — render the PDF
-  // once, write it to disk, and store the binary SHA-256 the member can later
-  // verify byte-for-byte against the Etherscan-anchored hash (M2).
+  // once per owner, write each to its own file, and store the binary SHA-256 the
+  // member can later verify byte-for-byte against the Etherscan-anchored hash (M2).
   try {
-    await persistCanonicalReceipt(caseId);
+    await persistCanonicalReceiptsForCase(caseId);
   } catch (err) {
     console.error(`[WARN] [payment.service] Canonical receipt persistence failed for ${caseId}:`, (err as Error).message);
+  }
+
+  // Combined admin/audit summary PDF, generated alongside the owner receipts.
+  try {
+    await persistCanonicalSettlementSummary(caseId);
+  } catch (err) {
+    console.error(`[WARN] [payment.service] Settlement summary persistence failed for ${caseId}:`, (err as Error).message);
   }
 
   try {
@@ -2405,7 +2493,7 @@ export async function getBankHistory() {
       caseId: { in: eligibleCaseIds },
       status: { in: [PaymentStatus.TRANSFER_SUCCEED, PaymentStatus.PAID, PaymentStatus.TRANSFER_FAILED, PaymentStatus.TRANSFER_REJECTED] },
     },
-    include: { receipt: true, failedTransactions: true, authorisations: true },
+    include: { receipts: { orderBy: { generatedAt: "asc" }, include: { beneficiary: true } }, failedTransactions: true, authorisations: true },
     orderBy: { updatedAt: "desc" },
     take: 30,
   });
@@ -2415,6 +2503,40 @@ export async function getBankHistory() {
   }));
 }
 
+/**
+ * Resolves which beneficiary row of a case belongs to the signed-in member, so
+ * receipt and document-hash endpoints can scope strictly to their own record.
+ * Returns null when the member is not a beneficiary of that case — callers must
+ * treat that as a hard denial, not as "show everything".
+ */
+export async function resolveOwnBeneficiaryId(
+  caseId: string,
+  userId: string
+): Promise<string | null> {
+  if (!caseId || !userId) return null;
+
+  const user = await prisma.user.findUnique({
+    where: { userId },
+    select: { userId: true, name: true, email: true, identificationNumber: true },
+  });
+  if (!user) return null;
+
+  const beneficiaries = await prisma.paymentBeneficiary.findMany({
+    where: { paymentCase: { caseId } },
+    include: { owner: true },
+    orderBy: { beneficiaryIndex: "asc" },
+  });
+  if (beneficiaries.length === 0) return null;
+
+  const identity: OwnerIdentity = {
+    userId: user.userId,
+    name: user.name,
+    identificationNumber: user.identificationNumber,
+  };
+  const mine = beneficiaries.find((b) => isSameOwner(b.owner, identity));
+  return mine?.id ?? null;
+}
+
 export async function confirmPaymentReceipt(
   caseId: string,
   confirmedByRole = "GOVERNMENT_ADMINISTRATOR",
@@ -2422,7 +2544,7 @@ export async function confirmPaymentReceipt(
 ) {
   const pc = await prisma.paymentCase.findUnique({
     where: { caseId },
-    include: { receipt: true },
+    include: { receipts: { orderBy: { generatedAt: "asc" }, include: { beneficiary: true } } },
   });
   if (!pc) throw new Error("Case not found");
 
@@ -2435,7 +2557,7 @@ export async function confirmPaymentReceipt(
   // 7-day rule for Government Administrator
   if (confirmedByRole === UserRole.GOVERNMENT_ADMINISTRATOR || confirmedByRole === "GOVERNMENT_ADMINISTRATOR") {
     if (!isAutoOrAdminOverride) {
-      const transferDate = pc.receipt?.generatedAt || pc.updatedAt;
+      const transferDate = pc.receipts?.[0]?.generatedAt || pc.updatedAt;
       const elapsedDays = (Date.now() - new Date(transferDate).getTime()) / (1000 * 60 * 60 * 24);
       if (elapsedDays < 7) {
         throw new Error(
@@ -2448,7 +2570,7 @@ export async function confirmPaymentReceipt(
   const updated = await prisma.paymentCase.update({
     where: { caseId },
     data: { status: PaymentStatus.PAID },
-    include: { authorisations: true, receipt: true },
+    include: { authorisations: true, receipts: { orderBy: { generatedAt: "asc" }, include: { beneficiary: true } } },
   });
 
   try {

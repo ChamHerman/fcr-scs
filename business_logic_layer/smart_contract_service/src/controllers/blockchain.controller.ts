@@ -55,15 +55,25 @@ export async function setNetwork(req: Request, res: Response): Promise<void> {
 }
 
 export async function publish(req: Request, res: Response): Promise<void> {
-  const { caseId, milestone, documentHash, transactionHash, onChainKey } = req.body as {
+  const { caseId, milestone, documentHash, documentHashes, transactionHash, onChainKey } = req.body as {
     caseId?: string;
     milestone?: string;
     documentHash?: string;
+    documentHashes?: string[];
     transactionHash?: string;
     onChainKey?: string;
   };
-  if (!caseId || !documentHash) {
-    res.status(400).json({ error: "caseId and documentHash are required" });
+  // A co-owned case anchors every owner's hash in one transaction, so the array
+  // is the preferred input; documentHash stays accepted for single-document cases.
+  const hashes = (documentHashes && documentHashes.length > 0
+    ? documentHashes
+    : documentHash
+      ? [documentHash]
+      : []
+  ).filter(Boolean);
+
+  if (!caseId || hashes.length === 0) {
+    res.status(400).json({ error: "caseId and at least one document hash are required" });
     return;
   }
   if (!transactionHash) {
@@ -80,7 +90,8 @@ export async function publish(req: Request, res: Response): Promise<void> {
     const r = await svc.publishRecord({
       caseId,
       milestone,
-      documentHash,
+      documentHash: hashes[0],
+      documentHashes: hashes,
       transactionHash,
       onChainKey,
       adminId: admin?.adminId,

@@ -422,16 +422,51 @@ export async function getFailedTransactions(_req: Request, res: Response): Promi
 
 export async function downloadReceipt(req: Request, res: Response): Promise<void> {
   const caseId = req.params.caseId as string;
+  const beneficiaryId = (req.query.beneficiaryId as string) || undefined;
+  const user = (req as AuthenticatedRequest).user;
   try {
     // FR-019: serve the frozen canonical receipt bytes so the downloaded
     // file always matches the stored (and Etherscan-anchored) SHA-256.
-    const pdfBuffer = await receiptService.getCanonicalReceiptBuffer(caseId);
+    //
+    // LHDN: a receipt is 1-to-1 with its recipient, so a member may only ever
+    // download their OWN receipt. Admins/auditors may read any of them.
+    const isMember = user?.role === "DISPLACED_COMMUNITY_MEMBER";
+    const resolvedBeneficiaryId = isMember
+      ? await paymentService.resolveOwnBeneficiaryId(caseId, user?.userId || "")
+      : beneficiaryId;
+
+    if (isMember && !resolvedBeneficiaryId) {
+      res.status(403).json({ error: "You can only download your own payment receipt." });
+      return;
+    }
+
+    const pdfBuffer = await receiptService.getCanonicalReceiptBuffer(caseId, resolvedBeneficiaryId ?? undefined);
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename=receipt-${caseId}.pdf`);
+    const suffix = resolvedBeneficiaryId ? `-${resolvedBeneficiaryId.slice(0, 8)}` : "";
+    res.setHeader("Content-Disposition", `attachment; filename=receipt-${caseId}${suffix}.pdf`);
     res.send(pdfBuffer);
   } catch (e: unknown) {
     const msg = (e as Error).message;
     if (msg.toLowerCase().includes("not found") || msg.toLowerCase().includes("no receipt")) {
+      res.status(404).json({ error: msg });
+    } else {
+      res.status(500).json({ error: msg });
+    }
+  }
+}
+
+// Combined admin/audit settlement summary. Never serves an individual owner's
+// receipt — it carries the case total and every co-owner's share.
+export async function downloadSettlementSummary(req: Request, res: Response): Promise<void> {
+  const caseId = req.params.caseId as string;
+  try {
+    const pdfBuffer = await receiptService.getSettlementSummaryBuffer(caseId);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename=settlement-summary-${caseId}.pdf`);
+    res.send(pdfBuffer);
+  } catch (e: unknown) {
+    const msg = (e as Error).message;
+    if (msg.toLowerCase().includes("not found")) {
       res.status(404).json({ error: msg });
     } else {
       res.status(500).json({ error: msg });

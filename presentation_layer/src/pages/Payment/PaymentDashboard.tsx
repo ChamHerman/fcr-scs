@@ -9,6 +9,7 @@ import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
 import { Switch } from '../../components/ui/Switch';
 import { CopyButton } from '../../components/ui/CopyButton';
+import { OwnerStack } from '../../components/payment/OwnerStack';
 import { Pagination } from '../../components/ui/Pagination';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { useAuth } from '../../context/AuthContext';
@@ -461,7 +462,7 @@ export default function PaymentDashboard() {
                         </div>
                       </td>
                       <td><CaseIdCell caseId={pc.caseId} onClick={(cid) => setCaseDetailsId(cid)} /></td>
-                      <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
+                      <td><OwnerStack owners={pc.beneficiaries} fallback={{ accountHolderName: pc.accountHolderName, myKadNumber: pc.myKadNumber, bankName: pc.bankName, accountNumber: pc.accountNumber, amount: pc.amount }} compact /></td>
                       <td>
                         {detailed.paymentStatus !== 'Bank Details Pending' &&
                           detailed.paymentStatus !== 'New Bank Details Pending' &&

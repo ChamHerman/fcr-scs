@@ -41,6 +41,7 @@ import { useNotification } from '../../components/ui/NotificationSystem';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { useAuth } from '../../context/AuthContext';
 import { formatActionLabel, formatReasonLabel, isRejectionAction, normalizePaymentStatus, paymentStatusClassMap, isCategory1BankFailure } from './statusMaps';
+import { OwnerStack } from '../../components/payment/OwnerStack';
 import { formatDateTime } from '../../utils/dateFormat';
 
 export type PaymentRowActionType =
@@ -82,11 +83,35 @@ export interface PaymentRow {
   updatedAt: string;
   authorisations?: Array<{ adminId: string; action: string; reason?: string | null; createdAt: string; cycle?: number }>;
   /**
-   * The frozen canonical receipt (FR-019). Present from TRANSFER_SUCCEED onward
-   * and kept regardless of later status changes, so the record modal can always
-   * show that a receipt was issued for this case.
+   * The frozen canonical receipts (FR-019), one per paying owner. Present from
+   * TRANSFER_SUCCEED onward and kept regardless of later status changes, so the
+   * record modal can always show that a receipt was issued for this case.
    */
   receipt?: { bankReferenceNumber?: string | null; generatedAt?: string | null; documentHash?: string | null } | null;
+  receipts?: Array<{
+    id?: string;
+    paymentBeneficiaryId?: string | null;
+    bankReferenceNumber?: string | null;
+    generatedAt?: string | null;
+    documentHash?: string | null;
+    beneficiary?: { accountHolderName?: string | null; sharePercent?: number | string | null } | null;
+  }>;
+  /**
+   * Co-owners of the same parcel. One payment record is split across N owners by
+   * percentage share, each with their own payout account and submission state.
+   */
+  beneficiaries?: Array<{
+    id?: string;
+    ownerId?: string;
+    beneficiaryIndex?: number;
+    sharePercent?: number | string | null;
+    amount?: number | string | null;
+    bankName?: string | null;
+    accountNumber?: string | null;
+    accountHolderName?: string | null;
+    myKadNumber?: string | null;
+    submittedAt?: string | null;
+  }> | null;
   /** Archived receipts from voided dispute cycles (FR-014), newest first. */
   receiptArchives?: Array<{
     id: string;
@@ -799,6 +824,9 @@ export const ViewDetailsModal: React.FC<{
   }, [pc?.caseId]);
 
   const norm = pc ? normalizePaymentStatus(pc.status) : '';
+  // A co-owned case carries more than one beneficiary row; only then does the
+  // stacked apportionment section add anything over the single-owner tiles.
+  const isCoOwned = Boolean(pc?.beneficiaries && pc.beneficiaries.length > 1);
   const transferSucceedDate =
     norm === 'Transfer Succeed' && pc ? pc.receipt?.generatedAt || pc.updatedAt || pc.createdAt : null;
   const succeedDateMs = transferSucceedDate ? new Date(transferSucceedDate).getTime() : Date.now();
@@ -1204,6 +1232,16 @@ export const ViewDetailsModal: React.FC<{
             </div>
           </div>
         </div>
+        {/* Co-owned case: one award split by percentage, so every owner's share
+            and payout account is listed instead of collapsing to one name. */}
+        {isCoOwned && (
+          <div className="rounded-xl border border-md-outline/20 bg-md-surface-container-low p-4">
+            <div className="text-xs font-bold uppercase tracking-wider text-md-on-surface-variant mb-3">
+              Co-owner apportionment
+            </div>
+            <OwnerStack owners={pc.beneficiaries} />
+          </div>
+        )}
         {/* FR-015: Member-uploaded dispute bank statement — reviewed in a full
             browser tab (or downloaded); never embedded inside the record modal. */}
         {hasDisputeStatement && (
@@ -2629,5 +2667,38 @@ export const downloadReceipt = async (pc: PaymentRow, notify: (n: { type: 'succe
     notify({ type: 'success', title: 'Receipt downloaded', message: `Receipt for case ${pc.caseId}.` });
   } catch (e: any) {
     notify({ type: 'error', title: 'Receipt unavailable', message: e.message || 'Receipt generation failed. Missing bank reference. Please contact support.' });
+  }
+};
+
+/**
+ * Combined settlement summary — admin/audit only. Unlike an owner's 1-to-1
+ * receipt it carries the case total, every co-owner's share, the RENTAS
+ * reference and the settlement timestamp.
+ */
+export const downloadSettlementSummary = async (
+  pc: PaymentRow,
+  notify: (n: { type: 'success' | 'error'; title: string; message?: string }) => void
+) => {
+  try {
+    const blob = await paymentApi.downloadSettlementSummary(pc.caseId);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `settlement-summary-${pc.caseId}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    notify({
+      type: 'success',
+      title: 'Settlement summary downloaded',
+      message: `Combined disbursement detail for case ${pc.caseId}.`,
+    });
+  } catch (e: any) {
+    notify({
+      type: 'error',
+      title: 'Summary unavailable',
+      message: e.message || 'Settlement summary generation failed. Please contact support.',
+    });
   }
 };

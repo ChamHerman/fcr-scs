@@ -28,7 +28,7 @@ export const blockchainApi = {
     blockchainFetch(
       "/api/smart-contract/records/" + encodeURIComponent(caseId) + (milestone ? "?milestone=" + encodeURIComponent(milestone) : "")
     ),
-  publish: (p: { caseId: string; milestone?: string; documentHash: string; walletAddress: string; transactionHash: string; onChainKey?: string }) =>
+  publish: (p: { caseId: string; milestone?: string; documentHash: string; documentHashes?: string[]; walletAddress: string; transactionHash: string; onChainKey?: string }) =>
     blockchainFetch("/api/smart-contract/publish", { method: "POST", body: JSON.stringify(p) }),
   /** Live publish locks held by any admin, for the 5s poll. */
   getPublishClaims: async (): Promise<PublishClaim[]> => {

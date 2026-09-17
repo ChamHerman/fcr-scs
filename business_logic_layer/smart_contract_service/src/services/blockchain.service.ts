@@ -258,12 +258,25 @@ export async function publishRecord(params: {
   caseId: string;
   milestone?: string;
   documentHash: string;
+  // Every hash sent in the same on-chain transaction. A co-owned case anchors
+  // all owners' documents together, so the record stores the full array while
+  // `documentHash` stays as documentHashes[0] for legacy single-hash reads.
+  documentHashes?: string[];
   transactionHash: string;
   onChainKey?: string;
   adminId?: string;
 }) {
   const { caseId, documentHash, transactionHash } = params;
   const milestone = normalizeMilestone(params.milestone);
+  const allHashes = Array.from(
+    new Set(
+      (params.documentHashes && params.documentHashes.length > 0
+        ? params.documentHashes
+        : [documentHash]
+      ).filter(Boolean)
+    )
+  );
+  const primaryHash = allHashes[0] ?? documentHash;
 
   if (milestone === "AWARD") {
     await assertM1GracePeriodElapsed(caseId);
@@ -294,7 +307,8 @@ export async function publishRecord(params: {
         data: {
           status: BlockchainStatus.PUBLISHED,
           transactionHash,
-          documentHash,
+          documentHash: primaryHash,
+          documentHashes: allHashes,
           onChainKey,
           publishedAt: new Date(),
           deletedAt: null,
@@ -323,7 +337,8 @@ export async function publishRecord(params: {
         caseId,
         milestone,
         onChainKey,
-        documentHash,
+        documentHash: primaryHash,
+        documentHashes: allHashes,
         transactionHash,
         status: BlockchainStatus.PUBLISHED,
       },
@@ -431,7 +446,11 @@ export async function getRecord(caseId: string, milestone?: string) {
 
 export async function verifyDocument(fileBuffer: Buffer) {
   const localHash = "0x" + crypto.createHash("sha256").update(fileBuffer).digest("hex");
-  let record = await prisma.blockchainRecord.findFirst({ where: { documentHash: localHash } });
+  // Match any anchored hash, not just the primary one: a co-owned case stores
+  // every owner's hash in the same record.
+  let record = await prisma.blockchainRecord.findFirst({
+    where: { OR: [{ documentHash: localHash }, { documentHashes: { has: localHash } }] },
+  });
   let matchedReceipt: any = null;
   let matchedOffer: any = null;
 

@@ -9,6 +9,7 @@ import { SearchInput } from '../../components/ui/SearchInput';
 import { Button } from '../../components/ui/Button';
 import { Switch } from '../../components/ui/Switch';
 import { CopyButton } from '../../components/ui/CopyButton';
+import { OwnerStack } from '../../components/payment/OwnerStack';
 import { Pagination } from '../../components/ui/Pagination';
 import { Modal } from '../../components/ui/Modal';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
@@ -280,7 +281,7 @@ export default function FailedTransactions() {
                         </div>
                       </td>
                       <td><CaseIdCell caseId={pc.caseId} onClick={(cid) => setCaseDetailsId(cid)} /></td>
-                      <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
+                      <td><OwnerStack owners={pc.beneficiaries} fallback={{ accountHolderName: pc.accountHolderName, myKadNumber: pc.myKadNumber, bankName: pc.bankName, accountNumber: pc.accountNumber, amount: pc.amount }} compact /></td>
                       <td>
                         <span className="meta-text" style={{ display: 'block', maxWidth: 280 }}>
                           {errorLog.length > 70 ? `${errorLog.slice(0, 70)}…` : errorLog}

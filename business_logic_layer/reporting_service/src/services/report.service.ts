@@ -216,7 +216,9 @@ export const generatePaymentData = async (filters: ReportFilterParams) => {
 
   const payments = await prisma.paymentCase.findMany({
     where,
-    include: { receipt: true },
+    // Receipts are per-owner now; the report only needs the bank reference, so
+    // take the earliest receipt for the case-level row.
+    include: { receipts: { orderBy: { generatedAt: "asc" }, take: 1 } },
     orderBy: { updatedAt: "desc" },
     take: 100,
   });
@@ -247,7 +249,7 @@ export const generatePaymentData = async (filters: ReportFilterParams) => {
       bankName: p.bankName || "National Bank",
       amount: `RM ${Number(p.amount || 0).toLocaleString("en-MY", { minimumFractionDigits: 2 })}`,
       status: p.status,
-      bankReference: p.receipt?.bankReferenceNumber || "Pending Clearance",
+      bankReference: p.receipts?.[0]?.bankReferenceNumber || "Pending Clearance",
       date: p.updatedAt.toISOString().slice(0, 10),
     })),
   };

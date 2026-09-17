@@ -6,7 +6,7 @@ import { ActionMenuPortal } from '../../components/ui/ActionMenuPortal';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { useAuth } from '../../context/AuthContext';
 import { normalizePaymentStatus, isCategory1BankFailure } from './statusMaps';
-import { hasBankDetails, hasSignedOrInitiated, signaturesLeft, downloadReceipt } from './paymentModals';
+import { hasBankDetails, hasSignedOrInitiated, signaturesLeft, downloadReceipt, downloadSettlementSummary } from './paymentModals';
 import type { PaymentRow } from './paymentModals';
 /**
  * Shared per-row actions for every payment list (overview, initiate, pending,
@@ -188,6 +188,14 @@ export const PaymentRowActions: React.FC<PaymentRowActionsProps> = ({
             <Button size="sm" variant="filled" className={pillBtn} onClick={() => downloadReceipt(pc, notify)}>
               <Download size={13} className="shrink-0" />
               <span>Receipt</span>
+            </Button>
+          )}
+          {/* Admin/audit copy: the case total and every co-owner's share, which
+              an individual owner's 1-to-1 receipt deliberately excludes. */}
+          {pc.receipt && (
+            <Button size="sm" variant="tonal" className={pillBtn} onClick={() => downloadSettlementSummary(pc, notify)}>
+              <Download size={13} className="shrink-0" />
+              <span>Summary</span>
             </Button>
           )}
         </div>

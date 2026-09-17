@@ -9,6 +9,7 @@ import { SearchInput } from '../../components/ui/SearchInput';
 import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
 import { CopyButton } from '../../components/ui/CopyButton';
+import { OwnerStack } from '../../components/payment/OwnerStack';
 import { Pagination } from '../../components/ui/Pagination';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { useAuth } from '../../context/AuthContext';
@@ -309,7 +310,7 @@ export default function InitiateTransfer() {
                         </div>
                       </td>
                       <td><CaseIdCell caseId={pc.caseId} onClick={(cid) => setCaseDetailsId(cid)} /></td>
-                      <td>{pc.accountHolderName || pc.beneficiaryId || '—'}</td>
+                      <td><OwnerStack owners={pc.beneficiaries} fallback={{ accountHolderName: pc.accountHolderName, myKadNumber: pc.myKadNumber, bankName: pc.bankName, accountNumber: pc.accountNumber, amount: pc.amount }} compact /></td>
                       <td>
                         {pc.bankName && pc.accountNumber ? (
                           <div className="flex items-center gap-1.5">

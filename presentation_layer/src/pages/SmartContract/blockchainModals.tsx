@@ -31,6 +31,12 @@ export interface LedgerRow {
   publicId?: string;
   transactionHash?: string | null;
   documentHash?: string | null;
+  /**
+   * Every hash anchored in this record's single on-chain transaction. A
+   * co-owned case contributes one hash per owner (a Form H per owner at M1,
+   * one receipt per owner at M2), so this array is what actually gets published.
+   */
+  documentHashes?: string[] | null;
   status: string;
   publishedAt?: string | null;
   createdAt?: string;
@@ -565,10 +571,23 @@ export const PublishModal: React.FC<{
 
       if (isCancelledRef.current) return;
 
+      // Publish every owner's hash in one transaction. `documentHashes` carries
+      // the full array for a co-owned case; a legacy single hash still works.
+      const hashes = (row.documentHashes && row.documentHashes.length > 0
+        ? row.documentHashes
+        : row.documentHash
+          ? [row.documentHash]
+          : []
+      ).filter(Boolean);
+
+      if (hashes.length === 0) {
+        throw new Error('No document hash available to publish for this record.');
+      }
+
       const txHash = await sendLedgerTransaction({
         from: walletAddress,
         functionName: 'publishRecord',
-        args: [publishKey, row.documentHash || ''],
+        args: [publishKey, ...hashes],
         network: { chainId: net.chainId, contractAddress: net.contractAddress },
       });
 
@@ -586,7 +605,8 @@ export const PublishModal: React.FC<{
       await blockchainApi.publish({
         caseId: row.caseId,
         milestone: row.milestone === 'M2' ? 'SETTLEMENT' : 'AWARD',
-        documentHash: row.documentHash || '',
+        documentHash: hashes[0],
+        documentHashes: hashes,
         walletAddress,
         transactionHash: txHash,
         onChainKey: publishKey,

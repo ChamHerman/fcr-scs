@@ -412,6 +412,11 @@ export async function acceptOffer(
   const totalOwnersCount = Math.max(allOwners.length, 1);
   const matchingOwner = findMatchingOwner(allOwners, options);
 
+  // Each co-owner signs their own Form H, so hash THIS owner's document rather
+  // than the shared offer file. Milestone 1 later anchors one hash per owner.
+  const ownerSignedDocument = signedDocument || offer.signedDocument;
+  const ownerDocumentHash = options?.documentHash || hashStoredFormH(ownerSignedDocument);
+
   const result = await prisma.$transaction(async (tx) => {
     if (matchingOwner) {
       await tx.offerMemberResponse.upsert({
@@ -425,12 +430,14 @@ export async function acceptOffer(
           offerId,
           ownerId: matchingOwner.ownerId,
           status: OfferStatus.ACCEPTED,
-          signedDocument: signedDocument || offer.signedDocument,
+          signedDocument: ownerSignedDocument,
+          ...(ownerDocumentHash ? { documentHash: ownerDocumentHash } : {}),
           respondedAt: new Date(),
         },
         update: {
           status: OfferStatus.ACCEPTED,
-          signedDocument: signedDocument || offer.signedDocument,
+          signedDocument: ownerSignedDocument,
+          ...(ownerDocumentHash ? { documentHash: ownerDocumentHash } : {}),
           respondedAt: new Date(),
           remarks: null,
         },

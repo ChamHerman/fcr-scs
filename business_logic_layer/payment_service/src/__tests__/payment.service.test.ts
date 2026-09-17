@@ -438,7 +438,7 @@ describe("generateReceipt — 1-page guarantee and RENTAS RTGS branding", () => 
         accountNumber: "1234567890",
         amount: 850000,
         status: PaymentStatus.TRANSFER_SUCCEED,
-        receipt: {
+        receipts: {
           create: {
             id: `RCP-TEST-${Date.now()}`,
             bankReferenceNumber: "RENTAS-2026-09-0099",
