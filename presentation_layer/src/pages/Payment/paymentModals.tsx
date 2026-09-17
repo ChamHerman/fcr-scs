@@ -42,6 +42,7 @@ import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { useAuth } from '../../context/AuthContext';
 import { formatActionLabel, formatReasonLabel, isRejectionAction, normalizePaymentStatus, paymentStatusClassMap, isCategory1BankFailure } from './statusMaps';
 import { formatDateTime } from '../../utils/dateFormat';
+import { effectiveRequiredSignatures } from '../../utils/requiredSignatures';
 
 export type PaymentRowActionType =
   | 'initiate'
@@ -1251,7 +1252,7 @@ export const ViewDetailsModal: React.FC<{
           <div className="label" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--md-on-surface-variant)', marginBottom: 8 }}>
             From Government Admin{' '}
             <span className="normal-case tracking-normal">
-              ({pc.currentSignatures || 0}/{pc.requiredSignatures || 1} Signatures · Cycle {pc.cycle ?? 1})
+              ({pc.currentSignatures || 0}/{effectiveRequiredSignatures(pc.amount, pc.requiredSignatures)} Signatures · Cycle {pc.cycle ?? 1})
             </span>
           </div>
           <div className="space-y-2">
@@ -1528,6 +1529,12 @@ export const InitiateTransferModal: React.FC<MutatingModalProps> = ({ pc, onClos
   const { isM1Published: hookM1Published } = useMilestone1Record(pc?.caseId);
   const isM1Published = pc?.isM1Published ?? hookM1Published;
 
+  // Statutory tier threshold. A pre-initiation PaymentCase is persisted with
+  // requiredSignatures = 0, so we must derive the tier from the award amount —
+  // otherwise the copy collapses to "total required 1 signatures".
+  const requiredSigs = effectiveRequiredSignatures(pc?.amount, pc?.requiredSignatures);
+  const remainingApprovals = Math.max(0, requiredSigs - 1);
+
   const confirm = async () => {
     if (!pc || !isM1Published) return;
     setLoading(true);
@@ -1576,9 +1583,9 @@ export const InitiateTransferModal: React.FC<MutatingModalProps> = ({ pc, onClos
           </div>
 
           <div className="text-sm text-md-on-surface-variant bg-md-surface-container-low rounded-xl px-4 py-3 border border-md-outline/10">
-            The bank initiator's signature (1) is recorded automatically. This admin adds{' '}
-            <strong className="text-md-on-surface">approval 1 of {Math.max(0, (pc.requiredSignatures || 1) - 1)}</strong> — total required{' '}
-            <strong className="text-md-on-surface">{pc.requiredSignatures || 1}</strong> signatures.
+            The bank initiator's signature (1) is recorded automatically. This initiation requires{' '}
+            <strong className="text-md-on-surface">{remainingApprovals} further approval{remainingApprovals === 1 ? '' : 's'}</strong> — total required{' '}
+            <strong className="text-md-on-surface">{requiredSigs}</strong> signatures.
             <div className="mt-1 flex items-center gap-2">
               <Lock size={13} />
               Initiating as: <strong className="text-md-on-surface">{identityLabel}</strong>
