@@ -10,7 +10,7 @@ import {
   ShieldCheck,
   CreditCard,
   FolderKanban,
-  RefreshCw
+  Archive,
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -32,6 +32,7 @@ import { SearchInput } from '../../components/ui/SearchInput';
 import { Select } from '../../components/ui/Select';
 import { Modal } from '../../components/ui/Modal';
 import { useNotification } from '../../components/ui/NotificationSystem';
+import { usePollingRefresh } from '../../hooks/usePollingRefresh';
 import { STATES } from './reportConstants';
 import { ReportSummaryCards, ReportDataTable } from './reportComponents';
 import {
@@ -132,8 +133,8 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
   const categorySeqRef = useRef(0);
 
   /* Overview data (charts + totals) is only needed on the overview page. */
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     try {
       const res = await fetchDashboardOverview();
       setData(res);
@@ -178,15 +179,15 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
         },
       });
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
-  };
+  }, []);
 
   /* Category pages fetch only their own records from the dedicated endpoint. */
-  const loadCategoryData = useCallback(async () => {
+  const loadCategoryData = useCallback(async (opts?: { silent?: boolean }) => {
     if (!reportCategory) return;
     const seq = ++categorySeqRef.current;
-    setLoading(true);
+    if (!opts?.silent) setLoading(true);
     try {
       let res: ReportGeneratedResponse;
       if (reportCategory === 'Payment') {
@@ -203,7 +204,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
       if (seq !== categorySeqRef.current) return;
       setCategoryData(FALLBACK_CATEGORY_DATA[reportCategory]);
     } finally {
-      if (seq === categorySeqRef.current) setLoading(false);
+      if (!opts?.silent && seq === categorySeqRef.current) setLoading(false);
     }
   }, [reportCategory]);
 
@@ -214,12 +215,19 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
     } else {
       loadData();
     }
-  }, [loadCategoryData, reportCategory]);
+  }, [loadCategoryData, loadData, reportCategory]);
 
-  const handleRefresh = () => {
-    if (reportCategory) loadCategoryData();
-    else loadData();
-  };
+  // Silent automatic polling every 15 seconds
+  usePollingRefresh(
+    () => {
+      if (reportCategory) {
+        return loadCategoryData({ silent: true });
+      } else {
+        return loadData({ silent: true });
+      }
+    },
+    { intervalMs: 15000 }
+  );
 
   const handleFullDownload = async () => {
     if (!reportCategory) return;
@@ -354,22 +362,17 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
       <PageHeader
         title={headerInfo.title}
         subtitle={headerInfo.subtitle}
-        actions={
-          <Button variant="tonal" size="sm" onClick={handleRefresh}>
-            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-            Refresh
-          </Button>
-        }
       />
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className={`grid gap-4 ${reportCategory === 'Case Status' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5' : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-4'}`}>
         {/* Case Status View Specific KPIs */}
         {reportCategory === 'Case Status' && (
           <>
             <StatCard icon={<FolderKanban size={16} className="text-[#6750A4]" />} label="Total Acquisition Cases" value={categoryData?.summary?.totalCases ?? 0} sub="Registered in System" />
             <StatCard icon={<TrendingUp size={16} className="text-[#a8600b]" />} label="Active in Pipeline" value={categoryData?.summary?.activeCases ?? 0} sub="In Progress / Review" />
-            <StatCard icon={<CheckCircle2 size={16} className="text-[#1e7b4a]" />} label="Completed / Closed" value={categoryData?.summary?.completedCases ?? 0} sub="Fully Settled" />
+            <StatCard icon={<CheckCircle2 size={16} className="text-[#1e7b4a]" />} label="Payment Completed" value={categoryData?.summary?.paymentCompletedCases ?? 0} sub="Disbursements Settled" />
+            <StatCard icon={<Archive size={16} className="text-[#5B4296]" />} label="Case Closed" value={categoryData?.summary?.closedCases ?? 0} sub="Statutory File Sealed" />
             <StatCard icon={<Clock size={16} className="text-[#0b5b8c]" />} label="Avg Lifecycle Duration" value={categoryData?.summary?.averageAgingDays ?? '0 days'} sub="From Notice to Settlement" />
           </>
         )}
@@ -397,7 +400,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
         {/* Overview (All) Default KPIs */}
         {!reportCategory && (
           <>
-            <StatCard icon={<FolderKanban size={16} className="text-[#6750A4]" />} label="Total Acquisition Cases" value={data?.kpis.totalCases ?? 0} sub={`${data?.kpis.completedCases ?? 0} Completed / Closed`} />
+            <StatCard icon={<FolderKanban size={16} className="text-[#6750A4]" />} label="Total Acquisition Cases" value={data?.kpis.totalCases ?? 0} sub={`${data?.kpis.paymentCompletedCases ?? (data?.kpis.completedCases ?? 0)} Completed • ${data?.kpis.closedCases ?? 0} Closed`} />
             <StatCard icon={<CreditCard size={16} className="text-[#1e7b4a]" />} label="Total Paid Out" value={`RM ${((data?.kpis.totalSettledAmount || 0) / 1000000).toFixed(2)}M`} sub={`of RM ${((data?.kpis.totalCompensationAmount || 0) / 1000000).toFixed(2)}M payment volume`} />
             <StatCard icon={<ShieldCheck size={16} className="text-[#0b5b8c]" />} label="Blockchain Notarized" value={data?.kpis.publishedBlockchainRecords ?? 0} sub={`${data?.kpis.readyToPublishBlockchainRecords ?? 0} ready to publish`} />
             <StatCard icon={<TrendingUp size={16} className="text-[#a8600b]" />} label="Active Pipeline" value={data?.kpis.activeCases ?? 0} sub="Cases not yet closed" />

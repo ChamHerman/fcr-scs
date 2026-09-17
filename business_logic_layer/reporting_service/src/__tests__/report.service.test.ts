@@ -16,6 +16,10 @@ describe("Reporting Service Integration & PDF Generation", () => {
     expect(res.status).toBe(200);
     expect(res.body.reportType).toBe("Case Status Report");
     expect(res.body).toHaveProperty("summary");
+    expect(res.body.summary).toHaveProperty("paymentCompletedCases");
+    expect(res.body.summary).toHaveProperty("closedCases");
+    expect(res.body.summary).toHaveProperty("completedCases");
+    expect(res.body.reportId).toMatch(/^RPT-CASE-\d{8}-\d{4}$/);
     expect(Array.isArray(res.body.details)).toBe(true);
   });
 
@@ -26,11 +30,12 @@ describe("Reporting Service Integration & PDF Generation", () => {
     expect(res.headers["content-disposition"]).toContain(".pdf");
   });
 
-  it("GET /api/reports/payment returns JSON and calculates summaries", async () => {
-    const res = await request(app).get("/api/reports/payment");
+  it("GET /api/reports/payment returns JSON and normalizes title case status", async () => {
+    const res = await request(app).get("/api/reports/payment?status=Ready%20to%20Initiate");
     expect(res.status).toBe(200);
     expect(res.body.reportType).toBe("Payment Report");
     expect(res.body).toHaveProperty("summary");
+    expect(res.body.reportId).toMatch(/^RPT-PAY-\d{8}-\d{4}$/);
   });
 
   it("GET /api/reports/payment?format=pdf returns PDF buffer", async () => {
@@ -39,11 +44,14 @@ describe("Reporting Service Integration & PDF Generation", () => {
     expect(res.headers["content-type"]).toBe("application/pdf");
   });
 
-  it("GET /api/reports/blockchain-audit returns JSON audit records", async () => {
+  it("GET /api/reports/blockchain-audit returns both published and unpublished records", async () => {
     const res = await request(app).get("/api/reports/blockchain-audit");
     expect(res.status).toBe(200);
     expect(res.body.reportType).toBe("Blockchain Audit Report");
     expect(res.body).toHaveProperty("summary");
+    expect(res.body.summary).toHaveProperty("publishedRecords");
+    expect(res.body.summary).toHaveProperty("readyToPublishRecords");
+    expect(res.body.reportId).toMatch(/^RPT-CHAIN-\d{8}-\d{4}$/);
   });
 
   it("GET /api/reports/blockchain-audit?format=pdf returns PDF buffer", async () => {

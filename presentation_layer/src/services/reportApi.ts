@@ -23,6 +23,8 @@ export interface DashboardOverviewData {
     publishedBlockchainRecords: number;
     readyToPublishBlockchainRecords: number;
     completedCases: number;
+    paymentCompletedCases?: number;
+    closedCases?: number;
     activeCases: number;
     inValuation: number;
     inCompensation: number;

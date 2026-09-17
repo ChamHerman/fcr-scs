@@ -15,6 +15,7 @@ import { PageHeader } from '../../components/ui/PageHeader';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { Modal } from '../../components/ui/Modal';
+import { CopyButton } from '../../components/ui/CopyButton';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import {
   ALL_OPTION,
@@ -97,13 +98,14 @@ export const GenerateReports: React.FC = () => {
   }, [category]);
 
   const buildFilters = useCallback((): ReportFilterOptions => {
+    const isBlockchain = category === 'Blockchain Audit Report';
     return {
-      startDate,
-      endDate,
-      state: state === 'All' ? undefined : state,
+      startDate: isBlockchain ? undefined : startDate,
+      endDate: isBlockchain ? undefined : endDate,
+      state: category === 'Case Status Report' && state !== 'All' ? state : undefined,
       status: status === 'All' ? undefined : status,
     };
-  }, [startDate, endDate, state, status]);
+  }, [category, startDate, endDate, state, status]);
 
   const loadPreview = useCallback(async () => {
     const seq = ++seqRef.current;
@@ -201,17 +203,21 @@ export const GenerateReports: React.FC = () => {
             />
           )}
 
-          <Select
-            label="Filter Status"
-            value={status}
-            onChange={setStatus}
-            options={currentStatusOptions}
-          />
-
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Start Date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-            <Input label="End Date" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          <div className={category === 'Blockchain Audit Report' ? 'md:col-span-2' : ''}>
+            <Select
+              label="Filter Status"
+              value={status}
+              onChange={setStatus}
+              options={currentStatusOptions}
+            />
           </div>
+
+          {category !== 'Blockchain Audit Report' && (
+            <div className="grid grid-cols-2 gap-4">
+              <Input label="Start Date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              <Input label="End Date" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </div>
+          )}
         </div>
 
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
@@ -232,10 +238,20 @@ export const GenerateReports: React.FC = () => {
 
       {/* Live Preview Section */}
       <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <TableIcon size={20} className="text-md-primary" />
-          <h2 className="text-lg font-semibold">Report Preview</h2>
-          {loading && <RefreshCw size={16} className="animate-spin text-md-on-surface-variant" />}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <TableIcon size={20} className="text-md-primary" />
+            <h2 className="text-lg font-semibold">Report Preview</h2>
+            {loading && <RefreshCw size={16} className="animate-spin text-md-on-surface-variant" />}
+          </div>
+
+          {previewData?.reportId && (
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-md-surface-container-high border border-md-outline-variant text-xs shadow-sm">
+              <span className="text-md-on-surface-variant font-medium">Report Reference ID:</span>
+              <span className="font-mono font-bold text-md-primary">{previewData.reportId}</span>
+              <CopyButton value={previewData.reportId} title="Copy Report Reference ID" />
+            </div>
+          )}
         </div>
 
         {error && (
@@ -274,6 +290,15 @@ export const GenerateReports: React.FC = () => {
       >
         {previewData && (
           <div className="space-y-4">
+            {previewData.reportId && (
+              <div className="flex items-center justify-between px-3.5 py-2 rounded-lg bg-md-surface-container-high border border-md-outline-variant text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-md-on-surface-variant font-medium">Official Audit Reference ID:</span>
+                  <span className="font-mono font-bold text-md-primary">{previewData.reportId}</span>
+                </div>
+                <CopyButton value={previewData.reportId} title="Copy Report Reference ID" />
+              </div>
+            )}
             <ReportSummaryCards data={previewData} />
             <ReportDataTable data={previewData} />
           </div>

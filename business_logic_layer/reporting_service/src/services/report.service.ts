@@ -86,7 +86,9 @@ export const getDashboardOverviewStats = async () => {
     statuses.reduce((acc, status) => acc + (paymentStatusDistribution[status]?.total ?? 0), 0);
 
   const totalCompensationAmount = Object.values(paymentStatusDistribution).reduce((acc, p) => acc + p.total, 0);
-  const completedCases = countCasesByStatus(COMPLETED_CASE_STATUSES);
+  const paymentCompletedCases = caseStatusDistribution["PAYMENT_COMPLETED"] || 0;
+  const closedCases = caseStatusDistribution["CASE_CLOSED"] || 0;
+  const completedCases = paymentCompletedCases + closedCases;
 
   /* Real monthly registration counts for the last 7 months. */
   const now = new Date();
@@ -120,7 +122,9 @@ export const getDashboardOverviewStats = async () => {
       publishedBlockchainRecords: blockchainStatusDistribution[BlockchainStatus.PUBLISHED] || 0,
       readyToPublishBlockchainRecords: blockchainStatusDistribution[BlockchainStatus.READY_TO_PUBLISH] || 0,
       completedCases,
-      activeCases: Math.max(0, totalCases - completedCases),
+      paymentCompletedCases,
+      closedCases,
+      activeCases: Math.max(0, totalCases - paymentCompletedCases - closedCases),
       inValuation: countCasesByStatus(VALUATION_STAGE_STATUSES),
       inCompensation: countCasesByStatus(COMPENSATION_STAGE_STATUSES),
       inOffer: countCasesByStatus(OFFER_STAGE_STATUSES),
@@ -132,6 +136,13 @@ export const getDashboardOverviewStats = async () => {
     blockchainStatusDistribution,
     monthlyTrends,
   };
+};
+
+const generateReportId = (prefix: string) => {
+  const d = new Date();
+  const dateStr = d.toISOString().slice(0, 10).replace(/-/g, "");
+  const timeSuffix = Date.now().toString().slice(-4);
+  return `RPT-${prefix}-${dateStr}-${timeSuffix}`;
 };
 
 export const generateCaseStatusData = async (filters: ReportFilterParams) => {
@@ -167,8 +178,10 @@ export const generateCaseStatusData = async (filters: ReportFilterParams) => {
   });
 
   const totalCases = cases.length;
-  const completedCases = cases.filter((c) => c.status === "CASE_CLOSED" || c.status === "PAYMENT_COMPLETED").length;
-  const activeCases = totalCases - completedCases;
+  const paymentCompletedCases = cases.filter((c) => c.status === "PAYMENT_COMPLETED").length;
+  const closedCases = cases.filter((c) => c.status === "CASE_CLOSED").length;
+  const completedCases = paymentCompletedCases + closedCases;
+  const activeCases = Math.max(0, totalCases - paymentCompletedCases - closedCases);
 
   let totalAgingDays = 0;
   cases.forEach((c) => {
@@ -179,12 +192,14 @@ export const generateCaseStatusData = async (filters: ReportFilterParams) => {
 
   return {
     reportType: "Case Status Report",
-    reportId: `RPT-CASE-${Date.now().toString().slice(-6)}`,
+    reportId: generateReportId("CASE"),
     generatedAt: new Date().toISOString(),
     filterApplied: filters,
     summary: {
       totalCases,
       activeCases,
+      paymentCompletedCases,
+      closedCases,
       completedCases,
       averageAgingDays: `${avgAging} days`,
       notes: "Generated from official Malaysian Land Acquisition statutory records.",
@@ -201,11 +216,24 @@ export const generateCaseStatusData = async (filters: ReportFilterParams) => {
   };
 };
 
+const normalizePaymentStatus = (status?: string): PaymentStatus | undefined => {
+  if (!status || status === "All" || status === "All Statuses") return undefined;
+  if (Object.values(PaymentStatus).includes(status as PaymentStatus)) {
+    return status as PaymentStatus;
+  }
+  const clean = status.trim().toUpperCase().replace(/&/g, "AND").replace(/[\s-]+/g, "_");
+  if (Object.values(PaymentStatus).includes(clean as PaymentStatus)) {
+    return clean as PaymentStatus;
+  }
+  return undefined;
+};
+
 export const generatePaymentData = async (filters: ReportFilterParams) => {
   const where: any = { deletedAt: null };
 
-  if (filters.status && filters.status !== "All") {
-    where.status = filters.status;
+  const normStatus = normalizePaymentStatus(filters.status);
+  if (normStatus) {
+    where.status = normStatus;
   }
   if (filters.startDate && filters.endDate) {
     where.createdAt = {
@@ -229,7 +257,7 @@ export const generatePaymentData = async (filters: ReportFilterParams) => {
 
   return {
     reportType: "Payment Report",
-    reportId: `RPT-PAY-${Date.now().toString().slice(-6)}`,
+    reportId: generateReportId("PAY"),
     generatedAt: new Date().toISOString(),
     filterApplied: filters,
     summary: {
@@ -253,22 +281,38 @@ export const generatePaymentData = async (filters: ReportFilterParams) => {
   };
 };
 
+const normalizeBlockchainStatus = (status?: string): BlockchainStatus | undefined => {
+  if (!status || status === "All" || status === "All Statuses") return undefined;
+  if (Object.values(BlockchainStatus).includes(status as BlockchainStatus)) {
+    return status as BlockchainStatus;
+  }
+  const clean = status.trim().toUpperCase().replace(/[\s-]+/g, "_");
+  if (Object.values(BlockchainStatus).includes(clean as BlockchainStatus)) {
+    return clean as BlockchainStatus;
+  }
+  return undefined;
+};
+
 export const generateBlockchainAuditData = async (filters: ReportFilterParams) => {
   const where: any = { deletedAt: null };
 
-  if (filters.status && filters.status !== "All") {
-    where.status = filters.status;
+  const normStatus = normalizeBlockchainStatus(filters.status);
+  if (normStatus) {
+    where.status = normStatus;
   }
-  if (filters.startDate && filters.endDate) {
+
+  // Only apply publishedAt date range when filtering specifically for PUBLISHED records
+  if (filters.startDate && filters.endDate && normStatus === BlockchainStatus.PUBLISHED) {
     where.publishedAt = {
       gte: new Date(filters.startDate),
       lte: new Date(`${filters.endDate}T23:59:59.999Z`),
     };
   }
 
+  // Order by createdAt desc so all events (both published and ready-to-publish) are properly ordered
   const records = await prisma.blockchainRecord.findMany({
     where,
-    orderBy: { publishedAt: "desc" },
+    orderBy: { createdAt: "desc" },
     take: 100,
   });
 
@@ -277,7 +321,7 @@ export const generateBlockchainAuditData = async (filters: ReportFilterParams) =
 
   return {
     reportType: "Blockchain Audit Report",
-    reportId: `RPT-CHAIN-${Date.now().toString().slice(-6)}`,
+    reportId: generateReportId("CHAIN"),
     generatedAt: new Date().toISOString(),
     filterApplied: filters,
     summary: {

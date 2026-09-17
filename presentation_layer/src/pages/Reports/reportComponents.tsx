@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, ExternalLink } from 'lucide-react';
 import { Pagination } from '../../components/ui/Pagination';
 import { CopyButton } from '../../components/ui/CopyButton';
 import { useTableSort } from '../../constants';
@@ -85,10 +85,11 @@ export const ReportSummaryCards: React.FC<{ data: ReportGeneratedResponse }> = (
 
   if (data.reportType === "Case Status Report") {
     cards = [
-      { label: 'Total Cases Found', value: s.totalCases ?? 0 },
-      { label: 'Active Acquisition', value: s.activeCases ?? 0 },
-      { label: 'Completed / Closed', value: s.completedCases ?? 0 },
-      { label: 'Average Lifecycle Aging', value: s.averageAgingDays ?? '0 days' },
+      { label: 'Total Cases Registered', value: s.totalCases ?? 0 },
+      { label: 'Active in Pipeline', value: s.activeCases ?? 0 },
+      { label: 'Payment Completed', value: s.paymentCompletedCases ?? 0 },
+      { label: 'Case Closed', value: s.closedCases ?? 0 },
+      { label: 'Avg Lifecycle Duration', value: s.averageAgingDays ?? '0 days' },
     ];
   } else if (data.reportType === "Payment Report") {
     cards = [
@@ -106,8 +107,12 @@ export const ReportSummaryCards: React.FC<{ data: ReportGeneratedResponse }> = (
     ];
   }
 
+  const gridClass = cards.length === 5
+    ? "grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4"
+    : "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4";
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+    <div className={gridClass}>
       {cards.map((c) => (
         <div key={c.label} className="bg-md-surface-container rounded-xl p-5 shadow-sm">
           <div className="text-[13px] font-medium text-md-on-surface-variant tracking-wide">{c.label}</div>
@@ -240,15 +245,30 @@ export const ReportDataTable: React.FC<{ data: ReportGeneratedResponse }> = ({ d
                     }
                     const text = String(value ?? '-');
                     const isHash = key.toLowerCase().includes('hash') || text.startsWith('0x');
+                    const isTxHash = key === 'transactionHash' && text && text !== '-' && text.startsWith('0x');
                     return (
                       <td key={key}>
                         <div className="flex items-center gap-1.5 min-w-0">
-                          <span
-                            className={isHash ? 'font-mono text-xs break-all' : 'truncate'}
-                            title={text}
-                          >
-                            {text}
-                          </span>
+                          {isTxHash ? (
+                            <a
+                              href={`https://sepolia.etherscan.io/tx/${text}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-mono text-xs text-md-primary hover:underline inline-flex items-center gap-1 break-all group"
+                              title="View on Sepolia Etherscan"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <span>{text}</span>
+                              <ExternalLink size={12} className="shrink-0 opacity-70 group-hover:opacity-100" />
+                            </a>
+                          ) : (
+                            <span
+                              className={isHash ? 'font-mono text-xs break-all' : 'truncate'}
+                              title={text}
+                            >
+                              {text}
+                            </span>
+                          )}
                           {COPYABLE_COLUMNS.has(key) && (
                             <CopyButton value={text} title={`Copy ${columnLabel(key)}`} />
                           )}
