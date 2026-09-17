@@ -37,6 +37,7 @@ import {
   type AlertRuleItem,
   type EmailTemplateSummary,
 } from '../../services/alert.service';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 const STATUS_OPTIONS: SelectOption[] = [
   { value: 'all', label: 'All Statuses' },
@@ -197,6 +198,7 @@ const RULES_URGENCY_OPTIONS: SelectOption[] = [
 ];
 
 export const AlertMonitoring: React.FC = () => {
+  useDocumentTitle('Alert Monitoring');
   const { notify } = useNotification();
   const { user } = useAuth();
   const isSystemAdmin = user?.role === 'SYSTEM_ADMINISTRATOR';

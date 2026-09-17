@@ -6,6 +6,7 @@ import type { CaseFormData, Owner, Document } from "../../components/CaseForm";
 import { Button } from "../../components/ui/Button";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
+import { useDocumentTitle } from "../../hooks/useDocumentTitle";
 
 /**
  * CaseEdit – Handles both:
@@ -17,6 +18,7 @@ import { useNotification } from "../../components/ui/NotificationSystem";
  *   - Whole-case edit calls each section endpoint sequentially (same as create flow)
  */
 export const CaseEdit: React.FC = () => {
+  useDocumentTitle('Edit Case');
   const { user, canEditCaseDetails, isOfficer, isSysAdmin, isGovAdmin } = useRole();
   const { notify } = useNotification();
   const navigate = useNavigate();

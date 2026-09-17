@@ -42,6 +42,7 @@ export interface MemberCaseSummaryCardProps {
   canCreateObjection: boolean;
   objectionDisabledReason?: string;
   workflowSteps?: any[];
+  isCaseClosed?: boolean;
 }
 
 export const MemberCaseSummaryCard: React.FC<MemberCaseSummaryCardProps> = ({
@@ -68,6 +69,7 @@ export const MemberCaseSummaryCard: React.FC<MemberCaseSummaryCardProps> = ({
   canCreateObjection,
   objectionDisabledReason,
   workflowSteps,
+  isCaseClosed = false,
 }) => {
   return (
     <>
@@ -149,7 +151,9 @@ export const MemberCaseSummaryCard: React.FC<MemberCaseSummaryCardProps> = ({
                 : 'Statutory Compensation'}
             </span>
             <span className="text-[11px] text-emerald-800 font-bold bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-300/70">
-              {activeOffer?.status === 'ACCEPTED'
+              {isCaseClosed || progressPercent === 100
+                ? 'Case Closed'
+                : activeOffer?.status === 'ACCEPTED'
                 ? 'Offer Accepted'
                 : activeValuation?.reportStatus === 'APPROVED'
                 ? 'JPPH Approved'
@@ -223,18 +227,26 @@ export const MemberCaseSummaryCard: React.FC<MemberCaseSummaryCardProps> = ({
                   title: ws.title,
                   subtitle: ws.subtitle,
                   badgeText: ws.badgeText,
+                  status: ws.status,
                 }))
               : [
-                  { id: 1, title: 'Notice of Acquisition', subtitle: 'Notice & Registration', badgeText: '' },
-                  { id: 2, title: 'Site Inspection & Valuation', subtitle: 'JPPH Assessment', badgeText: '' },
-                  { id: 3, title: 'Offer Letter (Form H)', subtitle: 'Award Issuance', badgeText: '' },
-                  { id: 4, title: 'Claimant Response & Decision', subtitle: 'Acceptance / Objection', badgeText: '' },
-                  { id: 5, title: 'Compensation Settlement', subtitle: 'Electronic GIRO Transfer', badgeText: '' },
-                  { id: 6, title: 'Handover & Formal Possession', subtitle: 'Vacant Possession', badgeText: '' },
+                  { id: 1, title: 'Notice of Acquisition', subtitle: 'Notice & Registration', badgeText: '', status: '' },
+                  { id: 2, title: 'Site Inspection & Valuation', subtitle: 'JPPH Assessment', badgeText: '', status: '' },
+                  { id: 3, title: 'Offer Letter (Form H)', subtitle: 'Award Issuance', badgeText: '', status: '' },
+                  { id: 4, title: 'Claimant Response & Decision', subtitle: 'Acceptance / Objection', badgeText: '', status: '' },
+                  { id: 5, title: 'Compensation Settlement', subtitle: 'Electronic GIRO Transfer', badgeText: '', status: '' },
                 ]
             ).map((st: any) => {
-              const isCompleted = currentStageNum > st.id;
-              const isCurrent = currentStageNum === st.id;
+              const isCompleted = st.status
+                ? st.status === 'completed'
+                : isCaseClosed || progressPercent === 100
+                ? true
+                : currentStageNum > st.id;
+              const isCurrent = st.status
+                ? st.status === 'current'
+                : isCaseClosed || progressPercent === 100
+                ? false
+                : currentStageNum === st.id;
 
               return (
                 <div key={st.id} className="flex items-start gap-2.5 py-0.5">
@@ -301,7 +313,7 @@ export const MemberCaseSummaryCard: React.FC<MemberCaseSummaryCardProps> = ({
           </div>
         </div>
 
-        {/* DESKTOP VIEW: 6 Step Segmented Bar */}
+        {/* DESKTOP VIEW: 5 Step Segmented Bar */}
         <div className="hidden sm:block">
           <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-2.5">
             <span className="flex items-center gap-1.5">
@@ -313,11 +325,11 @@ export const MemberCaseSummaryCard: React.FC<MemberCaseSummaryCardProps> = ({
             </span>
           </div>
 
-          {/* 6 Step Segmented Bar */}
-          <div className="grid grid-cols-6 gap-1.5 mb-2">
+          {/* 5 Step Segmented Bar */}
+          <div className="grid grid-cols-5 gap-1.5 mb-2">
             <div
               className={`h-2 rounded-full transition-all ${
-                currentStageNum > 1
+                isCaseClosed || progressPercent === 100 || currentStageNum > 1
                   ? 'bg-emerald-500'
                   : currentStageNum === 1
                   ? 'bg-violet-600 animate-pulse'
@@ -327,7 +339,7 @@ export const MemberCaseSummaryCard: React.FC<MemberCaseSummaryCardProps> = ({
             />
             <div
               className={`h-2 rounded-full transition-all ${
-                currentStageNum > 2
+                isCaseClosed || progressPercent === 100 || currentStageNum > 2
                   ? 'bg-emerald-500'
                   : currentStageNum === 2
                   ? 'bg-violet-600 animate-pulse'
@@ -337,7 +349,7 @@ export const MemberCaseSummaryCard: React.FC<MemberCaseSummaryCardProps> = ({
             />
             <div
               className={`h-2 rounded-full transition-all ${
-                currentStageNum > 3
+                isCaseClosed || progressPercent === 100 || currentStageNum > 3
                   ? 'bg-emerald-500'
                   : currentStageNum === 3
                   ? 'bg-violet-600 animate-pulse'
@@ -347,7 +359,7 @@ export const MemberCaseSummaryCard: React.FC<MemberCaseSummaryCardProps> = ({
             />
             <div
               className={`h-2 rounded-full transition-all ${
-                currentStageNum > 4
+                isCaseClosed || progressPercent === 100 || currentStageNum > 4
                   ? 'bg-emerald-500'
                   : currentStageNum === 4
                   ? 'bg-violet-600 animate-pulse'
@@ -357,34 +369,32 @@ export const MemberCaseSummaryCard: React.FC<MemberCaseSummaryCardProps> = ({
             />
             <div
               className={`h-2 rounded-full transition-all ${
-                currentStageNum > 5
+                isCaseClosed || progressPercent === 100
                   ? 'bg-emerald-500'
                   : currentStageNum === 5
                   ? 'bg-violet-600 animate-pulse'
                   : 'bg-slate-200'
               }`}
-              title="5. Payment Settlement"
-            />
-            <div
-              className={`h-2 rounded-full transition-all ${
-                currentStageNum >= 6 ? 'bg-emerald-500' : 'bg-slate-200'
-              }`}
-              title="6. Handover & Relocation"
+              title="5. Compensation Settlement & Case Closure"
             />
           </div>
 
           <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5">
-            <span className={`inline-flex items-center gap-1.5 ${currentStageNum >= 1 ? 'text-emerald-700 font-semibold' : ''}`}>
+            <span className={`inline-flex items-center gap-1.5 ${isCaseClosed || progressPercent === 100 || currentStageNum >= 1 ? 'text-emerald-700 font-semibold' : ''}`}>
               <span>1. Notice & Registration</span>
               <Check size={12} className="text-emerald-600 shrink-0" />
             </span>
-            <span className={`inline-flex items-center gap-1.5 ${currentStageNum === 3 ? 'text-violet-700 font-bold' : ''}`}>
+            <span className={`inline-flex items-center gap-1.5 ${!isCaseClosed && currentStageNum === 3 ? 'text-violet-700 font-bold' : ''}`}>
               <span>3. Form H Offer</span>
               <Zap size={12} className="text-violet-600 shrink-0" />
             </span>
-            <span className={`inline-flex items-center gap-1.5 ${currentStageNum >= 6 ? 'text-emerald-700 font-bold' : ''}`}>
-              <span>6. Handover</span>
-              <Clock size={12} className="text-slate-400 shrink-0" />
+            <span className={`inline-flex items-center gap-1.5 ${isCaseClosed || progressPercent === 100 ? 'text-emerald-700 font-bold' : ''}`}>
+              <span>5. Settlement &amp; Case Closed</span>
+              {isCaseClosed || progressPercent === 100 ? (
+                <Check size={12} className="text-emerald-600 shrink-0" />
+              ) : (
+                <Clock size={12} className="text-slate-400 shrink-0" />
+              )}
             </span>
           </div>
         </div>

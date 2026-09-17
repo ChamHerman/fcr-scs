@@ -6,7 +6,7 @@ import classNames from 'classnames';
 import { CheckCircle2, AlertCircle, Info, X, HelpCircle, Terminal, Copy, Check } from 'lucide-react';
 import { Modal } from './Modal';
 import { Button } from './Button';
-import { parseAppError, isMemberAudience, memberErrorMessage } from '../../utils/errorParser';
+import { parseAppError, isAdminAudience, memberErrorMessage } from '../../utils/errorParser';
 
 export type NotificationType = 'success' | 'error' | 'general';
 
@@ -309,9 +309,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const id = Math.random().toString(36).substr(2, 9);
     let { type, title, message, guidance, category, rawDetails, error } = input;
 
-    // Member-portal audience: keep error toasts short and plain —
-    // no category badge, no diagnostics guidance, no Error Details modal.
-    if (type === 'error' && isMemberAudience()) {
+    // Non-admin pages (public, member, bank): keep error toasts short and
+    // plain — no category badge, no diagnostics guidance, no Error Details
+    // modal. Only `/admin/*` keeps the full diagnostic treatment.
+    if (type === 'error' && !isAdminAudience()) {
       const parsed = parseAppError(error || message || '', title);
       setNotifications(prev => [
         ...prev,

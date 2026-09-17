@@ -33,6 +33,7 @@ import { CopyButton } from "../../components/ui/CopyButton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../components/ui/NotificationSystem";
+import { useDocumentTitle } from "../../hooks/useDocumentTitle";
 import { formatCurrencyWithDecimals, formatCurrencyRM, parseCurrencyToNumber, formatAreaWithoutDecimals, formatLiveInteger } from "../../utils/currency";
 import type { ValuationFormData } from "./types/land-acquisition.types";
 import { useValuationForm } from "./hooks/useValuationForm";
@@ -91,6 +92,7 @@ const mockValuer = {
 import { VALUATION_METHOD_OPTIONS, LOCATION_TYPE_OPTIONS } from "../../constants";
 
 export const ValuationCreate: React.FC = () => {
+  useDocumentTitle('Create Valuation');
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();

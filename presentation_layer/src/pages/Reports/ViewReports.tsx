@@ -4,6 +4,7 @@ import { BarChart3, Clock, Download, PieChart } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { SearchInput } from '../../components/ui/SearchInput';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 type ReportItem = {
   id: string;
@@ -102,6 +103,7 @@ const StatCard: React.FC<{ label: string; value: string; sub: string }> = ({ lab
 );
 
 export const ViewReports: React.FC = () => {
+  useDocumentTitle('View Report');
   const { reportId } = useParams();
   const navigate = useNavigate();
   const allReports = [...REPORT_DATA, ...getStoredReports()];

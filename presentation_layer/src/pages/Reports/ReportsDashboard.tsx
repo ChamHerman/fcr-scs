@@ -42,6 +42,7 @@ import {
   downloadReportPdf
 } from '../../services/reportApi';
 import type { DashboardOverviewData, ReportGeneratedResponse } from '../../services/reportApi';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 ChartJS.register(
   CategoryScale,
@@ -115,6 +116,7 @@ const StatCard: React.FC<{
 );
 
 export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCategory }) => {
+  useDocumentTitle('Reports Dashboard');
   const navigate = useNavigate();
   const location = useLocation();
   const { notify } = useNotification();

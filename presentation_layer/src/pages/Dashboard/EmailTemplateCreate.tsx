@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MD3Card, MD3Button } from '../MD3Components';
 import { PageHeader } from '../../components/ui/PageHeader';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import '../LandAcquisition/case_management.css';
 import {
   ArrowLeft,
@@ -99,6 +100,7 @@ const INITIAL_BODY = `<div style="font-family: Arial, sans-serif; padding: 24px;
 </div>`;
 
 export const EmailTemplateCreate: React.FC = () => {
+  useDocumentTitle('Create Email Template');
   const navigate = useNavigate();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 

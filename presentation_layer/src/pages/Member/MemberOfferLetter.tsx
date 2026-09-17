@@ -58,8 +58,10 @@ import {
   OFFER_STATUS_CLASS_MAP as statusClassMap, 
   OFFER_STATUS_LABEL_MAP as statusLabelMap 
 } from '../../constants';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 export const MemberOfferLetter: React.FC = () => {
+  useDocumentTitle('Offer Letter');
   const { offerId: routeOfferId } = useParams<{ offerId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryOfferId = searchParams.get('offerId') || '';

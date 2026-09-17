@@ -15,6 +15,7 @@ import { useNotification } from "../../components/ui/NotificationSystem";
 import { formatCurrencyRM } from "../../utils/currency";
 import "../../index.css";
 import "./compensation.css";
+import { useDocumentTitle } from "../../hooks/useDocumentTitle";
 
 type ObjectionItem = {
   id: string;
@@ -37,6 +38,7 @@ import {
 } from "../../constants";
 
 export const ObjectionDashboard: React.FC = () => {
+  useDocumentTitle("Objections");
   const navigate = useNavigate();
   const { user, isMember, isOfficer, isValuer, isAdmin, isSysAdmin, userId, role } = useRole();
   const { notify } = useNotification();

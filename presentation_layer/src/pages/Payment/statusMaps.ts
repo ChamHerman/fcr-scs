@@ -577,6 +577,15 @@ export function getMemberDisplayStatus(status: string): MemberDisplayStatus {
     };
   }
 
+  // 5b. Case Closed (M2 settlement published)
+  if (s === 'CASE_CLOSED' || s === 'Case Closed') {
+    return {
+      label: 'Case Closed',
+      badgeClass: 'status-paid',
+      stepIndex: 5,
+    };
+  }
+
   // 6. Disputed
   if (
     s === 'DISPUTED' ||

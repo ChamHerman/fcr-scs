@@ -11,6 +11,7 @@ import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
+import { useDocumentTitle } from "../../hooks/useDocumentTitle";
 import { formatCurrencyRM } from "../../utils/currency";
 import "../../index.css";
 import "../../styles/shared-report.css";
@@ -48,6 +49,7 @@ import {
 } from "../../constants";
 
 export const ValuationReview: React.FC = () => {
+  useDocumentTitle('Valuation Review');
   const { user, userId, isSysAdmin, isAdmin, isOfficer, isValuer } = useRole();
   const { reportId: paramReportId } = useParams<{ reportId: string }>();
   const location = useLocation();

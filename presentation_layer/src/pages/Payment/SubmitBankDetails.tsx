@@ -13,8 +13,10 @@ import {
   ACCOUNT_ATTRIBUTION_HINT,
 } from '../Member/components/bankValidation';
 import { Lock } from 'lucide-react';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 export default function SubmitBankDetails() {
+  useDocumentTitle('Submit Bank Details');
   const { notify } = useNotification();
   const { user } = useAuth();
   const navigate = useNavigate();

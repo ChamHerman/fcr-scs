@@ -14,6 +14,7 @@ import { useRole } from "../../hooks/useRole";
 import { formatCurrencyRM } from "../../utils/currency";
 import "../../index.css";
 import "./compensation.css";
+import { useDocumentTitle } from "../../hooks/useDocumentTitle";
 
 type OfferItem = {
   id: string;
@@ -42,6 +43,7 @@ import {
 const normalizeIc = (ic?: string) => (ic || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase().trim();
 
 export const OfferDashboard: React.FC = () => {
+  useDocumentTitle("Offer Letters");
   const navigate = useNavigate();
   const { user, isMember, isOfficer, isValuer, isAdmin, userId, role } = useRole();
   const [userIc, setUserIc] = useState<string>(() => user?.identificationNumber || "");

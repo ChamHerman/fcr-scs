@@ -38,8 +38,11 @@ import {
   MemberOfficerTab,
 } from './components';
 import { useMemberWorkflow } from './hooks/useMemberWorkflow';
+import { blockchainApi } from '../../services/blockchainApi';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 export const MemberDashboard: React.FC = () => {
+  useDocumentTitle('Member Dashboard');
   const { user, userName, identificationNumber, userId, role, isMember, isSysAdmin } = useRole();
   const { notify } = useNotification();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -52,6 +55,7 @@ export const MemberDashboard: React.FC = () => {
   const [loadingCases, setLoadingCases] = useState<boolean>(true);
   const [loadingDetails, setLoadingDetails] = useState<boolean>(false);
   const [caseDetails, setCaseDetails] = useState<any | null>(null);
+  const [isM2Published, setIsM2Published] = useState<boolean>(false);
 
   // Modals & Navigation state
   const [showOfferModal, setShowOfferModal] = useState<boolean>(false);
@@ -313,6 +317,31 @@ export const MemberDashboard: React.FC = () => {
     }
   }, [selectedCaseId, fetchSelectedCaseDetails]);
 
+  useEffect(() => {
+    if (!selectedCaseId) {
+      setIsM2Published(false);
+      return;
+    }
+    let isMounted = true;
+    blockchainApi
+      .getRecords()
+      .then((res: any) => {
+        if (!isMounted) return;
+        const list: any[] = res?.records || [];
+        const mine = list.filter((r) => r.caseId === selectedCaseId);
+        const isPublished = (s?: string | null) =>
+          String(s || '').toUpperCase().replace(/[\s_]+/g, '_') === 'PUBLISHED';
+        const m2 = mine.find((r) => r.milestone === 'SETTLEMENT');
+        setIsM2Published(Boolean(m2 && isPublished(m2.status)));
+      })
+      .catch(() => {
+        if (isMounted) setIsM2Published(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedCaseId]);
+
   // Handle Case Switcher
   const handleCaseChange = (newCaseId: string) => {
     setSelectedCaseId(newCaseId);
@@ -340,6 +369,7 @@ export const MemberDashboard: React.FC = () => {
   // 3. Encapsulated Member Workflow Hook
   // ---------------------------------------------------------------------------
   const {
+    isCaseClosed,
     activeValuation,
     activeOffer,
     hasOfferLetter,
@@ -365,6 +395,7 @@ export const MemberDashboard: React.FC = () => {
     identificationNumber: userIc || identificationNumber,
     allMemberObjections,
     selectedCaseId,
+    isM2Published: isM2Published || caseDetails?.status === 'CASE_CLOSED',
   });
 
   // Filter objections specifically belonging to the selected case
@@ -589,6 +620,7 @@ export const MemberDashboard: React.FC = () => {
         canCreateObjection={canCreateObjection}
         objectionDisabledReason={objectionDisabledReason}
         workflowSteps={workflowSteps}
+        isCaseClosed={isCaseClosed}
       />
 
       {/* ------------------------------------------------------------- */}

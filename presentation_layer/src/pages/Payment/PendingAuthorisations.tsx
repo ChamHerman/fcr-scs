@@ -29,6 +29,7 @@ import {
 import { CaseDetailsModal } from './CaseDetailsModal';
 import { PaymentRowActions } from './PaymentRowActions';
 import type { PaymentRow } from './paymentModals';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 type ModalState =
   | { type: 'view'; caseId: string }
@@ -38,6 +39,7 @@ type ModalState =
   | null;
 
 export default function PendingAuthorisations() {
+  useDocumentTitle('Pending Authorisations');
   const [searchParams] = useSearchParams();
   const deepLink = searchParams.get('caseId');
   const [cases, setCases] = useState<PaymentRow[]>([]);
@@ -242,16 +244,16 @@ export default function PendingAuthorisations() {
             </tbody>
           </table>
         </div>
-      </div>
 
-      <Pagination
-        currentPage={safePage}
-        totalPages={totalPages}
-        totalCount={totalCount}
-        pageSize={pageSize}
-        onPageChange={setCurrentPage}
-        itemLabel="pending authorisations"
-      />
+        <Pagination
+          currentPage={safePage}
+          totalPages={totalPages}
+          totalCount={totalCount}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          itemLabel="pending authorisations"
+        />
+      </div>
 
       <div style={{ height: '32px' }} />
 

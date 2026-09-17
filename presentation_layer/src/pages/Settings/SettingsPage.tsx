@@ -10,6 +10,7 @@ import { useNotification } from '../../components/ui/NotificationSystem';
 import { PageHeader } from '../../components/ui/PageHeader';
 import '../LandAcquisition/case_management.css';
 import '../Payment/payment.css';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 const NETWORK_OPTIONS = [
   { value: 'sepolia', label: 'Sepolia Testnet (Default)' },
@@ -28,6 +29,7 @@ interface NetworkInfo {
 }
 
 export const SettingsPage: React.FC = () => {
+  useDocumentTitle('Settings');
   const [info, setInfo] = useState<NetworkInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState(false);

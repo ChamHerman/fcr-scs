@@ -22,6 +22,7 @@ export interface UseMemberWorkflowParams {
   identificationNumber?: string;
   allMemberObjections: any[];
   selectedCaseId: string;
+  isM2Published?: boolean;
 }
 
 export const useMemberWorkflow = ({
@@ -31,7 +32,9 @@ export const useMemberWorkflow = ({
   identificationNumber,
   allMemberObjections,
   selectedCaseId,
+  isM2Published = false,
 }: UseMemberWorkflowParams) => {
+  const isCaseClosed = Boolean(isM2Published || caseDetails?.status === 'CASE_CLOSED');
   // 1. Active valuation report
   const activeValuation = useMemo(() => {
     if (!caseDetails?.valuationReports || caseDetails.valuationReports.length === 0) return null;
@@ -177,6 +180,10 @@ export const useMemberWorkflow = ({
     const offerStat = activeOffer?.status || (rawStatus === 'OFFER_ISSUED' ? 'PENDING' : null);
 
     const rawExpiry = activeOffer?.rawOffer?.expiryDate || activeOffer?.expiryDate;
+    if (isCaseClosed) {
+      return { daysRemaining: null, offerStatusBadge: 'Case Closed' };
+    }
+
     if (rawExpiry && (offerStat === 'PENDING' || rawStatus === 'OFFER_ISSUED')) {
       const expDate = new Date(rawExpiry).getTime();
       if (!isNaN(expDate)) {
@@ -209,53 +216,57 @@ export const useMemberWorkflow = ({
       daysRemaining: null,
       offerStatusBadge: CASE_STATUS_LABEL_MAP[rawStatus] || rawStatus || 'In Progress',
     };
-  }, [caseDetails, activeOffer, hasPendingObjection]);
+  }, [caseDetails, activeOffer, hasPendingObjection, isCaseClosed]);
 
-  // Dynamic 6-Stage Progress Tracker
+  // Dynamic 5-Stage Progress Tracker
   const { currentStageNum, progressPercent, progressBadge } = useMemo(() => {
     const st = caseDetails?.status || '';
 
+    if (isCaseClosed) {
+      return { currentStageNum: 5, progressPercent: 100, progressBadge: 'Stage 5 of 5 (Case Closed)' };
+    }
+
     if (activeOffer?.status === 'REJECTED' || st === 'OFFER_REJECTED') {
-      return { currentStageNum: 3, progressPercent: 50, progressBadge: 'Stage 3 of 6 (Award Rejected)' };
+      return { currentStageNum: 3, progressPercent: 60, progressBadge: 'Stage 3 of 5 (Award Rejected)' };
     }
 
     if (st === 'OBJECTION_FILED' || hasPendingObjection) {
-      return { currentStageNum: 4, progressPercent: 67, progressBadge: 'Stage 4 of 6 (Objection In Review)' };
+      return { currentStageNum: 4, progressPercent: 80, progressBadge: 'Stage 4 of 5 (Objection In Review)' };
+    }
+
+    if (st === 'PAYMENT_COMPLETED') {
+      return { currentStageNum: 5, progressPercent: 90, progressBadge: 'Stage 5 of 5 (Payment Disbursed)' };
+    }
+
+    if (st === 'PAYMENT_IN_PROGRESS' || st === 'PAYMENT_PROCESSING') {
+      return { currentStageNum: 5, progressPercent: 85, progressBadge: 'Stage 5 of 5 (Payment Processing)' };
     }
 
     if (st === 'OFFER_ACCEPTED' || isOfferAccepted) {
-      return { currentStageNum: 5, progressPercent: 83, progressBadge: 'Stage 5 of 6 (Payment Settlement)' };
+      return { currentStageNum: 5, progressPercent: 85, progressBadge: 'Stage 5 of 5 (Payment Settlement)' };
     }
 
     switch (st) {
       case 'CASE_REGISTERED':
-        return { currentStageNum: 1, progressPercent: 17, progressBadge: 'Stage 1 of 6 (Notice Issued)' };
+        return { currentStageNum: 1, progressPercent: 20, progressBadge: 'Stage 1 of 5 (Notice Issued)' };
       case 'VALUER_ASSIGNED':
       case 'VALUATION_IN_PROGRESS':
       case 'VALUATION_SUBMITTED':
       case 'PENDING_VALUATION_APPROVAL':
-        return { currentStageNum: 2, progressPercent: 33, progressBadge: 'Stage 2 of 6 (Valuation Assessment)' };
+        return { currentStageNum: 2, progressPercent: 40, progressBadge: 'Stage 2 of 5 (Valuation Assessment)' };
       case 'VALUATION_APPROVED':
       case 'PENDING_COMPENSATION_APPROVAL':
       case 'COMPENSATION_APPROVED':
       case 'COMPENSATION_DETERMINED':
-        return { currentStageNum: 3, progressPercent: 50, progressBadge: 'Stage 3 of 6 (Offer Preparation)' };
+        return { currentStageNum: 3, progressPercent: 60, progressBadge: 'Stage 3 of 5 (Offer Preparation)' };
       case 'OFFER_ISSUED':
-        return { currentStageNum: 3, progressPercent: 50, progressBadge: 'Stage 3 of 6 (Form H Active)' };
+        return { currentStageNum: 3, progressPercent: 60, progressBadge: 'Stage 3 of 5 (Form H Active)' };
       case 'OBJECTION_RESOLVED':
-        return { currentStageNum: 4, progressPercent: 67, progressBadge: 'Stage 4 of 6 (Claimant Decision)' };
-      case 'PAYMENT_IN_PROGRESS':
-      case 'PAYMENT_PROCESSING':
-        return { currentStageNum: 5, progressPercent: 83, progressBadge: 'Stage 5 of 6 (Payment Processing)' };
-      case 'PAYMENT_COMPLETED':
-        return { currentStageNum: 5, progressPercent: 90, progressBadge: 'Stage 5 of 6 (Payment Disbursed)' };
-      case 'LAND_POSSESSED':
-      case 'CASE_CLOSED':
-        return { currentStageNum: 6, progressPercent: 100, progressBadge: 'Stage 6 of 6 (Handover Completed)' };
+        return { currentStageNum: 4, progressPercent: 80, progressBadge: 'Stage 4 of 5 (Claimant Decision)' };
       default:
-        return { currentStageNum: 1, progressPercent: 17, progressBadge: 'Stage 1 of 6 (Registered)' };
+        return { currentStageNum: 1, progressPercent: 20, progressBadge: 'Stage 1 of 5 (Registered)' };
     }
-  }, [caseDetails, activeOffer, isOfferAccepted, hasPendingObjection]);
+  }, [caseDetails, activeOffer, isOfferAccepted, hasPendingObjection, isCaseClosed]);
 
   // Dynamic Total Compensation Award
   const totalCompensation = useMemo(() => {
@@ -396,6 +407,7 @@ export const useMemberWorkflow = ({
       : 'Pending';
 
     const getStepStatus = (stepId: number): 'completed' | 'current' | 'upcoming' => {
+      if (isCaseClosed) return 'completed';
       if (currentStageNum > stepId) return 'completed';
       if (currentStageNum === stepId) return 'current';
       return 'upcoming';
@@ -441,11 +453,8 @@ export const useMemberWorkflow = ({
     const step5Details = [
       currentStageNum >= 5 ? { label: 'Disbursement Method', value: 'Electronic GIRO / Bank Transfer' } : null,
       isOfferAccepted ? { label: 'Beneficiary Bank', value: 'Registered Payout Account' } : null,
-    ].filter(Boolean) as { label: string; value: string }[];
-
-    const step6Details = [
-      currentStageNum >= 6 ? { label: 'Possession Status', value: 'Vacant Possession Handed Over' } : null,
-      currentStageNum >= 6 ? { label: 'Relocation Assistance', value: 'Provided by Land Office' } : null,
+      isCaseClosed ? { label: 'Settlement Status', value: 'Notarized on Ethereum Sepolia (M2)' } : null,
+      isCaseClosed ? { label: 'Acquisition Case', value: 'Closed & Concluded Fully' } : null,
     ].filter(Boolean) as { label: string; value: string }[];
 
     return [
@@ -528,35 +537,30 @@ export const useMemberWorkflow = ({
       {
         id: 5,
         title: 'Compensation Payout & Settlement',
-        subtitle: 'Electronic GIRO Fund Disbursement',
-        date: isOfferAccepted
+        subtitle: isCaseClosed
+          ? 'Settlement Notarized · Case Closed Fully'
+          : 'Electronic GIRO Fund Disbursement',
+        date: isCaseClosed
+          ? 'Case Closed'
+          : isOfferAccepted
           ? 'Active'
           : currentStageNum >= 5
           ? 'Processing Payout'
           : 'Pending Stage 4',
-        status: isOfferAccepted && currentStageNum === 5 ? 'current' : getStepStatus(5),
-        badgeText:
-          isOfferAccepted && currentStageNum === 5 && caseDetails?.status !== 'PAYMENT_COMPLETED'
-            ? 'Action Required'
-            : currentStageNum >= 5
-            ? caseDetails?.status === 'PAYMENT_COMPLETED'
-              ? 'Paid & Settled'
-              : 'Disbursing Funds'
-            : 'Upcoming',
-        description:
-          'Approved statutory compensation deposited directly into registered land owner bank account.',
+        status: isCaseClosed ? 'completed' : isOfferAccepted && currentStageNum === 5 ? 'current' : getStepStatus(5),
+        badgeText: isCaseClosed
+          ? 'Case Closed'
+          : isOfferAccepted && currentStageNum === 5 && caseDetails?.status !== 'PAYMENT_COMPLETED'
+          ? 'Action Required'
+          : currentStageNum >= 5
+          ? caseDetails?.status === 'PAYMENT_COMPLETED'
+            ? 'Paid & Settled'
+            : 'Disbursing Funds'
+          : 'Upcoming',
+        description: isCaseClosed
+          ? 'Statutory compensation disbursement completed and Milestone 2 settlement notarized on Ethereum Sepolia ledger. Land acquisition case closed and ended fully.'
+          : 'Approved statutory compensation deposited directly into registered land owner bank account.',
         details: step5Details,
-      },
-      {
-        id: 6,
-        title: 'Handover & Formal Possession',
-        subtitle: 'Vacant Possession & Title Registration',
-        date: currentStageNum >= 6 ? 'Possession Taken' : 'Pending Stage 5',
-        status: getStepStatus(6),
-        badgeText: currentStageNum >= 6 ? 'Completed' : 'Upcoming',
-        description:
-          'Title ownership transferred to Federal/State Government, and vacant possession officially handed over.',
-        details: step6Details,
       },
     ];
   }, [
@@ -573,6 +577,7 @@ export const useMemberWorkflow = ({
     hasPendingObjection,
     hasOfferLetter,
     daysRemaining,
+    isCaseClosed,
   ]);
 
   // 7. Dynamic Documents Checklist (Non-empty only)
@@ -628,6 +633,7 @@ export const useMemberWorkflow = ({
   }, [parcel, caseDetails, activeOffer, isOfferAccepted]);
 
   return {
+    isCaseClosed,
     activeValuation,
     activeCompensation,
     activeOffer,

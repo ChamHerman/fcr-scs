@@ -2,9 +2,11 @@ import React from 'react';
 import { MD3Card, MD3Button, MD3Input } from '../MD3Components';
 import { Activity, Server, Clock, DownloadCloud } from 'lucide-react';
 import { Select } from '../../components/ui/Select';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { PageHeader } from '../../components/ui/PageHeader';
 
 export const SystemReports: React.FC = () => {
+  useDocumentTitle('System Reports');
   const [reportType, setReportType] = React.useState('System Performance Report');
 
   const handleGenerateReport = (e: React.FormEvent) => {

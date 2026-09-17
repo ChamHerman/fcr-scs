@@ -356,6 +356,8 @@ export const MemberWorkflowTimeline: React.FC<MemberWorkflowTimelineProps> = ({
                   const isPaid = rawStatus === 'PAID' || memberDisplay.label === 'Paid';
                   const isTransferSucceed = rawStatus === 'TRANSFER_SUCCEED' || memberDisplay.label === 'Payment Completed';
                   const failureNotice = getMemberFailureNotice(paymentCase);
+                  const isM2Published = Boolean(m2Record);
+                  const isCaseClosed = Boolean(isM2Published || paymentCase?.status === 'CASE_CLOSED');
 
                   const isInitiated = Boolean(
                     rawStatus !== 'READY_TO_INITIATE' &&
@@ -383,6 +385,7 @@ export const MemberWorkflowTimeline: React.FC<MemberWorkflowTimelineProps> = ({
                   const isBankVerified = !isBankPending && Boolean(paymentCase?.bankName && paymentCase?.accountNumber);
 
                   const currentWorkflowStep = (() => {
+                    if (isPaid && isCaseClosed) return 5;
                     if (isPaid) return 5;
                     if (isTransferSucceed) return 4;
                     if (isFullyApproved) return 4;
@@ -430,10 +433,14 @@ export const MemberWorkflowTimeline: React.FC<MemberWorkflowTimelineProps> = ({
                     },
                     {
                       step: 5,
-                      title: 'Disbursement Confirmed',
-                      subtitle: 'Statutory funds verified and confirmed received by landowner beneficiary',
-                      completed: isPaid,
-                      isCurrent: isTransferSucceed && !isPaid,
+                      title: isCaseClosed ? 'Settlement & Case Closed' : 'Disbursement Confirmed',
+                      subtitle: isCaseClosed
+                        ? 'Settlement notarized on Ethereum Sepolia ledger · Case fully closed'
+                        : isPaid
+                        ? 'Funds confirmed received; awaiting blockchain settlement notarization'
+                        : 'Statutory funds verified and confirmed received by landowner beneficiary',
+                      completed: isPaid && isCaseClosed,
+                      isCurrent: isPaid && !isCaseClosed,
                     },
                   ];
 
@@ -446,9 +453,9 @@ export const MemberWorkflowTimeline: React.FC<MemberWorkflowTimelineProps> = ({
                             <span className="text-xs font-mono font-bold text-slate-700 bg-white px-2 py-0.5 rounded-md border border-slate-200">
                               {paymentCase?.paymentId || `PMT-${selectedCaseId}`}
                             </span>
-                            <span className={`payment-badge ${memberDisplay.badgeClass}`}>
+                            <span className={`payment-badge ${isCaseClosed ? 'status-paid' : memberDisplay.badgeClass}`}>
                               <span className="dot" />
-                              {memberDisplay.label}
+                              {isCaseClosed ? 'Case Closed' : memberDisplay.label}
                             </span>
                           </div>
                           <p className="text-[11px] text-slate-500 mt-1">
@@ -568,6 +575,36 @@ export const MemberWorkflowTimeline: React.FC<MemberWorkflowTimelineProps> = ({
                             <p className="text-[11px] text-md-on-surface-variant mt-1.5 leading-relaxed">
                               <span className="font-semibold text-md-on-surface">What happens next: </span>
                               {failureNotice.nextStep}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Case Closed & Settled Banner */}
+                      {isCaseClosed && (
+                        <div className="p-3.5 sm:p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-start gap-2.5 shadow-xs">
+                          <CheckCircle2 size={20} className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                          <div>
+                            <h4 className="text-xs font-bold text-emerald-950 dark:text-emerald-100">
+                              Acquisition Case Closed &amp; Fully Settled
+                            </h4>
+                            <p className="text-[11px] text-emerald-800 dark:text-emerald-300 mt-0.5 leading-relaxed">
+                              Statutory compensation funds have been verified and Milestone 2 settlement is notarized on the Ethereum Sepolia blockchain. This case is closed and ended fully.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Payment Confirmed (Awaiting M2) Banner */}
+                      {isPaid && !isCaseClosed && (
+                        <div className="p-3.5 sm:p-4 rounded-2xl bg-violet-500/10 border border-violet-500/30 flex items-start gap-2.5 shadow-xs">
+                          <CheckCircle2 size={20} className="text-violet-600 dark:text-violet-400 shrink-0 mt-0.5" />
+                          <div>
+                            <h4 className="text-xs font-bold text-violet-950 dark:text-violet-100">
+                              Payment Confirmed · Awaiting Settlement Notarization
+                            </h4>
+                            <p className="text-[11px] text-violet-800 dark:text-violet-300 mt-0.5 leading-relaxed">
+                              You have confirmed receipt of payment. The case will officially close once Land Administration notarizes the Milestone 2 settlement record on the blockchain.
                             </p>
                           </div>
                         </div>

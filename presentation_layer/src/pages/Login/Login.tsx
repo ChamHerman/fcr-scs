@@ -4,8 +4,10 @@ import { LogIn, AlertCircle, CheckCircle2, RotateCw, ArrowLeft, ShieldCheck, Hom
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { authService } from '../../services/auth.service';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 export const Login: React.FC = () => {
+  useDocumentTitle('Login');
   const [step, setStep] = useState<'credentials' | 'otp'>('credentials');
   const [email, setEmail] = useState('admin@fcrscs.gov.my');
   const [password, setPassword] = useState('Password$123');

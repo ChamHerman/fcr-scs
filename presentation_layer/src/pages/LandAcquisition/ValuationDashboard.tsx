@@ -11,6 +11,7 @@ import { CopyButton } from "../../components/ui/CopyButton";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { useRole } from "../../hooks/useRole";
 import { useNotification } from "../../components/ui/NotificationSystem";
+import { useDocumentTitle } from "../../hooks/useDocumentTitle";
 import { formatCurrencyRM } from "../../utils/currency";
 import type { ValuationReportItem } from "./types/land-acquisition.types";
 import "../../index.css";
@@ -28,6 +29,7 @@ import {
 } from "../../constants";
 
 export const ValuationDashboard: React.FC = () => {
+  useDocumentTitle('Valuation Dashboard');
   const navigate = useNavigate();
   const { role, userId, isAdmin, isOfficer, isValuer, isSysAdmin } = useRole();
   const { notify } = useNotification();

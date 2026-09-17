@@ -1,8 +1,10 @@
 import React from 'react';
 import { Wrench } from 'lucide-react';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { PageHeader } from '../components/ui/PageHeader';
 
 export const Placeholder: React.FC<{ title: string }> = ({ title }) => {
+  useDocumentTitle(title);
   return (
     <div className="space-y-6">
       <PageHeader

@@ -1,40 +1,68 @@
-import React from 'react';
+import React, { useRef } from 'react';
+import gsap from 'gsap';
+import { useGSAP } from '@gsap/react';
 
-interface LogoProps {
-  className?: string;
+gsap.registerPlugin(useGSAP);
+
+interface BrandLogoProps {
   size?: number;
+  className?: string;
+  ringOn?: boolean;
 }
 
-export const Logo: React.FC<LogoProps> = ({ className = 'w-9 h-9 text-md-primary', size = 36 }) => {
+/**
+ * Circular brand mark rendered from /fcr-scs.jpg.
+ * Hover: GSAP bouncy scale 1.08.
+ * Click: 360° spin via contextSafe callback (animation stacks on repeat clicks).
+ */
+export const BrandLogo: React.FC<BrandLogoProps> = ({
+  size = 40,
+  className = '',
+  ringOn = true,
+}) => {
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  useGSAP(() => {
+    const onEnter = () => {
+      if (!imgRef.current) return;
+      gsap.to(imgRef.current, { scale: 1.08, duration: 0.35, ease: 'back.out(1.6)' });
+    };
+    const onLeave = () => {
+      if (!imgRef.current) return;
+      gsap.to(imgRef.current, { scale: 1, duration: 0.3, ease: 'power2.out' });
+    };
+    const onClick = () => {
+      if (!imgRef.current) return;
+      gsap.to(imgRef.current, { rotation: '+=360', duration: 0.7, ease: 'back.out(1.6)' });
+    };
+
+    const el = imgRef.current;
+    if (!el) return;
+    el.addEventListener('mouseenter', onEnter);
+    el.addEventListener('mouseleave', onLeave);
+    el.addEventListener('click', onClick);
+    return () => {
+      el.removeEventListener('mouseenter', onEnter);
+      el.removeEventListener('mouseleave', onLeave);
+      el.removeEventListener('click', onClick);
+    };
+  }, { scope: imgRef });
+
   return (
-    <svg 
-      width={size} 
-      height={size} 
-      viewBox="0 0 40 40" 
-      fill="none" 
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-    >
-      {/* Land boundary geometric hexagon */}
-      <path 
-        d="M20 4L4 13V27L20 36L36 27V13L20 4Z" 
-        fill="currentColor" 
-        fillOpacity="0.15" 
-        stroke="currentColor" 
-        strokeWidth="2" 
-        strokeLinejoin="round"
-      />
-      {/* Inner faceted land plot */}
-      <path 
-        d="M20 10L10 16V24L20 30L30 24V16L20 10Z" 
-        fill="currentColor" 
-        fillOpacity="0.25"
-      />
-      {/* Smart contract lightning bolt mark */}
-      <path 
-        d="M22 11L13 22H20L18 29L27 18H20L22 11Z" 
-        fill="currentColor"
-      />
-    </svg>
+    <img
+      ref={imgRef}
+      src="/fcr-scs.png"
+      alt="FCR-SCS"
+      width={size}
+      height={size}
+      draggable={false}
+      className={`rounded-full object-cover shadow-sm cursor-pointer select-none will-change-transform ${
+        ringOn ? 'ring-2 ring-md-primary/20' : ''
+      } ${className}`}
+      style={{ width: size, height: size }}
+    />
   );
 };
+
+// Backwards-compatible alias so existing import sites keep working.
+export const Logo = BrandLogo;

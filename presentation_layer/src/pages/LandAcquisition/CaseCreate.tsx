@@ -7,8 +7,10 @@ import type { CaseFormData, Owner, Document } from "../../components/CaseForm";
 import { useAuth } from "../../context/AuthContext";
 import { Button } from "../../components/ui/Button";
 import { useNotification } from "../../components/ui/NotificationSystem";
+import { useDocumentTitle } from "../../hooks/useDocumentTitle";
 
 export const CaseCreate: React.FC = () => {
+  useDocumentTitle('Register New Case');
   const navigate = useNavigate();
   const { user } = useAuth();
   const { notify } = useNotification();

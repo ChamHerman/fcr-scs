@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { MD3Card, MD3BlurBackground, MD3Button } from '../MD3Components';
 import { ShieldAlert, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 export const Unauthorized: React.FC = () => {
+  useDocumentTitle('Unauthorized');
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 

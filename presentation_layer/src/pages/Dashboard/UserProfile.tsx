@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MD3Card, MD3Button, MD3Input } from '../MD3Components';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { useAuth } from '../../context/AuthContext';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { getRoleShortForm, getRoleTitle, getNameInitials } from '../../utils/roleUtils';
 import {
   User,
@@ -38,6 +39,7 @@ interface ProfileData {
 }
 
 export const UserProfile: React.FC = () => {
+  useDocumentTitle('My Profile');
   const { user, updateUser } = useAuth();
   const activeUserId = user?.userId || user?.id || '';
   const [activeTab, setActiveTab] = useState<'profile' | 'security'>('profile');

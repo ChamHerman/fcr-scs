@@ -20,8 +20,10 @@ import {
 } from "../../constants";
 import "../../index.css";
 import "./compensation.css";
+import { useDocumentTitle } from "../../hooks/useDocumentTitle";
 
 export const CompensationDashboard: React.FC = () => {
+  useDocumentTitle("Compensation Dashboard");
   const navigate = useNavigate();
   const { userId, role, isAdmin, isOfficer, isGovAdmin, canCreateCompensationReport } = useRole();
   const { notify } = useNotification();

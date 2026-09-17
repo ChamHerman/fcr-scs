@@ -5,9 +5,11 @@ import { ArrowLeft, User, Mail, Phone, CreditCard, Calendar, Shield, AlertTriang
 import { PageHeader } from '../../components/ui/PageHeader';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { Modal } from '../../components/ui/Modal';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import '../LandAcquisition/case_management.css';
 
 export const UserDetails: React.FC = () => {
+  useDocumentTitle('User Details');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { notify } = useNotification();

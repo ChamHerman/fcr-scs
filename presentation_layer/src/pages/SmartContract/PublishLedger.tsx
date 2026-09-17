@@ -36,6 +36,7 @@ import {
   formatClaimElapsed,
 } from './blockchainModals';
 import type { LedgerRow, PublishLockState } from './blockchainModals';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 type ModalState = { type: 'view'; row: LedgerRow } | { type: 'publish'; row: LedgerRow } | null;
 type TabKey = 'm1' | 'm2';
@@ -59,9 +60,13 @@ export const formatGraceCountdown = (msRemaining: number): string => {
 };
 
 export const PublishLedger: React.FC = () => {
-  const [searchParams] = useSearchParams();
+  useDocumentTitle('Publish Ledger');
+  const [searchParams, setSearchParams] = useSearchParams();
   const deepLink = searchParams.get('caseId');
-  const [activeTab, setActiveTab] = useState<TabKey>('m1');
+  const rawMilestone = (searchParams.get('milestone') || searchParams.get('tab') || '').toLowerCase().trim();
+  const initialTab: TabKey =
+    rawMilestone === 'm2' || rawMilestone === '2' || rawMilestone === 'settlement' ? 'm2' : 'm1';
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
   const [m1Rows, setM1Rows] = useState<LedgerRow[]>([]);
   const [m2Rows, setM2Rows] = useState<LedgerRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,6 +78,33 @@ export const PublishLedger: React.FC = () => {
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
 
   useEffect(() => {
+    const m = (searchParams.get('milestone') || searchParams.get('tab') || '').toLowerCase().trim();
+    if (m === 'm2' || m === '2' || m === 'settlement') {
+      setActiveTab('m2');
+    } else if (m === 'm1' || m === '1' || m === 'award') {
+      setActiveTab('m1');
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (deepLink) {
+      setSearchQuery(deepLink);
+    }
+  }, [deepLink]);
+
+  useEffect(() => {
+    const m = (searchParams.get('milestone') || searchParams.get('tab') || '').toLowerCase().trim();
+    if (!m && deepLink && m2Rows.length > 0) {
+      const q = deepLink.trim().toLowerCase();
+      const inM1 = m1Rows.some((r) => r.caseId.toLowerCase() === q);
+      const inM2 = m2Rows.some((r) => r.caseId.toLowerCase() === q);
+      if (!inM1 && inM2) {
+        setActiveTab('m2');
+      }
+    }
+  }, [deepLink, searchParams, m1Rows, m2Rows]);
+
+  useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(Date.now());
     }, 1000);
@@ -82,6 +114,13 @@ export const PublishLedger: React.FC = () => {
   const tabRefs = useRef<Record<TabKey, HTMLButtonElement | null>>({ m1: null, m2: null });
   const sliderRef = useRef<HTMLDivElement>(null);
   const isFirstTabRender = useRef(true);
+
+  const handleTabChange = (key: TabKey) => {
+    setActiveTab(key);
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set('milestone', key);
+    setSearchParams(newParams, { replace: true });
+  };
 
   const { walletAddress, walletConnected, error: walletError, connectWallet } = useWallet();
 
@@ -109,9 +148,14 @@ export const PublishLedger: React.FC = () => {
   }, { scope: pageRef });
 
   useEffect(() => {
-    const activeEl = tabRefs.current[activeTab];
-    if (activeEl && sliderRef.current) {
-      if (isFirstTabRender.current) {
+    const updateSlider = (immediate: boolean) => {
+      const activeEl = tabRefs.current[activeTab];
+      if (!activeEl || !sliderRef.current) return;
+      if (activeEl.offsetWidth === 0) {
+        requestAnimationFrame(() => updateSlider(immediate));
+        return;
+      }
+      if (immediate) {
         gsap.set(sliderRef.current, {
           x: activeEl.offsetLeft,
           width: activeEl.offsetWidth,
@@ -125,7 +169,9 @@ export const PublishLedger: React.FC = () => {
           ease: 'power2.out',
         });
       }
-    }
+    };
+
+    updateSlider(isFirstTabRender.current);
   }, [activeTab]);
 
   useEffect(() => {
@@ -344,7 +390,7 @@ export const PublishLedger: React.FC = () => {
             key={t.key}
             ref={(el) => { tabRefs.current[t.key] = el; }}
             type="button"
-            onClick={() => setActiveTab(t.key)}
+            onClick={() => handleTabChange(t.key)}
             className={`relative z-10 shrink-0 whitespace-nowrap px-5 py-2 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer ${activeTab === t.key
               ? 'text-white font-bold'
               : 'text-md-on-surface-variant hover:text-md-on-surface'
@@ -523,16 +569,16 @@ export const PublishLedger: React.FC = () => {
             </tbody>
           </table>
         </div>
-      </div>
 
-      <Pagination
-        currentPage={safePage}
-        totalPages={totalPages}
-        totalCount={totalCount}
-        pageSize={pageSize}
-        onPageChange={setCurrentPage}
-        itemLabel="records"
-      />
+        <Pagination
+          currentPage={safePage}
+          totalPages={totalPages}
+          totalCount={totalCount}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          itemLabel="records"
+        />
+      </div>
 
       <div style={{ height: '32px' }} />
 

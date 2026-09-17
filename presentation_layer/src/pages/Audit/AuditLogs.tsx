@@ -20,11 +20,12 @@ import { Select, type SelectOption } from '../../components/ui/Select';
 import { Pagination } from '../../components/ui/Pagination';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
-import { 
-  auditService, 
-  type AuditLogItem, 
-  type AuditStatsResponse 
+import {
+  auditService,
+  type AuditLogItem,
+  type AuditStatsResponse
 } from '../../services/audit.service';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 const MODULE_OPTIONS: SelectOption[] = [
   { value: 'ALL', label: 'All Modules' },
@@ -63,6 +64,7 @@ const formatRole = (role?: string | null) => {
 };
 
 export const AuditLogs: React.FC = () => {
+  useDocumentTitle('Audit Logs');
   // Data state
   const [logs, setLogs] = useState<AuditLogItem[]>([]);
   const [stats, setStats] = useState<AuditStatsResponse | null>(null);

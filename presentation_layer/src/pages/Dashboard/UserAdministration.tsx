@@ -9,9 +9,11 @@ import { Pagination } from '../../components/ui/Pagination';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Search, Shield, MoreVertical, CheckCircle, Users, UserCheck, UserX, UserCog, ChevronLeft, ChevronRight, ArrowUpDown, Sparkles, KeyRound, Info } from 'lucide-react';
 import { resolveMalaysianIdentity, parseRawIc, type MalaysianIdentity } from '../../utils/malaysianIdentity';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import '../LandAcquisition/case_management.css';
 
 export const UserAdministration: React.FC = () => {
+  useDocumentTitle('User Administration');
   const navigate = useNavigate();
 
   const ROLE_OPTIONS: SelectOption[] = [

@@ -42,6 +42,7 @@ import { CaseDetailsModal } from './CaseDetailsModal';
 import { PaymentRowActions } from './PaymentRowActions';
 import { RefreshButton } from './RefreshButton';
 import type { PaymentRow } from './paymentModals';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 type ModalState =
   | { type: 'view'; caseId: string }
   | { type: 'initiate'; caseId: string }
@@ -118,6 +119,7 @@ const STATUS_PRIORITY_RANK: Record<string, number> = {
 };
 
 export default function PaymentDashboard() {
+  useDocumentTitle('Payment Overview');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [showCancelled, setShowCancelled] = useState(false);

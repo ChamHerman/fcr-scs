@@ -37,6 +37,7 @@ import type { ProjectBudgetSummary } from "./types/compensation.types";
 import "../../index.css";
 import "./compensation.css";
 import "../../styles/shared-report.css";
+import { useDocumentTitle } from "../../hooks/useDocumentTitle";
 
 type CompensationDetail = {
   id: string;
@@ -77,6 +78,7 @@ type CompensationDetail = {
 };
 
 export const CompensationReview: React.FC = () => {
+  useDocumentTitle("Compensation Review");
   const { reportId: paramReportId } = useParams<{ reportId: string }>();
   const location = useLocation();
   const navigate = useNavigate();

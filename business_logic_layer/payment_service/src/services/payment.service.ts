@@ -20,18 +20,44 @@ const isUuid = (id: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
 export async function resolveAdminUuid(adminId: string): Promise<string> {
-  if (isUuid(adminId)) return adminId;
+  if (!adminId) return adminId;
 
-  const match = adminId.match(/\d+/);
-  const index = match ? parseInt(match[0], 10) : 1;
-  const targetEmail = `ga${Math.min(Math.max(index, 1), 5)}@fcrscs.gov.my`;
-
-  const ga = await prisma.user.findFirst({
-    where: { email: targetEmail },
+  // 1. Direct match on userId (case-insensitive)
+  const directUser = await prisma.user.findFirst({
+    where: { userId: { equals: adminId.trim(), mode: "insensitive" } },
     select: { userId: true },
   });
-  if (ga) return ga.userId;
+  if (directUser) return directUser.userId;
 
+  // 2. Direct match on email (case-insensitive)
+  const emailUser = await prisma.user.findFirst({
+    where: { email: { equals: adminId.trim(), mode: "insensitive" } },
+    select: { userId: true },
+  });
+  if (emailUser) return emailUser.userId;
+
+  // 3. Fallback for alias identifiers like "ga1", "ga2", "admin-01", "admin-1", "admin-02"
+  const gaMatch = adminId.match(/^ga(\d+)/i) || adminId.match(/admin[-_]?0*(\d+)$/i);
+  if (gaMatch) {
+    const index = parseInt(gaMatch[1], 10);
+    const targetEmail = `ga${Math.min(Math.max(index, 1), 5)}@fcrscs.gov.my`;
+    const ga = await prisma.user.findFirst({
+      where: { email: targetEmail },
+      select: { userId: true },
+    });
+    if (ga) return ga.userId;
+  }
+
+  // 4. If adminId was a valid UUID that exists in user table
+  if (isUuid(adminId)) {
+    const uuidUser = await prisma.user.findFirst({
+      where: { userId: adminId },
+      select: { userId: true },
+    });
+    if (uuidUser) return uuidUser.userId;
+  }
+
+  // 5. Fallback to active Government Administrator in the system
   const anyGa = await prisma.user.findFirst({
     where: { role: UserRole.GOVERNMENT_ADMINISTRATOR, isActive: true, deletedAt: null },
     select: { userId: true },
@@ -423,9 +449,8 @@ export async function validateAccountNumberUniqueness(
   }
 
   // 4. Check MemberPayoutDetail
-  const isUserValidUuid = Boolean(userId && isUuid(userId));
   const existingPayouts = await prisma.memberPayoutDetail.findMany({
-    where: isUserValidUuid ? { userId: { not: userId } } : {},
+    where: userId ? { userId: { not: userId } } : {},
   });
 
   for (const mpd of existingPayouts) {
@@ -536,7 +561,7 @@ export async function submitBankDetails(data: {
 
   // Resolve actual User record for member payout detail
   let targetUser: { userId: string; name: string; email: string; identificationNumber: string | null; contactNumber: string | null } | null = null;
-  if (data.userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.userId)) {
+  if (data.userId) {
     targetUser = await prisma.user.findUnique({
       where: { userId: data.userId },
       select: { userId: true, name: true, email: true, identificationNumber: true, contactNumber: true },
@@ -598,7 +623,8 @@ export async function submitBankDetails(data: {
           notIn: [PaymentStatus.BANK_DETAILS_PENDING, PaymentStatus.NEW_BANK_DETAILS_PENDING],
         },
         OR: [
-          ...(effectiveUserId ? [{ beneficiaryId: effectiveUserId }] : []),
+          ...(effectiveUserId && isUuid(effectiveUserId) ? [{ beneficiaryId: effectiveUserId }] : []),
+          ...(owner?.ownerId && isUuid(owner.ownerId) ? [{ beneficiaryId: owner.ownerId }] : []),
           ...(cleanMyKad ? [{ myKadNumber: cleanMyKad }] : []),
           ...(targetUser?.name ? [{ accountHolderName: targetUser.name }] : []),
           ...(owner?.name ? [{ accountHolderName: owner.name }] : []),
@@ -1328,7 +1354,7 @@ export async function getPaymentStatus(caseId: string, userRole?: string, userId
                 some: {
                   landOwner: {
                     OR: [
-                      { ownerId: currentUser.userId },
+                      ...(isUuid(currentUser.userId) ? [{ ownerId: currentUser.userId }] : []),
                       { name: currentUser.name },
                       { email: currentUser.email },
                       ...(currentUser.identificationNumber ? [{ nric: currentUser.identificationNumber }, { nric: cleanIc }] : []),
@@ -1534,7 +1560,7 @@ export async function getAllCases(userRole?: string, userId?: string) {
 
   if (userRole === UserRole.DISPLACED_COMMUNITY_MEMBER || userRole === "DISPLACED_COMMUNITY_MEMBER") {
     let currentUser: { userId: string; name: string; email: string; identificationNumber: string | null } | null = null;
-    if (userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+    if (userId) {
       currentUser = await prisma.user.findUnique({
         where: { userId },
         select: { userId: true, name: true, email: true, identificationNumber: true },
@@ -1553,7 +1579,7 @@ export async function getAllCases(userRole?: string, userId?: string) {
               some: {
                 landOwner: {
                   OR: [
-                    { ownerId: currentUser.userId },
+                    ...(isUuid(currentUser.userId) ? [{ ownerId: currentUser.userId }] : []),
                     { name: currentUser.name },
                     { email: memberEmail },
                     ...(currentUser.identificationNumber ? [{ nric: currentUser.identificationNumber }, { nric: cleanIc }] : []),
@@ -1623,7 +1649,7 @@ export async function getAllCases(userRole?: string, userId?: string) {
 
 export async function getSavedBankDetails(userId?: string, myKadNumber?: string, userName?: string) {
   let currentUser: { userId: string; name: string; email: string; identificationNumber: string | null } | null = null;
-  if (userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+  if (userId) {
     currentUser = await prisma.user.findUnique({
       where: { userId },
       select: { userId: true, name: true, email: true, identificationNumber: true },
@@ -1690,7 +1716,7 @@ export async function getSavedBankDetails(userId?: string, myKadNumber?: string,
             some: {
               landOwner: {
                 OR: [
-                  { ownerId: currentUser.userId },
+                  ...(isUuid(currentUser.userId) ? [{ ownerId: currentUser.userId }] : []),
                   { name: currentUser.name },
                   { email: currentUser.email.toLowerCase() },
                   ...(cleanIc ? [{ nric: cleanIc }] : []),
@@ -1716,7 +1742,7 @@ export async function getSavedBankDetails(userId?: string, myKadNumber?: string,
         },
         OR: [
           ...(ownedCaseIds.size > 0 ? [{ caseId: { in: Array.from(ownedCaseIds) } }] : []),
-          { beneficiaryId: currentUser.userId },
+          ...(isUuid(currentUser.userId) ? [{ beneficiaryId: currentUser.userId }] : []),
           ...(cleanIc ? [{ myKadNumber: cleanIc }] : []),
           { accountHolderName: { equals: currentUser.name, mode: "insensitive" } },
         ],
@@ -1835,7 +1861,7 @@ export async function saveMemberBankDetails(
   const cleanAccountNumber = data.accountNumber.replace(/[\s-]/g, "");
   await bankService.validateBankAccount(data.bankName, cleanAccountNumber);
 
-  const user = userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)
+  const user = userId
     ? await prisma.user.findUnique({ where: { userId } })
     : null;
   const cleanIc = (user?.identificationNumber || data.myKadNumber || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
@@ -1864,10 +1890,10 @@ export async function saveMemberBankDetails(
   }
 
   // FR-016 flow 2: persist the default payout account so it survives restarts.
-  if (userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+  if (user) {
     try {
       await prisma.memberPayoutDetail.upsert({
-        where: { userId },
+        where: { userId: user.userId },
         update: {
           bankName: data.bankName,
           accountNumber: cleanAccountNumber,
@@ -1876,7 +1902,7 @@ export async function saveMemberBankDetails(
           myKadNumber: record.myKadNumber,
         },
         create: {
-          userId,
+          userId: user.userId,
           bankName: data.bankName,
           accountNumber: cleanAccountNumber,
           accountHolderName: record.accountHolderName,
