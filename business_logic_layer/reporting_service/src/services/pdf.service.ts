@@ -3,97 +3,329 @@ import PDFDocument from "pdfkit";
 export const generatePdfBuffer = async (reportTitle: string, reportData: any): Promise<Buffer> => {
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ margin: 40, size: "A4", bufferPages: true });
+      const doc = new PDFDocument({ margin: 35, size: "A4", bufferPages: true });
       const buffers: Buffer[] = [];
 
       doc.on("data", buffers.push.bind(buffers));
       doc.on("end", () => resolve(Buffer.concat(buffers)));
 
-      // Color Palette based on FCR-SCS Design System
-      const primaryColor = "#6750A4"; // Deep Purple Primary
+      // Color Palette based on FCR-SCS Official Design System
+      const primaryColor = "#4A3780"; // Deep Royal Purple
+      const accentGold = "#D4AF37"; // Statutory Malaysian Gold Accent
       const textColor = "#1D1B20";
       const secondaryTextColor = "#49454F";
-      const tableHeaderBg = "#F3EDF7";
-      const borderColor = "#CAC4D0";
+      const tableHeaderBg = "#ECE6F0";
+      const borderColor = "#D0C5D8";
+      const rowBorderColor = "#E7E0EC";
       const alternatingRowBg = "#FBF8FD";
+      const pageMargin = 35;
+      const printableWidth = doc.page.width - pageMargin * 2; // 525.28 pt
 
-      // Header Banner
-      doc.rect(40, 40, doc.page.width - 80, 75).fill(primaryColor);
+      // Top Official Header Banner
+      const bannerY = 32;
+      const bannerHeight = 60;
+      doc.rect(pageMargin, bannerY, printableWidth, bannerHeight).fill(primaryColor);
+      // Gold Accent Ribbon at bottom of banner
+      doc.rect(pageMargin, bannerY + bannerHeight - 3, printableWidth, 3).fill(accentGold);
 
-      doc.fillColor("#FFFFFF").fontSize(15).font("Helvetica-Bold")
-        .text("FAIR COMPENSATION & RESETTLEMENT SMART CONTRACT SYSTEM", 55, 50, { width: doc.page.width - 240, align: "left" });
-      
-      doc.fontSize(9.5).font("Helvetica")
-        .text("Government Administration Reporting & Audit Subsystem (FCR-SCS)", 55, doc.y + 4, { align: "left" });
+      // Banner Typography
+      doc.fillColor("#EADDFF").fontSize(7.5).font("Helvetica-Bold")
+        .text("KERAJAAN MALAYSIA  •  DEPARTMENT OF LANDS AND MINES (JKPTG)", pageMargin + 14, bannerY + 10);
 
-      doc.moveDown(3);
-      doc.y = 130;
+      doc.fillColor("#FFFFFF").fontSize(11.5).font("Helvetica-Bold")
+        .text("FAIR COMPENSATION & RESETTLEMENT SMART CONTRACT SYSTEM", pageMargin + 14, bannerY + 22);
+
+      const subsystemTitle = reportData.reportType === "Case Status Report"
+        ? "Government Land Acquisition Reporting & Statutory Lifecycle Subsystem (Act 486)"
+        : (reportData.reportType === "Payment Report"
+          ? "Government Financial Disbursement & Compensation Subsystem (Act 486)"
+          : "Government Administration Reporting & Statutory Audit Subsystem (Act 486)");
+
+      doc.fillColor("#D0BCFF").fontSize(8).font("Helvetica")
+        .text(subsystemTitle, pageMargin + 14, bannerY + 38);
+
+      // Security Classification Pill on Banner Right
+      const pillWidth = 100;
+      const pillX = pageMargin + printableWidth - pillWidth - 12;
+      doc.roundedRect(pillX, bannerY + 11, pillWidth, 20, 3).lineWidth(1).strokeColor(accentGold).fillAndStroke("#381E72", accentGold);
+      doc.fillColor("#FFFFFF").fontSize(7.5).font("Helvetica-Bold")
+        .text("OFFICIAL (SULIT)", pillX, bannerY + 16, { width: pillWidth, align: "center" });
+      doc.fillColor("#EADDFF").fontSize(6.5).font("Helvetica")
+        .text("AUDIT DISCLOSURE", pillX, bannerY + 36, { width: pillWidth, align: "center" });
+
+      doc.y = bannerY + bannerHeight + 12;
 
       // Report Title & Meta Info
-      doc.fillColor(textColor).fontSize(15).font("Helvetica-Bold").text(reportTitle, 40, doc.y);
-      doc.moveDown(0.3);
+      doc.fillColor(textColor).fontSize(14).font("Helvetica-Bold").text(reportTitle, pageMargin, doc.y);
+      doc.moveDown(0.25);
 
       const genDate = new Date(reportData.generatedAt || Date.now()).toLocaleString("en-GB", {
+        timeZone: "Asia/Kuala_Lumpur",
         day: "2-digit",
         month: "short",
         year: "numeric",
         hour: "2-digit",
         minute: "2-digit",
+        second: "2-digit",
       });
 
-      doc.fillColor(secondaryTextColor).fontSize(9).font("Helvetica")
-        .text(`Generated on: ${genDate}  |  Authorized Operator: Government Administrator`, 40, doc.y);
-      
-      doc.moveDown(1.2);
+      const reportId = reportData.reportId || `RPT-${Date.now().toString().slice(-6)}`;
+      const operatorText = reportData.operator || (reportData.reportType === "Case Status Report" ? "Government Officer (JKPTG)" : "Gov Administrator (Government Administrator)");
 
-      // Executive Summary Metrics Box
+      // Format clean filter summary items (strictly exclude operator, format, reportId, operatorRole)
+      const formatStatusVal = (val: string) => {
+        if (!val || val === "All" || val === "All statuses" || val === "All Statuses") return null;
+        return val
+          .split("_")
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+          .join(" ");
+      };
+
+      const filterParts: string[] = [];
+      const applied = reportData.filterApplied || {};
+      if (applied.startDate && applied.endDate) {
+        filterParts.push(`Date Range: ${applied.startDate} to ${applied.endDate}`);
+      } else if (applied.startDate) {
+        filterParts.push(`From: ${applied.startDate}`);
+      } else if (applied.endDate) {
+        filterParts.push(`Until: ${applied.endDate}`);
+      }
+
+      if (applied.state && applied.state !== "All" && applied.state !== "All states") {
+        filterParts.push(`State: ${applied.state}`);
+      }
+
+      if (applied.status && applied.status !== "All" && applied.status !== "All Statuses" && applied.status !== "All statuses") {
+        const formattedStatus = formatStatusVal(applied.status);
+        if (formattedStatus) filterParts.push(`Status: ${formattedStatus}`);
+      }
+
+      if (applied.location && applied.location !== "All") {
+        filterParts.push(`District: ${applied.location}`);
+      }
+
+      if (applied.projectType && applied.projectType !== "All") {
+        filterParts.push(`Project: ${applied.projectType}`);
+      }
+
+      const filterSummaryText = filterParts.length > 0 ? filterParts.join("   •   ") : "All Records (National Scope — Unrestricted)";
+
+      // Metadata Box (Clean Non-Color Card with Row-by-Row Dividers)
+      const metaBoxY = doc.y;
+      const rowHeight = 15;
+      const metaBoxHeight = rowHeight * 3 + 4;
+
+      doc.roundedRect(pageMargin, metaBoxY, printableWidth, metaBoxHeight, 4)
+        .lineWidth(0.75)
+        .strokeColor("#D0C5D8")
+        .fillAndStroke("#FFFFFF", "#D0C5D8");
+
+      // Row 1: Audit Reference, Generation Timestamp, Security Level
+      const row1Y = metaBoxY + 4;
+      doc.fillColor(primaryColor).fontSize(7.5).font("Helvetica-Bold")
+        .text("Report ID:", pageMargin + 10, row1Y, { continued: true });
+      doc.fillColor(textColor).font("Helvetica")
+        .text(`  ${reportId}`, { continued: false });
+
+      doc.fillColor(primaryColor).fontSize(7.5).font("Helvetica-Bold")
+        .text("Generated:", pageMargin + 185, row1Y, { continued: true });
+      doc.fillColor(textColor).font("Helvetica")
+        .text(`  ${genDate} (MYT)`, { continued: false });
+
+      doc.fillColor(primaryColor).fontSize(7.5).font("Helvetica-Bold")
+        .text("Classification:", pageMargin + 375, row1Y, { continued: true });
+      doc.fillColor("#B3261E").font("Helvetica-Bold")
+        .text("  OFFICIAL (SULIT)", { continued: false });
+
+      // Divider 1
+      doc.moveTo(pageMargin + 6, metaBoxY + rowHeight + 2)
+        .lineTo(pageMargin + printableWidth - 6, metaBoxY + rowHeight + 2)
+        .lineWidth(0.5)
+        .strokeColor("#ECE6F0")
+        .stroke();
+
+      // Row 2: Authorized Operator
+      const row2Y = metaBoxY + rowHeight + 5;
+      doc.fillColor(primaryColor).fontSize(7.5).font("Helvetica-Bold")
+        .text("Authorized Operator:", pageMargin + 10, row2Y, { continued: true });
+      doc.fillColor(textColor).font("Helvetica")
+        .text(`  ${operatorText}`, pageMargin + 10 + 95, row2Y, { width: printableWidth - 20 - 95, ellipsis: true });
+
+      // Divider 2
+      doc.moveTo(pageMargin + 6, metaBoxY + rowHeight * 2 + 2)
+        .lineTo(pageMargin + printableWidth - 6, metaBoxY + rowHeight * 2 + 2)
+        .lineWidth(0.5)
+        .strokeColor("#ECE6F0")
+        .stroke();
+
+      // Row 3: Audit Filter Scope
+      const row3Y = metaBoxY + rowHeight * 2 + 5;
+      doc.fillColor(primaryColor).fontSize(7.5).font("Helvetica-Bold")
+        .text("Filter Scope:", pageMargin + 10, row3Y, { continued: true });
+      doc.fillColor(secondaryTextColor).font("Helvetica")
+        .text(`  ${filterSummaryText}`, pageMargin + 10 + 65, row3Y, { width: printableWidth - 20 - 65, ellipsis: true });
+
+      doc.y = metaBoxY + metaBoxHeight + 8;
+
+      // Executive Summary Metrics Box (Multi-tile with dividers)
       const summaryBoxY = doc.y;
-      doc.rect(40, summaryBoxY, doc.page.width - 80, 54).fillAndStroke(tableHeaderBg, borderColor);
+      const boxHeight = 56;
+      doc.roundedRect(pageMargin, summaryBoxY, printableWidth, boxHeight, 4).fillAndStroke("#F8F5FC", borderColor);
 
-      doc.fillColor(primaryColor).fontSize(10).font("Helvetica-Bold")
-        .text("EXECUTIVE METRICS SUMMARY", 50, summaryBoxY + 8);
+      doc.fillColor(primaryColor).fontSize(8).font("Helvetica-Bold")
+        .text("EXECUTIVE AUDIT SUMMARY", pageMargin + 10, summaryBoxY + 7);
 
-      let summaryText = "";
+      let statItems: { label: string; value: string; sub?: string }[] = [];
       if (reportData.summary) {
         if (reportData.reportType === "Case Status Report") {
-          summaryText = `Total Cases: ${reportData.summary.totalCases ?? 0}  |  Active Cases: ${reportData.summary.activeCases ?? 0}  |  Completed: ${reportData.summary.completedCases ?? 0}  |  Avg Lifecycle Aging: ${reportData.summary.averageAgingDays ?? '0 days'}`;
+          statItems = [
+            { label: "Total Registered", value: String(reportData.summary.totalCases ?? 0) },
+            { label: "Active in Pipeline", value: String(reportData.summary.activeCases ?? 0) },
+            { label: "Payment Completed", value: String(reportData.summary.paymentCompletedCases ?? 0) },
+            { label: "Case Closed", value: String(reportData.summary.closedCases ?? 0) },
+            { label: "Avg Lifecycle", value: String(reportData.summary.averageAgingDays ?? "0 days") },
+          ];
         } else if (reportData.reportType === "Payment Report") {
-          summaryText = `Total Disbursement: ${reportData.summary.totalDisbursement ?? 'RM 0.00'}  |  Success Rate: ${reportData.summary.successRate ?? '100%'}  |  Paid: ${reportData.summary.successfulPayments ?? 0}  |  Pending: ${reportData.summary.pendingPayments ?? 0}`;
+          const details = reportData.details || [];
+          const parseAmt = (val: any): number => {
+            if (typeof val === "number") return val;
+            const clean = String(val || "").replace(/[^0-9.-]+/g, "");
+            const parsed = parseFloat(clean);
+            return isNaN(parsed) ? 0 : parsed;
+          };
+
+          const pendingClearanceRows = details.filter((d: any) => {
+            const cs = String(d.clearanceStatus || "").toLowerCase();
+            const ref = String(d.bankReference || "").toLowerCase();
+            const st = String(d.status || "").toUpperCase();
+            return cs === "pending clearance" || ref.includes("pending") || (!st.includes("PAID") && !st.includes("SUCCEED"));
+          });
+          const dynamicUndisbursedNum = pendingClearanceRows.reduce((sum: number, d: any) => sum + parseAmt(d.amount), 0);
+
+          const settledRows = details.filter((d: any) => {
+            const cs = String(d.clearanceStatus || "").toLowerCase();
+            const st = String(d.status || "").toUpperCase();
+            return cs === "cleared" || st === "PAID" || st === "TRANSFER_SUCCEED";
+          });
+          const dynamicDisbursedNum = settledRows.reduce((sum: number, d: any) => sum + parseAmt(d.amount), 0);
+          const dynamicTotalVolNum = dynamicDisbursedNum + dynamicUndisbursedNum;
+          const dynamicRate = dynamicTotalVolNum > 0 ? Math.round((dynamicDisbursedNum / dynamicTotalVolNum) * 100) : 0;
+
+          const totalVolStr = dynamicTotalVolNum > 0
+            ? `RM ${dynamicTotalVolNum.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : (reportData.summary.totalPaymentVolume ?? "RM 0.00");
+          const disbursedStr = dynamicDisbursedNum > 0
+            ? `RM ${dynamicDisbursedNum.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : (reportData.summary.totalDisbursement ?? "RM 0.00");
+          const undisbursedStr = dynamicUndisbursedNum > 0
+            ? `RM ${dynamicUndisbursedNum.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : (reportData.summary.undisbursedAmount ?? "RM 0.00");
+
+          statItems = [
+            { label: "Total Volume", value: totalVolStr },
+            { label: "Total Disbursed", value: disbursedStr },
+            { label: "Undisbursed", value: undisbursedStr },
+            {
+              label: "Disbursed Rate",
+              value: `${dynamicRate}%`,
+              sub: `${settledRows.length} Paid / ${details.length} Total`,
+            },
+          ];
         } else if (reportData.reportType === "Blockchain Audit Report") {
-          summaryText = `Total Records: ${reportData.summary.totalRecords ?? 0}  |  Published On-chain: ${reportData.summary.publishedRecords ?? 0}  |  Ready to Publish: ${reportData.summary.readyToPublishRecords ?? 0}  |  Ledger Status: ${reportData.summary.integrityStatus ?? 'Verified'}`;
-        } else {
-          summaryText = JSON.stringify(reportData.summary);
+          const totalRecs = Number(reportData.summary.totalRecords ?? (reportData.details?.length ?? 0));
+          const publishedRecs = Number(reportData.summary.publishedRecords ?? (reportData.details?.filter((r: any) => String(r.status).toUpperCase() === "PUBLISHED").length ?? 0));
+          const dynamicCryptoPercentage = totalRecs > 0 ? `${Math.round((publishedRecs / totalRecs) * 100)}%` : "0%";
+          const dynamicCryptoRatio = `${publishedRecs}/${totalRecs} Notarized`;
+
+          statItems = [
+            { label: "Total Records", value: String(totalRecs) },
+            { label: "Published to Sepolia", value: String(publishedRecs) },
+            { label: "Ready to Publish", value: String(reportData.summary.readyToPublishRecords ?? (totalRecs - publishedRecs)) },
+            {
+              label: "Cryptographic Proof",
+              value: dynamicCryptoPercentage,
+              sub: dynamicCryptoRatio,
+            },
+          ];
         }
       }
 
-      doc.fillColor(textColor).fontSize(9).font("Helvetica").text(summaryText, 50, summaryBoxY + 26, { width: doc.page.width - 100 });
+      const tileCount = Math.max(1, statItems.length);
+      const tileWidth = (printableWidth - 20) / tileCount;
 
-      doc.y = summaryBoxY + 68;
+      statItems.forEach((item, idx) => {
+        const itemX = pageMargin + 10 + idx * tileWidth;
+
+        // Vertical divider line between tiles
+        if (idx > 0) {
+          doc.moveTo(itemX - 5, summaryBoxY + 18).lineTo(itemX - 5, summaryBoxY + 50).lineWidth(0.5).stroke("#E2D9E8");
+        }
+
+        doc.fillColor(secondaryTextColor).fontSize(6.8).font("Helvetica")
+          .text(item.label.toUpperCase(), itemX, summaryBoxY + 18, { width: tileWidth - 8, lineBreak: false });
+
+        doc.fillColor(textColor).fontSize(11).font("Helvetica-Bold")
+          .text(item.value, itemX, summaryBoxY + 29, { width: tileWidth - 8, lineBreak: false });
+
+        if (item.sub) {
+          doc.fillColor(secondaryTextColor).fontSize(6.5).font("Helvetica")
+            .text(item.sub, itemX, summaryBoxY + 43, { width: tileWidth - 8, lineBreak: false });
+        }
+      });
+
+      doc.y = summaryBoxY + boxHeight + 8;
+
+      // Statutory Regulatory & Compliance Guidance Box (with purple accent bar)
+      const notesBoxY = doc.y;
+      const notesHeight = 36;
+      doc.rect(pageMargin, notesBoxY, printableWidth, notesHeight).fillAndStroke("#FBF8FD", borderColor);
+      // Left accent bar
+      doc.rect(pageMargin, notesBoxY, 3.5, notesHeight).fill(primaryColor);
+
+      doc.fillColor(primaryColor).fontSize(7.5).font("Helvetica-Bold")
+        .text("STATUTORY LEGAL BASIS & COMPLIANCE SCOPE", pageMargin + 10, notesBoxY + 6);
+
+      let statutoryNote = "";
+      if (reportData.reportType === "Case Status Report") {
+        statutoryNote = "Governed under Land Acquisition Act 1960 (Act 486). Lifecycle aging tracks statutory progression from Section 4 gazette to Section 8 declaration, valuation inquiry, and Form H award. Files marked Completed have settled disbursements; Closed files are formally archived.";
+      } else if (reportData.reportType === "Payment Report") {
+        statutoryNote = "Disbursements comply with the Financial Procedures Act 1957 and Treasury Instructions. Dual-administrator multi-sig approval enforces Segregation of Duties (SoD). Bank clearance status is audited via official bank transaction references.";
+      } else {
+        statutoryNote = "Anchored to Ethereum Sepolia Testnet smart contract. SHA-256 document hashing complies with Digital Signature Act 1997 and Evidence Act 1950 Section 90A for permanent electronic document admissibility and tamper-proof verification.";
+      }
+
+      doc.fillColor(secondaryTextColor).fontSize(7).font("Helvetica")
+        .text(statutoryNote, pageMargin + 10, notesBoxY + 16, { width: printableWidth - 20, lineGap: 1.2 });
+
+      doc.y = notesBoxY + notesHeight + 10;
 
       // Render Tables based on report type
       if (reportData.details && reportData.details.length > 0) {
-        doc.fillColor(textColor).fontSize(11).font("Helvetica-Bold").text("Detailed Record Breakdown", 40, doc.y);
-        doc.moveDown(0.5);
+        doc.fillColor(textColor).fontSize(10).font("Helvetica-Bold")
+          .text("Detailed Record Breakdown", pageMargin, doc.y);
+        doc.moveDown(0.3);
 
         if (reportData.reportType === "Case Status Report") {
-          renderCaseStatusTable(doc, reportData.details, tableHeaderBg, borderColor, alternatingRowBg, textColor);
+          renderCaseStatusTable(doc, reportData.details, tableHeaderBg, borderColor, alternatingRowBg, rowBorderColor, textColor);
         } else if (reportData.reportType === "Payment Report") {
-          renderPaymentTable(doc, reportData.details, tableHeaderBg, borderColor, alternatingRowBg, textColor);
+          renderPaymentTable(doc, reportData.details, tableHeaderBg, borderColor, alternatingRowBg, rowBorderColor, textColor);
         } else if (reportData.reportType === "Blockchain Audit Report") {
-          renderBlockchainTable(doc, reportData.details, tableHeaderBg, borderColor, alternatingRowBg, textColor);
+          renderBlockchainTable(doc, reportData.details, tableHeaderBg, borderColor, alternatingRowBg, rowBorderColor, textColor);
         }
       } else {
-        doc.fillColor(secondaryTextColor).fontSize(10).font("Helvetica-Oblique").text("No records found matching the specified report criteria.", 40, doc.y + 10);
+        doc.fillColor(secondaryTextColor).fontSize(9).font("Helvetica-Oblique")
+          .text("No records found matching the specified report criteria.", pageMargin, doc.y + 10);
       }
 
-      // Add Footer with Page Numbers
+      // Add Footer with Page Numbers without triggering automatic blank pages
       const totalPages = doc.bufferedPageRange().count;
       for (let i = 0; i < totalPages; i++) {
         doc.switchToPage(i);
-        doc.rect(40, doc.page.height - 35, doc.page.width - 80, 0.5).fill(borderColor);
-        doc.fillColor(secondaryTextColor).fontSize(8).font("Helvetica")
-          .text("FCR-SCS Audit Subsystem • Land Acquisition Act 1960 • Confidential", 40, doc.page.height - 25, { align: "left" });
-        doc.text(`Page ${i + 1} of ${totalPages}`, doc.page.width - 120, doc.page.height - 25, { width: 80, align: "right" });
+        doc.page.margins.bottom = 0;
+        doc.rect(pageMargin, doc.page.height - 30, printableWidth, 0.5).fill(borderColor);
+        doc.fillColor(secondaryTextColor).fontSize(7).font("Helvetica")
+          .text("Federal Land Acquisition & Compensation System (FCR-SCS)  •  Governed by Land Acquisition Act 1960  •  Confidential Audit Record", pageMargin, doc.page.height - 22, { align: "left", lineBreak: false });
+        doc.text(`Page ${i + 1} of ${totalPages}`, doc.page.width - pageMargin - 80, doc.page.height - 22, { width: 80, align: "right", lineBreak: false });
       }
 
       doc.end();
@@ -109,25 +341,29 @@ interface PdfColumn {
   value: (item: any) => string;
 }
 
-const TABLE_MARGIN_X = 40;
+const TABLE_MARGIN_X = 35;
 const CELL_PAD_X = 4;
 const CELL_PAD_Y = 4;
-const CELL_FONT_SIZE = 7.5;
+const CELL_FONT_SIZE = 7;
 const HEADER_HEIGHT = 20;
-const FOOTER_RESERVE = 45;
+const FOOTER_RESERVE = 40;
 
-/**
- * Draws a table whose row heights follow the wrapped cell content, so no value
- * is clipped. Every row is emitted — rows flow onto new pages instead of being
- * dropped, and the column header is redrawn on each page.
- */
+const formatStatusText = (status: any): string => {
+  if (!status) return "-";
+  return String(status)
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
 function renderTable(
   doc: PDFKit.PDFDocument,
   columns: PdfColumn[],
   items: any[],
   headerBg: string,
-  borderColor: string,
+  headerBorderColor: string,
   altBg: string,
+  rowBorderColor: string,
   textCol: string
 ) {
   const startX = TABLE_MARGIN_X;
@@ -136,11 +372,11 @@ function renderTable(
 
   const drawHeader = () => {
     doc.rect(startX, y, tableWidth, HEADER_HEIGHT).fill(headerBg);
-    doc.rect(startX, y, tableWidth, HEADER_HEIGHT).stroke(borderColor);
-    doc.fillColor(textCol).fontSize(8).font("Helvetica-Bold");
+    doc.rect(startX, y, tableWidth, HEADER_HEIGHT).stroke(headerBorderColor);
+    doc.fillColor(textCol).fontSize(7.5).font("Helvetica-Bold");
     let x = startX;
     columns.forEach((col) => {
-      doc.text(col.header, x + CELL_PAD_X, y + 6, { width: col.width - CELL_PAD_X * 2 });
+      doc.text(col.header, x + CELL_PAD_X, y + 6, { width: col.width - CELL_PAD_X * 2, lineBreak: false });
       x += col.width;
     });
     y += HEADER_HEIGHT;
@@ -166,7 +402,7 @@ function renderTable(
     }
 
     doc.rect(startX, y, tableWidth, rowHeight).fill(idx % 2 === 0 ? "#FFFFFF" : altBg);
-    doc.rect(startX, y, tableWidth, rowHeight).stroke(borderColor);
+    doc.rect(startX, y, tableWidth, rowHeight).stroke(rowBorderColor);
 
     doc.fillColor(textCol).fontSize(CELL_FONT_SIZE).font("Helvetica");
     let x = startX;
@@ -183,58 +419,94 @@ function renderTable(
   doc.y = y + 10;
 }
 
-function renderCaseStatusTable(doc: PDFKit.PDFDocument, items: any[], headerBg: string, borderColor: string, altBg: string, textCol: string) {
+function renderCaseStatusTable(
+  doc: PDFKit.PDFDocument,
+  items: any[],
+  headerBg: string,
+  headerBorder: string,
+  altBg: string,
+  rowBorder: string,
+  textCol: string
+) {
   renderTable(
     doc,
     [
       { header: "Case Ref", width: 75, value: (i) => i.caseId || "-" },
-      { header: "Case Title", width: 120, value: (i) => i.title || i.caseTitle || "-" },
-      { header: "Project / Location", width: 115, value: (i) => i.location || `${i.state || "Selangor"} / ${i.district || "Petaling"}` },
-      { header: "Current Status", width: 105, value: (i) => i.status || "-" },
-      { header: "Reg Date", width: 55, value: (i) => i.date || i.registrationDate || "-" },
-      { header: "Aging", width: 45, value: (i) => i.lifecycleAging || `${i.agingDays || 0}d` },
+      { header: "Case Title", width: 135, value: (i) => i.title || i.caseTitle || "-" },
+      { header: "State / District", width: 115, value: (i) => i.location || `${i.state || "Selangor"} / ${i.district || "-"}` },
+      { header: "Statutory Status", width: 98, value: (i) => formatStatusText(i.status) },
+      { header: "Notice Date", width: 55, value: (i) => i.date || i.registrationDate || "-" },
+      { header: "Aging", width: 47, value: (i) => i.lifecycleAging || `${i.agingDays || 0}d` },
     ],
     items,
     headerBg,
-    borderColor,
+    headerBorder,
     altBg,
+    rowBorder,
     textCol
   );
 }
 
-function renderPaymentTable(doc: PDFKit.PDFDocument, items: any[], headerBg: string, borderColor: string, altBg: string, textCol: string) {
+function renderPaymentTable(
+  doc: PDFKit.PDFDocument,
+  items: any[],
+  headerBg: string,
+  headerBorder: string,
+  altBg: string,
+  rowBorder: string,
+  textCol: string
+) {
   renderTable(
     doc,
     [
-      { header: "Case Ref", width: 85, value: (i) => i.caseId || "-" },
-      { header: "Disbursement", width: 95, value: (i) => i.amount || i.formattedAmount || "-" },
-      { header: "Bank Details", width: 80, value: (i) => i.bankName || i.bankDetails || "Bank Transfer" },
-      { header: "Bank Reference No.", width: 110, value: (i) => i.bankReference || "-" },
-      { header: "Status", width: 85, value: (i) => i.status || "-" },
-      { header: "Date", width: 60, value: (i) => i.date || i.createdAt || "-" },
+      { header: "Case Ref", width: 75, value: (i) => i.caseId || "-" },
+      { header: "Payee Name", width: 105, value: (i) => i.payeeName || "Landowner Beneficiary" },
+      { header: "Bank Details", width: 80, value: (i) => i.bankName || "Commercial Bank" },
+      { header: "Disbursement", width: 85, value: (i) => i.amount || i.formattedAmount || "-" },
+      { header: "Bank Ref Number", width: 100, value: (i) => i.bankReference || "Pending Clearance" },
+      {
+        header: "Clearance Status",
+        width: 80,
+        value: (i) =>
+          i.clearanceStatus ||
+          (["PAID", "TRANSFER_SUCCEED", "Paid", "Transfer Succeed"].includes(i.status)
+            ? "Cleared"
+            : "Pending Clearance"),
+      },
     ],
     items,
     headerBg,
-    borderColor,
+    headerBorder,
     altBg,
+    rowBorder,
     textCol
   );
 }
 
-function renderBlockchainTable(doc: PDFKit.PDFDocument, items: any[], headerBg: string, borderColor: string, altBg: string, textCol: string) {
+function renderBlockchainTable(
+  doc: PDFKit.PDFDocument,
+  items: any[],
+  headerBg: string,
+  headerBorder: string,
+  altBg: string,
+  rowBorder: string,
+  textCol: string
+) {
   renderTable(
     doc,
     [
-      { header: "Case Ref", width: 80, value: (i) => i.caseId || "-" },
-      { header: "On-chain Transaction Hash", width: 135, value: (i) => i.transactionHash || "-" },
-      { header: "Document Hash (SHA-256)", width: 110, value: (i) => i.documentHash || "-" },
-      { header: "Verification Status", width: 110, value: (i) => i.status || i.verificationStatus || "-" },
-      { header: "Published Date", width: 80, value: (i) => i.publishedAt || "-" },
+      { header: "Case Ref", width: 75, value: (i) => i.caseId || "-" },
+      { header: "Milestone", width: 50, value: (i) => i.milestone || "AWARD" },
+      { header: "On-Chain Transaction Hash", width: 150, value: (i) => i.transactionHash || "Pending Publication" },
+      { header: "Document SHA-256 Hash", width: 110, value: (i) => i.documentHash || "-" },
+      { header: "Ledger Status", width: 65, value: (i) => formatStatusText(i.status) },
+      { header: "Notarized Date", width: 75, value: (i) => (i.publishedAt ? String(i.publishedAt).slice(0, 10) : "-") },
     ],
     items,
     headerBg,
-    borderColor,
+    headerBorder,
     altBg,
+    rowBorder,
     textCol
   );
 }

@@ -7,6 +7,8 @@ export interface ReportFilterOptions {
   status?: string;
   projectType?: string;
   location?: string;
+  operator?: string;
+  reportId?: string;
 }
 
 export interface DashboardOverviewData {
@@ -23,6 +25,8 @@ export interface DashboardOverviewData {
     publishedBlockchainRecords: number;
     readyToPublishBlockchainRecords: number;
     completedCases: number;
+    paymentCompletedCases?: number;
+    closedCases?: number;
     activeCases: number;
     inValuation: number;
     inCompensation: number;
@@ -83,36 +87,71 @@ function resolveReportEndpoint(reportCategory: string): string {
 }
 
 /**
- * Fetch the generated report PDF as a Blob without triggering a download.
+ * Fetch the generated report PDF as a Blob along with filename/reportId headers.
  * Used by the preview-before-download flow; the caller decides when to save.
  */
 export async function fetchReportPdfBlob(
   reportCategory: string,
   filters?: ReportFilterOptions
-): Promise<Blob> {
+): Promise<Blob & { filename?: string; reportId?: string }> {
   const endpoint = resolveReportEndpoint(reportCategory);
   const queryParams = { ...filters, format: "pdf" } as Record<string, string>;
   const query = buildQuery(queryParams);
   const url = `${BASE_URL}/api/reports/${endpoint}${query}`;
 
-  const response = await fetch(url);
+  const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+  const headers: Record<string, string> = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  const response = await fetch(url, { headers });
   if (!response.ok) {
     throw new Error(`Failed to generate report PDF (${response.status})`);
   }
-  return response.blob();
+
+  let filename: string | undefined;
+  const disposition = response.headers.get("content-disposition");
+  if (disposition) {
+    const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utf8Match && utf8Match[1]) {
+      filename = decodeURIComponent(utf8Match[1].trim());
+    } else {
+      const match = disposition.match(/filename=["']?([^"';]+)["']?/i);
+      if (match && match[1]) {
+        filename = match[1].trim();
+      }
+    }
+  }
+
+  const reportId = response.headers.get("x-report-id") || undefined;
+  const blob = (await response.blob()) as Blob & { filename?: string; reportId?: string };
+  blob.filename = filename;
+  blob.reportId = reportId;
+  return blob;
 }
 
 export async function downloadReportPdf(
   reportCategory: "Case Status Report" | "Payment Report" | "Blockchain Audit Report" | string,
-  filters?: ReportFilterOptions
+  filters?: ReportFilterOptions,
+  reportId?: string
 ): Promise<void> {
   const endpoint = resolveReportEndpoint(reportCategory);
-  const blob = await fetchReportPdfBlob(reportCategory, filters);
+  const combinedFilters: ReportFilterOptions = {
+    ...filters,
+    ...(reportId ? { reportId } : {}),
+  };
+  const blob = await fetchReportPdfBlob(reportCategory, combinedFilters);
 
   const downloadUrl = window.URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = downloadUrl;
-  const fileName = `FCR-${endpoint}-Report-${Date.now()}.pdf`;
+
+  const targetReportId = reportId || blob.reportId;
+  const fileName =
+    (targetReportId ? `${targetReportId}.pdf` : undefined) ||
+    blob.filename ||
+    `FCR-${endpoint}-Report-${Date.now()}.pdf`;
+
   a.download = fileName;
   document.body.appendChild(a);
   a.click();

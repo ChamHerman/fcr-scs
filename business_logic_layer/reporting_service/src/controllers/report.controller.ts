@@ -9,6 +9,7 @@ import {
 import { generatePdfBuffer } from "../services/pdf.service";
 import { logAudit } from "../../../user_management_service/src/services/audit.service";
 import { AuthenticatedRequest } from "../../../user_management_service/src/middleware/auth.middleware";
+import { prisma } from "../../../user_management_service/src/prisma";
 
 export const getOverviewStats = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -20,9 +21,43 @@ export const getOverviewStats = async (req: Request, res: Response): Promise<voi
   }
 };
 
+const resolveOperator = async (req: Request, defaultRole: 'officer' | 'admin'): Promise<string> => {
+  if (req.query.operator && typeof req.query.operator === 'string' && req.query.operator.trim()) {
+    return req.query.operator.trim();
+  }
+  let user = (req as AuthenticatedRequest).user;
+  if (!user && req.headers.authorization) {
+    try {
+      const authHeader = req.headers.authorization;
+      const sessionToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader.split(' ')[1];
+      if (sessionToken) {
+        const session = await prisma.userSession.findUnique({
+          where: { sessionToken },
+          include: { user: true },
+        });
+        if (session && session.user && session.expiresAt > new Date()) {
+          user = session.user;
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }
+  if (user?.name) {
+    const roleTitle = user.role === 'GOVERNMENT_OFFICER'
+      ? 'Government Officer'
+      : (user.role === 'GOVERNMENT_ADMINISTRATOR' ? 'Government Administrator' : 'System Administrator');
+    return `${user.name} (${roleTitle})`;
+  }
+  return defaultRole === 'officer'
+    ? 'Government Officer (JKPTG)'
+    : 'Gov Administrator (Government Administrator)';
+};
+
 export const getCaseStatusReport = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { format, startDate, endDate, state, status, location, projectType } = req.query;
+    const { format, startDate, endDate, state, status, location, projectType, reportId } = req.query;
+    const resolvedOperator = await resolveOperator(req, 'officer');
     const filters: ReportFilterParams = {
       startDate: startDate as string,
       endDate: endDate as string,
@@ -30,6 +65,8 @@ export const getCaseStatusReport = async (req: Request, res: Response): Promise<
       status: status as string,
       location: location as string,
       projectType: projectType as string,
+      operator: resolvedOperator,
+      reportId: reportId as string,
     };
 
     const data = await generateCaseStatusData(filters);
@@ -38,7 +75,8 @@ export const getCaseStatusReport = async (req: Request, res: Response): Promise<
     if (format === "pdf") {
       const pdfBuffer = await generatePdfBuffer("Case Status & Lifecycle Report", data);
       res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename=FCR-Case-Status-Report-${Date.now()}.pdf`);
+      res.setHeader("Content-Disposition", `attachment; filename="${data.reportId}.pdf"`);
+      res.setHeader("X-Report-Id", data.reportId);
 
       logAudit({
         userId: user?.userId,
@@ -75,11 +113,14 @@ export const getCaseStatusReport = async (req: Request, res: Response): Promise<
 
 export const getPaymentReport = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { format, startDate, endDate, status } = req.query;
+    const { format, startDate, endDate, status, reportId } = req.query;
+    const resolvedOperator = await resolveOperator(req, 'admin');
     const filters: ReportFilterParams = {
       startDate: startDate as string,
       endDate: endDate as string,
       status: status as string,
+      operator: resolvedOperator,
+      reportId: reportId as string,
     };
 
     const data = await generatePaymentData(filters);
@@ -88,7 +129,8 @@ export const getPaymentReport = async (req: Request, res: Response): Promise<voi
     if (format === "pdf") {
       const pdfBuffer = await generatePdfBuffer("Payment & Disbursement Report", data);
       res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename=FCR-Payment-Report-${Date.now()}.pdf`);
+      res.setHeader("Content-Disposition", `attachment; filename="${data.reportId}.pdf"`);
+      res.setHeader("X-Report-Id", data.reportId);
 
       logAudit({
         userId: user?.userId,
@@ -125,11 +167,14 @@ export const getPaymentReport = async (req: Request, res: Response): Promise<voi
 
 export const getBlockchainAuditReport = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { format, startDate, endDate, status } = req.query;
+    const { format, startDate, endDate, status, reportId } = req.query;
+    const resolvedOperator = await resolveOperator(req, 'admin');
     const filters: ReportFilterParams = {
       startDate: startDate as string,
       endDate: endDate as string,
       status: status as string,
+      operator: resolvedOperator,
+      reportId: reportId as string,
     };
 
     const data = await generateBlockchainAuditData(filters);
@@ -138,7 +183,8 @@ export const getBlockchainAuditReport = async (req: Request, res: Response): Pro
     if (format === "pdf") {
       const pdfBuffer = await generatePdfBuffer("Blockchain Audit & Notarization Report", data);
       res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename=FCR-Blockchain-Audit-Report-${Date.now()}.pdf`);
+      res.setHeader("Content-Disposition", `attachment; filename="${data.reportId}.pdf"`);
+      res.setHeader("X-Report-Id", data.reportId);
 
       logAudit({
         userId: user?.userId,

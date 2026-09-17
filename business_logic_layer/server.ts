@@ -55,7 +55,11 @@ import { enforcePageAccess } from "./user_management_service/src/middleware/auth
 
 export const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    exposedHeaders: ["Content-Disposition", "X-Report-Id"],
+  })
+);
 app.use(express.json());
 
 // Global RBAC enforcement for page access

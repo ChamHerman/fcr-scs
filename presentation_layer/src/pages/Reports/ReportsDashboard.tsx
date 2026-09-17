@@ -10,7 +10,8 @@ import {
   ShieldCheck,
   CreditCard,
   FolderKanban,
-  RefreshCw
+  Archive,
+  Layers,
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -31,8 +32,10 @@ import { PageHeader } from '../../components/ui/PageHeader';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Select } from '../../components/ui/Select';
 import { Modal } from '../../components/ui/Modal';
+import { CopyButton } from '../../components/ui/CopyButton';
 import { useNotification } from '../../components/ui/NotificationSystem';
-import { STATES } from './reportConstants';
+import { usePollingRefresh } from '../../hooks/usePollingRefresh';
+import { caseStatusLabel, paymentStatusLabel } from './reportConstants';
 import { ReportSummaryCards, ReportDataTable } from './reportComponents';
 import {
   fetchDashboardOverview,
@@ -43,6 +46,8 @@ import {
 } from '../../services/reportApi';
 import type { DashboardOverviewData, ReportGeneratedResponse } from '../../services/reportApi';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { useAuth } from '../../context/AuthContext';
+import { getRoleTitle } from '../../utils/roleUtils';
 
 ChartJS.register(
   CategoryScale,
@@ -116,7 +121,7 @@ const StatCard: React.FC<{
 );
 
 export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCategory }) => {
-  useDocumentTitle('Reports Dashboard');
+  useDocumentTitle(reportCategory ? `${reportCategory} Report` : 'Reports Overview');
   const navigate = useNavigate();
   const location = useLocation();
   const { notify } = useNotification();
@@ -129,11 +134,38 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
   const [fullReportOpen, setFullReportOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
+  // Dynamically derive available states strictly from loaded table records
+  const availableStates = useMemo(() => {
+    const set = new Set<string>();
+    (categoryData?.details || []).forEach((row: any) => {
+      if (row.state && row.state !== 'Not recorded') {
+        set.add(row.state);
+      }
+    });
+    return ['All states', ...Array.from(set).sort()];
+  }, [categoryData?.details]);
+
+  useEffect(() => {
+    if (selectedState !== 'All states' && !availableStates.includes(selectedState)) {
+      setSelectedState('All states');
+    }
+  }, [availableStates, selectedState]);
+
   const categorySeqRef = useRef(0);
+  const { user } = useAuth();
+
+  const operator = useMemo(() => {
+    if (user?.name) {
+      return `${user.name} (${getRoleTitle(user.role)})`;
+    }
+    return reportCategory === 'Case Status'
+      ? 'Government Officer (JKPTG)'
+      : 'Gov Administrator (Government Administrator)';
+  }, [user, reportCategory]);
 
   /* Overview data (charts + totals) is only needed on the overview page. */
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     try {
       const res = await fetchDashboardOverview();
       setData(res);
@@ -178,23 +210,23 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
         },
       });
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
-  };
+  }, []);
 
   /* Category pages fetch only their own records from the dedicated endpoint. */
-  const loadCategoryData = useCallback(async () => {
+  const loadCategoryData = useCallback(async (opts?: { silent?: boolean }) => {
     if (!reportCategory) return;
     const seq = ++categorySeqRef.current;
-    setLoading(true);
+    if (!opts?.silent) setLoading(true);
     try {
       let res: ReportGeneratedResponse;
       if (reportCategory === 'Payment') {
-        res = await fetchPaymentReport({});
+        res = await fetchPaymentReport({ operator });
       } else if (reportCategory === 'Blockchain Audit') {
-        res = await fetchBlockchainAuditReport({});
+        res = await fetchBlockchainAuditReport({ operator });
       } else {
-        res = await fetchCaseStatusReport({});
+        res = await fetchCaseStatusReport({ operator });
       }
       if (seq !== categorySeqRef.current) return;
       setCategoryData(res);
@@ -203,7 +235,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
       if (seq !== categorySeqRef.current) return;
       setCategoryData(FALLBACK_CATEGORY_DATA[reportCategory]);
     } finally {
-      if (seq === categorySeqRef.current) setLoading(false);
+      if (!opts?.silent && seq === categorySeqRef.current) setLoading(false);
     }
   }, [reportCategory]);
 
@@ -214,18 +246,25 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
     } else {
       loadData();
     }
-  }, [loadCategoryData, reportCategory]);
+  }, [loadCategoryData, loadData, reportCategory]);
 
-  const handleRefresh = () => {
-    if (reportCategory) loadCategoryData();
-    else loadData();
-  };
+  // Silent automatic polling every 15 seconds
+  usePollingRefresh(
+    () => {
+      if (reportCategory) {
+        return loadCategoryData({ silent: true });
+      } else {
+        return loadData({ silent: true });
+      }
+    },
+    { intervalMs: 15000 }
+  );
 
   const handleFullDownload = async () => {
     if (!reportCategory) return;
     setDownloading(true);
     try {
-      await downloadReportPdf(`${reportCategory} Report`, {});
+      await downloadReportPdf(`${reportCategory} Report`, { operator }, categoryData?.reportId);
       setDownloading(false);
       setFullReportOpen(false);
       notify({ type: 'success', title: 'Report downloaded', message: 'The full report PDF has been generated and downloaded.' });
@@ -236,7 +275,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
   };
 
   // Case Status Chart Data
-  const caseLabels = data ? Object.keys(data.caseStatusDistribution).map(k => k.replace(/_/g, ' ')) : [];
+  const caseLabels = data ? Object.keys(data.caseStatusDistribution).map(k => caseStatusLabel(k)) : [];
   const caseValues = data ? Object.values(data.caseStatusDistribution) : [];
   const doughnutData = {
     labels: caseLabels.length ? caseLabels : ['Registered', 'In Valuation', 'Approved', 'Paid'],
@@ -249,7 +288,9 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
           '#7D5260',
           '#4CAF50',
           '#FF9800',
-          '#03A9F4'
+          '#03A9F4',
+          '#009688',
+          '#9C27B0',
         ],
         borderWidth: 2,
         borderColor: '#ffffff',
@@ -277,15 +318,16 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
   };
 
   // Payment Breakdown Bar Chart Data
-  const paymentLabels = data ? Object.keys(data.paymentStatusDistribution) : ['Paid', 'Approved', 'Initiated'];
+  const paymentLabels = data ? Object.keys(data.paymentStatusDistribution).map(k => paymentStatusLabel(k)) : ['Paid', 'Approved', 'Initiated'];
   const paymentTotals = data ? Object.values(data.paymentStatusDistribution).map(p => p.total / 1000) : [2450, 950, 450];
+  const barChartColors = ['#4CAF50', '#6750A4', '#FF9800', '#0277BD', '#7D5260', '#9C27B0', '#009688'];
   const barChartData = {
     labels: paymentLabels,
     datasets: [
       {
         label: 'Disbursement Volume (RM in Thousands)',
         data: paymentTotals,
-        backgroundColor: ['#4CAF50', '#6750A4', '#FF9800'],
+        backgroundColor: paymentLabels.map((_, i) => barChartColors[i % barChartColors.length]),
         borderRadius: 8,
       },
     ],
@@ -341,8 +383,8 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
       };
     }
     return {
-      title: 'Reporting & Analytics Dashboard',
-      subtitle: 'Real-time analytics and statutory compliance overview.',
+      title: 'Reports Overview',
+      subtitle: 'Comprehensive overview of land acquisition cases, disbursement progress, and blockchain notarization.',
     };
   };
 
@@ -354,53 +396,98 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
       <PageHeader
         title={headerInfo.title}
         subtitle={headerInfo.subtitle}
-        actions={
-          <Button variant="tonal" size="sm" onClick={handleRefresh}>
-            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-            Refresh
-          </Button>
-        }
       />
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className={`grid gap-4 ${reportCategory === 'Case Status' || reportCategory === 'Payment' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5' : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-4'}`}>
         {/* Case Status View Specific KPIs */}
         {reportCategory === 'Case Status' && (
           <>
             <StatCard icon={<FolderKanban size={16} className="text-[#6750A4]" />} label="Total Acquisition Cases" value={categoryData?.summary?.totalCases ?? 0} sub="Registered in System" />
             <StatCard icon={<TrendingUp size={16} className="text-[#a8600b]" />} label="Active in Pipeline" value={categoryData?.summary?.activeCases ?? 0} sub="In Progress / Review" />
-            <StatCard icon={<CheckCircle2 size={16} className="text-[#1e7b4a]" />} label="Completed / Closed" value={categoryData?.summary?.completedCases ?? 0} sub="Fully Settled" />
+            <StatCard icon={<CheckCircle2 size={16} className="text-[#1e7b4a]" />} label="Payment Completed" value={categoryData?.summary?.paymentCompletedCases ?? 0} sub="Disbursements Settled" />
+            <StatCard icon={<Archive size={16} className="text-[#5B4296]" />} label="Case Closed" value={categoryData?.summary?.closedCases ?? 0} sub="Statutory File Sealed" />
             <StatCard icon={<Clock size={16} className="text-[#0b5b8c]" />} label="Avg Lifecycle Duration" value={categoryData?.summary?.averageAgingDays ?? '0 days'} sub="From Notice to Settlement" />
           </>
         )}
 
         {/* Payment View Specific KPIs */}
-        {reportCategory === 'Payment' && (
-          <>
-            <StatCard icon={<CreditCard size={16} className="text-[#1e7b4a]" />} label="Total Disbursements" value={categoryData?.summary?.totalDisbursement ?? 'RM 0.00'} sub="Paid to Landowners" />
-            <StatCard icon={<CheckCircle2 size={16} className="text-[#0b5b8c]" />} label="Disbursement Success Rate" value={categoryData?.summary?.successRate ?? '0%'} sub="Bank Transfer Clearance" />
-            <StatCard icon={<FolderKanban size={16} className="text-[#6750A4]" />} label="Paid Records" value={categoryData?.summary?.successfulPayments ?? 0} sub="Settled in Full" />
-            <StatCard icon={<TrendingUp size={16} className="text-[#a8600b]" />} label="Pending / Processing" value={categoryData?.summary?.pendingPayments ?? 0} sub="Awaiting Bank Transfer" />
-          </>
-        )}
+        {reportCategory === 'Payment' && (() => {
+          const details = categoryData?.details || [];
+          const parseAmt = (val: any): number => {
+            if (typeof val === "number") return val;
+            const clean = String(val || "").replace(/[^0-9.-]+/g, "");
+            const parsed = parseFloat(clean);
+            return isNaN(parsed) ? 0 : parsed;
+          };
+
+          const pendingClearanceRows = details.filter((d: any) => {
+            const cs = String(d.clearanceStatus || "").toLowerCase();
+            const ref = String(d.bankReference || "").toLowerCase();
+            const st = String(d.status || "").toUpperCase();
+            return cs === "pending clearance" || ref.includes("pending") || (!st.includes("PAID") && !st.includes("SUCCEED"));
+          });
+          const dynamicUndisbursedNum = pendingClearanceRows.reduce((sum: number, d: any) => sum + parseAmt(d.amount), 0);
+
+          const settledRows = details.filter((d: any) => {
+            const cs = String(d.clearanceStatus || "").toLowerCase();
+            const st = String(d.status || "").toUpperCase();
+            return cs === "cleared" || st === "PAID" || st === "TRANSFER_SUCCEED";
+          });
+          const dynamicDisbursedNum = settledRows.reduce((sum: number, d: any) => sum + parseAmt(d.amount), 0);
+          const dynamicTotalVolNum = dynamicDisbursedNum + dynamicUndisbursedNum;
+          const dynamicRate = dynamicTotalVolNum > 0 ? Math.round((dynamicDisbursedNum / dynamicTotalVolNum) * 100) : 0;
+
+          const totalVolStr = dynamicTotalVolNum > 0
+            ? `RM ${dynamicTotalVolNum.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : "RM 0.00";
+          const disbursedStr = dynamicDisbursedNum > 0
+            ? `RM ${dynamicDisbursedNum.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : (categoryData?.summary?.totalDisbursement ?? "RM 0.00");
+          const undisbursedStr = dynamicUndisbursedNum > 0
+            ? `RM ${dynamicUndisbursedNum.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : (categoryData?.summary?.undisbursedAmount ?? "RM 0.00");
+
+          return (
+            <>
+              <StatCard icon={<Layers size={16} className="text-[#6750A4]" />} label="Total Volume" value={totalVolStr} sub="Total Pipeline Volume" />
+              <StatCard icon={<CreditCard size={16} className="text-[#1e7b4a]" />} label="Total Disbursements" value={disbursedStr} sub="Cleared to Beneficiary" />
+              <StatCard icon={<TrendingUp size={16} className="text-[#a8600b]" />} label="Undisbursed Amount" value={undisbursedStr} sub="Pending Clearance" />
+              <StatCard icon={<CheckCircle2 size={16} className="text-[#0b5b8c]" />} label="Disbursement Rate" value={`${dynamicRate}%`} sub="Disbursed / Pipeline Volume" />
+              <StatCard icon={<FolderKanban size={16} className="text-[#5B4296]" />} label="Settled Records" value={`${settledRows.length} Paid`} sub={`${pendingClearanceRows.length} Pending Clearance`} />
+            </>
+          );
+        })()}
 
         {/* Blockchain Audit View Specific KPIs */}
-        {reportCategory === 'Blockchain Audit' && (
-          <>
-            <StatCard icon={<ShieldCheck size={16} className="text-[#0b5b8c]" />} label="Total Ledger Records" value={categoryData?.summary?.totalRecords ?? 0} sub="Smart Contract Events" />
-            <StatCard icon={<CheckCircle2 size={16} className="text-[#1e7b4a]" />} label="Published On-Chain" value={categoryData?.summary?.publishedRecords ?? 0} sub="Ethereum Sepolia Verified" />
-            <StatCard icon={<Clock size={16} className="text-[#a8600b]" />} label="Ready to Publish" value={categoryData?.summary?.readyToPublishRecords ?? 0} sub="Pending Publication" />
-            <StatCard icon={<ShieldCheck size={16} className="text-[#6750A4]" />} label="Cryptographic Integrity" value={categoryData?.summary?.integrityStatus ?? 'Verified'} sub="SHA-256 Validated" />
-          </>
-        )}
+        {reportCategory === 'Blockchain Audit' && (() => {
+          const totalRecs = Number(categoryData?.summary?.totalRecords ?? (categoryData?.details?.length ?? 0));
+          const publishedRecs = Number(categoryData?.summary?.publishedRecords ?? (categoryData?.details?.filter((r: any) => String(r.status).toUpperCase() === 'PUBLISHED').length ?? 0));
+          const dynamicCryptoPercentage = totalRecs > 0 ? `${Math.round((publishedRecs / totalRecs) * 100)}%` : '0%';
+          const dynamicCryptoRatio = `${publishedRecs}/${totalRecs} Notarized`;
+
+          return (
+            <>
+              <StatCard icon={<ShieldCheck size={16} className="text-[#0b5b8c]" />} label="Total Ledger Records" value={totalRecs} sub="Smart Contract Events" />
+              <StatCard icon={<CheckCircle2 size={16} className="text-[#1e7b4a]" />} label="Published On-Chain" value={publishedRecs} sub="Ethereum Sepolia Verified" />
+              <StatCard icon={<Clock size={16} className="text-[#a8600b]" />} label="Ready to Publish" value={categoryData?.summary?.readyToPublishRecords ?? (totalRecs - publishedRecs)} sub="Pending Publication" />
+              <StatCard
+                icon={<ShieldCheck size={16} className="text-[#6750A4]" />}
+                label="Cryptographic Proof"
+                value={dynamicCryptoPercentage}
+                sub={dynamicCryptoRatio}
+              />
+            </>
+          );
+        })()}
 
         {/* Overview (All) Default KPIs */}
         {!reportCategory && (
           <>
-            <StatCard icon={<FolderKanban size={16} className="text-[#6750A4]" />} label="Total Acquisition Cases" value={data?.kpis.totalCases ?? 0} sub={`${data?.kpis.completedCases ?? 0} Completed / Closed`} />
-            <StatCard icon={<CreditCard size={16} className="text-[#1e7b4a]" />} label="Total Paid Out" value={`RM ${((data?.kpis.totalSettledAmount || 0) / 1000000).toFixed(2)}M`} sub={`of RM ${((data?.kpis.totalCompensationAmount || 0) / 1000000).toFixed(2)}M payment volume`} />
+            <StatCard icon={<FolderKanban size={16} className="text-[#6750A4]" />} label="Total Acquisition Cases" value={data?.kpis.totalCases ?? 0} sub={`${data?.kpis.paymentCompletedCases ?? (data?.kpis.completedCases ?? 0)} Completed • ${data?.kpis.closedCases ?? 0} Closed`} />
+            <StatCard icon={<CreditCard size={16} className="text-[#1e7b4a]" />} label="Total Disbursements" value={`RM ${((data?.kpis.totalSettledAmount || 0) / 1000000).toFixed(2)}M`} sub={`of RM ${((data?.kpis.totalCompensationAmount || 0) / 1000000).toFixed(2)}M Total Pipeline Volume`} />
             <StatCard icon={<ShieldCheck size={16} className="text-[#0b5b8c]" />} label="Blockchain Notarized" value={data?.kpis.publishedBlockchainRecords ?? 0} sub={`${data?.kpis.readyToPublishBlockchainRecords ?? 0} ready to publish`} />
-            <StatCard icon={<TrendingUp size={16} className="text-[#a8600b]" />} label="Active Pipeline" value={data?.kpis.activeCases ?? 0} sub="Cases not yet closed" />
+            <StatCard icon={<TrendingUp size={16} className="text-[#a8600b]" />} label="Active in Pipeline" value={data?.kpis.activeCases ?? 0} sub="In Progress / Review" />
           </>
         )}
       </div>
@@ -477,10 +564,10 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
                   label="State"
                   value={selectedState}
                   onChange={setSelectedState}
-                  options={[
-                    { value: 'All states', label: 'All States' },
-                    ...Object.keys(STATES).map((s) => ({ value: s, label: s })),
-                  ]}
+                  options={availableStates.map((s) => ({
+                    value: s,
+                    label: s === 'All states' ? 'All States' : s,
+                  }))}
                 />
               </div>
             )}
@@ -540,7 +627,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
         onClose={() => !downloading && setFullReportOpen(false)}
         title={`${reportCategory ? `${reportCategory} Report` : 'Report'} — Full Preview`}
         subtitle="Complete report without filters. Review the report below, then download the PDF."
-        maxWidth="max-w-5xl"
+        maxWidth="max-w-6xl"
         footer={
           <div className="flex items-center justify-end gap-3">
             <Button variant="text" disabled={downloading} onClick={() => setFullReportOpen(false)}>
@@ -555,6 +642,57 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
       >
         {categoryData && (
           <div className="space-y-4">
+            {categoryData.reportId && (
+              <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl divide-y divide-slate-100 dark:divide-zinc-800 text-xs shadow-sm overflow-hidden">
+                {/* Row 1: Audit Reference, Generated Timestamp, Security Level */}
+                <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-500 dark:text-zinc-400 font-semibold">Report ID:</span>
+                    <span className="font-mono font-bold text-md-primary">{categoryData.reportId}</span>
+                    <CopyButton value={categoryData.reportId} title="Copy Report Reference ID" />
+                  </div>
+                  <div className="flex items-center gap-1.5 text-slate-500 dark:text-zinc-400">
+                    <span className="font-semibold">Generated:</span>
+                    <span>
+                      {new Date(categoryData.generatedAt || Date.now()).toLocaleString('en-GB', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                      })}{' '}
+                      (MYT)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-500 dark:text-zinc-400 font-semibold">Classification:</span>
+                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 dark:border-rose-900/50">
+                      OFFICIAL (SULIT)
+                    </span>
+                  </div>
+                </div>
+
+                {/* Row 2: Authorized Operator */}
+                <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-slate-50/40 dark:bg-zinc-900/40">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-500 dark:text-zinc-400 font-semibold">Authorized Operator:</span>
+                    <span className="font-medium text-slate-800 dark:text-zinc-200">{operator}</span>
+                  </div>
+                  <div className="text-slate-500 dark:text-zinc-400 text-[11px]">
+                    Statutory Framework: <strong className="text-slate-700 dark:text-zinc-300">Land Acquisition Act 1960 (Act 486)</strong>
+                  </div>
+                </div>
+
+                {/* Row 3: Scope */}
+                <div className="px-4 py-2.5 flex items-start gap-2">
+                  <span className="text-slate-500 dark:text-zinc-400 font-semibold shrink-0">Filter Scope:</span>
+                  <span className="text-slate-700 dark:text-zinc-300 font-medium">
+                    National Scope — Complete Official Ledger (All Records)
+                  </span>
+                </div>
+              </div>
+            )}
             <ReportSummaryCards data={categoryData} />
             <ReportDataTable data={categoryData} />
           </div>

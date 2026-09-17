@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Clock, User, Activity, Wallet, Loader2, Lock, CheckCircle2, Folder } from 'lucide-react';
+import { Clock, User, Activity, Wallet, Loader2, Lock, CheckCircle2, Folder, ExternalLink } from 'lucide-react';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { blockchainApi } from '../../services/blockchainApi';
@@ -682,7 +682,16 @@ export const BlockchainDashboard: React.FC = () => {
                         <td className="font-mono text-xs text-md-on-surface-variant">
                           {row.transactionHash ? (
                             <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                              <span>{fmtTx(row.transactionHash)}</span>
+                              <a
+                                href={`https://sepolia.etherscan.io/tx/${row.transactionHash}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-md-primary hover:underline inline-flex items-center gap-1"
+                                title="View on Sepolia Etherscan"
+                              >
+                                <span>{fmtTx(row.transactionHash)}</span>
+                                <ExternalLink size={11} className="shrink-0 opacity-70" />
+                              </a>
                               <CopyButton value={row.transactionHash} title="Copy Transaction Hash" />
                             </div>
                           ) : (

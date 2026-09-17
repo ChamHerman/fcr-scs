@@ -8,6 +8,9 @@ export interface ReportFilterParams {
   status?: string;
   location?: string;
   projectType?: string;
+  operator?: string;
+  operatorRole?: string;
+  reportId?: string;
 }
 
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -86,7 +89,9 @@ export const getDashboardOverviewStats = async () => {
     statuses.reduce((acc, status) => acc + (paymentStatusDistribution[status]?.total ?? 0), 0);
 
   const totalCompensationAmount = Object.values(paymentStatusDistribution).reduce((acc, p) => acc + p.total, 0);
-  const completedCases = countCasesByStatus(COMPLETED_CASE_STATUSES);
+  const paymentCompletedCases = caseStatusDistribution["PAYMENT_COMPLETED"] || 0;
+  const closedCases = caseStatusDistribution["CASE_CLOSED"] || 0;
+  const completedCases = paymentCompletedCases + closedCases;
 
   /* Real monthly registration counts for the last 7 months. */
   const now = new Date();
@@ -120,7 +125,9 @@ export const getDashboardOverviewStats = async () => {
       publishedBlockchainRecords: blockchainStatusDistribution[BlockchainStatus.PUBLISHED] || 0,
       readyToPublishBlockchainRecords: blockchainStatusDistribution[BlockchainStatus.READY_TO_PUBLISH] || 0,
       completedCases,
-      activeCases: Math.max(0, totalCases - completedCases),
+      paymentCompletedCases,
+      closedCases,
+      activeCases: Math.max(0, totalCases - paymentCompletedCases - closedCases),
       inValuation: countCasesByStatus(VALUATION_STAGE_STATUSES),
       inCompensation: countCasesByStatus(COMPENSATION_STAGE_STATUSES),
       inOffer: countCasesByStatus(OFFER_STAGE_STATUSES),
@@ -132,6 +139,23 @@ export const getDashboardOverviewStats = async () => {
     blockchainStatusDistribution,
     monthlyTrends,
   };
+};
+
+const generateReportId = (prefix: string) => {
+  let dateStr: string;
+  try {
+    dateStr = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur" })
+      .format(new Date())
+      .replace(/-/g, "");
+  } catch {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    dateStr = `${year}${month}${day}`;
+  }
+  const timeSuffix = Date.now().toString().slice(-4);
+  return `RPT-${prefix}-${dateStr}-${timeSuffix}`;
 };
 
 export const generateCaseStatusData = async (filters: ReportFilterParams) => {
@@ -167,8 +191,10 @@ export const generateCaseStatusData = async (filters: ReportFilterParams) => {
   });
 
   const totalCases = cases.length;
-  const completedCases = cases.filter((c) => c.status === "CASE_CLOSED" || c.status === "PAYMENT_COMPLETED").length;
-  const activeCases = totalCases - completedCases;
+  const paymentCompletedCases = cases.filter((c) => c.status === "PAYMENT_COMPLETED").length;
+  const closedCases = cases.filter((c) => c.status === "CASE_CLOSED").length;
+  const completedCases = paymentCompletedCases + closedCases;
+  const activeCases = Math.max(0, totalCases - paymentCompletedCases - closedCases);
 
   let totalAgingDays = 0;
   cases.forEach((c) => {
@@ -179,12 +205,15 @@ export const generateCaseStatusData = async (filters: ReportFilterParams) => {
 
   return {
     reportType: "Case Status Report",
-    reportId: `RPT-CASE-${Date.now().toString().slice(-6)}`,
+    reportId: filters.reportId || generateReportId("CASE"),
     generatedAt: new Date().toISOString(),
+    operator: filters.operator || "Government Officer (JKPTG)",
     filterApplied: filters,
     summary: {
       totalCases,
       activeCases,
+      paymentCompletedCases,
+      closedCases,
       completedCases,
       averageAgingDays: `${avgAging} days`,
       notes: "Generated from official Malaysian Land Acquisition statutory records.",
@@ -201,11 +230,24 @@ export const generateCaseStatusData = async (filters: ReportFilterParams) => {
   };
 };
 
+const normalizePaymentStatus = (status?: string): PaymentStatus | undefined => {
+  if (!status || status === "All" || status === "All Statuses") return undefined;
+  if (Object.values(PaymentStatus).includes(status as PaymentStatus)) {
+    return status as PaymentStatus;
+  }
+  const clean = status.trim().toUpperCase().replace(/&/g, "AND").replace(/[\s-]+/g, "_");
+  if (Object.values(PaymentStatus).includes(clean as PaymentStatus)) {
+    return clean as PaymentStatus;
+  }
+  return undefined;
+};
+
 export const generatePaymentData = async (filters: ReportFilterParams) => {
   const where: any = { deletedAt: null };
 
-  if (filters.status && filters.status !== "All") {
-    where.status = filters.status;
+  const normStatus = normalizePaymentStatus(filters.status);
+  if (normStatus) {
+    where.status = normStatus;
   }
   if (filters.startDate && filters.endDate) {
     where.createdAt = {
@@ -221,73 +263,106 @@ export const generatePaymentData = async (filters: ReportFilterParams) => {
     take: 100,
   });
 
-  const settledPayments = payments.filter((p) => SETTLED_PAYMENT_STATUSES.includes(p.status));
-  const totalPaymentVolume = payments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
+  const isSettledStatus = (st: PaymentStatus) => SETTLED_PAYMENT_STATUSES.includes(st);
+  const settledPayments = payments.filter((p) => isSettledStatus(p.status));
+  const pendingClearancePayments = payments.filter((p) => !isSettledStatus(p.status));
+
+  // 'Undisbursed Amount' dynamically calculates the sum of 'Disbursement' values for all rows where Clearance Status is Pending Clearance
   const totalDisbursementNum = settledPayments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
+  const undisbursedAmountNum = pendingClearancePayments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
+  const totalPaymentVolume = totalDisbursementNum + undisbursedAmountNum;
   const successfulPayments = settledPayments.length;
-  const successRate = payments.length > 0 ? Math.round((successfulPayments / payments.length) * 100) : 0;
+  const pendingPayments = pendingClearancePayments.length;
+  const disbursementRate = totalPaymentVolume > 0
+    ? Math.round((totalDisbursementNum / totalPaymentVolume) * 100)
+    : 0;
 
   return {
     reportType: "Payment Report",
-    reportId: `RPT-PAY-${Date.now().toString().slice(-6)}`,
+    reportId: filters.reportId || generateReportId("PAY"),
     generatedAt: new Date().toISOString(),
+    operator: filters.operator || "Gov Administrator (Government Administrator)",
     filterApplied: filters,
     summary: {
       totalRecords: payments.length,
       totalDisbursement: `RM ${totalDisbursementNum.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       totalPaymentVolume: `RM ${totalPaymentVolume.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      undisbursedAmount: `RM ${undisbursedAmountNum.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       successfulPayments,
-      pendingPayments: payments.length - successfulPayments,
-      successRate: `${successRate}%`,
+      pendingPayments,
+      successRate: `${disbursementRate}%`,
+      disbursementRate: `${disbursementRate}%`,
       notes: "Audited disbursement records with national banking references.",
     },
-    details: payments.map((p) => ({
-      caseId: p.caseId,
-      payeeName: p.accountHolderName || "Beneficiary",
-      bankName: p.bankName || "National Bank",
-      amount: `RM ${Number(p.amount || 0).toLocaleString("en-MY", { minimumFractionDigits: 2 })}`,
-      status: p.status,
-      bankReference: p.receipt?.bankReferenceNumber || "Pending Clearance",
-      date: p.updatedAt.toISOString().slice(0, 10),
-    })),
+    details: payments.map((p) => {
+      const isSettled = isSettledStatus(p.status);
+      return {
+        caseId: p.caseId,
+        payeeName: p.accountHolderName || "Beneficiary",
+        bankName: p.bankName || "National Bank",
+        amount: `RM ${Number(p.amount || 0).toLocaleString("en-MY", { minimumFractionDigits: 2 })}`,
+        status: p.status,
+        clearanceStatus: isSettled ? "Cleared" : "Pending Clearance",
+        bankReference: p.receipt?.bankReferenceNumber || "Pending Clearance",
+        date: p.updatedAt.toISOString().slice(0, 10),
+      };
+    }),
   };
+};
+
+const normalizeBlockchainStatus = (status?: string): BlockchainStatus | undefined => {
+  if (!status || status === "All" || status === "All Statuses") return undefined;
+  if (Object.values(BlockchainStatus).includes(status as BlockchainStatus)) {
+    return status as BlockchainStatus;
+  }
+  const clean = status.trim().toUpperCase().replace(/[\s-]+/g, "_");
+  if (Object.values(BlockchainStatus).includes(clean as BlockchainStatus)) {
+    return clean as BlockchainStatus;
+  }
+  return undefined;
 };
 
 export const generateBlockchainAuditData = async (filters: ReportFilterParams) => {
   const where: any = { deletedAt: null };
 
-  if (filters.status && filters.status !== "All") {
-    where.status = filters.status;
+  const normStatus = normalizeBlockchainStatus(filters.status);
+  if (normStatus) {
+    where.status = normStatus;
   }
-  if (filters.startDate && filters.endDate) {
+
+  // Only apply publishedAt date range when filtering specifically for PUBLISHED records
+  if (filters.startDate && filters.endDate && normStatus === BlockchainStatus.PUBLISHED) {
     where.publishedAt = {
       gte: new Date(filters.startDate),
       lte: new Date(`${filters.endDate}T23:59:59.999Z`),
     };
   }
 
+  // Order by createdAt desc so all events (both published and ready-to-publish) are properly ordered
   const records = await prisma.blockchainRecord.findMany({
     where,
-    orderBy: { publishedAt: "desc" },
+    orderBy: { createdAt: "desc" },
     take: 100,
   });
 
   const publishedRecords = records.filter((r) => r.status === BlockchainStatus.PUBLISHED).length;
   const readyToPublishRecords = records.filter((r) => r.status === BlockchainStatus.READY_TO_PUBLISH).length;
+  const notarizedPercentageNum = records.length > 0 ? Math.round((publishedRecords / records.length) * 100) : 0;
+  const notarizedRatio = `${publishedRecords}/${records.length} Notarized`;
 
   return {
     reportType: "Blockchain Audit Report",
-    reportId: `RPT-CHAIN-${Date.now().toString().slice(-6)}`,
+    reportId: filters.reportId || generateReportId("CHAIN"),
     generatedAt: new Date().toISOString(),
+    operator: filters.operator || "Gov Administrator (Government Administrator)",
     filterApplied: filters,
     summary: {
       totalRecords: records.length,
       publishedRecords,
       readyToPublishRecords,
-      integrityStatus:
-        records.length > 0 && publishedRecords === records.length
-          ? "100% Cryptographically Verified"
-          : `${publishedRecords}/${records.length} Notarized On-Chain`,
+      notarizedPercentage: `${notarizedPercentageNum}%`,
+      notarizedRatio,
+      integrityStatus: `${notarizedPercentageNum}% (${notarizedRatio})`,
       network: "Ethereum Sepolia Testnet",
     },
     details: records.map((r) => ({

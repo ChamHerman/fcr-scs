@@ -1,11 +1,14 @@
 import React from 'react';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, ExternalLink } from 'lucide-react';
 import { Pagination } from '../../components/ui/Pagination';
 import { CopyButton } from '../../components/ui/CopyButton';
 import { useTableSort } from '../../constants';
 import type { ReportGeneratedResponse } from '../../services/reportApi';
 import { reportStatusLabel } from './reportConstants';
+import { paymentBadge } from '../Payment/paymentModals';
+import { normalizePaymentStatus, paymentStatusClassMap } from '../Payment/statusMaps';
 import '../LandAcquisition/case_management.css';
+import '../Payment/payment.css';
 
 /* ─────────────────────── Design-system status badges ─────────────────────── */
 
@@ -68,10 +71,14 @@ export function statusStyle(status: string) {
 }
 
 export const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
+  const norm = normalizePaymentStatus(status);
+  if (norm && paymentStatusClassMap[norm]) {
+    return paymentBadge(norm);
+  }
   const style = statusStyle(status);
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full py-0.5 pl-2 pr-3 text-xs font-semibold whitespace-nowrap ${style.bg} ${style.fg}`}>
-      <span className={`w-2 h-2 rounded-full ${style.dot}`} />
+    <span className={`payment-badge ${style.bg} ${style.fg} whitespace-nowrap`}>
+      <span className={`dot ${style.dot}`} />
       {reportStatusLabel(status)}
     </span>
   );
@@ -81,37 +88,89 @@ export const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
 
 export const ReportSummaryCards: React.FC<{ data: ReportGeneratedResponse }> = ({ data }) => {
   const s = data.summary ?? {};
-  let cards: { label: string; value: React.ReactNode }[] = [];
+  let cards: { label: string; value: React.ReactNode; sub?: string }[] = [];
 
   if (data.reportType === "Case Status Report") {
     cards = [
-      { label: 'Total Cases Found', value: s.totalCases ?? 0 },
-      { label: 'Active Acquisition', value: s.activeCases ?? 0 },
-      { label: 'Completed / Closed', value: s.completedCases ?? 0 },
-      { label: 'Average Lifecycle Aging', value: s.averageAgingDays ?? '0 days' },
+      { label: 'Total Cases Registered', value: s.totalCases ?? 0 },
+      { label: 'Active in Pipeline', value: s.activeCases ?? 0 },
+      { label: 'Payment Completed', value: s.paymentCompletedCases ?? 0 },
+      { label: 'Case Closed', value: s.closedCases ?? 0 },
+      { label: 'Avg Lifecycle Duration', value: s.averageAgingDays ?? '0 days' },
     ];
   } else if (data.reportType === "Payment Report") {
+    const details = data.details || [];
+    const parseAmt = (val: any): number => {
+      if (typeof val === "number") return val;
+      const clean = String(val || "").replace(/[^0-9.-]+/g, "");
+      const parsed = parseFloat(clean);
+      return isNaN(parsed) ? 0 : parsed;
+    };
+
+    // Dynamically calculate sum of 'Disbursement' values for all rows where Clearance Status is 'Pending Clearance'
+    const pendingClearanceRows = details.filter((d: any) => {
+      const cs = String(d.clearanceStatus || "").toLowerCase();
+      const ref = String(d.bankReference || "").toLowerCase();
+      const st = String(d.status || "").toUpperCase();
+      return cs === "pending clearance" || ref.includes("pending") || (!st.includes("PAID") && !st.includes("SUCCEED"));
+    });
+    const dynamicUndisbursedNum = pendingClearanceRows.reduce((sum: number, d: any) => sum + parseAmt(d.amount), 0);
+
+    const settledRows = details.filter((d: any) => {
+      const cs = String(d.clearanceStatus || "").toLowerCase();
+      const st = String(d.status || "").toUpperCase();
+      return cs === "cleared" || st === "PAID" || st === "TRANSFER_SUCCEED";
+    });
+    const dynamicDisbursedNum = settledRows.reduce((sum: number, d: any) => sum + parseAmt(d.amount), 0);
+    const dynamicTotalVolNum = dynamicDisbursedNum + dynamicUndisbursedNum;
+    const dynamicRate = dynamicTotalVolNum > 0 ? Math.round((dynamicDisbursedNum / dynamicTotalVolNum) * 100) : 0;
+
+    const totalVolStr = dynamicTotalVolNum > 0
+      ? `RM ${dynamicTotalVolNum.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : (s.totalPaymentVolume ?? "RM 0.00");
+    const disbursedStr = dynamicDisbursedNum > 0
+      ? `RM ${dynamicDisbursedNum.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : (s.totalDisbursement ?? "RM 0.00");
+    const undisbursedStr = dynamicUndisbursedNum > 0
+      ? `RM ${dynamicUndisbursedNum.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : (s.undisbursedAmount ?? "RM 0.00");
+
     cards = [
-      { label: 'Total Disbursements', value: s.totalDisbursement ?? 'RM 0.00' },
-      { label: 'Success Rate', value: s.successRate ?? '0%' },
-      { label: 'Paid Records', value: s.successfulPayments ?? 0 },
-      { label: 'Pending / Processing', value: s.pendingPayments ?? 0 },
+      { label: 'Total Volume', value: totalVolStr, sub: 'Pipeline Allocation' },
+      { label: 'Total Disbursed', value: disbursedStr, sub: 'Cleared to Beneficiary' },
+      { label: 'Undisbursed Amount', value: undisbursedStr, sub: 'Pending Clearance' },
+      { label: 'Disbursement Rate', value: `${dynamicRate}%`, sub: 'Disbursed / Pipeline' },
+      { label: 'Settled Records', value: `${settledRows.length} Paid`, sub: `${pendingClearanceRows.length} Pending Clearance` },
     ];
   } else {
+    const totalRecs = Number(s.totalRecords ?? (data.details?.length ?? 0));
+    const publishedRecs = Number(s.publishedRecords ?? (data.details?.filter((r: any) => String(r.status).toUpperCase() === 'PUBLISHED').length ?? 0));
+    const dynamicCryptoPercentage = totalRecs > 0 ? `${Math.round((publishedRecs / totalRecs) * 100)}%` : '0%';
+    const dynamicCryptoRatio = `${publishedRecs}/${totalRecs} Notarized`;
+
     cards = [
-      { label: 'Total Ledger Records', value: s.totalRecords ?? 0 },
-      { label: 'Published On-Chain', value: s.publishedRecords ?? 0 },
-      { label: 'Ready to Publish', value: s.readyToPublishRecords ?? 0 },
-      { label: 'Cryptographic Integrity', value: s.integrityStatus ?? 'Verified' },
+      { label: 'Total Ledger Records', value: totalRecs },
+      { label: 'Published On-Chain', value: publishedRecs },
+      { label: 'Ready to Publish', value: s.readyToPublishRecords ?? (totalRecs - publishedRecs) },
+      {
+        label: 'Cryptographic Proof',
+        value: dynamicCryptoPercentage,
+        sub: dynamicCryptoRatio,
+      },
     ];
   }
 
+  const gridClass = cards.length === 5
+    ? "grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4"
+    : "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4";
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+    <div className={gridClass}>
       {cards.map((c) => (
         <div key={c.label} className="bg-md-surface-container rounded-xl p-5 shadow-sm">
           <div className="text-[13px] font-medium text-md-on-surface-variant tracking-wide">{c.label}</div>
           <div className="text-2xl font-bold mt-1 tracking-tight">{c.value}</div>
+          {c.sub && <div className="text-xs text-md-on-surface-variant mt-1 font-medium">{c.sub}</div>}
         </div>
       ))}
     </div>
@@ -146,24 +205,23 @@ const COLUMN_LABELS: Record<string, string> = {
   publishedAt: 'Published Date',
 };
 
-/* Explicit widths because the shared table CSS uses table-layout: fixed. Each
-   report's column set is sized to fit the preview modal without side-scrolling. */
+/* Sized to comfortably fit badges and text without overflowing columns or wrapping headers */
 const COLUMN_WIDTHS: Record<string, string> = {
-  caseId: '120px',
-  title: '200px',
-  state: '110px',
-  district: '110px',
-  status: '170px',
-  date: '100px',
-  lifecycleAging: '100px',
-  payeeName: '160px',
-  bankName: '120px',
-  amount: '130px',
-  bankReference: '140px',
+  caseId: '150px',
+  title: '220px',
+  state: '130px',
+  district: '120px',
+  status: '220px',
+  date: '110px',
+  lifecycleAging: '110px',
+  payeeName: '180px',
+  bankName: '130px',
+  amount: '140px',
+  bankReference: '150px',
   milestone: '90px',
-  transactionHash: '190px',
-  documentHash: '190px',
-  publishedAt: '110px',
+  transactionHash: '200px',
+  documentHash: '200px',
+  publishedAt: '120px',
 };
 
 const columnLabel = (key: string) =>
@@ -202,18 +260,21 @@ export const ReportDataTable: React.FC<{ data: ReportGeneratedResponse }> = ({ d
 
   return (
     <div className="table-wrap">
-      <div className="table-scroll">
-        <table>
+      <div className="table-scroll overflow-x-auto">
+        <table className="w-full text-left border-collapse" style={{ minWidth: '980px' }}>
           <thead>
             <tr>
               {columns.map((key) => (
                 <th
                   key={key}
-                  style={{ width: COLUMN_WIDTHS[key] }}
+                  style={{ width: COLUMN_WIDTHS[key], minWidth: COLUMN_WIDTHS[key] }}
                   onClick={() => handleSort(key)}
-                  className="cursor-pointer select-none"
+                  className="cursor-pointer select-none px-3.5 py-3 text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider"
                 >
-                  {columnLabel(key)} {renderSortIcon(key)}
+                  <div className="flex items-center gap-1">
+                    <span>{columnLabel(key)}</span>
+                    {renderSortIcon(key)}
+                  </div>
                 </th>
               ))}
             </tr>
@@ -228,27 +289,42 @@ export const ReportDataTable: React.FC<{ data: ReportGeneratedResponse }> = ({ d
               </tr>
             ) : (
               pageRows.map((row, idx) => (
-                <tr key={idx}>
+                <tr key={idx} className="border-b border-md-outline-variant/30 hover:bg-md-surface-container-high/40 transition-colors">
                   {columns.map((key) => {
                     const value = row[key];
                     if (key.toLowerCase() === 'status') {
                       return (
-                        <td key={key}>
+                        <td key={key} className="px-3.5 py-3 whitespace-nowrap" style={{ width: COLUMN_WIDTHS[key], minWidth: COLUMN_WIDTHS[key] }}>
                           <StatusBadge status={String(value)} />
                         </td>
                       );
                     }
                     const text = String(value ?? '-');
                     const isHash = key.toLowerCase().includes('hash') || text.startsWith('0x');
+                    const isTxHash = key === 'transactionHash' && text && text !== '-' && text.startsWith('0x');
                     return (
-                      <td key={key}>
+                      <td key={key} className="px-3.5 py-3 text-sm text-md-on-surface" style={{ width: COLUMN_WIDTHS[key], minWidth: COLUMN_WIDTHS[key] }}>
                         <div className="flex items-center gap-1.5 min-w-0">
-                          <span
-                            className={isHash ? 'font-mono text-xs break-all' : 'truncate'}
-                            title={text}
-                          >
-                            {text}
-                          </span>
+                          {isTxHash ? (
+                            <a
+                              href={`https://sepolia.etherscan.io/tx/${text}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-mono text-xs text-md-primary hover:underline inline-flex items-center gap-1 break-all group"
+                              title="View on Sepolia Etherscan"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <span>{text}</span>
+                              <ExternalLink size={12} className="shrink-0 opacity-70 group-hover:opacity-100" />
+                            </a>
+                          ) : (
+                            <span
+                              className={isHash ? 'font-mono text-xs break-all' : 'truncate'}
+                              title={text}
+                            >
+                              {text}
+                            </span>
+                          )}
                           {COPYABLE_COLUMNS.has(key) && (
                             <CopyButton value={text} title={`Copy ${columnLabel(key)}`} />
                           )}
