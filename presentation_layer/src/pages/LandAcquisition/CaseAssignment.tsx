@@ -5,6 +5,7 @@ import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
 import { Button } from "../../components/ui/Button";
+import { PageHeader } from "../../components/ui/PageHeader";
 import { Select, type SelectOption } from "../../components/ui/Select";
 import { SearchInput } from "../../components/ui/SearchInput";
 import { Input } from "../../components/ui/Input";
@@ -404,18 +405,10 @@ export const CaseAssignment: React.FC = () => {
   return (
     <div ref={containerRef}>
       <div className="main blur-shape-bg">
-        <div className="topbar" style={{ marginBottom: "20px" }}>
-          <div className="topbar-left">
-            <h1 style={{ marginBottom: 0 }}>Case Assignment</h1>
-            <div className="sub">
-              Assign unassigned acquisition cases to land valuers (Phase 3 Backend Integration)
-            </div>
-          </div>
-          <div className="topbar-right">
-            <span className="date-badge"><Lucide.Calendar size={16} className="inline mr-1" /> {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
-            <div className="avatar">AO</div>
-          </div>
-        </div>
+        <PageHeader
+          title="Case Assignment"
+          subtitle="Assign unassigned acquisition cases to land valuers (Phase 3 Backend Integration)"
+        />
 
         {assignmentRecord ? (
           renderSuccessState()

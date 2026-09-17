@@ -12,6 +12,7 @@ import { CopyButton } from '../../components/ui/CopyButton';
 import { Pagination } from '../../components/ui/Pagination';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { useAuth } from '../../context/AuthContext';
+import { PageHeader } from '../../components/ui/PageHeader';
 import '../LandAcquisition/case_management.css';
 import { RefreshButton } from './RefreshButton';
 import './payment.css';
@@ -206,20 +207,10 @@ export default function InitiateTransfer() {
 
   return (
     <div className="main" ref={pageRef}>
-      <div className="topbar initiate-header">
-        <div className="topbar-left">
-          <h1>Initiate Transfer</h1>
-          <div className="sub">Queue of eligible cases ready for initiation — requires valid bank details and published Milestone 1 (Statutory Award) notarization.</div>
-        </div>
-        <div className="topbar-right">
-          <div className="date-badge">
-            <Clock size={16} className="inline mr-1" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-          </div>
-          <div className="avatar">
-            <User size={20} />
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title="Initiate Transfer"
+        subtitle="Queue of eligible cases ready for initiation — requires valid bank details and published Milestone 1 (Statutory Award) notarization."
+      />
 
       {user?.role === 'SYSTEM_ADMINISTRATOR' && (
         <div className="my-4 px-4 py-3 rounded-xl bg-md-surface-container-highest border border-md-outline/20 text-md-on-surface text-sm flex items-center gap-3">

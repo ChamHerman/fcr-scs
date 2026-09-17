@@ -68,8 +68,8 @@ const COMMON_PLACEHOLDERS: PlaceholderItem[] = [
 const CATEGORIES = ['ALL', 'Links & Buttons', 'Case & Land', 'Recipient', 'Financial', 'Security & OTP'] as const;
 
 const INITIAL_BODY = `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;">
-  <div style="border-bottom: 2px solid #0066cc; padding-bottom: 12px; margin-bottom: 20px;">
-    <h2 style="color: #0066cc; margin: 0; font-size: 20px;">FCR-SCS Notification</h2>
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <h2 style="color: #6750A4; margin: 0; font-size: 20px;">FCR-SCS Notification</h2>
     <span style="font-size: 12px; color: #64748b;">Statutory Compensation & Land Commission</span>
   </div>
 
@@ -79,13 +79,13 @@ const INITIAL_BODY = `<div style="font-family: Arial, sans-serif; padding: 24px;
     This is an official communication regarding your compensation case <strong>{{caseId}}</strong>.
   </p>
 
-  <div style="background-color: #f8fafc; border-left: 4px solid #0066cc; padding: 12px 16px; margin: 20px 0;">
+  <div style="background-color: #f8fafc; border-left: 4px solid #6750A4; padding: 12px 16px; margin: 20px 0;">
     <p style="margin: 0; font-size: 14px; color: #1e293b;">Status: <strong>{{status}}</strong></p>
     <p style="margin: 4px 0 0 0; font-size: 14px; color: #475569;">Remarks: {{remarks}}</p>
   </div>
 
   <div style="text-align: center; margin: 25px 0;">
-    <a href="{{portalLink}}" style="background-color: #0066cc; color: #ffffff; padding: 10px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 14px;">View In Member Portal</a>
+    <a href="{{portalLink}}" style="background-color: #6750A4; color: #ffffff; padding: 10px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 14px;">View In Member Portal</a>
   </div>
 
   <p style="font-size: 13px; color: #64748b; line-height: 1.5;">
@@ -120,7 +120,7 @@ export const EmailTemplateCreate: React.FC = () => {
   };
 
   const handleInsertButtonSnippet = () => {
-    const snippet = `\n<div style="text-align: center; margin: 24px 0;">\n  <a href="{{actionUrl}}" style="background-color: #0066cc; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">{{buttonText}}</a>\n</div>\n`;
+    const snippet = `\n<div style="text-align: center; margin: 24px 0;">\n  <a href="{{actionUrl}}" style="background-color: #6750A4; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(103,80,164,0.2);">{{buttonText}}</a>\n</div>\n`;
 
     const el = textareaRef.current;
     if (el) {
@@ -243,25 +243,15 @@ export const EmailTemplateCreate: React.FC = () => {
         subtitle="Design a new administrative notification template with live split-screen preview."
         backPath="/admin/email-templates"
         actions={
-          <div className="flex items-center gap-2">
-            <MD3Button
-              type="button"
-              variant="outlined"
-              onClick={() => navigate('/admin/email-templates')}
-              disabled={isSaving}
-            >
-              Cancel
-            </MD3Button>
-            <MD3Button
-              type="button"
-              onClick={handleSave}
-              disabled={isSaving}
-              className="flex items-center gap-2"
-            >
-              <Save size={16} />
-              {isSaving ? 'Saving Template...' : 'Save Template'}
-            </MD3Button>
-          </div>
+          <MD3Button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving}
+            className="flex items-center gap-2"
+          >
+            <Save size={16} />
+            {isSaving ? 'Saving Template...' : 'Save Template'}
+          </MD3Button>
         }
       />
 
@@ -330,7 +320,7 @@ export const EmailTemplateCreate: React.FC = () => {
               <button
                 type="button"
                 onClick={handleInsertButtonSnippet}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-sm"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-md-primary hover:bg-md-primary/90 text-white transition-all shadow-sm"
                 title="Insert pre-styled responsive Action Button snippet into editor"
               >
                 <ExternalLink size={13} />

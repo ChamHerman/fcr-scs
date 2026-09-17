@@ -33,6 +33,7 @@ import {
 import { compensationApi } from "../../services/compensationApi";
 import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
+import { PageHeader } from "../../components/ui/PageHeader";
 import { Textarea } from "../../components/ui/Textarea";
 import { FileUpload } from "../../components/ui/FileUpload";
 import { CopyButton } from "../../components/ui/CopyButton";
@@ -467,39 +468,11 @@ export const OfferLetterReview: React.FC = () => {
       <div className="main blur-shape-bg">
         <div className="review-container">
           {/* Top Bar */}
-          <div className="topbar" style={{ marginBottom: "16px" }}>
-            <div className="topbar-left">
-              <h1 style={{ marginBottom: 0 }}>Review Offer Letter</h1>
-              <div className="sub">
-                Review official Form H notice of award and offer of compensation details
-              </div>
-            </div>
-            <div className="topbar-right flex items-center gap-3">
-              <Button variant="outlined" size="sm" onClick={() => navigate("/admin/compensation/offer")}>
-                <ArrowLeft size={16} /> Back
-              </Button>
-              <span className="date-badge">
-                <Calendar size={16} className="inline mr-1" />
-                {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-              </span>
-              <div
-                className="avatar"
-                title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
-              >
-                {user?.name ? (
-                  <span className="text-xs font-bold uppercase">
-                    {user.name
-                      .split(/\s+/)
-                      .map((n: string) => n[0])
-                      .slice(0, 2)
-                      .join("")}
-                  </span>
-                ) : (
-                  <User size={16} />
-                )}
-              </div>
-            </div>
-          </div>
+          <PageHeader
+            title="Review Offer Letter"
+            subtitle="Review official Form H notice of award and offer of compensation details"
+            backPath="/admin/compensation/offer"
+          />
 
           {/* Case Summary: Exactly matching ValuationReview design with 3 requested detail items */}
           <div className="case-summary">

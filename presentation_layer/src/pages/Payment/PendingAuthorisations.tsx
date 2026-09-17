@@ -11,6 +11,7 @@ import { CopyButton } from '../../components/ui/CopyButton';
 import { Pagination } from '../../components/ui/Pagination';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { useAuth } from '../../context/AuthContext';
+import { PageHeader } from '../../components/ui/PageHeader';
 import './payment.css';
 import { RefreshButton } from './RefreshButton';
 import {
@@ -143,20 +144,10 @@ export default function PendingAuthorisations() {
 
   return (
     <div className="main" ref={pageRef}>
-      <div className="topbar pending-header">
-        <div className="topbar-left">
-          <h1>Pending Authorisations</h1>
-          <div className="sub">Initiated transfers awaiting secondary approval (multi-signature queue).</div>
-        </div>
-        <div className="topbar-right">
-          <div className="date-badge">
-            <Clock size={16} className="inline mr-1" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-          </div>
-          <div className="avatar">
-            <User size={20} />
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title="Pending Authorisations"
+        subtitle="Initiated transfers awaiting secondary approval (multi-signature queue)."
+      />
 
       {user?.role === 'SYSTEM_ADMINISTRATOR' && (
         <div className="my-4 px-4 py-3 rounded-xl bg-md-surface-container-highest border border-md-outline/20 text-md-on-surface text-sm flex items-center gap-3">

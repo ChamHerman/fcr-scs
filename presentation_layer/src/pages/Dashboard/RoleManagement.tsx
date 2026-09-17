@@ -6,6 +6,8 @@ import { PageHeader } from '../../components/ui/PageHeader';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import '../LandAcquisition/case_management.css';
 import { Check, Save } from 'lucide-react';
+import api from '../../services/api';
+import { useNotification } from '../../components/ui/NotificationSystem';
 
 const ROLES = [
   'SYSTEM_ADMINISTRATOR',
@@ -20,11 +22,33 @@ const getDefaultPermissions = (role: string): string[] => {
     case 'SYSTEM_ADMINISTRATOR':
       return ADMIN_PAGES.map(p => p.path);
     case 'GOVERNMENT_ADMINISTRATOR':
-      return ADMIN_PAGES.filter(p => !p.path.startsWith('/member') && p.category !== 'User Management').map(p => p.path);
+      return ADMIN_PAGES.filter(p => 
+        !p.path.startsWith('/member') && 
+        !['/admin/users', '/admin/role-management', '/admin/email-templates', '/admin/audit-logs'].includes(p.path)
+      ).map(p => p.path);
     case 'GOVERNMENT_OFFICER':
-      return ADMIN_PAGES.filter(p => ['Main', 'Land Acquisition', 'Compensation', 'Reporting'].includes(p.category) && !p.path.startsWith('/member')).map(p => p.path);
+      return [
+        '/admin',
+        '/admin/case',
+        '/admin/case/valuation',
+        '/admin/compensation/report',
+        '/admin/compensation/offer',
+        '/admin/compensation/objection',
+        '/admin/prediction',
+        '/admin/reports',
+        '/admin/reports/case-status',
+        '/admin/profile',
+        '/admin/alerts',
+      ];
     case 'LAND_VALUER':
-      return ADMIN_PAGES.filter(p => ['Main', 'Land Acquisition', 'AI Valuation'].includes(p.category)).map(p => p.path);
+      return [
+        '/admin',
+        '/admin/case',
+        '/admin/case/valuation',
+        '/admin/prediction',
+        '/admin/profile',
+        '/admin/alerts',
+      ];
     case 'DISPLACED_COMMUNITY_MEMBER':
       return ADMIN_PAGES.filter(p => p.path.startsWith('/member')).map(p => p.path);
     default:
@@ -34,7 +58,8 @@ const getDefaultPermissions = (role: string): string[] => {
 
 export const RoleManagement: React.FC = () => {
   useDocumentTitle('Role Management');
-  const [selectedRole, setSelectedRole] = useState<string>(ROLES[1]); // Default to first non-sysadmin role
+  const { notify } = useNotification();
+  const [selectedRole, setSelectedRole] = useState<string>(ROLES[1]); // Default to GOVERNMENT_ADMINISTRATOR
   const [permissions, setPermissions] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState<boolean>(false);
 
@@ -45,31 +70,31 @@ export const RoleManagement: React.FC = () => {
   const fetchPermissions = async (role: string) => {
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:3030/api/users/permissions/${role}`);
-      if (res.ok) {
-        const json = await res.json();
-        const permMap: Record<string, boolean> = {};
-        
-        // Initialize all pages to false unless fetched otherwise
-        ADMIN_PAGES.forEach(page => {
-          permMap[page.path] = false;
-        });
+      const res = await api.get(`/users/permissions/${role}`);
+      const data = res.data;
+      const permMap: Record<string, boolean> = {};
+      
+      // Initialize all pages to false unless fetched otherwise
+      ADMIN_PAGES.forEach(page => {
+        permMap[page.path] = false;
+      });
 
-        if (json.success && json.data && json.data.length > 0) {
-          json.data.forEach((p: any) => {
+      if (data?.success && data?.data && data.data.length > 0) {
+        data.data.forEach((p: any) => {
+          if (permMap[p.pagePath] !== undefined) {
             permMap[p.pagePath] = p.canAccess;
-          });
-        } else {
-          // Initialize with default permissions if no saved permissions exist
-          const defaultPaths = getDefaultPermissions(role);
-          defaultPaths.forEach(path => {
-            if (permMap[path] !== undefined) {
-              permMap[path] = true;
-            }
-          });
-        }
-        setPermissions(permMap);
+          }
+        });
+      } else {
+        // Initialize with default permissions if no saved permissions exist
+        const defaultPaths = getDefaultPermissions(role);
+        defaultPaths.forEach(path => {
+          if (permMap[path] !== undefined) {
+            permMap[path] = true;
+          }
+        });
       }
+      setPermissions(permMap);
     } catch (e) {
       console.error('Failed to fetch permissions', e);
     } finally {
@@ -81,6 +106,8 @@ export const RoleManagement: React.FC = () => {
     if (selectedRole === 'SYSTEM_ADMINISTRATOR') return; // Cannot modify system admin
     if (path === '/admin/role-management') return; // Strictly reserved for system admin
     if (selectedRole !== 'GOVERNMENT_ADMINISTRATOR' && (path.startsWith('/admin/payment') || path.startsWith('/admin/blockchain'))) return; // Strictly for GA
+    if (selectedRole === 'DISPLACED_COMMUNITY_MEMBER' && !path.startsWith('/member')) return; // Member cannot access admin portal
+    if (selectedRole !== 'DISPLACED_COMMUNITY_MEMBER' && path.startsWith('/member')) return; // Admin roles cannot access member portal
 
     setPermissions(prev => ({
       ...prev,
@@ -91,10 +118,14 @@ export const RoleManagement: React.FC = () => {
   const handleToggleCategory = (categoryPages: AdminPageInfo[]) => {
     if (selectedRole === 'SYSTEM_ADMINISTRATOR') return;
     if (selectedRole !== 'GOVERNMENT_ADMINISTRATOR' && categoryPages.some(p => p.category === 'Finance & Ledger')) return;
+    if (selectedRole !== 'DISPLACED_COMMUNITY_MEMBER' && categoryPages.some(p => p.category === 'Member Portal')) return;
+    if (selectedRole === 'DISPLACED_COMMUNITY_MEMBER' && categoryPages.some(p => p.category !== 'Member Portal')) return;
 
     const modifiablePages = categoryPages.filter(p => {
       if (p.path === '/admin/role-management') return false;
       if (selectedRole !== 'GOVERNMENT_ADMINISTRATOR' && p.category === 'Finance & Ledger') return false;
+      if (selectedRole !== 'DISPLACED_COMMUNITY_MEMBER' && p.category === 'Member Portal') return false;
+      if (selectedRole === 'DISPLACED_COMMUNITY_MEMBER' && p.category !== 'Member Portal') return false;
       return true;
     });
 
@@ -118,19 +149,27 @@ export const RoleManagement: React.FC = () => {
     }));
 
     try {
-      const res = await fetch(`http://localhost:3030/api/users/permissions/${selectedRole}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ permissions: payload })
-      });
-      if (res.ok) {
-        alert('Permissions saved successfully');
+      const res = await api.post(`/users/permissions/${selectedRole}`, { permissions: payload });
+      if (res.data?.success || res.status === 200) {
+        notify({
+          type: 'success',
+          title: 'Permissions Updated',
+          message: `Permissions for ${selectedRole.replace(/_/g, ' ')} have been saved successfully.`
+        });
       } else {
-        alert('Failed to save permissions');
+        notify({
+          type: 'error',
+          title: 'Save Failed',
+          message: res.data?.message || 'Failed to save role permissions.'
+        });
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert('Error saving permissions');
+      notify({
+        type: 'error',
+        title: 'Error Saving Permissions',
+        message: e?.response?.data?.message || e.message || 'An unexpected error occurred while saving.'
+      });
     } finally {
       setLoading(false);
     }
@@ -186,7 +225,13 @@ export const RoleManagement: React.FC = () => {
 
       <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
         {Object.entries(groupedPages).map(([category, pages]) => {
-          const allChecked = isSysAdmin ? true : pages.every(p => !!permissions[p.path]);
+          const isCategoryDisabled =
+            isSysAdmin ||
+            (selectedRole !== 'GOVERNMENT_ADMINISTRATOR' && category === 'Finance & Ledger') ||
+            (selectedRole !== 'DISPLACED_COMMUNITY_MEMBER' && category === 'Member Portal') ||
+            (selectedRole === 'DISPLACED_COMMUNITY_MEMBER' && category !== 'Member Portal');
+
+          const allChecked = isSysAdmin ? true : (isCategoryDisabled ? false : pages.every(p => !!permissions[p.path]));
 
           return (
             <div key={category} className="flex flex-col gap-3">
@@ -198,10 +243,10 @@ export const RoleManagement: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleToggleCategory(pages)}
-                  disabled={isSysAdmin}
+                  disabled={isCategoryDisabled}
                   title={allChecked ? `Deselect all in ${category}` : `Select all in ${category}`}
                   className={`text-xs px-3 py-1 rounded-full font-medium transition-all duration-200 border flex items-center gap-1.5 ${
-                    isSysAdmin
+                    isCategoryDisabled
                       ? 'opacity-40 cursor-not-allowed border-transparent text-md-on-surface-variant'
                       : allChecked
                       ? 'bg-md-primary/10 text-md-primary border-md-primary/30 hover:bg-md-primary/20'
@@ -217,8 +262,10 @@ export const RoleManagement: React.FC = () => {
                 {pages.map(page => {
                   const isRoleMgmtLocked = page.path === '/admin/role-management';
                   const isFinanceLocked = page.category === 'Finance & Ledger' && selectedRole !== 'GOVERNMENT_ADMINISTRATOR';
-                  const isDisabled = isSysAdmin || isRoleMgmtLocked || isFinanceLocked;
-                  const checked = isSysAdmin ? true : (isRoleMgmtLocked ? false : (isFinanceLocked ? false : !!permissions[page.path]));
+                  const isMemberOnlyLocked = page.category === 'Member Portal' && selectedRole !== 'DISPLACED_COMMUNITY_MEMBER';
+                  const isAdminOnlyLocked = page.category !== 'Member Portal' && selectedRole === 'DISPLACED_COMMUNITY_MEMBER';
+                  const isDisabled = isSysAdmin || isRoleMgmtLocked || isFinanceLocked || isMemberOnlyLocked || isAdminOnlyLocked;
+                  const checked = isSysAdmin ? true : (isRoleMgmtLocked || isFinanceLocked || isMemberOnlyLocked || isAdminOnlyLocked ? false : !!permissions[page.path]);
                   return (
                     <label 
                       key={page.path} 
@@ -241,6 +288,16 @@ export const RoleManagement: React.FC = () => {
                           {isFinanceLocked && (
                             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-md-outline/15 text-md-on-surface-variant">
                               GovAdmin Only
+                            </span>
+                          )}
+                          {isMemberOnlyLocked && (
+                            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-md-outline/15 text-md-on-surface-variant">
+                              Member Only
+                            </span>
+                          )}
+                          {isAdminOnlyLocked && (
+                            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-md-outline/15 text-md-on-surface-variant">
+                              Admin Only
                             </span>
                           )}
                         </div>

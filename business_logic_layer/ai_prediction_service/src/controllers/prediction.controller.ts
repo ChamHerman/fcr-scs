@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import * as predictionService from "../services/pythonBridge.service";
 import type { ValuationInput } from "../interfaces/prediction.types";
+import { logAudit } from "../../../user_management_service/src/services/audit.service";
+import { AuthenticatedRequest } from "../../../user_management_service/src/middleware/auth.middleware";
 
 export async function valuate(req: Request, res: Response): Promise<void> {
   if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
@@ -12,6 +14,22 @@ export async function valuate(req: Request, res: Response): Promise<void> {
     // The body is forwarded as-is: the Python sidecar normalises canonical and
     // legacy (pre-alignment) keys/aliases and returns precise validation errors.
     const breakdown = await predictionService.valuate(req.body as unknown as ValuationInput);
+
+    const user = (req as AuthenticatedRequest).user;
+    logAudit({
+      userId: user?.userId,
+      activityType: 'AI_VALUATION_GENERATED',
+      moduleName: 'AI_VALUATION',
+      severity: 'INFO',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: {
+        inputKeys: Object.keys(req.body),
+        estimatedValue: (breakdown as any)?.totalCompensation ?? (breakdown as any)?.estimatedValue,
+      },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     res.json({ success: true, data: breakdown });
   } catch (e: unknown) {
     handleError(res, e);
@@ -37,10 +55,40 @@ export async function retrainModel(req: Request, res: Response): Promise<void> {
     return;
   }
 
+  const user = (req as AuthenticatedRequest).user;
   try {
     const comparison = await predictionService.retrainModel(req.file.buffer, req.file.originalname);
+
+    logAudit({
+      userId: user?.userId,
+      activityType: 'AI_MODEL_RETRAINED',
+      moduleName: 'AI_VALUATION',
+      severity: 'INFO',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: {
+        datasetFileName: req.file.originalname,
+        datasetSizeBytes: req.file.size,
+        comparison,
+      },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     res.json({ success: true, data: comparison });
   } catch (e: unknown) {
+    logAudit({
+      userId: user?.userId,
+      activityType: 'AI_MODEL_RETRAIN_FAILED',
+      moduleName: 'AI_VALUATION',
+      severity: 'CRITICAL',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: {
+        datasetFileName: req.file.originalname,
+        error: (e as Error).message,
+      },
+      systemResponse: 'ERROR (500/502)',
+    });
     handleError(res, e);
   }
 }
@@ -51,8 +99,21 @@ export async function activateModel(req: Request, res: Response): Promise<void> 
     res.status(400).json({ error: "candidateId is required" });
     return;
   }
+  const user = (req as AuthenticatedRequest).user;
   try {
     const info = await predictionService.activateModel(candidateId);
+
+    logAudit({
+      userId: user?.userId,
+      activityType: 'AI_MODEL_ACTIVATED',
+      moduleName: 'AI_VALUATION',
+      severity: 'INFO',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { candidateId, modelInfo: info },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     res.json({ success: true, data: info });
   } catch (e: unknown) {
     handleError(res, e, { notFoundStatus: true });
@@ -65,8 +126,21 @@ export async function discardModel(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: "candidateId is required" });
     return;
   }
+  const user = (req as AuthenticatedRequest).user;
   try {
     await predictionService.discardCandidate(candidateId);
+
+    logAudit({
+      userId: user?.userId,
+      activityType: 'AI_MODEL_DISCARDED',
+      moduleName: 'AI_VALUATION',
+      severity: 'INFO',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { candidateId },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     res.json({ success: true, data: { discarded: candidateId } });
   } catch (e: unknown) {
     handleError(res, e, { notFoundStatus: true });

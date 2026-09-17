@@ -27,6 +27,7 @@ import {
 } from 'chart.js';
 import { Doughnut, Line, Bar } from 'react-chartjs-2';
 import { Button } from '../../components/ui/Button';
+import { PageHeader } from '../../components/ui/PageHeader';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { Select } from '../../components/ui/Select';
 import { Modal } from '../../components/ui/Modal';
@@ -350,22 +351,16 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
   return (
     <div className="space-y-6">
       {/* Topbar */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold">{headerInfo.title}</h1>
-          <p className="text-md-on-surface-variant mt-1 max-w-3xl">{headerInfo.subtitle}</p>
-        </div>
-        <div className="flex items-center gap-3">
+      <PageHeader
+        title={headerInfo.title}
+        subtitle={headerInfo.subtitle}
+        actions={
           <Button variant="tonal" size="sm" onClick={handleRefresh}>
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
             Refresh
           </Button>
-          <span className="inline-flex items-center gap-2 text-sm text-md-on-surface-variant px-3.5 py-2 rounded-full bg-md-surface-container shadow-sm">
-            <Clock size={16} />
-            {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-          </span>
-        </div>
-      </div>
+        }
+      />
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">

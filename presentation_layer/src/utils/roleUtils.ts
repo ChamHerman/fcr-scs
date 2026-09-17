@@ -30,3 +30,16 @@ export const getRoleTitle = (role?: string | null): string => {
   };
   return map[role] || role.replace(/_/g, ' ');
 };
+
+/**
+ * Extract the initials using the first letter of the first and second words of the user's name.
+ * e.g., "Herman Ting" -> "HT", "Ahmad bin Razak" -> "AB", "Admin" -> "AD"
+ */
+export const getNameInitials = (name?: string | null): string => {
+  if (!name) return 'AD';
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const first = words[0]?.[0] ?? '';
+  const second = words[1]?.[0] ?? '';
+  const initials = (first + second).toUpperCase();
+  return initials || (name.slice(0, 2).toUpperCase() || 'AD');
+};

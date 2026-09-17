@@ -21,6 +21,7 @@ import { WalletButton } from '../../components/ui/WalletButton';
 import { NetworkStatusBadge } from './NetworkSelector';
 import type { NetworkInfo } from './NetworkSelector';
 import { RefreshButton } from '../Payment/RefreshButton';
+import { PageHeader } from '../../components/ui/PageHeader';
 import '../LandAcquisition/case_management.css';
 import '../Payment/payment.css';
 import { normalizePaymentStatus } from '../Payment/statusMaps';
@@ -354,29 +355,19 @@ export const PublishLedger: React.FC = () => {
 
   return (
     <div className="main" ref={pageRef}>
-      <div className="topbar publish-header">
-        <div className="topbar-left">
-          <h1>Publish to Ledger</h1>
-          <div className="sub">
-            Dual-milestone notarization — statutory awards and settlement completions anchored on-chain.
-          </div>
-        </div>
-        <div className="topbar-right flex items-center gap-3">
-          {walletConnected ? (
+      <PageHeader
+        title="Publish to Ledger"
+        subtitle="Dual-milestone notarization — statutory awards and settlement completions anchored on-chain."
+        actions={
+          walletConnected ? (
             <WalletButton walletAddress={walletAddress || undefined} label="Government Wallet" />
           ) : (
             <Button onClick={connectWallet} variant="animated-primary" className="font-semibold flex items-center gap-2">
               <Wallet size={16} /> Connect MetaMask
             </Button>
-          )}
-          <div className="date-badge">
-            <Clock size={16} className="inline mr-1" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-          </div>
-          <div className="avatar">
-            <User size={20} />
-          </div>
-        </div>
-      </div>
+          )
+        }
+      />
 
       {error && (
         <div className="my-4 px-4 py-3 rounded-xl bg-md-error/10 border border-md-error/30 text-md-on-error text-sm">{error}</div>

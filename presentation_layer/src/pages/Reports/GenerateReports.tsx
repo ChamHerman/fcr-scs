@@ -11,6 +11,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
+import { PageHeader } from '../../components/ui/PageHeader';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { Modal } from '../../components/ui/Modal';
@@ -170,29 +171,11 @@ export const GenerateReports: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Topbar */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <Button variant="tonal" size="sm" onClick={handleBack}>
-            <ArrowLeft size={16} />
-            Back
-          </Button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl md:text-3xl font-bold">Generate Filtering Reports</h1>
-              <span className="px-2 py-1 rounded-lg bg-md-primary/15 text-md-primary font-bold text-xs whitespace-nowrap">
-                {category}
-              </span>
-            </div>
-            <p className="text-md-on-surface-variant mt-1 max-w-3xl">
-              {REPORT_DESCRIPTIONS[category]}
-            </p>
-          </div>
-        </div>
-        <span className="inline-flex items-center gap-2 text-sm text-md-on-surface-variant px-3.5 py-2 rounded-full bg-md-surface-container shadow-sm">
-          <CalendarRange size={16} />
-          {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-        </span>
-      </div>
+      <PageHeader
+        title={`Generate Filtering Reports (${category})`}
+        subtitle={REPORT_DESCRIPTIONS[category]}
+        onBack={handleBack}
+      />
 
       {/* Filter & Configuration Form Panel */}
       <div className="bg-md-surface-container rounded-xl p-6 shadow-sm">

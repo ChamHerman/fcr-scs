@@ -14,6 +14,7 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
+import { PageHeader } from '../../components/ui/PageHeader';
 import { useNotification } from '../../components/ui/NotificationSystem';
 import { CaseSelectionModal } from '../LandAcquisition/CaseSelectionModal';
 import { landAcquisitionApi } from '../../services/landAcquisitionApi';
@@ -236,19 +237,10 @@ export const GenerateAIValuation: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl md:text-3xl font-bold">Generate AI Valuation</h1>
-            <span className="px-2 py-1 rounded-lg bg-md-primary/15 text-md-primary font-bold text-xs whitespace-nowrap">
-              Admin console
-            </span>
-          </div>
-          <p className="text-md-on-surface-variant mt-1 max-w-3xl">
-            Estimate statutory compensation with the live trained model.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Generate AI Valuation"
+        subtitle="Estimate statutory compensation with the live trained model."
+      />
 
       {/* Case linkage */}
       <Card interactive={false} className="flex flex-wrap items-center gap-3 !p-4">

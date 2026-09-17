@@ -23,6 +23,7 @@ import {
 import { compensationApi } from "../../services/compensationApi";
 import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
+import { PageHeader } from "../../components/ui/PageHeader";
 import { Textarea } from "../../components/ui/Textarea";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
@@ -370,37 +371,11 @@ export const CompensationReview: React.FC = () => {
       <div className="main blur-shape-bg">
         <div className="review-container space-y-6">
           {/* Topbar */}
-          <div className="topbar" style={{ marginBottom: "0px" }}>
-            <div className="topbar-left">
-              <h1 style={{ marginBottom: 0 }}>Review Compensation Report</h1>
-              <div className="sub">Review the report details and take action</div>
-            </div>
-            <div className="topbar-right flex items-center gap-3">
-              <Button variant="outlined" size="sm" onClick={() => navigate("/admin/compensation/report")}>
-                <ArrowLeft size={16} /> Back
-              </Button>
-              <span className="date-badge">
-                <Calendar size={16} className="inline mr-1" />
-                {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-              </span>
-              <div
-                className="avatar"
-                title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
-              >
-                {user?.name ? (
-                  <span className="text-xs font-bold uppercase">
-                    {user.name
-                      .split(/\s+/)
-                      .map((n: string) => n[0])
-                      .slice(0, 2)
-                      .join("")}
-                  </span>
-                ) : (
-                  <User size={16} />
-                )}
-              </div>
-            </div>
-          </div>
+          <PageHeader
+            title="Review Compensation Report"
+            subtitle="Review the report details and take action"
+            backPath="/admin/compensation/report"
+          />
 
           {/* Case Summary */}
           <div className="case-summary">

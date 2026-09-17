@@ -236,8 +236,6 @@ async function main() {
   const ALL_ADMIN_PAGES = [
     // Main
     '/admin',
-    '/admin/valuers',
-    '/admin/forms',
 
     // Land Acquisition
     '/admin/case',
@@ -266,30 +264,63 @@ async function main() {
     '/admin/reports/payment',
     '/admin/reports/blockchain-audit',
 
-    // System
-    '/admin/profile',
+    // User Management
     '/admin/users',
     '/admin/role-management',
+
+    // System
+    '/admin/profile',
+    '/admin/email-templates',
     '/admin/audit-logs',
     '/admin/alerts',
     '/admin/settings',
   ];
 
+  const ALL_MEMBER_PAGES = [
+    '/member',
+    '/member/notifications',
+    '/member/offer-letter',
+    '/member/payment-status',
+    '/member/bank-details',
+    '/member/verify-audit',
+    '/member/settings',
+  ];
+
+  const GA_ALLOWED_PAGES = new Set([
+    '/admin',
+    '/admin/case',
+    '/admin/case/valuation',
+    '/admin/compensation/report',
+    '/admin/compensation/offer',
+    '/admin/compensation/objection',
+    '/admin/payment',
+    '/admin/payment/initiate',
+    '/admin/payment/pending',
+    '/admin/payment/failed',
+    '/admin/blockchain',
+    '/admin/blockchain/publish',
+    '/admin/prediction',
+    '/admin/prediction/retrain',
+    '/admin/reports',
+    '/admin/reports/case-status',
+    '/admin/reports/payment',
+    '/admin/reports/blockchain-audit',
+    '/admin/profile',
+    '/admin/alerts',
+    '/admin/settings',
+  ]);
+
   const OFFICER_ALLOWED_PAGES = new Set([
     '/admin',
-    '/admin/valuers',
-    '/admin/forms',
     '/admin/case',
     '/admin/case/valuation',
     '/admin/compensation/report',
     '/admin/compensation/offer',
     '/admin/compensation/objection',
     '/admin/prediction',
-    '/admin/prediction/retrain',
     '/admin/reports',
     '/admin/reports/case-status',
     '/admin/profile',
-    '/admin/audit-logs',
     '/admin/alerts',
   ]);
 
@@ -299,13 +330,25 @@ async function main() {
     '/admin/case/valuation',
     '/admin/prediction',
     '/admin/profile',
+    '/admin/alerts',
   ]);
 
+  const MEMBER_ALLOWED_PAGES = new Set([
+    '/member',
+    '/member/notifications',
+    '/member/offer-letter',
+    '/member/payment-status',
+    '/member/bank-details',
+    '/member/verify-audit',
+    '/member/settings',
+  ]);
+
+  const ALL_SYSTEM_PAGES = [...ALL_ADMIN_PAGES, ...ALL_MEMBER_PAGES];
   let rpmSeq = 1;
-  // Seed Government Administrator permissions:
-  // Allowed to access all admin portal pages EXCEPT for role management page only.
-  for (const pagePath of ALL_ADMIN_PAGES) {
-    const canAccess = pagePath !== '/admin/role-management';
+
+  // Seed Government Administrator permissions
+  for (const pagePath of ALL_SYSTEM_PAGES) {
+    const canAccess = GA_ALLOWED_PAGES.has(pagePath);
     const id = `RPM-2026-09-${String(rpmSeq++).padStart(4, '0')}`;
     await prisma.rolePermission.upsert({
       where: { role_pagePath: { role: UserRole.GOVERNMENT_ADMINISTRATOR, pagePath } },
@@ -314,9 +357,8 @@ async function main() {
     });
   }
 
-  // Seed Government Officer permissions:
-  // Finance & Ledger permissions removed; operational pages granted; role management & user admin denied.
-  for (const pagePath of ALL_ADMIN_PAGES) {
+  // Seed Government Officer permissions
+  for (const pagePath of ALL_SYSTEM_PAGES) {
     const canAccess = OFFICER_ALLOWED_PAGES.has(pagePath);
     const id = `RPM-2026-09-${String(rpmSeq++).padStart(4, '0')}`;
     await prisma.rolePermission.upsert({
@@ -326,9 +368,8 @@ async function main() {
     });
   }
 
-  // Seed Land Valuer permissions:
-  // Operational pages only (Forms, Case, Valuation, AI Valuation); all admin functions denied.
-  for (const pagePath of ALL_ADMIN_PAGES) {
+  // Seed Land Valuer permissions
+  for (const pagePath of ALL_SYSTEM_PAGES) {
     const canAccess = VALUER_ALLOWED_PAGES.has(pagePath);
     const id = `RPM-2026-09-${String(rpmSeq++).padStart(4, '0')}`;
     await prisma.rolePermission.upsert({
@@ -338,7 +379,18 @@ async function main() {
     });
   }
 
-  console.log('✅ Upserted RolePermissions: Finance & Ledger strictly for Government Admins; Government Admins granted all pages except Role Management; Officers removed from Finance & Ledger');
+  // Seed Displaced Community Member permissions
+  for (const pagePath of ALL_SYSTEM_PAGES) {
+    const canAccess = MEMBER_ALLOWED_PAGES.has(pagePath);
+    const id = `RPM-2026-09-${String(rpmSeq++).padStart(4, '0')}`;
+    await prisma.rolePermission.upsert({
+      where: { role_pagePath: { role: UserRole.DISPLACED_COMMUNITY_MEMBER, pagePath } },
+      update: { canAccess },
+      create: { id, role: UserRole.DISPLACED_COMMUNITY_MEMBER, pagePath, canAccess },
+    });
+  }
+
+  console.log('✅ Upserted RolePermissions matching active Role Management settings: Government Admins, Government Officers, Land Valuers, and Displaced Community Members configured.');
 
   // ===========================================================================
   // 2. Seed Email Templates
@@ -361,22 +413,76 @@ async function main() {
 
   const passwordResetTemplate = await prisma.emailTemplate.upsert({
     where: { templateName: 'PASSWORD_RESET' },
-    update: { templateId: 'EMT-2026-09-0001' },
+    update: {
+      templateId: 'EMT-2026-09-0001',
+      subject: 'FCR-SCS: Password Reset Request',
+      bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">SECURITY NOTICE</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Statutory Land Acquisition & Compensation Portal · Government of Malaysia</span>
+  </div>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Dear {{name}},</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    You recently requested to reset your password for your FCR-SCS portal account. Click the button below to proceed with resetting your credentials:
+  </p>
+
+  <div style="text-align: center; margin: 24px 0;">
+    <a href="{{resetLink}}" style="background-color: #6750A4; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(103,80,164,0.2);">Reset Password</a>
+  </div>
+
+  <div style="background-color: #f8fafc; border-left: 4px solid #6750A4; padding: 12px 16px; margin: 20px 0;">
+    <p style="margin: 0; font-size: 13px; color: #475569;">
+      This password reset link is valid for <strong>60 minutes</strong>. If you did not request a password reset, please ignore this email or contact administrative security immediately.
+    </p>
+  </div>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Government of Malaysia
+  </p>
+</div>`,
+    },
     create: {
       templateId: 'EMT-2026-09-0001',
       templateName: 'PASSWORD_RESET',
       subject: 'FCR-SCS: Password Reset Request',
-      bodyContent: `
-        <div style="font-family: sans-serif; padding: 20px;">
-          <h2>Password Reset Request</h2>
-          <p>Hi {{name}},</p>
-          <p>You recently requested to reset your password for your FCR-SCS account. Click the button below to reset it:</p>
-          <a href="{{resetLink}}" style="background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0;">Reset Password</a>
-          <p>If you did not request a password reset, please ignore this email or reply to let us know. This password reset link is only valid for the next 60 minutes.</p>
-          <br>
-          <p>Thanks,<br>The FCR-SCS Team</p>
-        </div>
-      `,
+      bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">SECURITY NOTICE</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Statutory Land Acquisition & Compensation Portal · Government of Malaysia</span>
+  </div>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Dear {{name}},</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    You recently requested to reset your password for your FCR-SCS portal account. Click the button below to proceed with resetting your credentials:
+  </p>
+
+  <div style="text-align: center; margin: 24px 0;">
+    <a href="{{resetLink}}" style="background-color: #6750A4; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(103,80,164,0.2);">Reset Password</a>
+  </div>
+
+  <div style="background-color: #f8fafc; border-left: 4px solid #6750A4; padding: 12px 16px; margin: 20px 0;">
+    <p style="margin: 0; font-size: 13px; color: #475569;">
+      This password reset link is valid for <strong>60 minutes</strong>. If you did not request a password reset, please ignore this email or contact administrative security immediately.
+    </p>
+  </div>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Government of Malaysia
+  </p>
+</div>`,
       createdById: defaultAdmin.userId,
     },
   });
@@ -384,22 +490,76 @@ async function main() {
 
   const activationTemplate = await prisma.emailTemplate.upsert({
     where: { templateName: 'ACCOUNT_ACTIVATION' },
-    update: {},
+    update: {
+      templateId: 'EMT-2026-09-0002',
+      subject: 'FCR-SCS: Activate Your Account',
+      bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">ACCOUNT ACTIVATION</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Statutory Land Acquisition & Compensation Portal · Government of Malaysia</span>
+  </div>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Dear {{name}},</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    Thank you for registering with the FCR-SCS Statutory Land Acquisition & Compensation Portal. Please click the button below to activate your account and verify your email address:
+  </p>
+
+  <div style="text-align: center; margin: 24px 0;">
+    <a href="{{activationLink}}" style="background-color: #6750A4; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(103,80,164,0.2);">Activate Account</a>
+  </div>
+
+  <div style="background-color: #f8fafc; border-left: 4px solid #6750A4; padding: 12px 16px; margin: 20px 0;">
+    <p style="margin: 0; font-size: 13px; color: #475569;">
+      This activation link is valid for <strong>24 hours</strong>. If you did not register for an account, please disregard this communication.
+    </p>
+  </div>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Government of Malaysia
+  </p>
+</div>`,
+    },
     create: {
       templateId: 'EMT-2026-09-0002',
       templateName: 'ACCOUNT_ACTIVATION',
       subject: 'FCR-SCS: Activate Your Account',
-      bodyContent: `
-        <div style="font-family: sans-serif; padding: 20px;">
-          <h2>Activate Your Account</h2>
-          <p>Hi {{name}},</p>
-          <p>Thank you for registering with FCR-SCS. Please click the button below to activate your account:</p>
-          <a href="{{activationLink}}" style="background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0;">Activate Account</a>
-          <p>If you did not register for an account, please ignore this email. This link is valid for 24 hours.</p>
-          <br>
-          <p>Thanks,<br>The FCR-SCS Team</p>
-        </div>
-      `,
+      bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">ACCOUNT ACTIVATION</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Statutory Land Acquisition & Compensation Portal · Government of Malaysia</span>
+  </div>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Dear {{name}},</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    Thank you for registering with the FCR-SCS Statutory Land Acquisition & Compensation Portal. Please click the button below to activate your account and verify your email address:
+  </p>
+
+  <div style="text-align: center; margin: 24px 0;">
+    <a href="{{activationLink}}" style="background-color: #6750A4; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(103,80,164,0.2);">Activate Account</a>
+  </div>
+
+  <div style="background-color: #f8fafc; border-left: 4px solid #6750A4; padding: 12px 16px; margin: 20px 0;">
+    <p style="margin: 0; font-size: 13px; color: #475569;">
+      This activation link is valid for <strong>24 hours</strong>. If you did not register for an account, please disregard this communication.
+    </p>
+  </div>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Government of Malaysia
+  </p>
+</div>`,
       createdById: defaultAdmin.userId,
     },
   });
@@ -407,23 +567,82 @@ async function main() {
 
   const offerLetterTemplate = await prisma.emailTemplate.upsert({
     where: { templateName: 'OFFER_LETTER_NOTIFICATION' },
-    update: {},
+    update: {
+      templateId: 'EMT-2026-09-0003',
+      subject: 'FCR-SCS: Compensation Offer Notice - Case {{caseId}}',
+      bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">STATUTORY OFFER NOTICE</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Statutory Land Acquisition & Compensation Commission · Government of Malaysia</span>
+  </div>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Dear {{name}},</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    An official compensation award and formal Form H offer notice have been published for Land Acquisition Case <strong>{{caseId}}</strong>.
+  </p>
+
+  <div style="background-color: #F3EDF7; border-left: 4px solid #6750A4; padding: 14px 18px; border-radius: 8px; margin: 20px 0;">
+    <p style="margin: 0 0 6px 0; font-size: 14px; color: #1e293b;">Case Reference: <strong>{{caseId}}</strong></p>
+    <p style="margin: 0; font-size: 14px; color: #1e293b;">Total Compensation Award: <strong style="color: #6750A4; font-size: 16px;">{{amount}}</strong></p>
+  </div>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    Please log in to your Member Portal to review the formal offer letter, examine the valuation breakdown, and select your statutory response (Accept / Dispute) within the designated window.
+  </p>
+
+  <div style="text-align: center; margin: 24px 0;">
+    <a href="{{portalLink}}" style="background-color: #6750A4; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(103,80,164,0.2);">View Offer Letter & Respond</a>
+  </div>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Land Acquisition Act 1960 (Act 486) · Government of Malaysia
+  </p>
+</div>`,
+    },
     create: {
       templateId: 'EMT-2026-09-0003',
       templateName: 'OFFER_LETTER_NOTIFICATION',
       subject: 'FCR-SCS: Compensation Offer Notice - Case {{caseId}}',
-      bodyContent: `
-        <div style="font-family: sans-serif; padding: 20px;">
-          <h2>Official Compensation Offer Notice</h2>
-          <p>Dear {{name}},</p>
-          <p>An official compensation offer has been published for Land Acquisition Case <strong>{{caseId}}</strong>.</p>
-          <p>Total awarded amount: <strong>{{amount}}</strong></p>
-          <p>Please log in to your Member Portal to review the formal offer letter and select your response (Accept / Dispute) within the statutory window:</p>
-          <a href="{{portalLink}}" style="background-color: #2e7d32; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0;">View Offer Letter</a>
-          <br>
-          <p>Regards,<br>Land Acquisition & Compensation Department</p>
-        </div>
-      `,
+      bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">STATUTORY OFFER NOTICE</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Statutory Land Acquisition & Compensation Commission · Government of Malaysia</span>
+  </div>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Dear {{name}},</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    An official compensation award and formal Form H offer notice have been published for Land Acquisition Case <strong>{{caseId}}</strong>.
+  </p>
+
+  <div style="background-color: #F3EDF7; border-left: 4px solid #6750A4; padding: 14px 18px; border-radius: 8px; margin: 20px 0;">
+    <p style="margin: 0 0 6px 0; font-size: 14px; color: #1e293b;">Case Reference: <strong>{{caseId}}</strong></p>
+    <p style="margin: 0; font-size: 14px; color: #1e293b;">Total Compensation Award: <strong style="color: #6750A4; font-size: 16px;">{{amount}}</strong></p>
+  </div>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    Please log in to your Member Portal to review the formal offer letter, examine the valuation breakdown, and select your statutory response (Accept / Dispute) within the designated window.
+  </p>
+
+  <div style="text-align: center; margin: 24px 0;">
+    <a href="{{portalLink}}" style="background-color: #6750A4; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(103,80,164,0.2);">View Offer Letter & Respond</a>
+  </div>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Land Acquisition Act 1960 (Act 486) · Government of Malaysia
+  </p>
+</div>`,
       createdById: defaultAdmin.userId,
     },
   });
@@ -431,23 +650,76 @@ async function main() {
 
   const paymentDisbursedTemplate = await prisma.emailTemplate.upsert({
     where: { templateName: 'PAYMENT_DISBURSED' },
-    update: {},
+    update: {
+      templateId: 'EMT-2026-09-0004',
+      subject: 'FCR-SCS: Payment Disbursed for Case {{caseId}}',
+      bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">PAYMENT DISBURSEMENT</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Finance & Disbursement Division · Government of Malaysia</span>
+  </div>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Dear {{name}},</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    Your statutory compensation payment for Land Acquisition Case <strong>{{caseId}}</strong> has been approved and successfully processed.
+  </p>
+
+  <div style="background-color: #F3EDF7; border-left: 4px solid #6750A4; padding: 14px 18px; border-radius: 8px; margin: 20px 0;">
+    <p style="margin: 0 0 6px 0; font-size: 14px; color: #1e293b;">Disbursed Amount: <strong style="color: #6750A4; font-size: 16px;">{{amount}}</strong></p>
+    <p style="margin: 0 0 6px 0; font-size: 13px; color: #475569;">EFT Reference ID: <code style="background-color: #EADDFF; padding: 2px 6px; border-radius: 4px; font-family: monospace;">{{transactionId}}</code></p>
+    <p style="margin: 0; font-size: 13px; color: #475569;">Payment Method: Direct Bank Transfer (EFT)</p>
+  </div>
+
+  <p style="font-size: 13px; color: #64748b; line-height: 1.5;">
+    Please allow 1-3 business days for the funds to reflect in your designated bank account depending on interbank clearing windows.
+  </p>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Finance & Statutory Disbursement Division · Government of Malaysia
+  </p>
+</div>`,
+    },
     create: {
       templateId: 'EMT-2026-09-0004',
       templateName: 'PAYMENT_DISBURSED',
       subject: 'FCR-SCS: Payment Disbursed for Case {{caseId}}',
-      bodyContent: `
-        <div style="font-family: sans-serif; padding: 20px;">
-          <h2>Compensation Payment Disbursed</h2>
-          <p>Dear {{name}},</p>
-          <p>Your compensation payment of <strong>{{amount}}</strong> for Case <strong>{{caseId}}</strong> has been approved and processed.</p>
-          <p>Reference Transaction ID: <code>{{transactionId}}</code></p>
-          <p>Payment Method: Direct Bank Transfer (EFT)</p>
-          <p>Please allow 1-3 business days for the funds to reflect in your designated bank account.</p>
-          <br>
-          <p>Regards,<br>Finance & Disbursement Division</p>
-        </div>
-      `,
+      bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">PAYMENT DISBURSEMENT</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Finance & Disbursement Division · Government of Malaysia</span>
+  </div>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Dear {{name}},</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    Your statutory compensation payment for Land Acquisition Case <strong>{{caseId}}</strong> has been approved and successfully processed.
+  </p>
+
+  <div style="background-color: #F3EDF7; border-left: 4px solid #6750A4; padding: 14px 18px; border-radius: 8px; margin: 20px 0;">
+    <p style="margin: 0 0 6px 0; font-size: 14px; color: #1e293b;">Disbursed Amount: <strong style="color: #6750A4; font-size: 16px;">{{amount}}</strong></p>
+    <p style="margin: 0 0 6px 0; font-size: 13px; color: #475569;">EFT Reference ID: <code style="background-color: #EADDFF; padding: 2px 6px; border-radius: 4px; font-family: monospace;">{{transactionId}}</code></p>
+    <p style="margin: 0; font-size: 13px; color: #475569;">Payment Method: Direct Bank Transfer (EFT)</p>
+  </div>
+
+  <p style="font-size: 13px; color: #64748b; line-height: 1.5;">
+    Please allow 1-3 business days for the funds to reflect in your designated bank account depending on interbank clearing windows.
+  </p>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Finance & Statutory Disbursement Division · Government of Malaysia
+  </p>
+</div>`,
       createdById: defaultAdmin.userId,
     },
   });
@@ -455,24 +727,74 @@ async function main() {
 
   const objectionUpdateTemplate = await prisma.emailTemplate.upsert({
     where: { templateName: 'OBJECTION_UPDATE' },
-    update: {},
+    update: {
+      templateId: 'EMT-2026-09-0005',
+      subject: 'FCR-SCS: Status Update on Objection - Case {{caseId}}',
+      bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">OBJECTION UPDATE</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Land Acquisition Hearing Committee & Objections Board</span>
+  </div>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Dear {{name}},</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    This is an official communication regarding your formal Form N objection submitted for Land Acquisition Case <strong>{{caseId}}</strong>.
+  </p>
+
+  <div style="background-color: #F3EDF7; border-left: 4px solid #6750A4; padding: 14px 18px; border-radius: 8px; margin: 20px 0;">
+    <p style="margin: 0 0 6px 0; font-size: 14px; color: #1e293b;">Current Status: <strong style="color: #6750A4;">{{status}}</strong></p>
+    <p style="margin: 0; font-size: 13px; color: #475569;">Hearing / Review Remarks: {{remarks}}</p>
+  </div>
+
+  <div style="text-align: center; margin: 24px 0;">
+    <a href="{{portalLink}}" style="background-color: #6750A4; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(103,80,164,0.2);">Check Details in Portal</a>
+  </div>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Land Acquisition Hearing Committee · Government of Malaysia
+  </p>
+</div>`,
+    },
     create: {
       templateId: 'EMT-2026-09-0005',
       templateName: 'OBJECTION_UPDATE',
       subject: 'FCR-SCS: Status Update on Objection - Case {{caseId}}',
-      bodyContent: `
-        <div style="font-family: sans-serif; padding: 20px;">
-          <h2>Update on Your Compensation Objection</h2>
-          <p>Dear {{name}},</p>
-          <p>Your objection submitted for Case <strong>{{caseId}}</strong> has been reviewed.</p>
-          <p>Current Status: <strong>{{status}}</strong></p>
-          <p>Review Remarks: {{remarks}}</p>
-          <p>Please visit the portal for full details or to communicate with your assigned officer:</p>
-          <a href="{{portalLink}}" style="background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0;">View Objection Details</a>
-          <br>
-          <p>Regards,<br>Objections & Appeals Board</p>
-        </div>
-      `,
+      bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">OBJECTION UPDATE</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Land Acquisition Hearing Committee & Objections Board</span>
+  </div>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Dear {{name}},</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    This is an official communication regarding your formal Form N objection submitted for Land Acquisition Case <strong>{{caseId}}</strong>.
+  </p>
+
+  <div style="background-color: #F3EDF7; border-left: 4px solid #6750A4; padding: 14px 18px; border-radius: 8px; margin: 20px 0;">
+    <p style="margin: 0 0 6px 0; font-size: 14px; color: #1e293b;">Current Status: <strong style="color: #6750A4;">{{status}}</strong></p>
+    <p style="margin: 0; font-size: 13px; color: #475569;">Hearing / Review Remarks: {{remarks}}</p>
+  </div>
+
+  <div style="text-align: center; margin: 24px 0;">
+    <a href="{{portalLink}}" style="background-color: #6750A4; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(103,80,164,0.2);">Check Details in Portal</a>
+  </div>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Land Acquisition Hearing Committee · Government of Malaysia
+  </p>
+</div>`,
       createdById: defaultAdmin.userId,
     },
   });
@@ -480,25 +802,76 @@ async function main() {
 
   const adminOtpTemplate = await prisma.emailTemplate.upsert({
     where: { templateName: 'SYSTEM_ADMIN_OTP' },
-    update: {},
+    update: {
+      templateId: 'EMT-2026-09-0006',
+      subject: 'FCR-SCS Security: Your Administrator Verification Code is {{otp}}',
+      bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">TWO-FACTOR AUTH</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Identity & Access Governance · Government of Malaysia</span>
+  </div>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Dear {{name}},</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    A sign-in attempt to the FCR-SCS Administrative Console was initiated for your account. Please use the following One-Time Password (OTP) to complete your two-factor verification:
+  </p>
+
+  <div style="text-align: center; margin: 25px 0;">
+    <span style="display: inline-block; font-family: monospace; font-size: 32px; font-weight: bold; letter-spacing: 6px; padding: 14px 32px; background-color: #F3EDF7; color: #21005D; border-radius: 8px; border: 1px dashed #6750A4;">{{otp}}</span>
+  </div>
+
+  <div style="background-color: #f8fafc; border-left: 4px solid #6750A4; padding: 12px 16px; margin: 20px 0;">
+    <p style="margin: 0; font-size: 13px; color: #475569;">
+      This code is valid for <strong>{{expiresMinutes}} minutes</strong>. If you did not initiate this login request, immediately notify the Chief Security Officer and rotate your credentials.
+    </p>
+  </div>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Government of Malaysia
+  </p>
+</div>`,
+    },
     create: {
       templateId: 'EMT-2026-09-0006',
       templateName: 'SYSTEM_ADMIN_OTP',
-      subject: 'FCR-SCS: System Admin Login OTP Verification Code',
-      bodyContent: `
-        <div style="font-family: sans-serif; padding: 24px; max-width: 600px; border: 1px solid #e0e0e0; border-radius: 8px;">
-          <h2 style="color: #6750A4; margin-top: 0;">System Administrator Authentication</h2>
-          <p>Dear {{name}},</p>
-          <p>A sign-in request to the Federal Compensation System Administrator Console was initiated for your account.</p>
-          <div style="background-color: #F3EDF7; padding: 16px; border-radius: 8px; text-align: center; margin: 24px 0;">
-            <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #1D192B;">{{otp}}</span>
-          </div>
-          <p style="color: #49454F; font-size: 14px;">This one-time passcode is valid for <strong>{{expiresInMinutes}} minutes</strong>. Do NOT disclose this code to anyone.</p>
-          <p style="color: #b3261e; font-size: 13px;">If you did not attempt this sign-in, please immediately notify the Chief Security Officer and rotate your administrative password.</p>
-          <br>
-          <p style="margin-bottom: 0;">Regards,<br><strong>FCR-SCS Identity & Access Management</strong></p>
-        </div>
-      `,
+      subject: 'FCR-SCS Security: Your Administrator Verification Code is {{otp}}',
+      bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">TWO-FACTOR AUTH</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Identity & Access Governance · Government of Malaysia</span>
+  </div>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Dear {{name}},</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    A sign-in attempt to the FCR-SCS Administrative Console was initiated for your account. Please use the following One-Time Password (OTP) to complete your two-factor verification:
+  </p>
+
+  <div style="text-align: center; margin: 25px 0;">
+    <span style="display: inline-block; font-family: monospace; font-size: 32px; font-weight: bold; letter-spacing: 6px; padding: 14px 32px; background-color: #F3EDF7; color: #21005D; border-radius: 8px; border: 1px dashed #6750A4;">{{otp}}</span>
+  </div>
+
+  <div style="background-color: #f8fafc; border-left: 4px solid #6750A4; padding: 12px 16px; margin: 20px 0;">
+    <p style="margin: 0; font-size: 13px; color: #475569;">
+      This code is valid for <strong>{{expiresMinutes}} minutes</strong>. If you did not initiate this login request, immediately notify the Chief Security Officer and rotate your credentials.
+    </p>
+  </div>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Government of Malaysia
+  </p>
+</div>`,
       createdById: defaultAdmin.userId,
     },
   });
@@ -506,38 +879,86 @@ async function main() {
 
   const temporaryCredentialsTemplate = await prisma.emailTemplate.upsert({
     where: { templateName: 'TEMPORARY_CREDENTIALS' },
-    update: {},
+    update: {
+      templateId: 'EMT-2026-09-0007',
+      subject: 'FCR-SCS: Your Account Credentials - Land Acquisition Case {{caseId}}',
+      bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">MEMBER PORTAL CREDENTIALS</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Statutory Case Management & Compensation Portal (FCR-SCS)</span>
+  </div>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Dear <strong>{{name}}</strong>,</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    An account has been created for you on the <strong>FCR-SCS Platform</strong> as an affected landowner attached to statutory acquisition case <strong>{{caseTitle}}</strong> (Case ID: <strong>{{caseId}}</strong>).
+  </p>
+
+  <div style="background-color: #F3EDF7; padding: 16px 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #EADDFF;">
+    <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Sign-In Email:</strong> <span style="color: #1e293b; font-weight: 600;">{{email}}</span></p>
+    <p style="margin: 0; font-size: 14px;"><strong>Temporary Password:</strong> <code style="background: #E8DEF8; color: #4a148c; padding: 3px 8px; border-radius: 4px; font-size: 15px; font-weight: bold; font-family: monospace;">{{temporaryPassword}}</code></p>
+  </div>
+
+  <div style="background-color: #fff1f2; border-left: 4px solid #f43f5e; padding: 12px 16px; border-radius: 6px; margin: 16px 0;">
+    <p style="margin: 0; font-size: 13px; color: #9f1239; font-weight: 600;">
+      Security Requirement: For your protection, you must change this temporary password upon your first login.
+    </p>
+  </div>
+
+  <div style="text-align: center; margin: 24px 0;">
+    <a href="{{loginUrl}}" style="background-color: #6750A4; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(103,80,164,0.2);">Sign In to Member Portal</a>
+  </div>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Government of Malaysia
+  </p>
+</div>`,
+    },
     create: {
       templateId: 'EMT-2026-09-0007',
       templateName: 'TEMPORARY_CREDENTIALS',
       subject: 'FCR-SCS: Your Account Credentials - Land Acquisition Case {{caseId}}',
-      bodyContent: `
-        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 24px; max-width: 600px; border: 1px solid #e0e0e0; border-radius: 12px; color: #1f2937; background-color: #ffffff;">
-          <div style="text-align: center; margin-bottom: 20px;">
-            <h2 style="color: #6750A4; margin: 0; font-size: 22px;">Federal Compensation &amp; Resettlement System</h2>
-            <p style="color: #6b7280; font-size: 13px; margin: 4px 0 0 0;">Statutory Case Management &amp; Compensation Portal (FCR-SCS)</p>
-          </div>
-          <p style="font-size: 15px;">Dear <strong>{{name}}</strong>,</p>
-          <p style="font-size: 14px; line-height: 1.5;">An account has been created for you on the <strong>FCR-SCS Platform</strong> as an affected landowner.</p>
-          <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-left: 4px solid #16a34a; padding: 14px 18px; border-radius: 8px; margin: 18px 0;">
-            <p style="margin: 0 0 6px 0; font-size: 14px; font-weight: bold; color: #166534;">Reason for Account Creation:</p>
-            <p style="margin: 0 0 4px 0; font-size: 14px; color: #14532d;">Your land parcel has been officially attached to statutory acquisition case <strong>{{caseTitle}}</strong> (Case ID: <strong>{{caseId}}</strong>).</p>
-            <p style="margin: 0; font-size: 13px; color: #15803d;">This account allows you to securely track case progress, view land valuation reports, review statutory Form H compensation awards, and lodge formal inquiries or objections.</p>
-          </div>
-          <div style="background-color: #F3EDF7; padding: 18px; border-radius: 8px; margin: 20px 0; border: 1px solid #e7d8f3;">
-            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Sign-In Email:</strong> <span style="color: #1e293b; font-weight: 600;">{{email}}</span></p>
-            <p style="margin: 0; font-size: 14px;"><strong>Temporary Password:</strong> <code style="background: #E8DEF8; color: #4a148c; padding: 3px 8px; border-radius: 4px; font-size: 15px; font-weight: bold; font-family: monospace;">{{temporaryPassword}}</code></p>
-          </div>
-          <div style="background-color: #fff1f2; border-left: 4px solid #f43f5e; padding: 12px 16px; border-radius: 6px; margin: 16px 0;">
-            <p style="margin: 0; font-size: 13px; color: #9f1239; font-weight: 600;">Security Requirement: For your protection, you must change this temporary password upon your first login.</p>
-          </div>
-          <div style="text-align: center; margin: 24px 0;">
-            <a href="{{loginUrl}}" style="background-color: #6750A4; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">Sign In to Member Portal</a>
-          </div>
-          <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 20px 0;">
-          <p style="font-size: 12px; color: #94a3b8; margin: 0;">Regards,<br><strong>Land Acquisition &amp; Compensation Authority (FCR-SCS)</strong></p>
-        </div>
-      `,
+      bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">MEMBER PORTAL CREDENTIALS</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Statutory Case Management & Compensation Portal (FCR-SCS)</span>
+  </div>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Dear <strong>{{name}}</strong>,</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    An account has been created for you on the <strong>FCR-SCS Platform</strong> as an affected landowner attached to statutory acquisition case <strong>{{caseTitle}}</strong> (Case ID: <strong>{{caseId}}</strong>).
+  </p>
+
+  <div style="background-color: #F3EDF7; padding: 16px 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #EADDFF;">
+    <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Sign-In Email:</strong> <span style="color: #1e293b; font-weight: 600;">{{email}}</span></p>
+    <p style="margin: 0; font-size: 14px;"><strong>Temporary Password:</strong> <code style="background: #E8DEF8; color: #4a148c; padding: 3px 8px; border-radius: 4px; font-size: 15px; font-weight: bold; font-family: monospace;">{{temporaryPassword}}</code></p>
+  </div>
+
+  <div style="background-color: #fff1f2; border-left: 4px solid #f43f5e; padding: 12px 16px; border-radius: 6px; margin: 16px 0;">
+    <p style="margin: 0; font-size: 13px; color: #9f1239; font-weight: 600;">
+      Security Requirement: For your protection, you must change this temporary password upon your first login.
+    </p>
+  </div>
+
+  <div style="text-align: center; margin: 24px 0;">
+    <a href="{{loginUrl}}" style="background-color: #6750A4; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(103,80,164,0.2);">Sign In to Member Portal</a>
+  </div>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Government of Malaysia
+  </p>
+</div>`,
       createdById: defaultAdmin.userId,
     },
   });
@@ -545,22 +966,76 @@ async function main() {
 
   const systemAlertTemplate = await prisma.emailTemplate.upsert({
     where: { templateName: 'SYSTEM_ALERT' },
-    update: {},
+    update: {
+      templateId: 'EMT-2026-09-0008',
+      subject: 'FCR-SCS: System Notification - {{alertType}}',
+      bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">SYSTEM NOTICE</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Administrative & Compliance Notification System</span>
+  </div>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Hello {{name}},</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    This is an automated system event dispatched by the FCR-SCS Administrative Platform:
+  </p>
+
+  <div style="background-color: #F3EDF7; border-left: 4px solid #6750A4; padding: 14px 18px; border-radius: 8px; margin: 20px 0;">
+    <p style="margin: 0 0 6px 0; font-size: 14px; color: #1e293b;">Event Type: <strong style="color: #6750A4;">{{alertType}}</strong></p>
+    <p style="margin: 0 0 6px 0; font-size: 13px; color: #334155;">{{message}}</p>
+    <p style="margin: 0; font-size: 12px; color: #64748b;">Timestamp: {{timestamp}}</p>
+  </div>
+
+  <p style="font-size: 13px; color: #64748b; line-height: 1.5;">
+    If you require assistance or need to escalate this event, please access the Alert & Notification Center in your administrator console.
+  </p>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Government of Malaysia
+  </p>
+</div>`,
+    },
     create: {
       templateId: 'EMT-2026-09-0008',
       templateName: 'SYSTEM_ALERT',
       subject: 'FCR-SCS: System Notification - {{alertType}}',
-      bodyContent: `
-        <div style="font-family: sans-serif; padding: 20px;">
-          <h2>System Notification</h2>
-          <p>Hello {{name}},</p>
-          <p>This is an automated system notice: <strong>{{message}}</strong></p>
-          <p>Timestamp: {{timestamp}}</p>
-          <p>If you require assistance, please reach out to the System Administrator.</p>
-          <br>
-          <p>FCR-SCS Administrative Services</p>
-        </div>
-      `,
+      bodyContent: `<div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #6750A4; padding-bottom: 12px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="color: #6750A4; margin: 0; font-size: 20px; font-weight: 700;">FCR-SCS Notification</h2>
+      <span style="font-size: 11px; font-weight: 600; color: #6750A4; background-color: #F3EDF7; padding: 3px 8px; border-radius: 6px; border: 1px solid #EADDFF;">SYSTEM NOTICE</span>
+    </div>
+    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">Administrative & Compliance Notification System</span>
+  </div>
+
+  <p style="font-size: 15px; color: #1e293b; line-height: 1.5;">Hello {{name}},</p>
+
+  <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    This is an automated system event dispatched by the FCR-SCS Administrative Platform:
+  </p>
+
+  <div style="background-color: #F3EDF7; border-left: 4px solid #6750A4; padding: 14px 18px; border-radius: 8px; margin: 20px 0;">
+    <p style="margin: 0 0 6px 0; font-size: 14px; color: #1e293b;">Event Type: <strong style="color: #6750A4;">{{alertType}}</strong></p>
+    <p style="margin: 0 0 6px 0; font-size: 13px; color: #334155;">{{message}}</p>
+    <p style="margin: 0; font-size: 12px; color: #64748b;">Timestamp: {{timestamp}}</p>
+  </div>
+
+  <p style="font-size: 13px; color: #64748b; line-height: 1.5;">
+    If you require assistance or need to escalate this event, please access the Alert & Notification Center in your administrator console.
+  </p>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.5;">
+    Federal Land Commission Reimbursement & Statutory Compensation System (FCR-SCS)<br/>
+    Government of Malaysia
+  </p>
+</div>`,
       createdById: defaultAdmin.userId,
     },
   });
