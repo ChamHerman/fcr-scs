@@ -2,7 +2,7 @@ import { ethers } from "hardhat";
 
 async function main() {
   console.log("Deploying to local Hardhat node...");
-  const factory = await ethers.getContractFactory("CompensationLedger");
+  const factory = await ethers.getContractFactory("FCRSCSLedger");
   const contract = await factory.deploy();
   await contract.waitForDeployment();
   const address = await contract.getAddress();

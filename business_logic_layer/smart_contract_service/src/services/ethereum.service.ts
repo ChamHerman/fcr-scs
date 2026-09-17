@@ -21,11 +21,11 @@ dotenv.config();
 
 function loadAbi() {
   const candidates = [
-    path.resolve(__dirname, "../../../../../data_layer/blockchain_ledger/artifacts/contracts/CompensationLedger.sol/CompensationLedger.json"),
-    path.resolve(__dirname, "../../../../data_layer/blockchain_ledger/artifacts/contracts/CompensationLedger.sol/CompensationLedger.json"),
-    path.resolve(process.cwd(), "../data_layer/blockchain_ledger/artifacts/contracts/CompensationLedger.sol/CompensationLedger.json"),
-    path.resolve(process.cwd(), "data_layer/blockchain_ledger/artifacts/contracts/CompensationLedger.sol/CompensationLedger.json"),
-    path.resolve(process.cwd(), "../../data_layer/blockchain_ledger/artifacts/contracts/CompensationLedger.sol/CompensationLedger.json"),
+    path.resolve(__dirname, "../../../../../data_layer/blockchain_ledger/artifacts/contracts/FCRSCSLedger.sol/FCRSCSLedger.json"),
+    path.resolve(__dirname, "../../../../data_layer/blockchain_ledger/artifacts/contracts/FCRSCSLedger.sol/FCRSCSLedger.json"),
+    path.resolve(process.cwd(), "../data_layer/blockchain_ledger/artifacts/contracts/FCRSCSLedger.sol/FCRSCSLedger.json"),
+    path.resolve(process.cwd(), "data_layer/blockchain_ledger/artifacts/contracts/FCRSCSLedger.sol/FCRSCSLedger.json"),
+    path.resolve(process.cwd(), "../../data_layer/blockchain_ledger/artifacts/contracts/FCRSCSLedger.sol/FCRSCSLedger.json"),
   ];
 
   for (const candidate of candidates) {
@@ -33,7 +33,7 @@ function loadAbi() {
       return JSON.parse(fs.readFileSync(candidate, "utf-8"));
     }
   }
-  throw new Error("CompensationLedger.json ABI file not found");
+  throw new Error("FCRSCSLedger.json ABI file not found");
 }
 
 const ABI = loadAbi();
@@ -135,7 +135,7 @@ export interface ReceiptVerification {
 /**
  * Verifies a transaction the ADMIN WALLET sent via MetaMask: it must be mined
  * on the active network, must not have reverted, and must have targeted the
- * CompensationLedger contract. Retries briefly — a just-mined tx can take a
+ * FCRSCSLedger contract. Retries briefly — a just-mined tx can take a
  * moment to appear on the read RPC.
  */
 export async function verifyTransactionReceipt(
@@ -172,10 +172,12 @@ export async function getNetworkInfo(): Promise<{ name: string; label: string; c
 }
 
 export async function getRecordFromBlockchain(caseId: string) {
-  const [documentHash, publishedAt] =
+  const [documentHashes, publishedAt] =
     await getContract().getRecord(caseId);
+  const hashes = (documentHashes as string[]).map((h) => h.toLowerCase());
   return {
-    documentHash: documentHash as string,
+    documentHashes: hashes,
+    documentHash: hashes[0] ?? "0x",
     publishedAt: Number(publishedAt),
   };
 }

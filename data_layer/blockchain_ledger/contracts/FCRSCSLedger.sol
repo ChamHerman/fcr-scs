@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-contract CompensationLedger {
+contract FCRSCSLedger {
     struct Record {
-        bytes32 documentHash;
+        bytes32[] documentHashes;
         uint256 publishedAt;
         bool isVoided;
         string voidReason;
@@ -13,7 +13,7 @@ contract CompensationLedger {
     address public owner;
     mapping(string => Record) private records;
 
-    event RecordPublished(string indexed caseId, bytes32 documentHash, uint256 timestamp);
+    event RecordPublished(string indexed caseId, bytes32[] documentHashes, uint256 timestamp);
     event RecordVoided(string indexed caseId, string reason, uint256 timestamp);
 
     modifier onlyOwner() {
@@ -25,11 +25,16 @@ contract CompensationLedger {
         owner = msg.sender;
     }
 
-    function publishRecord(string calldata caseId, bytes32 documentHash) external onlyOwner {
+    function publishRecord(string calldata caseId, bytes32[] calldata documentHashes) external onlyOwner {
         require(records[caseId].publishedAt == 0, "Record already exists");
-        require(documentHash != bytes32(0), "Invalid hash");
-        records[caseId] = Record(documentHash, block.timestamp, false, "", 0);
-        emit RecordPublished(caseId, documentHash, block.timestamp);
+        require(documentHashes.length > 0, "Invalid hash");
+        for (uint256 i = 0; i < documentHashes.length; i++) {
+            require(documentHashes[i] != bytes32(0), "Invalid hash");
+        }
+        Record storage r = records[caseId];
+        r.documentHashes = documentHashes;
+        r.publishedAt = block.timestamp;
+        emit RecordPublished(caseId, documentHashes, block.timestamp);
     }
 
     function voidRecord(string calldata caseId, string calldata reason) external onlyOwner {
@@ -43,13 +48,13 @@ contract CompensationLedger {
     }
 
     function getRecord(string calldata caseId) external view returns (
-        bytes32 documentHash,
+        bytes32[] memory documentHashes,
         uint256 publishedAt,
         bool isVoided,
         string memory voidReason,
         uint256 voidedAt
     ) {
         Record storage r = records[caseId];
-        return (r.documentHash, r.publishedAt, r.isVoided, r.voidReason, r.voidedAt);
+        return (r.documentHashes, r.publishedAt, r.isVoided, r.voidReason, r.voidedAt);
     }
 }

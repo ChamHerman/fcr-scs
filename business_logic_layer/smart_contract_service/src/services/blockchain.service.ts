@@ -57,7 +57,7 @@ export async function newRecordId(): Promise<string> {
  * Publication transactions are signed by the ADMIN WALLET in MetaMask (the
  * frontend sends them via eth_sendTransaction). The backend never signs: it
  * verifies the supplied transaction hash on the active network (mined,
- * successful, targeted the CompensationLedger contract) and only then records
+ * successful, targeted the FCRSCSLedger contract) and only then records
  * it in the database.
  */
 async function assertRecordedOnChain(transactionHash: string) {
@@ -73,14 +73,14 @@ async function assertRecordedOnChain(transactionHash: string) {
     throw new Error("Transaction reverted on chain — nothing was recorded");
   }
   if (verification.to !== contractAddress.toLowerCase()) {
-    throw new Error("Transaction did not target the CompensationLedger contract");
+    throw new Error("Transaction did not target the FCRSCSLedger contract");
   }
 }
 
 // ---------------------------------------------------------------------------
 // FR-019 dual-milestone keying
 // ---------------------------------------------------------------------------
-// One case carries up to two on-chain anchors, keyed on CompensationLedger as
+// One case carries up to two on-chain anchors, keyed on FCRSCSLedger as
 // `${caseId}#M1` (Statutory Award / Form H hash) and `${caseId}#M2`
 // (Settlement / receipt hash). The database stores the milestone separately so
 // per-milestone records remain queryable by case.
@@ -575,13 +575,14 @@ export async function verifyDocument(fileBuffer: Buffer) {
     };
   }
 
-  const isDirectMatch = localHash.toLowerCase() === chain.documentHash.toLowerCase();
-  const isLinkedReceiptMatch = Boolean(
-    matchedReceipt && record.documentHash.toLowerCase() === chain.documentHash.toLowerCase()
-  );
-  const isLinkedOfferMatch = Boolean(
-    matchedOffer && record.documentHash.toLowerCase() === chain.documentHash.toLowerCase()
-  );
+  // FCRSCSLedger anchors every owner's hash for a case in one record, so a
+  // document is authentic when its hash matches ANY anchored hash.
+  const onChainHashes = chain.documentHashes.map((h) => h.toLowerCase());
+  const matchesOnChain = (hash?: string | null) =>
+    Boolean(hash) && onChainHashes.includes(String(hash).toLowerCase());
+  const isDirectMatch = matchesOnChain(localHash);
+  const isLinkedReceiptMatch = Boolean(matchedReceipt && matchesOnChain(record.documentHash));
+  const isLinkedOfferMatch = Boolean(matchedOffer && matchesOnChain(record.documentHash));
 
   if (!isDirectMatch && !isLinkedReceiptMatch && !isLinkedOfferMatch) {
     return {

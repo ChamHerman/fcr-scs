@@ -4,6 +4,7 @@ import { PaymentStatus, UserRole, CaseStatus, BlockchainStatus } from "@prisma/c
 import * as bankService from "./bank.service";
 import { persistCanonicalReceipt, archiveCanonicalReceipt } from "./receipt.service";
 import { newRecordId } from "../../../smart_contract_service/src/services/blockchain.service";
+import { isOwnedBy, isSameOwner, normalizeNric, parseSharePercent, type OwnerIdentity } from "../utils/owner-identity";
 
 export function calculateRequiredSignatures(amount: number, totalActiveGAs = 5): number {
   let signatures = 2; // base (1 initiator + 1 approver)
@@ -158,6 +159,7 @@ export function extractScheduledFor(pc: any): string | null {
 export function formatPaymentResponse<T extends { id: string; caseId: string }>(pc: T): T & { paymentId: string; scheduledFor?: string | null } {
   const anyPc = pc as any;
   const scheduledFor = extractScheduledFor(anyPc);
+  const beneficiaries: any[] | undefined = Array.isArray(anyPc.beneficiaries) ? anyPc.beneficiaries : undefined;
   return {
     ...pc,
     paymentId: pc.id,
@@ -165,6 +167,15 @@ export function formatPaymentResponse<T extends { id: string; caseId: string }>(
     ...(anyPc.phoneNumber !== undefined ? { phoneNumber: normalizeLocalPhoneNumber(anyPc.phoneNumber) } : {}),
     ...(Array.isArray(anyPc.authorisations)
       ? { authorisations: [...anyPc.authorisations].sort(byCreatedAtAsc) }
+      : {}),
+    // N-of-M bank-details progress for co-owned parcels. Only meaningful once
+    // beneficiaries have been seeded (i.e. the parcel has more than one owner).
+    ...(beneficiaries && beneficiaries.length > 0
+      ? {
+          beneficiaries,
+          beneficiaryTotal: beneficiaries.length,
+          beneficiarySubmitted: beneficiaries.filter((b) => Boolean(b.submittedAt)).length,
+        }
       : {}),
   };
 }
@@ -282,10 +293,15 @@ export async function validateAccountNumberUniqueness(
   const cleanAccount = (accountNumber || "").replace(/[\s-]/g, "");
   if (!cleanAccount) return;
 
-  const cleanMyKad = (myKadNumber || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  const cleanMyKad = normalizeNric(myKadNumber);
   const cleanUserName = (opts?.userName || "").trim().toLowerCase();
   const userId = opts?.userId;
   const currentCaseId = opts?.currentCaseId;
+  const identity: OwnerIdentity = {
+    userId,
+    name: opts?.userName,
+    identificationNumber: myKadNumber,
+  };
 
   const isBankMatch = (otherBank?: string | null) => {
     if (bankName && otherBank) {
@@ -325,14 +341,7 @@ export async function validateAccountNumberUniqueness(
           },
         });
         const owners = ac?.landParcel?.ownerships?.map((o: any) => o.landOwner).filter(Boolean) || [];
-        isOwnerMatch = owners.some((ow: any) => {
-          const owIc = (ow.icNumber || ow.nric || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
-          return (
-            (cleanMyKad && owIc === cleanMyKad) ||
-            (userId && ow.ownerId === userId) ||
-            (cleanUserName && ow.name && ow.name.trim().toLowerCase() === cleanUserName)
-          );
-        });
+        isOwnerMatch = isOwnedBy(owners, identity);
       }
 
       const isSameMember =
@@ -381,14 +390,7 @@ export async function validateAccountNumberUniqueness(
           },
         });
         const owners = ac?.landParcel?.ownerships?.map((o: any) => o.landOwner).filter(Boolean) || [];
-        isOwnerMatch = owners.some((ow: any) => {
-          const owIc = (ow.icNumber || ow.nric || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
-          return (
-            (cleanMyKad && owIc === cleanMyKad) ||
-            (userId && ow.ownerId === userId) ||
-            (cleanUserName && ow.name && ow.name.trim().toLowerCase() === cleanUserName)
-          );
-        });
+        isOwnerMatch = isOwnedBy(owners, identity);
       }
 
       const isSameMember =
@@ -440,6 +442,37 @@ export async function validateAccountNumberUniqueness(
           "This bank account number is already registered by another beneficiary. Bank accounts must be unique to the registered MyKad holder."
         );
       }
+    }
+  }
+}
+
+/**
+ * Creates one PaymentBeneficiary row per co-owner of the parcel so every owner
+ * has an apportioned slot to submit their own bank details into. Called when a
+ * payment case is first created; idempotent via the (case, owner) unique key.
+ */
+export async function seedPaymentBeneficiaries(
+  paymentCaseId: string,
+  owners: { ownerId: string; share?: string | null }[],
+  totalAmount: number
+): Promise<void> {
+  if (!owners || owners.length === 0) return;
+  for (let i = 0; i < owners.length; i++) {
+    const sharePercent = parseSharePercent(owners[i]);
+    try {
+      await prisma.paymentBeneficiary.upsert({
+        where: { paymentCaseId_ownerId: { paymentCaseId, ownerId: owners[i].ownerId } },
+        update: {},
+        create: {
+          paymentCaseId,
+          ownerId: owners[i].ownerId,
+          beneficiaryIndex: i,
+          sharePercent,
+          amount: Number(totalAmount) * (sharePercent / 100),
+        },
+      });
+    } catch (err) {
+      console.error("[payment_service] Error seeding payment beneficiary:", err);
     }
   }
 }
@@ -510,6 +543,20 @@ export async function submitBankDetails(data: {
 
   const cleanPhone = normalizeLocalPhoneNumber(data.phoneNumber || owner?.contact);
 
+  // Every owner of the parcel is a beneficiary of the same payment case. The
+  // submitting owner's row is the one that carries this bank detail; the others
+  // stay unsubmitted until they sign in and provide their own, so the case is
+  // only fully banked when N-of-M owners have submitted.
+  const allOwners =
+    ac?.landParcel?.ownerships?.map((o: any) => o.landOwner).filter(Boolean) || [owner];
+  const submitterIdentity: OwnerIdentity = {
+    userId: data.userId,
+    name: data.accountHolderName,
+    identificationNumber: data.myKadNumber,
+  };
+  const submitterOwner =
+    allOwners.find((o: any) => isSameOwner(o, submitterIdentity)) || owner;
+
   const pc = await prisma.paymentCase.upsert({
     where: { caseId: data.caseId },
     update: {
@@ -533,6 +580,48 @@ export async function submitBankDetails(data: {
       status: targetInitialStatus,
     },
   });
+
+  const encryptedBankDetails = Buffer.from(cleanAccountNumber).toString("base64");
+  for (let i = 0; i < allOwners.length; i++) {
+    const ownerRow = allOwners[i];
+    const isSubmitter = ownerRow.ownerId === submitterOwner.ownerId;
+    const sharePercent = parseSharePercent(ownerRow);
+    const ownerAmount = Number(amount) * (sharePercent / 100);
+    await prisma.paymentBeneficiary.upsert({
+      where: {
+        paymentCaseId_ownerId: { paymentCaseId: pc.id, ownerId: ownerRow.ownerId },
+      },
+      update: isSubmitter
+        ? {
+            bankName: data.bankName,
+            accountNumber: cleanAccountNumber,
+            accountHolderName: data.accountHolderName,
+            phoneNumber: cleanPhone,
+            myKadNumber: data.myKadNumber,
+            encryptedBankDetails,
+            submittedAt: new Date(),
+          }
+        : {},
+      create: {
+        paymentCaseId: pc.id,
+        ownerId: ownerRow.ownerId,
+        beneficiaryIndex: i,
+        sharePercent,
+        amount: ownerAmount,
+        ...(isSubmitter
+          ? {
+              bankName: data.bankName,
+              accountNumber: cleanAccountNumber,
+              accountHolderName: data.accountHolderName,
+              phoneNumber: cleanPhone,
+              myKadNumber: data.myKadNumber,
+              encryptedBankDetails,
+              submittedAt: new Date(),
+            }
+          : {}),
+      },
+    });
+  }
 
   // Resolve actual User record for member payout detail
   let targetUser: { userId: string; name: string; email: string; identificationNumber: string | null; contactNumber: string | null } | null = null;
@@ -1297,6 +1386,8 @@ export async function getPaymentStatus(caseId: string, userRole?: string, userId
         failedTransactions: true,
       },
     });
+    const parcelOwners = ac.landParcel?.ownerships?.map((o: any) => o.landOwner).filter(Boolean) || [primaryOwner];
+    await seedPaymentBeneficiaries(pc.id, parcelOwners, amount);
   }
 
   if (!pc) throw new Error("Case not found");
@@ -1378,7 +1469,7 @@ export async function getPendingAuthorisations() {
     // The receipt is loaded on every payment read: a generated receipt is a
     // historical fact about the case, so the record modal shows it at whatever
     // status the case currently sits at rather than only at Paid.
-    include: { authorisations: true, receipt: true, receiptArchives: { orderBy: { archivedAt: "desc" } } },
+    include: { authorisations: true, receipt: true, receiptArchives: { orderBy: { archivedAt: "desc" } }, beneficiaries: { orderBy: { beneficiaryIndex: "asc" } } },
     orderBy: { updatedAt: "desc" },
   });
   const enriched = await Promise.all(cases.map(enrichPaymentWithAdminNames));
@@ -1471,7 +1562,7 @@ export async function getAllCases(userRole?: string, userId?: string) {
           : PaymentStatus.BANK_DETAILS_AND_M1_PENDING;
 
         const pmtId = await newPaymentId();
-        await prisma.paymentCase.create({
+        const created = await prisma.paymentCase.create({
           data: {
             id: pmtId,
             caseId: ac.caseId,
@@ -1485,6 +1576,8 @@ export async function getAllCases(userRole?: string, userId?: string) {
             currentSignatures: 0,
           },
         });
+        const parcelOwners = ac.landParcel?.ownerships?.map((o: any) => o.landOwner).filter(Boolean) || [primaryOwner];
+        await seedPaymentBeneficiaries(created.id, parcelOwners, amount);
       }
 
       // Also ensure blockchainRecord exists for Milestone 1 (AWARD)
@@ -1630,7 +1723,7 @@ export async function getSavedBankDetails(userId?: string, myKadNumber?: string,
     });
   }
 
-  const cleanIc = (currentUser?.identificationNumber || myKadNumber || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  const cleanIc = normalizeNric(currentUser?.identificationNumber || myKadNumber);
   const name = (currentUser?.name || userName || "").toLowerCase();
 
   if (!currentUser && cleanIc) {
@@ -1838,8 +1931,13 @@ export async function saveMemberBankDetails(
   const user = userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)
     ? await prisma.user.findUnique({ where: { userId } })
     : null;
-  const cleanIc = (user?.identificationNumber || data.myKadNumber || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  const cleanIc = normalizeNric(user?.identificationNumber || data.myKadNumber);
   const userName = (user?.name || data.accountHolderName || "").trim();
+  const identity: OwnerIdentity = {
+    userId,
+    name: user?.name || data.accountHolderName,
+    identificationNumber: user?.identificationNumber || data.myKadNumber,
+  };
 
   await validateAccountNumberUniqueness(data.bankName, cleanAccountNumber, cleanIc, {
     userId,
@@ -1913,7 +2011,7 @@ export async function saveMemberBankDetails(
         },
       });
       const owners = ac?.landParcel?.ownerships?.map((o: any) => o.landOwner).filter(Boolean) || [];
-      isOwner = owners.some((ow: any) => ow.ownerId === userId || (ow.nric && ow.nric.replace(/[^a-zA-Z0-9]/g, "").toLowerCase() === cleanIc));
+      isOwner = isOwnedBy(owners, identity);
     }
     if (isOwner || pc.beneficiaryId === userId) {
       try {
@@ -1991,7 +2089,7 @@ export async function getFailedTransactions() {
     },
     // receipt: a failed attempt does not un-generate an earlier receipt, so the
     // modal must still be able to show the one that was issued for this case.
-    include: { failedTransactions: true, authorisations: true, receipt: true, receiptArchives: { orderBy: { archivedAt: "desc" } } },
+    include: { failedTransactions: true, authorisations: true, receipt: true, receiptArchives: { orderBy: { archivedAt: "desc" } }, beneficiaries: { orderBy: { beneficiaryIndex: "asc" } } },
     orderBy: { updatedAt: "desc" },
   });
   const enriched = await Promise.all(cases.map(enrichPaymentWithAdminNames));

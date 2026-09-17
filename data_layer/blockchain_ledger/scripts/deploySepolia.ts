@@ -19,8 +19,8 @@ async function main() {
     throw new Error("Deployer has no Sepolia ETH. Get free testnet ETH from https://sepoliafaucet.com or https://www.alchemy.com/faucets/ethereum-sepolia");
   }
 
-  const factory = await ethers.getContractFactory("CompensationLedger");
-  console.log("Deploying CompensationLedger...");
+  const factory = await ethers.getContractFactory("FCRSCSLedger");
+  console.log("Deploying FCRSCSLedger...");
   const contract = await factory.deploy();
   await contract.waitForDeployment();
 

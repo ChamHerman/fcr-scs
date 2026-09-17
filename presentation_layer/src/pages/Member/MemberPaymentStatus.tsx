@@ -53,6 +53,11 @@ interface PaymentCaseDetails {
   requiredSignatures?: number;
   authorisations?: Array<{ action?: string; reason?: string | null; adminId?: string; createdAt?: string }>;
   failedTransactions?: Array<{ errorLog?: string | null; resolution?: string | null; createdAt?: string }>;
+  // Co-owner payout tracking. Seeded once a parcel has more than one owner; the
+  // case is only fully banked when every owner has submitted their own details.
+  beneficiaries?: Array<{ ownerId?: string; beneficiaryIndex?: number; sharePercent?: number | string; amount?: number | string; submittedAt?: string | null }>;
+  beneficiaryTotal?: number;
+  beneficiarySubmitted?: number;
   disputeDocumentPath?: string | null;
   disputeDocumentName?: string | null;
   disputeUploadedAt?: string | null;
@@ -496,6 +501,20 @@ export default function MemberPaymentStatus() {
               Five statutory stages, with the award and the settlement each anchored on the
               Ethereum Sepolia ledger.
             </p>
+            {!!paymentCase?.beneficiaryTotal && paymentCase.beneficiaryTotal > 1 && (
+              <span
+                className={`inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                  (paymentCase.beneficiarySubmitted || 0) >= paymentCase.beneficiaryTotal
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-amber-50 text-amber-800 border border-amber-200'
+                }`}
+                title="Bank details submitted by each co-owner of this parcel"
+              >
+                <span>
+                  {paymentCase.beneficiarySubmitted || 0} of {paymentCase.beneficiaryTotal} owners submitted
+                </span>
+              </span>
+            )}
           </div>
         </div>
 

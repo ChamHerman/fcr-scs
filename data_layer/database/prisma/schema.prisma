@@ -194,8 +194,39 @@ model PaymentCase {
   receiptArchives      PaymentReceiptArchive[]
   failedTransactions   FailedTransaction[]
   receiverBankDetails  ReceiverBankDetails?
+  beneficiaries        PaymentBeneficiary[]
 
   @@map("payment_case")
+}
+
+// FR-021: one payment case can serve several co-owners of the same parcel.
+// Each beneficiary carries its own apportioned share and its own payout bank
+// details, so bank-details submission is tracked per owner (N-of-M) rather
+// than once for the whole case.
+model PaymentBeneficiary {
+  id                   String      @id @default(uuid())
+  paymentCaseId        String      @map("payment_case_id")
+  ownerId              String      @map("owner_id") @db.Uuid
+  beneficiaryIndex     Int         @map("beneficiary_index")
+  sharePercent         Decimal     @map("share_percent")
+  amount               Decimal
+  bankName             String?     @map("bank_name")
+  accountNumber        String?     @map("account_number")
+  accountHolderName    String?     @map("account_holder_name")
+  phoneNumber          String?     @map("phone_number")
+  myKadNumber          String?     @map("my_kad_number")
+  encryptedBankDetails String?     @map("encrypted_bank_details")
+  submittedAt          DateTime?   @map("submitted_at")
+  createdAt            DateTime    @default(now()) @map("created_at")
+  updatedAt            DateTime    @updatedAt @map("updated_at")
+
+  paymentCase          PaymentCase @relation(fields: [paymentCaseId], references: [id], onDelete: Cascade)
+  owner                LandOwner   @relation(fields: [ownerId], references: [ownerId], onDelete: Restrict)
+
+  @@unique([paymentCaseId, beneficiaryIndex])
+  @@unique([paymentCaseId, ownerId])
+  @@index([ownerId])
+  @@map("payment_beneficiary")
 }
 
 model PaymentAuthorisation {
@@ -409,6 +440,7 @@ model LandOwner {
   ownerships     LandOwnership[]
   offerResponses OfferMemberResponse[]
   paymentCases   PaymentCase[]
+  paymentBeneficiaries PaymentBeneficiary[]
   createdAt      DateTime              @default(now()) @map("created_at")
   updatedAt      DateTime              @updatedAt @map("updated_at")
   deletedAt      DateTime?             @map("deleted_at")

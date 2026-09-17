@@ -1,10 +1,10 @@
 {
   "_format": "hh-sol-cache-2",
   "files": {
-    "C:\\repository\\fcr-scs\\data_layer\\blockchain_ledger\\contracts\\CompensationLedger.sol": {
-      "lastModificationDate": 1786598281000,
-      "contentHash": "4e8b9b0475b8ac85a901507917ccd6ff",
-      "sourceName": "contracts/CompensationLedger.sol",
+    "C:\\repository\\fcr-scs\\data_layer\\blockchain_ledger\\contracts\\FCRSCSLedger.sol": {
+      "lastModificationDate": 1789580744403,
+      "contentHash": "c0c6b705f683bd1807407a739b88763d",
+      "sourceName": "contracts/FCRSCSLedger.sol",
       "solcConfig": {
         "version": "0.8.24",
         "settings": {
@@ -34,7 +34,7 @@
         "^0.8.24"
       ],
       "artifacts": [
-        "CompensationLedger"
+        "FCRSCSLedger"
       ]
     }
   }

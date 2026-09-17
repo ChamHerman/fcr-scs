@@ -22,7 +22,7 @@ import type {
   TypedContractMethod,
 } from "./common";
 
-export interface CompensationLedgerInterface extends Interface {
+export interface FCRSCSLedgerInterface extends Interface {
   getFunction(
     nameOrSignature: "getRecord" | "owner" | "publishRecord" | "voidRecord"
   ): FunctionFragment;
@@ -35,7 +35,7 @@ export interface CompensationLedgerInterface extends Interface {
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "publishRecord",
-    values: [string, BytesLike]
+    values: [string, BytesLike[]]
   ): string;
   encodeFunctionData(
     functionFragment: "voidRecord",
@@ -54,17 +54,17 @@ export interface CompensationLedgerInterface extends Interface {
 export namespace RecordPublishedEvent {
   export type InputTuple = [
     caseId: string,
-    documentHash: BytesLike,
+    documentHashes: BytesLike[],
     timestamp: BigNumberish
   ];
   export type OutputTuple = [
     caseId: string,
-    documentHash: string,
+    documentHashes: string[],
     timestamp: bigint
   ];
   export interface OutputObject {
     caseId: string;
-    documentHash: string;
+    documentHashes: string[];
     timestamp: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
@@ -91,11 +91,11 @@ export namespace RecordVoidedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export interface CompensationLedger extends BaseContract {
-  connect(runner?: ContractRunner | null): CompensationLedger;
+export interface FCRSCSLedger extends BaseContract {
+  connect(runner?: ContractRunner | null): FCRSCSLedger;
   waitForDeployment(): Promise<this>;
 
-  interface: CompensationLedgerInterface;
+  interface: FCRSCSLedgerInterface;
 
   queryFilter<TCEvent extends TypedContractEvent>(
     event: TCEvent,
@@ -137,8 +137,8 @@ export interface CompensationLedger extends BaseContract {
   getRecord: TypedContractMethod<
     [caseId: string],
     [
-      [string, bigint, boolean, string, bigint] & {
-        documentHash: string;
+      [string[], bigint, boolean, string, bigint] & {
+        documentHashes: string[];
         publishedAt: bigint;
         isVoided: boolean;
         voidReason: string;
@@ -151,7 +151,7 @@ export interface CompensationLedger extends BaseContract {
   owner: TypedContractMethod<[], [string], "view">;
 
   publishRecord: TypedContractMethod<
-    [caseId: string, documentHash: BytesLike],
+    [caseId: string, documentHashes: BytesLike[]],
     [void],
     "nonpayable"
   >;
@@ -171,8 +171,8 @@ export interface CompensationLedger extends BaseContract {
   ): TypedContractMethod<
     [caseId: string],
     [
-      [string, bigint, boolean, string, bigint] & {
-        documentHash: string;
+      [string[], bigint, boolean, string, bigint] & {
+        documentHashes: string[];
         publishedAt: bigint;
         isVoided: boolean;
         voidReason: string;
@@ -187,7 +187,7 @@ export interface CompensationLedger extends BaseContract {
   getFunction(
     nameOrSignature: "publishRecord"
   ): TypedContractMethod<
-    [caseId: string, documentHash: BytesLike],
+    [caseId: string, documentHashes: BytesLike[]],
     [void],
     "nonpayable"
   >;
@@ -215,7 +215,7 @@ export interface CompensationLedger extends BaseContract {
   >;
 
   filters: {
-    "RecordPublished(string,bytes32,uint256)": TypedContractEvent<
+    "RecordPublished(string,bytes32[],uint256)": TypedContractEvent<
       RecordPublishedEvent.InputTuple,
       RecordPublishedEvent.OutputTuple,
       RecordPublishedEvent.OutputObject

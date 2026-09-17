@@ -66,7 +66,7 @@ fcr-scs/
 | Blockchain Service | Business Logic | Ethers.js v6, Solidity, Sepolia / Local Hardhat | Implemented |
 | AI Service | Business Logic | Python, Scikit-learn, TensorFlow, OpenCV | Planned |
 | Database | Data | PostgreSQL, Prisma ORM v7 (`@prisma/adapter-pg`) | Implemented |
-| Blockchain Ledger | Data | Solidity (`CompensationLedger.sol`), Hardhat | Implemented |
+| Blockchain Ledger | Data | Solidity (`FCRSCSLedger.sol`), Hardhat | Implemented |
 | Reporting | Business Logic | jsPDF, PDFKit, Chart.js | In progress |
 
 ## Development environment

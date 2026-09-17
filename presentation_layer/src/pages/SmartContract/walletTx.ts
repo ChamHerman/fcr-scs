@@ -8,13 +8,11 @@ import { ethers } from 'ethers';
 
 const getEthereum = () => (window as any).ethereum;
 
-// Human-readable ABI fragment for publication.
-// NOTE: the contract declares publishRecord(string, bytes32) — a string/string
-// ABI here would encode a selector the contract does not have, the estimate
-// would revert, and MetaMask would fall back to a 21,000,000 gas default that
-// Infura rejects (cap 16,777,216).
-const COMPENSATION_LEDGER_ABI = [
-  'function publishRecord(string caseId, bytes32 documentHash)',
+// Human-readable ABI fragment for publication. The contract declares
+// publishRecord(string, bytes32[]) so every owner's document hash for a case is
+// anchored in a single transaction.
+const FCRSCS_LEDGER_ABI = [
+  'function publishRecord(string caseId, bytes32[] documentHashes)',
 ];
 
 /** Normalises a document hash to an exact 32-byte hex value (bytes32). */
@@ -105,7 +103,7 @@ export async function ensureChain(chainId: number): Promise<void> {
   }
 }
 
-/** Prompts MetaMask to sign + send a CompensationLedger call; resolves with the tx hash. */
+/** Prompts MetaMask to sign + send an FCRSCSLedger call; resolves with the tx hash. */
 export async function sendLedgerTransaction(params: {
   from: string;
   functionName?: 'publishRecord';
@@ -117,8 +115,9 @@ export async function sendLedgerTransaction(params: {
 
   await ensureChain(params.network.chainId);
 
-  const iface = new ethers.Interface(COMPENSATION_LEDGER_ABI);
-  const args = [params.args[0], toBytes32(params.args[1])];
+  const iface = new ethers.Interface(FCRSCS_LEDGER_ABI);
+  const [caseId, ...hashes] = params.args;
+  const args = [caseId, hashes.map(toBytes32)];
   const data = iface.encodeFunctionData('publishRecord', args);
   const request: Record<string, string> = { from: params.from, to: params.network.contractAddress, data };
 
