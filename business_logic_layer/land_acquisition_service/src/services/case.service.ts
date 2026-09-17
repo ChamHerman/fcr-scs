@@ -2,31 +2,8 @@ import { prisma } from "../prisma";
 import { CaseStatus, AreaUnit, FundingSource, LandCategory, TenureType, OwnershipType, UserRole, Prisma, AlertChannel, AlertUrgency, ReportStatus, ObjectionStatus } from "@prisma/client";
 import { CaseStateMachine } from "../utils/case-state.machine";
 import { parseLandCategory, parseTenureType, parseOwnershipType, formatOwnershipType } from "../utils/enum.utils";
-import bcrypt from "bcrypt";
-import crypto from "crypto";
 import { sendTemplatedEmail } from "../../../user_management_service/src/utils/email.service";
-import { resolveMalaysianIdentity } from "../../../user_management_service/src/utils/malaysianIdentity";
 import { generateCustomId } from "../../../user_management_service/src/utils/idGenerator";
-import { logAudit } from "../../../user_management_service/src/services/audit.service";
-
-function generateTemporaryPassword(): string {
-  const letters = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-  const smalls = "abcdefghijkmnpqrstuvwxyz";
-  const numbers = "23456789";
-  const specials = "@$!%*?&";
-  
-  let result = "";
-  result += letters[crypto.randomInt(0, letters.length)];
-  result += smalls[crypto.randomInt(0, smalls.length)];
-  result += numbers[crypto.randomInt(0, numbers.length)];
-  result += specials[crypto.randomInt(0, specials.length)];
-  
-  const all = letters + smalls + numbers + specials;
-  for (let i = 0; i < 8; i++) {
-    result += all[crypto.randomInt(0, all.length)];
-  }
-  return result;
-}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -749,10 +726,10 @@ export async function createCase(input: CreateCaseInput) {
         });
 
         if (existingAccount) {
-          console.log(`[CaseService] Landowner account already exists for ${ownerEmail} (UserId: ${existingAccount.userId}, Role: ${existingAccount.role}). Skipping auto-provisioning.`);
+          console.log(`[CaseService] Landowner account already exists for ${ownerEmail} (UserId: ${existingAccount.userId}, Role: ${existingAccount.role}). Attaching case notification.`);
 
           // 1. Create In-App SystemAlert for existing landowner
-          const alertId = await generateCustomId("systemAlert");
+          const alertId = await generateCustomId("systemAlert", tx);
           await tx.systemAlert.create({
             data: {
               alertId,
@@ -784,83 +761,6 @@ export async function createCase(input: CreateCaseInput) {
           }).catch((err) => {
             console.warn(`[CaseService] Non-fatal notification failure to existing landowner ${existingAccount.email}:`, err);
           });
-        } else {
-          try {
-            const identity = resolveMalaysianIdentity(pureNric);
-            const resolvedName = identity.isValid ? identity.name : ownerName;
-            const resolvedAddress = identity.isValid ? identity.address : ownerAddress;
-            const tempPassword = generateTemporaryPassword();
-            const hashedPassword = await bcrypt.hash(tempPassword, 10);
-            const newUserId = await generateCustomId("user");
-
-            const newUser = await tx.user.create({
-              data: {
-                userId: newUserId,
-                name: resolvedName,
-                email: ownerEmail,
-                contactNumber: contact || "0123456789",
-                identificationNumber: pureNric,
-                address: resolvedAddress,
-                passwordHash: hashedPassword,
-                role: UserRole.DISPLACED_COMMUNITY_MEMBER,
-                isActive: true,
-                mustChangePassword: true,
-              },
-            });
-
-            // 1. Create In-App Notification for new landowner so it is immediately visible on first login
-            const alertId = await generateCustomId("systemAlert");
-            await tx.systemAlert.create({
-              data: {
-                alertId,
-                recipientId: newUser.userId,
-                alertType: "CASE_CREATED",
-                channel: AlertChannel.IN_APP,
-                urgencyLevel: AlertUrgency.HIGH,
-                caseReference: dbCase.caseId,
-                message: `Welcome to FCR-SCS. Your account has been provisioned as an affected landowner for land acquisition case: ${dbCase.caseTitle} (${dbCase.caseId}). Please review your case details.`,
-                isAcknowledged: false,
-              },
-            });
-
-            // 2. Dispatch temporary credentials email with explicit case reason
-            const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
-            sendTemplatedEmail(newUser.email, "TEMPORARY_CREDENTIALS", {
-              name: newUser.name,
-              role: "Displaced Community Member",
-              email: newUser.email,
-              temporaryPassword: tempPassword,
-              loginUrl: `${frontendUrl}/login`,
-              caseId: dbCase.caseId,
-              caseTitle: dbCase.caseTitle,
-              caseReference: dbCase.caseId,
-            }).catch((mailErr) => {
-              console.error(`[CaseService] Failed to send credentials email to ${newUser.email}:`, mailErr);
-            });
-
-            logAudit({
-              userId: newUser.userId,
-              userRole: newUser.role,
-              actorName: newUser.name,
-              actorEmail: newUser.email,
-              activityType: "CITIZEN_AUTO_PROVISIONED",
-              moduleName: "LAND_ACQUISITION",
-              caseReference: dbCase.caseId,
-              severity: "INFO",
-              activityDetails: {
-                name: newUser.name,
-                email: newUser.email,
-                caseId: dbCase.caseId,
-                role: newUser.role,
-              },
-              systemResponse: "CREATED (201)",
-            });
-
-            console.log(`[CaseService] Auto-provisioned account & in-app alert for landowner ${newUser.name} (${newUser.email}) on case ${dbCase.caseId}`);
-          } catch (autoErr) {
-            console.error(`[CaseService] Error auto-provisioning landowner account:`, autoErr);
-            throw autoErr;
-          }
         }
       }
     }
