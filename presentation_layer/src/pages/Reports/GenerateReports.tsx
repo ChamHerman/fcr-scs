@@ -472,14 +472,61 @@ export const GenerateReports: React.FC = () => {
         {previewData && (
           <div className="space-y-4">
             {previewData.reportId && (
-              <div className="flex items-center justify-between px-3.5 py-2 rounded-lg bg-md-surface-container-high border border-md-outline-variant text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="text-md-on-surface-variant font-medium">Official Audit Reference ID:</span>
-                  <span className="font-mono font-bold text-md-primary">{previewData.reportId}</span>
+              <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl divide-y divide-slate-100 dark:divide-zinc-800 text-xs shadow-sm overflow-hidden">
+                {/* Row 1: Audit Reference, Generated Timestamp, Security Level */}
+                <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-500 dark:text-zinc-400 font-semibold">Report ID:</span>
+                    <span className="font-mono font-bold text-md-primary">{previewData.reportId}</span>
+                    <CopyButton value={previewData.reportId} title="Copy Report Reference ID" />
+                  </div>
+                  <div className="flex items-center gap-1.5 text-slate-500 dark:text-zinc-400">
+                    <span className="font-semibold">Generated:</span>
+                    <span>
+                      {new Date(previewData.generatedAt || Date.now()).toLocaleString('en-GB', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                      })}{' '}
+                      (MYT)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-500 dark:text-zinc-400 font-semibold">Classification:</span>
+                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 dark:border-rose-900/50">
+                      OFFICIAL (SULIT)
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-md-on-surface-variant">Operator: <strong>{operator}</strong></span>
-                  <CopyButton value={previewData.reportId} title="Copy Report Reference ID" />
+
+                {/* Row 2: Authorized Operator */}
+                <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-slate-50/40 dark:bg-zinc-900/40">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-500 dark:text-zinc-400 font-semibold">Authorized Operator:</span>
+                    <span className="font-medium text-slate-800 dark:text-zinc-200">{operator}</span>
+                  </div>
+                  <div className="text-slate-500 dark:text-zinc-400 text-[11px]">
+                    Statutory Framework: <strong className="text-slate-700 dark:text-zinc-300">Land Acquisition Act 1960 (Act 486)</strong>
+                  </div>
+                </div>
+
+                {/* Row 3: Filter Scope */}
+                <div className="px-4 py-2.5 flex items-start gap-2">
+                  <span className="text-slate-500 dark:text-zinc-400 font-semibold shrink-0">Filter Scope:</span>
+                  <span className="text-slate-700 dark:text-zinc-300 font-medium">
+                    {[
+                      !isBlockchain && startDate && endDate ? `Date Range: ${startDate} to ${endDate}` : null,
+                      state && state !== 'All' && state !== 'All states' ? `State: ${state}` : null,
+                      status && status !== 'All' && status !== 'All statuses' && status !== 'All Statuses'
+                        ? `Status: ${status.replace(/_/g, ' ')}`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join('   •   ') || 'National Scope — Unrestricted (All Records)'}
+                  </span>
                 </div>
               </div>
             )}

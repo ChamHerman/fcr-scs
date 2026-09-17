@@ -71,32 +71,101 @@ export const generatePdfBuffer = async (reportTitle: string, reportData: any): P
 
       const reportId = reportData.reportId || `RPT-${Date.now().toString().slice(-6)}`;
       const operatorText = reportData.operator || (reportData.reportType === "Case Status Report" ? "Government Officer (JKPTG)" : "Gov Administrator (Government Administrator)");
-      
-      doc.fillColor(secondaryTextColor).fontSize(8).font("Helvetica")
-        .text(`Report ID: ${reportId}   •   Generated: ${genDate}   •   Classification: OFFICIAL (SULIT)`, pageMargin, doc.y);
-      doc.moveDown(0.2);
-      doc.fillColor(secondaryTextColor).fontSize(8).font("Helvetica")
-        .text(`Operator: ${operatorText}`, pageMargin, doc.y);
 
-      // Filter scope line
-      let filterSummary = "All records (National Scope — Unrestricted)";
-      if (reportData.filterApplied && typeof reportData.filterApplied === "object") {
-        const activeEntries = Object.entries(reportData.filterApplied).filter(
-          ([k, v]) => k !== "operator" && k !== "format" && v && v !== "All" && v !== "All states" && v !== "All Statuses" && v !== "All statuses"
-        );
-        if (activeEntries.length > 0) {
-          filterSummary = activeEntries
-            .map(([k, v]) => `${k.charAt(0).toUpperCase() + k.slice(1)}: ${v}`)
-            .join("   •   ");
-        }
+      // Format clean filter summary items (strictly exclude operator, format, reportId, operatorRole)
+      const formatStatusVal = (val: string) => {
+        if (!val || val === "All" || val === "All statuses" || val === "All Statuses") return null;
+        return val
+          .split("_")
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+          .join(" ");
+      };
+
+      const filterParts: string[] = [];
+      const applied = reportData.filterApplied || {};
+      if (applied.startDate && applied.endDate) {
+        filterParts.push(`Date Range: ${applied.startDate} to ${applied.endDate}`);
+      } else if (applied.startDate) {
+        filterParts.push(`From: ${applied.startDate}`);
+      } else if (applied.endDate) {
+        filterParts.push(`Until: ${applied.endDate}`);
       }
 
-      doc.moveDown(0.25);
-      doc.fillColor(primaryColor).fontSize(8).font("Helvetica-Bold")
-        .text("Filter Scope: ", pageMargin, doc.y, { continued: true })
-        .font("Helvetica").fillColor(secondaryTextColor).text(filterSummary);
+      if (applied.state && applied.state !== "All" && applied.state !== "All states") {
+        filterParts.push(`State: ${applied.state}`);
+      }
 
-      doc.moveDown(0.6);
+      if (applied.status && applied.status !== "All" && applied.status !== "All Statuses" && applied.status !== "All statuses") {
+        const formattedStatus = formatStatusVal(applied.status);
+        if (formattedStatus) filterParts.push(`Status: ${formattedStatus}`);
+      }
+
+      if (applied.location && applied.location !== "All") {
+        filterParts.push(`District: ${applied.location}`);
+      }
+
+      if (applied.projectType && applied.projectType !== "All") {
+        filterParts.push(`Project: ${applied.projectType}`);
+      }
+
+      const filterSummaryText = filterParts.length > 0 ? filterParts.join("   •   ") : "All Records (National Scope — Unrestricted)";
+
+      // Metadata Box (Clean Non-Color Card with Row-by-Row Dividers)
+      const metaBoxY = doc.y;
+      const rowHeight = 15;
+      const metaBoxHeight = rowHeight * 3 + 4;
+
+      doc.roundedRect(pageMargin, metaBoxY, printableWidth, metaBoxHeight, 4)
+        .lineWidth(0.75)
+        .strokeColor("#D0C5D8")
+        .fillAndStroke("#FFFFFF", "#D0C5D8");
+
+      // Row 1: Audit Reference, Generation Timestamp, Security Level
+      const row1Y = metaBoxY + 4;
+      doc.fillColor(primaryColor).fontSize(7.5).font("Helvetica-Bold")
+        .text("Report ID:", pageMargin + 10, row1Y, { continued: true });
+      doc.fillColor(textColor).font("Helvetica")
+        .text(`  ${reportId}`, { continued: false });
+
+      doc.fillColor(primaryColor).fontSize(7.5).font("Helvetica-Bold")
+        .text("Generated:", pageMargin + 185, row1Y, { continued: true });
+      doc.fillColor(textColor).font("Helvetica")
+        .text(`  ${genDate} (MYT)`, { continued: false });
+
+      doc.fillColor(primaryColor).fontSize(7.5).font("Helvetica-Bold")
+        .text("Classification:", pageMargin + 375, row1Y, { continued: true });
+      doc.fillColor("#B3261E").font("Helvetica-Bold")
+        .text("  OFFICIAL (SULIT)", { continued: false });
+
+      // Divider 1
+      doc.moveTo(pageMargin + 6, metaBoxY + rowHeight + 2)
+        .lineTo(pageMargin + printableWidth - 6, metaBoxY + rowHeight + 2)
+        .lineWidth(0.5)
+        .strokeColor("#ECE6F0")
+        .stroke();
+
+      // Row 2: Authorized Operator
+      const row2Y = metaBoxY + rowHeight + 5;
+      doc.fillColor(primaryColor).fontSize(7.5).font("Helvetica-Bold")
+        .text("Authorized Operator:", pageMargin + 10, row2Y, { continued: true });
+      doc.fillColor(textColor).font("Helvetica")
+        .text(`  ${operatorText}`, pageMargin + 10 + 95, row2Y, { width: printableWidth - 20 - 95, ellipsis: true });
+
+      // Divider 2
+      doc.moveTo(pageMargin + 6, metaBoxY + rowHeight * 2 + 2)
+        .lineTo(pageMargin + printableWidth - 6, metaBoxY + rowHeight * 2 + 2)
+        .lineWidth(0.5)
+        .strokeColor("#ECE6F0")
+        .stroke();
+
+      // Row 3: Audit Filter Scope
+      const row3Y = metaBoxY + rowHeight * 2 + 5;
+      doc.fillColor(primaryColor).fontSize(7.5).font("Helvetica-Bold")
+        .text("Filter Scope:", pageMargin + 10, row3Y, { continued: true });
+      doc.fillColor(secondaryTextColor).font("Helvetica")
+        .text(`  ${filterSummaryText}`, pageMargin + 10 + 65, row3Y, { width: printableWidth - 20 - 65, ellipsis: true });
+
+      doc.y = metaBoxY + metaBoxHeight + 8;
 
       // Executive Summary Metrics Box (Multi-tile with dividers)
       const summaryBoxY = doc.y;
