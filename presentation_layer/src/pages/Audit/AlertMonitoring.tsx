@@ -78,7 +78,44 @@ const ACTIVITY_TYPE_PRESETS: SelectOption[] = [
   { value: 'ROLE_PERMISSIONS_UPDATED', label: 'Security: Role Permissions Modified' },
   { value: 'USER_STATUS_CHANGE', label: 'User Admin: Status Change' },
   { value: 'EMAIL_TEMPLATE_MODIFIED', label: 'Settings: Email Template Modified' },
-  { value: 'PAYMENT_AUTHORISATION', label: 'Finance: Payment Authorisation' },
+  { value: 'PAYMENT_AUTHORISATION_SIGNED', label: 'Finance: Payment Authorisation Co-Signed' },
+  // AI Valuation
+  { value: 'AI_VALUATION_GENERATED', label: 'AI Valuation: Valuation Generated' },
+  { value: 'AI_MODEL_RETRAINED', label: 'AI Valuation: Model Retrained Successfully' },
+  { value: 'AI_MODEL_RETRAIN_FAILED', label: 'AI Valuation: Model Retraining Failed' },
+  { value: 'AI_MODEL_ACTIVATED', label: 'AI Valuation: New Model Activated' },
+  { value: 'AI_MODEL_DISCARDED', label: 'AI Valuation: Candidate Model Discarded' },
+  // Reporting & Analytics
+  { value: 'REPORT_GENERATED', label: 'Reporting: Report Generated (JSON View)' },
+  { value: 'REPORT_EXPORTED', label: 'Reporting: Report Exported (PDF)' },
+  // Smart Contract & Blockchain
+  { value: 'BLOCKCHAIN_NETWORK_SWITCHED', label: 'Blockchain: Network Switched' },
+  { value: 'BLOCKCHAIN_CLAIM_ACQUIRED', label: 'Blockchain: Publish Lock Acquired' },
+  { value: 'BLOCKCHAIN_CLAIM_RELEASED', label: 'Blockchain: Publish Lock Released' },
+  { value: 'BLOCKCHAIN_MILESTONE1_NOTARIZED', label: 'Blockchain: Milestone 1 (Award) Notarized' },
+  { value: 'BLOCKCHAIN_MILESTONE2_NOTARIZED', label: 'Blockchain: Milestone 2 (Settlement) Notarized' },
+  { value: 'BLOCKCHAIN_DOCUMENT_VERIFIED', label: 'Blockchain: Document Integrity Verified' },
+  // Payment: Bank Details
+  { value: 'CITIZEN_BANK_DETAILS_SUBMITTED', label: 'Payment: Member Submitted Bank Details' },
+  { value: 'BANK_DETAILS_UPDATED', label: 'Payment: Default Bank Details Updated' },
+  { value: 'PAYMENT_BANK_DETAILS_REQUESTED', label: 'Payment: Admin Requested Updated Bank Details' },
+  // Payment: Workflow
+  { value: 'PAYMENT_TRANSFER_INITIATED', label: 'Payment: Transfer Initiated (Awaiting Co-Sig)' },
+  { value: 'PAYMENT_DISBURSEMENT_EXECUTED', label: 'Payment: Disbursement Sent to Bank' },
+  { value: 'PAYMENT_TRANSFER_REJECTED', label: 'Payment: Transfer Rejected by Admin' },
+  { value: 'PAYMENT_REJECTION_RESOLVED', label: 'Payment: Rejection Resolved' },
+  { value: 'PAYMENT_TRANSFER_CANCELLED', label: 'Payment: Transfer Cancelled (Terminal)' },
+  // Payment: Bank Clearance
+  { value: 'BANK_TRANSFER_APPROVED', label: 'Payment: Bank Clearance Approved' },
+  { value: 'BANK_TRANSFER_REJECTED', label: 'Payment: Bank Clearance Rejected (Gateway Error)' },
+  { value: 'PAYMENT_TRANSFER_RETRIED', label: 'Payment: Transfer Retried' },
+  { value: 'PAYMENT_TRANSFER_SCHEDULED_NEXT_DAY', label: 'Payment: Transfer Rescheduled to Next Day' },
+  { value: 'PAYMENT_RECEIPT_CONFIRMED', label: 'Payment: Receipt Confirmed (PAID / M2 Ready)' },
+  // Payment: Dispute
+  { value: 'PAYMENT_DISPUTE_FILED', label: 'Payment: Dispute Filed by Member' },
+  { value: 'PAYMENT_DISPUTE_RESOLVED', label: 'Payment: Dispute Resolved (Mark as Resolved)' },
+  { value: 'PAYMENT_DISPUTE_REINITIATED', label: 'Payment: Dispute Resolved (Reinitiate Payment)' },
+  { value: 'PAYMENT_DISPUTE_DETAILS_REQUESTED', label: 'Payment: Dispute Resolved (New Bank Details Requested)' },
 ];
 
 const TARGET_ROLES_LIST = [
