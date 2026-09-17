@@ -8,6 +8,8 @@ export interface ReportFilterParams {
   status?: string;
   location?: string;
   projectType?: string;
+  operator?: string;
+  operatorRole?: string;
 }
 
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -194,6 +196,7 @@ export const generateCaseStatusData = async (filters: ReportFilterParams) => {
     reportType: "Case Status Report",
     reportId: generateReportId("CASE"),
     generatedAt: new Date().toISOString(),
+    operator: filters.operator || "Government Officer (JKPTG)",
     filterApplied: filters,
     summary: {
       totalCases,
@@ -252,21 +255,28 @@ export const generatePaymentData = async (filters: ReportFilterParams) => {
   const settledPayments = payments.filter((p) => SETTLED_PAYMENT_STATUSES.includes(p.status));
   const totalPaymentVolume = payments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
   const totalDisbursementNum = settledPayments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
+  const undisbursedAmountNum = Math.max(0, totalPaymentVolume - totalDisbursementNum);
   const successfulPayments = settledPayments.length;
-  const successRate = payments.length > 0 ? Math.round((successfulPayments / payments.length) * 100) : 0;
+  const pendingPayments = payments.length - successfulPayments;
+  const disbursementRate = totalPaymentVolume > 0
+    ? Math.round((totalDisbursementNum / totalPaymentVolume) * 100)
+    : (payments.length > 0 ? Math.round((successfulPayments / payments.length) * 100) : 0);
 
   return {
     reportType: "Payment Report",
     reportId: generateReportId("PAY"),
     generatedAt: new Date().toISOString(),
+    operator: filters.operator || "Gov Administrator (Government Administrator)",
     filterApplied: filters,
     summary: {
       totalRecords: payments.length,
       totalDisbursement: `RM ${totalDisbursementNum.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       totalPaymentVolume: `RM ${totalPaymentVolume.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      undisbursedAmount: `RM ${undisbursedAmountNum.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       successfulPayments,
-      pendingPayments: payments.length - successfulPayments,
-      successRate: `${successRate}%`,
+      pendingPayments,
+      successRate: `${disbursementRate}%`,
+      disbursementRate: `${disbursementRate}%`,
       notes: "Audited disbursement records with national banking references.",
     },
     details: payments.map((p) => ({
@@ -318,20 +328,22 @@ export const generateBlockchainAuditData = async (filters: ReportFilterParams) =
 
   const publishedRecords = records.filter((r) => r.status === BlockchainStatus.PUBLISHED).length;
   const readyToPublishRecords = records.filter((r) => r.status === BlockchainStatus.READY_TO_PUBLISH).length;
+  const notarizedPercentageNum = records.length > 0 ? Math.round((publishedRecords / records.length) * 100) : 100;
+  const notarizedRatio = `${publishedRecords}/${records.length} Notarized`;
 
   return {
     reportType: "Blockchain Audit Report",
     reportId: generateReportId("CHAIN"),
     generatedAt: new Date().toISOString(),
+    operator: filters.operator || "Gov Administrator (Government Administrator)",
     filterApplied: filters,
     summary: {
       totalRecords: records.length,
       publishedRecords,
       readyToPublishRecords,
-      integrityStatus:
-        records.length > 0 && publishedRecords === records.length
-          ? "100% Cryptographically Verified"
-          : `${publishedRecords}/${records.length} Notarized On-Chain`,
+      notarizedPercentage: `${notarizedPercentageNum}%`,
+      notarizedRatio,
+      integrityStatus: `${notarizedPercentageNum}% (${notarizedRatio})`,
       network: "Ethereum Sepolia Testnet",
     },
     details: records.map((r) => ({

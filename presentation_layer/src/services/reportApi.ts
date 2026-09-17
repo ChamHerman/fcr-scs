@@ -7,6 +7,7 @@ export interface ReportFilterOptions {
   status?: string;
   projectType?: string;
   location?: string;
+  operator?: string;
 }
 
 export interface DashboardOverviewData {

@@ -20,9 +20,25 @@ export const getOverviewStats = async (req: Request, res: Response): Promise<voi
   }
 };
 
+const resolveOperator = (req: Request, defaultRole: 'officer' | 'admin'): string => {
+  if (req.query.operator && typeof req.query.operator === 'string') {
+    return req.query.operator;
+  }
+  const user = (req as AuthenticatedRequest).user;
+  if (user?.name) {
+    const roleTitle = user.role === 'GOVERNMENT_OFFICER'
+      ? 'Government Officer'
+      : (user.role === 'GOVERNMENT_ADMINISTRATOR' ? 'Government Administrator' : 'System Administrator');
+    return `${user.name} (${roleTitle})`;
+  }
+  return defaultRole === 'officer'
+    ? 'Government Officer (JKPTG)'
+    : 'Gov Administrator (Government Administrator)';
+};
+
 export const getCaseStatusReport = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { format, startDate, endDate, state, status, location, projectType } = req.query;
+    const { format, startDate, endDate, state, status, location, projectType, operator } = req.query;
     const filters: ReportFilterParams = {
       startDate: startDate as string,
       endDate: endDate as string,
@@ -30,6 +46,7 @@ export const getCaseStatusReport = async (req: Request, res: Response): Promise<
       status: status as string,
       location: location as string,
       projectType: projectType as string,
+      operator: resolveOperator(req, 'officer'),
     };
 
     const data = await generateCaseStatusData(filters);
@@ -75,11 +92,12 @@ export const getCaseStatusReport = async (req: Request, res: Response): Promise<
 
 export const getPaymentReport = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { format, startDate, endDate, status } = req.query;
+    const { format, startDate, endDate, status, operator } = req.query;
     const filters: ReportFilterParams = {
       startDate: startDate as string,
       endDate: endDate as string,
       status: status as string,
+      operator: resolveOperator(req, 'admin'),
     };
 
     const data = await generatePaymentData(filters);
@@ -125,11 +143,12 @@ export const getPaymentReport = async (req: Request, res: Response): Promise<voi
 
 export const getBlockchainAuditReport = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { format, startDate, endDate, status } = req.query;
+    const { format, startDate, endDate, status, operator } = req.query;
     const filters: ReportFilterParams = {
       startDate: startDate as string,
       endDate: endDate as string,
       status: status as string,
+      operator: resolveOperator(req, 'admin'),
     };
 
     const data = await generateBlockchainAuditData(filters);

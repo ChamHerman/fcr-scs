@@ -44,6 +44,8 @@ import {
 } from '../../services/reportApi';
 import type { DashboardOverviewData, ReportGeneratedResponse } from '../../services/reportApi';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { useAuth } from '../../context/AuthContext';
+import { getRoleTitle } from '../../utils/roleUtils';
 
 ChartJS.register(
   CategoryScale,
@@ -131,6 +133,16 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
   const [downloading, setDownloading] = useState(false);
 
   const categorySeqRef = useRef(0);
+  const { user } = useAuth();
+
+  const operator = useMemo(() => {
+    if (user?.name) {
+      return `${user.name} (${getRoleTitle(user.role)})`;
+    }
+    return reportCategory === 'Case Status'
+      ? 'Government Officer (JKPTG)'
+      : 'Gov Administrator (Government Administrator)';
+  }, [user, reportCategory]);
 
   /* Overview data (charts + totals) is only needed on the overview page. */
   const loadData = useCallback(async (opts?: { silent?: boolean }) => {
@@ -191,11 +203,11 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
     try {
       let res: ReportGeneratedResponse;
       if (reportCategory === 'Payment') {
-        res = await fetchPaymentReport({});
+        res = await fetchPaymentReport({ operator });
       } else if (reportCategory === 'Blockchain Audit') {
-        res = await fetchBlockchainAuditReport({});
+        res = await fetchBlockchainAuditReport({ operator });
       } else {
-        res = await fetchCaseStatusReport({});
+        res = await fetchCaseStatusReport({ operator });
       }
       if (seq !== categorySeqRef.current) return;
       setCategoryData(res);
@@ -233,7 +245,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
     if (!reportCategory) return;
     setDownloading(true);
     try {
-      await downloadReportPdf(`${reportCategory} Report`, {});
+      await downloadReportPdf(`${reportCategory} Report`, { operator });
       setDownloading(false);
       setFullReportOpen(false);
       notify({ type: 'success', title: 'Report downloaded', message: 'The full report PDF has been generated and downloaded.' });
@@ -380,10 +392,10 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
         {/* Payment View Specific KPIs */}
         {reportCategory === 'Payment' && (
           <>
-            <StatCard icon={<CreditCard size={16} className="text-[#1e7b4a]" />} label="Total Disbursements" value={categoryData?.summary?.totalDisbursement ?? 'RM 0.00'} sub="Paid to Landowners" />
-            <StatCard icon={<CheckCircle2 size={16} className="text-[#0b5b8c]" />} label="Disbursement Success Rate" value={categoryData?.summary?.successRate ?? '0%'} sub="Bank Transfer Clearance" />
-            <StatCard icon={<FolderKanban size={16} className="text-[#6750A4]" />} label="Paid Records" value={categoryData?.summary?.successfulPayments ?? 0} sub="Settled in Full" />
-            <StatCard icon={<TrendingUp size={16} className="text-[#a8600b]" />} label="Pending / Processing" value={categoryData?.summary?.pendingPayments ?? 0} sub="Awaiting Bank Transfer" />
+            <StatCard icon={<CreditCard size={16} className="text-[#1e7b4a]" />} label="Total Disbursements" value={categoryData?.summary?.totalDisbursement ?? 'RM 0.00'} sub="Cleared to Beneficiary" />
+            <StatCard icon={<TrendingUp size={16} className="text-[#a8600b]" />} label="Undisbursed Amount" value={categoryData?.summary?.undisbursedAmount ?? 'RM 0.00'} sub="Awaiting Settlement" />
+            <StatCard icon={<CheckCircle2 size={16} className="text-[#0b5b8c]" />} label="Disbursement Rate" value={categoryData?.summary?.disbursementRate ?? categoryData?.summary?.successRate ?? '0%'} sub="Disbursed / Pipeline Volume" />
+            <StatCard icon={<FolderKanban size={16} className="text-[#6750A4]" />} label="Settled Records" value={`${categoryData?.summary?.successfulPayments ?? 0} Paid`} sub={`${categoryData?.summary?.pendingPayments ?? 0} Pending Clearance`} />
           </>
         )}
 
@@ -393,7 +405,12 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
             <StatCard icon={<ShieldCheck size={16} className="text-[#0b5b8c]" />} label="Total Ledger Records" value={categoryData?.summary?.totalRecords ?? 0} sub="Smart Contract Events" />
             <StatCard icon={<CheckCircle2 size={16} className="text-[#1e7b4a]" />} label="Published On-Chain" value={categoryData?.summary?.publishedRecords ?? 0} sub="Ethereum Sepolia Verified" />
             <StatCard icon={<Clock size={16} className="text-[#a8600b]" />} label="Ready to Publish" value={categoryData?.summary?.readyToPublishRecords ?? 0} sub="Pending Publication" />
-            <StatCard icon={<ShieldCheck size={16} className="text-[#6750A4]" />} label="Cryptographic Integrity" value={categoryData?.summary?.integrityStatus ?? 'Verified'} sub="SHA-256 Validated" />
+            <StatCard
+              icon={<ShieldCheck size={16} className="text-[#6750A4]" />}
+              label="Cryptographic Proof"
+              value={categoryData?.summary?.notarizedPercentage ?? '100%'}
+              sub={categoryData?.summary?.notarizedRatio ?? `${categoryData?.summary?.publishedRecords ?? 0}/${categoryData?.summary?.totalRecords ?? 0} Notarized`}
+            />
           </>
         )}
 
@@ -543,7 +560,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
         onClose={() => !downloading && setFullReportOpen(false)}
         title={`${reportCategory ? `${reportCategory} Report` : 'Report'} — Full Preview`}
         subtitle="Complete report without filters. Review the report below, then download the PDF."
-        maxWidth="max-w-5xl"
+        maxWidth="max-w-6xl"
         footer={
           <div className="flex items-center justify-end gap-3">
             <Button variant="text" disabled={downloading} onClick={() => setFullReportOpen(false)}>

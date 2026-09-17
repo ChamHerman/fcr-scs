@@ -8,7 +8,9 @@ import {
   FileText,
   RefreshCw,
   Table as TableIcon,
-  AlertCircle
+  AlertCircle,
+  RotateCcw,
+  ShieldAlert
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { PageHeader } from '../../components/ui/PageHeader';
@@ -17,12 +19,12 @@ import { Select } from '../../components/ui/Select';
 import { Modal } from '../../components/ui/Modal';
 import { CopyButton } from '../../components/ui/CopyButton';
 import { useNotification } from '../../components/ui/NotificationSystem';
+import { useAuth } from '../../context/AuthContext';
+import { useRole } from '../../hooks/useRole';
+import { getRoleTitle } from '../../utils/roleUtils';
 import {
   ALL_OPTION,
   STATES,
-  CASE_STATUS_OPTIONS,
-  PAYMENT_STATUS_OPTIONS,
-  BLOCKCHAIN_STATUS_OPTIONS,
   caseStatusLabel,
   paymentStatusLabel,
   blockchainStatusLabel
@@ -55,6 +57,8 @@ export const GenerateReports: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { notify } = useNotification();
+  const { user } = useAuth();
+  const { isOfficer, isAdmin } = useRole();
 
   // The report type is locked from the entry URL (e.g. clicking
   // "Generate Filtering Report" on a report page) — users cannot switch type.
@@ -71,6 +75,22 @@ export const GenerateReports: React.FC = () => {
     }
   };
 
+  // Operator resolution: match user's name & role
+  const operator = useMemo(() => {
+    if (user?.name) {
+      return `${user.name} (${getRoleTitle(user.role)})`;
+    }
+    return category === 'Case Status Report'
+      ? 'Government Officer (JKPTG)'
+      : 'Gov Administrator (Government Administrator)';
+  }, [user, category]);
+
+  // RBAC: Only Government Administrator (or System Admin) can generate Payment and Blockchain reports.
+  // Government Officers can generate Case Status reports.
+  const isRoleRestricted = useMemo(() => {
+    return isOfficer && !isAdmin && category !== 'Case Status Report';
+  }, [isOfficer, isAdmin, category]);
+
   const [state, setState] = useState<string>('All');
   const [status, setStatus] = useState<string>('All');
   const [startDate, setStartDate] = useState<string>('2026-01-01');
@@ -78,36 +98,73 @@ export const GenerateReports: React.FC = () => {
 
   const [loading, setLoading] = useState<boolean>(false);
   const [previewData, setPreviewData] = useState<ReportGeneratedResponse | null>(null);
+  const [baseRecords, setBaseRecords] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState<boolean>(false);
   const [downloading, setDownloading] = useState<boolean>(false);
 
   const seqRef = useRef(0);
+  const isBlockchain = category === 'Blockchain Audit Report';
 
-  /* Values are real enum members; labels come from the owning module's map. */
+  // Date validation: Start Date cannot be later than End Date
+  const dateError = useMemo(() => {
+    if (isBlockchain) return null;
+    if (!startDate || !endDate) return null;
+    if (startDate > endDate) {
+      return 'Start date cannot be later than end date. Please select a valid date range.';
+    }
+    return null;
+  }, [isBlockchain, startDate, endDate]);
+
+  // Dynamically derive available statuses strictly from loaded table records
+  const availableStatusValues = useMemo(() => {
+    const set = new Set<string>();
+    baseRecords.forEach((r: any) => {
+      if (r.status) set.add(r.status);
+    });
+    return Array.from(set);
+  }, [baseRecords]);
+
+  // Dropdown shows "All statuses" plus only the statuses that exist in the active records
   const currentStatusOptions = useMemo<SelectOption[]>(() => {
-    const toOptions = (values: string[], labelFor: (value: string) => string): SelectOption[] =>
-      values.map((value) => ({
-        value,
-        label: value === ALL_OPTION ? 'All Statuses' : labelFor(value),
-      }));
+    const toLabel = (val: string) => {
+      if (category === 'Payment Report') return paymentStatusLabel(val);
+      if (category === 'Blockchain Audit Report') return blockchainStatusLabel(val);
+      return caseStatusLabel(val);
+    };
 
-    if (category === 'Payment Report') return toOptions(PAYMENT_STATUS_OPTIONS, paymentStatusLabel);
-    if (category === 'Blockchain Audit Report') return toOptions(BLOCKCHAIN_STATUS_OPTIONS, blockchainStatusLabel);
-    return toOptions(CASE_STATUS_OPTIONS, caseStatusLabel);
-  }, [category]);
+    const opts: SelectOption[] = [{ value: 'All', label: 'All statuses' }];
+    availableStatusValues.forEach((val) => {
+      opts.push({ value: val, label: toLabel(val) });
+    });
+    return opts;
+  }, [availableStatusValues, category]);
 
-  const buildFilters = useCallback((): ReportFilterOptions => {
-    const isBlockchain = category === 'Blockchain Audit Report';
+  // Revert status to 'All' if selected status is not present in available records
+  useEffect(() => {
+    if (status !== 'All' && !availableStatusValues.includes(status)) {
+      setStatus('All');
+    }
+  }, [availableStatusValues, status]);
+
+  const buildFilters = useCallback((overrideStatus?: string): ReportFilterOptions => {
+    const activeStatus = overrideStatus !== undefined ? overrideStatus : status;
     return {
       startDate: isBlockchain ? undefined : startDate,
       endDate: isBlockchain ? undefined : endDate,
       state: category === 'Case Status Report' && state !== 'All' ? state : undefined,
-      status: status === 'All' ? undefined : status,
+      status: activeStatus === 'All' ? undefined : activeStatus,
+      operator,
     };
-  }, [category, startDate, endDate, state, status]);
+  }, [category, isBlockchain, startDate, endDate, state, status, operator]);
 
   const loadPreview = useCallback(async () => {
+    if (isRoleRestricted) return;
+    if (dateError) {
+      setError(dateError);
+      return;
+    }
+
     const seq = ++seqRef.current;
     setLoading(true);
     setError(null);
@@ -124,32 +181,52 @@ export const GenerateReports: React.FC = () => {
       }
       if (seq !== seqRef.current) return;
       setPreviewData(res);
+
+      // Keep baseRecords populated with the complete unfiltered set for this scope
+      if (status === 'All') {
+        setBaseRecords(res.details || []);
+      }
     } catch (err: any) {
       console.error("Preview load error:", err);
       if (seq !== seqRef.current) return;
       setError(err.message || "Failed to load report preview");
-      // Create a sensible preview fallback so the user still gets an interactive UI
-      setPreviewData({
-        reportType: category,
-        reportId: `RPT-${Date.now().toString().slice(-4)}`,
-        generatedAt: new Date().toISOString(),
-        filterApplied: { startDate, endDate, state, status },
-        summary: {
-          totalRecords: 12,
-          notes: "Live query returned sample demonstration records."
-        },
-        details: [
-          { "Case Ref": "LAC-2026-0001", "Title": "Langkawi Resort Expansion", "Status": "In Progress", "Location": "Kedah" },
-          { "Case Ref": "LAC-2026-0002", "Title": "Desaru Coast Reclamation", "Status": "Approved", "Location": "Johor" },
-          { "Case Ref": "LAC-2026-0003", "Title": "Port Dickson Marina Works", "Status": "Paid", "Location": "Negeri Sembilan" }
-        ]
-      });
+      setPreviewData(null);
     } finally {
       if (seq === seqRef.current) setLoading(false);
     }
-  }, [category, buildFilters, startDate, endDate, state, status]);
+  }, [category, buildFilters, dateError, isRoleRestricted, status]);
 
-  // Real-time preview: debounce every filter change, no manual refresh button.
+  // On category, date range or state change, fetch the base dataset to discover available statuses
+  useEffect(() => {
+    if (isRoleRestricted || dateError) return;
+    let isMounted = true;
+    const baseFilters = buildFilters('All');
+
+    const fetchBase = async () => {
+      try {
+        let res: ReportGeneratedResponse;
+        if (category === 'Payment Report') {
+          res = await fetchPaymentReport(baseFilters);
+        } else if (category === 'Blockchain Audit Report') {
+          res = await fetchBlockchainAuditReport(baseFilters);
+        } else {
+          res = await fetchCaseStatusReport(baseFilters);
+        }
+        if (isMounted) {
+          setBaseRecords(res.details || []);
+        }
+      } catch {
+        // Handled in loadPreview
+      }
+    };
+
+    fetchBase();
+    return () => {
+      isMounted = false;
+    };
+  }, [category, startDate, endDate, state, buildFilters, isRoleRestricted, dateError]);
+
+  // Real-time preview: debounce filter changes
   useEffect(() => {
     const timer = setTimeout(() => {
       loadPreview();
@@ -157,7 +234,16 @@ export const GenerateReports: React.FC = () => {
     return () => clearTimeout(timer);
   }, [loadPreview]);
 
+  const handleResetFilters = () => {
+    setState('All');
+    setStatus('All');
+    setStartDate('2026-01-01');
+    setEndDate(new Date().toISOString().slice(0, 10));
+    setError(null);
+  };
+
   const handleDownload = async () => {
+    if (isRoleRestricted || dateError) return;
     setDownloading(true);
     try {
       await downloadReportPdf(category, buildFilters());
@@ -179,16 +265,43 @@ export const GenerateReports: React.FC = () => {
         onBack={handleBack}
       />
 
+      {/* Role Restriction Banner */}
+      {isRoleRestricted && (
+        <div className="p-5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-start gap-3">
+            <ShieldAlert size={22} className="text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-bold text-sm">Role Access Restricted</div>
+              <div className="text-xs text-md-on-surface-variant mt-0.5">
+                Government Officers are authorised to generate <strong>Case Status Reports</strong>. Only Government Administrators can generate <strong>{category}</strong>.
+              </div>
+            </div>
+          </div>
+          <Button
+            variant="filled"
+            size="sm"
+            onClick={() => navigate('/admin/reports/generate?type=Case Status Report')}
+          >
+            Switch to Case Status Report
+          </Button>
+        </div>
+      )}
+
       {/* Filter & Configuration Form Panel */}
       <div className="bg-md-surface-container rounded-xl p-6 shadow-sm">
         <h2 className="text-base font-semibold mb-4">Report Configuration & Scope</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Locked report type — no type selector */}
-          <div className="md:col-span-2 flex items-center gap-2 px-4 py-3 rounded-xl bg-md-secondary-container text-md-on-secondary-container text-sm">
-            <FileText size={16} />
-            <span>
-              Generating: <strong>{category}</strong>
-            </span>
+          {/* Locked report type with dynamic operator badge */}
+          <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-2 px-4 py-3 rounded-xl bg-md-secondary-container text-md-on-secondary-container text-sm">
+            <div className="flex items-center gap-2">
+              <FileText size={16} />
+              <span>
+                Generating: <strong>{category}</strong>
+              </span>
+            </div>
+            <div className="text-xs font-medium">
+              Operator: <strong>{operator}</strong>
+            </div>
           </div>
 
           {category === 'Case Status Report' && (
@@ -209,26 +322,59 @@ export const GenerateReports: React.FC = () => {
               value={status}
               onChange={setStatus}
               options={currentStatusOptions}
+              placeholder="All statuses"
             />
           </div>
 
           {category !== 'Blockchain Audit Report' && (
-            <div className="grid grid-cols-2 gap-4">
-              <Input label="Start Date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-              <Input label="End Date" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-            </div>
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Start Date"
+                  type="date"
+                  value={startDate}
+                  max={endDate || undefined}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+                <Input
+                  label="End Date"
+                  type="date"
+                  value={endDate}
+                  min={startDate || undefined}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </div>
+              {dateError && (
+                <div className="md:col-span-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-xs text-red-700 dark:text-red-300 font-medium">
+                  <AlertCircle size={15} className="shrink-0 text-red-600 dark:text-red-400" />
+                  <span>{dateError}</span>
+                </div>
+              )}
+            </>
           )}
         </div>
 
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-          <span className="inline-flex items-center gap-1.5 text-xs text-md-on-surface-variant">
-            <span className="w-2 h-2 rounded-full bg-md-primary animate-pulse" />
-            Live preview updates automatically as you change the filters.
-          </span>
+          <div className="flex items-center gap-4">
+            <span className="inline-flex items-center gap-1.5 text-xs text-md-on-surface-variant">
+              <span className="w-2 h-2 rounded-full bg-md-primary animate-pulse" />
+              Live preview updates automatically as you change the filters.
+            </span>
+            <Button
+              variant="text"
+              size="sm"
+              onClick={handleResetFilters}
+              disabled={loading}
+              className="text-xs"
+            >
+              <RotateCcw size={13} />
+              Reset Filters
+            </Button>
+          </div>
           <Button
             variant="filled"
             onClick={() => setPreviewOpen(true)}
-            disabled={!previewData || loading}
+            disabled={!previewData || loading || Boolean(dateError) || isRoleRestricted}
           >
             <Eye size={16} />
             Generate Report
@@ -254,7 +400,7 @@ export const GenerateReports: React.FC = () => {
           )}
         </div>
 
-        {error && (
+        {error && !dateError && (
           <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-md-error text-md-on-error text-sm">
             <AlertCircle size={16} />
             {error}
@@ -273,9 +419,9 @@ export const GenerateReports: React.FC = () => {
       <Modal
         isOpen={previewOpen}
         onClose={() => !downloading && setPreviewOpen(false)}
-        title={`${category} — Preview`}
-        subtitle="Review the report below, then download the PDF."
-        maxWidth="max-w-5xl"
+        title={`${category} — Full Preview`}
+        subtitle="Complete report preview. Review all details below before downloading the official PDF."
+        maxWidth="max-w-6xl"
         footer={
           <div className="flex items-center justify-end gap-3">
             <Button variant="text" disabled={downloading} onClick={() => setPreviewOpen(false)}>
@@ -296,7 +442,10 @@ export const GenerateReports: React.FC = () => {
                   <span className="text-md-on-surface-variant font-medium">Official Audit Reference ID:</span>
                   <span className="font-mono font-bold text-md-primary">{previewData.reportId}</span>
                 </div>
-                <CopyButton value={previewData.reportId} title="Copy Report Reference ID" />
+                <div className="flex items-center gap-3">
+                  <span className="text-md-on-surface-variant">Operator: <strong>{operator}</strong></span>
+                  <CopyButton value={previewData.reportId} title="Copy Report Reference ID" />
+                </div>
               </div>
             )}
             <ReportSummaryCards data={previewData} />

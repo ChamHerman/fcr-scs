@@ -63,14 +63,15 @@ export const generatePdfBuffer = async (reportTitle: string, reportData: any): P
       });
 
       const reportId = reportData.reportId || `RPT-${Date.now().toString().slice(-6)}`;
+      const operatorText = reportData.operator || (reportData.reportType === "Case Status Report" ? "Government Officer (JKPTG)" : "Gov Administrator (Government Administrator)");
       doc.fillColor(secondaryTextColor).fontSize(8).font("Helvetica")
-        .text(`Report ID: ${reportId}   •   Generated: ${genDate}   •   Classification: OFFICIAL (SULIT)   •   Operator: Gov Administrator`, pageMargin, doc.y);
+        .text(`Report ID: ${reportId}   •   Generated: ${genDate}   •   Classification: OFFICIAL (SULIT)   •   Operator: ${operatorText}`, pageMargin, doc.y);
 
       // Filter scope line
       let filterSummary = "All records (National Scope — Unrestricted)";
       if (reportData.filterApplied && typeof reportData.filterApplied === "object") {
         const activeEntries = Object.entries(reportData.filterApplied).filter(
-          ([_, v]) => v && v !== "All" && v !== "All states" && v !== "All Statuses"
+          ([_, v]) => v && v !== "All" && v !== "All states" && v !== "All Statuses" && v !== "All statuses"
         );
         if (activeEntries.length > 0) {
           filterSummary = activeEntries
@@ -88,13 +89,13 @@ export const generatePdfBuffer = async (reportTitle: string, reportData: any): P
 
       // Executive Summary Metrics Box (Multi-tile with dividers)
       const summaryBoxY = doc.y;
-      const boxHeight = 52;
+      const boxHeight = 56;
       doc.roundedRect(pageMargin, summaryBoxY, printableWidth, boxHeight, 4).fillAndStroke("#F8F5FC", borderColor);
 
       doc.fillColor(primaryColor).fontSize(8).font("Helvetica-Bold")
         .text("EXECUTIVE AUDIT SUMMARY", pageMargin + 10, summaryBoxY + 7);
 
-      let statItems: { label: string; value: string }[] = [];
+      let statItems: { label: string; value: string; sub?: string }[] = [];
       if (reportData.summary) {
         if (reportData.reportType === "Case Status Report") {
           statItems = [
@@ -106,17 +107,22 @@ export const generatePdfBuffer = async (reportTitle: string, reportData: any): P
           ];
         } else if (reportData.reportType === "Payment Report") {
           statItems = [
-            { label: "Total Disbursements", value: String(reportData.summary.totalDisbursement ?? "RM 0.00") },
-            { label: "Clearance Success Rate", value: String(reportData.summary.successRate ?? "100%") },
-            { label: "Paid Records", value: String(reportData.summary.successfulPayments ?? 0) },
-            { label: "Pending Payouts", value: String(reportData.summary.pendingPayments ?? 0) },
+            { label: "Total Volume", value: String(reportData.summary.totalPaymentVolume ?? "RM 0.00") },
+            { label: "Total Disbursed", value: String(reportData.summary.totalDisbursement ?? "RM 0.00") },
+            { label: "Undisbursed", value: String(reportData.summary.undisbursedAmount ?? "RM 0.00") },
+            { label: "Disbursement Rate", value: String(reportData.summary.disbursementRate ?? reportData.summary.successRate ?? "0%") },
+            { label: "Paid / Pending", value: `${reportData.summary.successfulPayments ?? 0} Paid`, sub: `${reportData.summary.pendingPayments ?? 0} Pending` },
           ];
         } else if (reportData.reportType === "Blockchain Audit Report") {
           statItems = [
             { label: "Total Ledger Records", value: String(reportData.summary.totalRecords ?? 0) },
             { label: "Published to Sepolia", value: String(reportData.summary.publishedRecords ?? 0) },
             { label: "Ready to Publish", value: String(reportData.summary.readyToPublishRecords ?? 0) },
-            { label: "Cryptographic Proof", value: String(reportData.summary.integrityStatus ?? "100% Validated") },
+            {
+              label: "Cryptographic Proof",
+              value: String(reportData.summary.notarizedPercentage ?? "100%"),
+              sub: String(reportData.summary.notarizedRatio ?? `${reportData.summary.publishedRecords ?? 0}/${reportData.summary.totalRecords ?? 0} Notarized`),
+            },
           ];
         }
       }
@@ -129,14 +135,19 @@ export const generatePdfBuffer = async (reportTitle: string, reportData: any): P
 
         // Vertical divider line between tiles
         if (idx > 0) {
-          doc.moveTo(itemX - 5, summaryBoxY + 18).lineTo(itemX - 5, summaryBoxY + 46).lineWidth(0.5).stroke("#E2D9E8");
+          doc.moveTo(itemX - 5, summaryBoxY + 18).lineTo(itemX - 5, summaryBoxY + 50).lineWidth(0.5).stroke("#E2D9E8");
         }
 
         doc.fillColor(secondaryTextColor).fontSize(6.8).font("Helvetica")
-          .text(item.label.toUpperCase(), itemX, summaryBoxY + 20, { width: tileWidth - 8, lineBreak: false });
+          .text(item.label.toUpperCase(), itemX, summaryBoxY + 18, { width: tileWidth - 8, lineBreak: false });
 
         doc.fillColor(textColor).fontSize(11).font("Helvetica-Bold")
-          .text(item.value, itemX, summaryBoxY + 32, { width: tileWidth - 8, lineBreak: false });
+          .text(item.value, itemX, summaryBoxY + 29, { width: tileWidth - 8, lineBreak: false });
+
+        if (item.sub) {
+          doc.fillColor(secondaryTextColor).fontSize(6.5).font("Helvetica")
+            .text(item.sub, itemX, summaryBoxY + 43, { width: tileWidth - 8, lineBreak: false });
+        }
       });
 
       doc.y = summaryBoxY + boxHeight + 8;
@@ -210,7 +221,7 @@ const TABLE_MARGIN_X = 35;
 const CELL_PAD_X = 4;
 const CELL_PAD_Y = 4;
 const CELL_FONT_SIZE = 7;
-const HEADER_HEIGHT = 18;
+const HEADER_HEIGHT = 20;
 const FOOTER_RESERVE = 40;
 
 const formatStatusText = (status: any): string => {
@@ -241,7 +252,7 @@ function renderTable(
     doc.fillColor(textCol).fontSize(7.5).font("Helvetica-Bold");
     let x = startX;
     columns.forEach((col) => {
-      doc.text(col.header, x + CELL_PAD_X, y + 5, { width: col.width - CELL_PAD_X * 2, lineBreak: false });
+      doc.text(col.header, x + CELL_PAD_X, y + 6, { width: col.width - CELL_PAD_X * 2, lineBreak: false });
       x += col.width;
     });
     y += HEADER_HEIGHT;
@@ -353,11 +364,11 @@ function renderBlockchainTable(
     doc,
     [
       { header: "Case Ref", width: 75, value: (i) => i.caseId || "-" },
-      { header: "Milestone", width: 55, value: (i) => i.milestone || "AWARD" },
-      { header: "On-Chain Transaction Hash", width: 165, value: (i) => i.transactionHash || "Pending Publication" },
+      { header: "Milestone", width: 50, value: (i) => i.milestone || "AWARD" },
+      { header: "On-Chain Transaction Hash", width: 150, value: (i) => i.transactionHash || "Pending Publication" },
       { header: "Document SHA-256 Hash", width: 110, value: (i) => i.documentHash || "-" },
       { header: "Ledger Status", width: 65, value: (i) => formatStatusText(i.status) },
-      { header: "Notarized Date", width: 55, value: (i) => (i.publishedAt ? String(i.publishedAt).slice(0, 10) : "-") },
+      { header: "Notarized Date", width: 75, value: (i) => (i.publishedAt ? String(i.publishedAt).slice(0, 10) : "-") },
     ],
     items,
     headerBg,

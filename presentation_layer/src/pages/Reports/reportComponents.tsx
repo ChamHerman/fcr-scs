@@ -5,7 +5,10 @@ import { CopyButton } from '../../components/ui/CopyButton';
 import { useTableSort } from '../../constants';
 import type { ReportGeneratedResponse } from '../../services/reportApi';
 import { reportStatusLabel } from './reportConstants';
+import { paymentBadge } from '../Payment/paymentModals';
+import { normalizePaymentStatus, paymentStatusClassMap } from '../Payment/statusMaps';
 import '../LandAcquisition/case_management.css';
+import '../Payment/payment.css';
 
 /* ─────────────────────── Design-system status badges ─────────────────────── */
 
@@ -68,10 +71,14 @@ export function statusStyle(status: string) {
 }
 
 export const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
+  const norm = normalizePaymentStatus(status);
+  if (norm && paymentStatusClassMap[norm]) {
+    return paymentBadge(norm);
+  }
   const style = statusStyle(status);
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full py-0.5 pl-2 pr-3 text-xs font-semibold whitespace-nowrap ${style.bg} ${style.fg}`}>
-      <span className={`w-2 h-2 rounded-full ${style.dot}`} />
+    <span className={`payment-badge ${style.bg} ${style.fg} whitespace-nowrap`}>
+      <span className={`dot ${style.dot}`} />
       {reportStatusLabel(status)}
     </span>
   );
@@ -81,7 +88,7 @@ export const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
 
 export const ReportSummaryCards: React.FC<{ data: ReportGeneratedResponse }> = ({ data }) => {
   const s = data.summary ?? {};
-  let cards: { label: string; value: React.ReactNode }[] = [];
+  let cards: { label: string; value: React.ReactNode; sub?: string }[] = [];
 
   if (data.reportType === "Case Status Report") {
     cards = [
@@ -93,17 +100,22 @@ export const ReportSummaryCards: React.FC<{ data: ReportGeneratedResponse }> = (
     ];
   } else if (data.reportType === "Payment Report") {
     cards = [
-      { label: 'Total Disbursements', value: s.totalDisbursement ?? 'RM 0.00' },
-      { label: 'Success Rate', value: s.successRate ?? '0%' },
-      { label: 'Paid Records', value: s.successfulPayments ?? 0 },
-      { label: 'Pending / Processing', value: s.pendingPayments ?? 0 },
+      { label: 'Total Volume', value: s.totalPaymentVolume ?? 'RM 0.00', sub: 'Pipeline Allocation' },
+      { label: 'Total Disbursed', value: s.totalDisbursement ?? 'RM 0.00', sub: 'Cleared to Beneficiary' },
+      { label: 'Undisbursed Amount', value: s.undisbursedAmount ?? 'RM 0.00', sub: 'Awaiting Settlement' },
+      { label: 'Disbursement Rate', value: s.disbursementRate ?? s.successRate ?? '0%', sub: 'Disbursed / Pipeline' },
+      { label: 'Settled Records', value: `${s.successfulPayments ?? 0} Paid`, sub: `${s.pendingPayments ?? 0} Pending Clearance` },
     ];
   } else {
     cards = [
       { label: 'Total Ledger Records', value: s.totalRecords ?? 0 },
       { label: 'Published On-Chain', value: s.publishedRecords ?? 0 },
       { label: 'Ready to Publish', value: s.readyToPublishRecords ?? 0 },
-      { label: 'Cryptographic Integrity', value: s.integrityStatus ?? 'Verified' },
+      {
+        label: 'Cryptographic Proof',
+        value: s.notarizedPercentage ?? '100%',
+        sub: s.notarizedRatio ?? `${s.publishedRecords ?? 0}/${s.totalRecords ?? 0} Notarized`,
+      },
     ];
   }
 
@@ -117,6 +129,7 @@ export const ReportSummaryCards: React.FC<{ data: ReportGeneratedResponse }> = (
         <div key={c.label} className="bg-md-surface-container rounded-xl p-5 shadow-sm">
           <div className="text-[13px] font-medium text-md-on-surface-variant tracking-wide">{c.label}</div>
           <div className="text-2xl font-bold mt-1 tracking-tight">{c.value}</div>
+          {c.sub && <div className="text-xs text-md-on-surface-variant mt-1 font-medium">{c.sub}</div>}
         </div>
       ))}
     </div>
@@ -151,24 +164,23 @@ const COLUMN_LABELS: Record<string, string> = {
   publishedAt: 'Published Date',
 };
 
-/* Explicit widths because the shared table CSS uses table-layout: fixed. Each
-   report's column set is sized to fit the preview modal without side-scrolling. */
+/* Sized to comfortably fit badges and text without overflowing columns or wrapping headers */
 const COLUMN_WIDTHS: Record<string, string> = {
-  caseId: '120px',
-  title: '200px',
-  state: '110px',
-  district: '110px',
-  status: '170px',
-  date: '100px',
-  lifecycleAging: '100px',
-  payeeName: '160px',
-  bankName: '120px',
-  amount: '130px',
-  bankReference: '140px',
+  caseId: '150px',
+  title: '220px',
+  state: '130px',
+  district: '120px',
+  status: '220px',
+  date: '110px',
+  lifecycleAging: '110px',
+  payeeName: '180px',
+  bankName: '130px',
+  amount: '140px',
+  bankReference: '150px',
   milestone: '90px',
-  transactionHash: '190px',
-  documentHash: '190px',
-  publishedAt: '110px',
+  transactionHash: '200px',
+  documentHash: '200px',
+  publishedAt: '120px',
 };
 
 const columnLabel = (key: string) =>
@@ -207,18 +219,21 @@ export const ReportDataTable: React.FC<{ data: ReportGeneratedResponse }> = ({ d
 
   return (
     <div className="table-wrap">
-      <div className="table-scroll">
-        <table>
+      <div className="table-scroll overflow-x-auto">
+        <table className="w-full text-left border-collapse" style={{ minWidth: '980px' }}>
           <thead>
             <tr>
               {columns.map((key) => (
                 <th
                   key={key}
-                  style={{ width: COLUMN_WIDTHS[key] }}
+                  style={{ width: COLUMN_WIDTHS[key], minWidth: COLUMN_WIDTHS[key] }}
                   onClick={() => handleSort(key)}
-                  className="cursor-pointer select-none"
+                  className="cursor-pointer select-none px-3.5 py-3 text-xs font-semibold text-md-on-surface-variant uppercase tracking-wider"
                 >
-                  {columnLabel(key)} {renderSortIcon(key)}
+                  <div className="flex items-center gap-1">
+                    <span>{columnLabel(key)}</span>
+                    {renderSortIcon(key)}
+                  </div>
                 </th>
               ))}
             </tr>
@@ -233,12 +248,12 @@ export const ReportDataTable: React.FC<{ data: ReportGeneratedResponse }> = ({ d
               </tr>
             ) : (
               pageRows.map((row, idx) => (
-                <tr key={idx}>
+                <tr key={idx} className="border-b border-md-outline-variant/30 hover:bg-md-surface-container-high/40 transition-colors">
                   {columns.map((key) => {
                     const value = row[key];
                     if (key.toLowerCase() === 'status') {
                       return (
-                        <td key={key}>
+                        <td key={key} className="px-3.5 py-3 whitespace-nowrap" style={{ width: COLUMN_WIDTHS[key], minWidth: COLUMN_WIDTHS[key] }}>
                           <StatusBadge status={String(value)} />
                         </td>
                       );
@@ -247,7 +262,7 @@ export const ReportDataTable: React.FC<{ data: ReportGeneratedResponse }> = ({ d
                     const isHash = key.toLowerCase().includes('hash') || text.startsWith('0x');
                     const isTxHash = key === 'transactionHash' && text && text !== '-' && text.startsWith('0x');
                     return (
-                      <td key={key}>
+                      <td key={key} className="px-3.5 py-3 text-sm text-md-on-surface" style={{ width: COLUMN_WIDTHS[key], minWidth: COLUMN_WIDTHS[key] }}>
                         <div className="flex items-center gap-1.5 min-w-0">
                           {isTxHash ? (
                             <a
