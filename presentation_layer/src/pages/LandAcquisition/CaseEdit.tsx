@@ -220,17 +220,14 @@ export const CaseEdit: React.FC = () => {
       tenureType: data.formData.tenureType,
     };
 
-    const resolvedOwnershipType =
-      data.formData.ownershipType || (data.owners.length > 1 ? "Joint Ownership" : "Individual Citizen");
-
     const ownersPayload = data.owners.map((o) => ({
       name: o.name,
       nric: (o.icNumber || "").replace(/\D/g, ""),
       address: o.address,
       contact: o.phone,
       email: o.email || undefined,
-      ownershipType: resolvedOwnershipType || o.ownershipType || "Individual Citizen",
-      share: data.owners.length === 1 ? "100" : (o.share || "50"),
+      ownershipType: data.formData.ownershipType || o.ownershipType || "Individual Citizen",
+      share: o.share || "1/1",
     }));
 
     try {

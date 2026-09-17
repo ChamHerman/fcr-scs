@@ -185,7 +185,7 @@ export const MemberSettings: React.FC = () => {
 
   // Pre-fill contact number from the profile
   useEffect(() => {
-    if (user?.contactNumber) setPhoneNumber((prev) => prev || formatLocalContactNumber(user.contactNumber));
+    if (user?.contactNumber) setInputContact((prev) => prev || formatLocalContactNumber(user.contactNumber));
   }, [user]);
 
   // Bank rule and real-time account validation

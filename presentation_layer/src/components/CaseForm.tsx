@@ -481,19 +481,35 @@ export const CaseForm: React.FC<CaseFormProps> = ({
   const handleOwnershipTypeChange = (val: string) => {
     handleFieldChange("ownershipType", val);
     if (val === "Individual Citizen" || val === "Corporate Entity") {
-      if (owners.length === 1) {
-        setOwners([{ ...(owners[0] || {}), share: "100" }]);
-      }
+      setOwners((prev) => [
+        { ...(prev[0] || {}), share: "100" }
+      ]);
       setErrors((prev) => {
         const next = { ...prev };
         delete next.ownersShareTotal;
+        delete next.ownershipType;
         Object.keys(next).forEach((k) => {
           if (k.endsWith("_share")) delete next[k];
         });
         return next;
       });
     } else if (val === "Joint Ownership") {
-      if (owners.length === 1) {
+      setOwners((prev) => {
+        if (prev.length >= 2) return prev;
+        const currentTotal = calculateTotalShare(prev);
+        const share1 = currentTotal > 0 ? prev[0].share : "50";
+        const share2 = currentTotal > 0 ? String(Math.max(0, 100 - Number(share1))) : "50";
+        const updatedOwner1: Owner = {
+          ...(prev[0] || {
+            id: "1",
+            name: "",
+            icNumber: "",
+            address: "",
+            phone: "",
+            email: "",
+          }),
+          share: share1,
+        };
         const secondOwner: Owner = {
           id: `${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
           name: "",
@@ -501,15 +517,22 @@ export const CaseForm: React.FC<CaseFormProps> = ({
           address: "",
           phone: "",
           email: "",
-          share: "50",
+          share: share2,
         };
-        setOwners([{ ...owners[0], share: "50" }, secondOwner]);
-      }
+        return [updatedOwner1, secondOwner];
+      });
     }
   };
 
   const canAddOwner = () => {
-    return owners.length < 20;
+    const type = formData.ownershipType || "Individual Citizen";
+    if (type === "Individual Citizen" || type === "Corporate Entity") {
+      return false;
+    }
+    if (type === "Trustee" && owners.length >= 4) {
+      return false;
+    }
+    return true;
   };
 
   const addOwner = () => {
@@ -526,20 +549,12 @@ export const CaseForm: React.FC<CaseFormProps> = ({
     };
 
     setLockedOwnerIds((prev) => ({ ...prev, [newOwnerId]: false }));
-
-    if (owners.length === 1 && (formData.ownershipType === "Individual Citizen" || !formData.ownershipType)) {
-      handleFieldChange("ownershipType", "Joint Ownership");
-      setOwners([
-        { ...owners[0], share: "50" },
-        { ...newOwner, share: "50" },
-      ]);
-    } else {
-      setOwners([...owners, newOwner]);
-    }
+    setOwners([...owners, newOwner]);
   };
 
   const removeOwner = (id: string) => {
-    if (owners.length <= 1) return;
+    const minOwners = formData.ownershipType === "Joint Ownership" ? 2 : 1;
+    if (owners.length <= minOwners) return;
     delete lastLookedUpIcRef.current[id];
     setLockedOwnerIds((prev) => {
       const next = { ...prev };
@@ -547,9 +562,6 @@ export const CaseForm: React.FC<CaseFormProps> = ({
       return next;
     });
     const updated = owners.filter((o) => o.id !== id);
-    if (updated.length === 1) {
-      updated[0] = { ...updated[0], share: "100" };
-    }
     setOwners(updated);
 
     // Recheck total share after owner removal
@@ -1261,17 +1273,14 @@ export const CaseForm: React.FC<CaseFormProps> = ({
       };
     }
 
-    const resolvedOwnershipType =
-      formData.ownershipType || (owners.length > 1 ? "Joint Ownership" : "Individual Citizen");
-
     const resolvedOwners = owners.map((o) => ({
       ...o,
-      ownershipType: resolvedOwnershipType,
-      share: owners.length === 1 ? "100" : (o.share || "50"),
+      ownershipType: formData.ownershipType || "Individual Citizen",
+      share: o.share || "1/1",
     }));
 
     await onSubmit({
-      formData: { ...finalFormData, ownershipType: resolvedOwnershipType },
+      formData: { ...finalFormData, ownershipType: formData.ownershipType || "Individual Citizen" },
       owners: resolvedOwners,
       documents,
     });
@@ -1675,7 +1684,13 @@ export const CaseForm: React.FC<CaseFormProps> = ({
             </div>
 
             {/* Total Share Summary Banner */}
-            {owners.length > 1 && (() => {
+            {(() => {
+              if (
+                formData.ownershipType === "Individual Citizen" ||
+                formData.ownershipType === "Corporate Entity"
+              ) {
+                return null;
+              }
               const currentTotal = calculateTotalShare(owners);
               const isExact = Math.abs(currentTotal - 100) < 0.01;
               const isOver = currentTotal > 100;
@@ -1744,7 +1759,9 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                         </span>
                       ) : null}
                     </div>
-                    {owners.length > 1 && (
+                    {(formData.ownershipType === "Joint Ownership"
+                      ? owners.length > 2 && index >= 2
+                      : owners.length > 1) && (
                       <IconButton
                         title="Remove Owner"
                         size="sm"
@@ -1879,13 +1896,21 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                         min="0"
                         max="100"
                         step="any"
-                        disabled={owners.length === 1}
-                        value={owners.length === 1 ? "100" : owner.share}
+                        disabled={
+                          formData.ownershipType === "Individual Citizen" ||
+                          formData.ownershipType === "Corporate Entity"
+                        }
+                        value={
+                          formData.ownershipType === "Individual Citizen" ||
+                          formData.ownershipType === "Corporate Entity"
+                            ? "100"
+                            : owner.share
+                        }
                         error={errors[`owner_${owner.id}_share`]}
                         onChange={(e) =>
                           handleOwnerChange(owner.id, "share", e.target.value)
                         }
-                        placeholder={owners.length === 1 ? "100" : "e.g., 50"}
+                        placeholder="e.g., 50 or 100"
                       />
                     </div>
                   </div>
