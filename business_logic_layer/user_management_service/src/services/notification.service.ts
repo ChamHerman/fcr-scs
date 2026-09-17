@@ -82,6 +82,77 @@ function buildAlertMessage(auditLog: AuditLog): string {
       return `Password reset completed for account ${details.email || ''}.`;
     case 'USER_PASSWORD_UPDATED':
       return `Account password was updated for ${details.email || ''}.`;
+    // ── AI Valuation ──────────────────────────────────────────────────────────
+    case 'AI_VALUATION_GENERATED':
+      return `AI property valuation was generated${caseSuffix}${details.estimatedValue ? ` (Estimated: RM ${Number(details.estimatedValue).toLocaleString('en-MY', { minimumFractionDigits: 2 })})` : ''}.`;
+    case 'AI_MODEL_RETRAINED':
+      return `AI valuation model has been successfully retrained${details.datasetFileName ? ` using dataset '${details.datasetFileName}'` : ''}.`;
+    case 'AI_MODEL_RETRAIN_FAILED':
+      return `AI valuation model retraining failed${details.datasetFileName ? ` for dataset '${details.datasetFileName}'` : ''}${details.error ? `: ${details.error}` : ''}. Immediate attention required.`;
+    case 'AI_MODEL_ACTIVATED':
+      return `A new AI valuation model has been activated${details.candidateId ? ` (Model ID: ${details.candidateId})` : ''}. Valuations will now use the updated model.`;
+    case 'AI_MODEL_DISCARDED':
+      return `Candidate AI valuation model${details.candidateId ? ` (${details.candidateId})` : ''} has been discarded and removed from the system.`;
+    // ── Reporting ─────────────────────────────────────────────────────────────
+    case 'REPORT_GENERATED':
+      return `${details.reportType ? details.reportType.replace(/_/g, ' ') : 'System'} report was generated${details.format ? ` (Format: ${details.format})` : ''}.`;
+    case 'REPORT_EXPORTED':
+      return `${details.reportType ? details.reportType.replace(/_/g, ' ') : 'System'} report was exported as PDF.`;
+    // ── Blockchain ────────────────────────────────────────────────────────────
+    case 'BLOCKCHAIN_NETWORK_SWITCHED':
+      return `Blockchain network has been switched to '${details.network || 'Unknown'}'.`;
+    case 'BLOCKCHAIN_CLAIM_ACQUIRED':
+      return `Publish lock acquired${caseSuffix ? ` for case ${auditLog.caseReference}` : ''}${details.adminName ? ` by ${details.adminName}` : ''}. MetaMask signing in progress.`;
+    case 'BLOCKCHAIN_CLAIM_RELEASED':
+      return `Publish lock released${caseSuffix ? ` for case ${auditLog.caseReference}` : ''}${details.adminName ? ` by ${details.adminName}` : ''}.`;
+    case 'BLOCKCHAIN_MILESTONE1_NOTARIZED':
+      return `Milestone 1 (Award) has been notarized on-chain${caseSuffix}${details.transactionHash ? ` (Tx: ${String(details.transactionHash).slice(0, 10)}…)` : ''}.`;
+    case 'BLOCKCHAIN_MILESTONE2_NOTARIZED':
+      return `Milestone 2 (Settlement) has been notarized on-chain${caseSuffix}${details.transactionHash ? ` (Tx: ${String(details.transactionHash).slice(0, 10)}…)` : ''}. Payment process may now proceed to PAID status.`;
+    case 'BLOCKCHAIN_DOCUMENT_VERIFIED':
+      return details.verified
+        ? `Document integrity verified — the uploaded file matches its blockchain record.`
+        : `Document integrity check failed — the uploaded file does NOT match its blockchain record. Possible tampering detected.`;
+    // ── Payment: Bank Details ─────────────────────────────────────────────────
+    case 'CITIZEN_BANK_DETAILS_SUBMITTED':
+      return `A displaced community member has submitted bank details${caseSuffix ? ` for case ${auditLog.caseReference}` : ''}${details.bankName ? ` (Bank: ${details.bankName})` : ''}.`;
+    case 'BANK_DETAILS_UPDATED':
+      return `Default bank account details have been updated${details.bankName ? ` (Bank: ${details.bankName})` : ''}.`;
+    case 'PAYMENT_BANK_DETAILS_REQUESTED':
+      return `Updated bank details have been requested from the beneficiary${caseSuffix}. A fresh bank-details submission cycle has been opened.`;
+    // ── Payment: Workflow ──────────────────────────────────────────────────────
+    case 'PAYMENT_TRANSFER_INITIATED':
+      return `Disbursement transfer has been initiated${caseSuffix} and is pending multi-signature co-authorisation.`;
+    case 'PAYMENT_AUTHORISATION_SIGNED':
+      return `A Government Administrator has co-signed the disbursement transfer${caseSuffix}.`;
+    case 'PAYMENT_DISBURSEMENT_EXECUTED':
+      return `Disbursement transfer has been fully authorised and sent to the bank gateway${caseSuffix}.`;
+    case 'PAYMENT_TRANSFER_REJECTED':
+      return `Disbursement transfer${caseSuffix} was rejected by a Government Administrator${details.reason ? `: ${details.reason}` : ''}.`;
+    case 'PAYMENT_REJECTION_RESOLVED':
+      return `Transfer rejection${caseSuffix} has been resolved. Case returned to Pending Approval with prior signatures retained.`;
+    case 'PAYMENT_TRANSFER_CANCELLED':
+      return `Disbursement transfer${caseSuffix} has been permanently cancelled${details.reason ? ` (Reason: ${details.reason})` : ''}.`;
+    // ── Payment: Bank Clearance ───────────────────────────────────────────────
+    case 'BANK_TRANSFER_APPROVED':
+      return `Bank clearance approved${caseSuffix}${details.bankReferenceNumber ? ` (Ref: ${details.bankReferenceNumber})` : ''}. Please confirm receipt of funds within 7 days.`;
+    case 'BANK_TRANSFER_REJECTED':
+      return `Bank clearance rejected${caseSuffix}${details.errorReason ? ` — Gateway error: ${details.errorReason}` : ''}. Action required to resolve the transfer failure.`;
+    case 'PAYMENT_TRANSFER_RETRIED':
+      return `Failed disbursement transfer${caseSuffix} has been re-queued to the bank gateway for a retry attempt.`;
+    case 'PAYMENT_TRANSFER_SCHEDULED_NEXT_DAY':
+      return `Disbursement transfer${caseSuffix} has been rescheduled for processing on the next business day.`;
+    case 'PAYMENT_RECEIPT_CONFIRMED':
+      return `Payment receipt confirmed${caseSuffix}. Status has been updated to PAID. The case is now eligible for Milestone 2 blockchain notarization.`;
+    // ── Payment: Dispute ──────────────────────────────────────────────────────
+    case 'PAYMENT_DISPUTE_FILED':
+      return `A payment dispute has been filed${caseSuffix ? ` for case ${auditLog.caseReference}` : ''}${details.reason ? `: "${details.reason}"` : ''}. A supporting bank statement has been attached.`;
+    case 'PAYMENT_DISPUTE_RESOLVED':
+      return `Payment dispute${caseSuffix} has been marked as resolved. Case returned to Transfer Succeed for beneficiary re-confirmation.`;
+    case 'PAYMENT_DISPUTE_REINITIATED':
+      return `Payment dispute${caseSuffix} resolved by reinitiating transfer. The disbursement has been re-queued to the bank gateway.`;
+    case 'PAYMENT_DISPUTE_DETAILS_REQUESTED':
+      return `Payment dispute${caseSuffix} resolved by requesting new bank details. A fresh multi-signature submission cycle has been opened.`;
     default:
       if (details.reason) return `${auditLog.activityType}: ${details.reason}`;
       const actionName = auditLog.activityType

@@ -12,6 +12,7 @@ import { CopyButton } from '../../components/ui/CopyButton';
 import { Pagination } from '../../components/ui/Pagination';
 import { useAdminIdentity } from '../../hooks/useAdminIdentity';
 import { useAuth } from '../../context/AuthContext';
+import { PageHeader } from '../../components/ui/PageHeader';
 import '../LandAcquisition/case_management.css';
 import './payment.css';
 import {
@@ -303,20 +304,10 @@ export default function PaymentDashboard() {
 
   return (
     <div className="main" ref={containerRef}>
-      <div className="topbar">
-        <div className="topbar-left">
-          <h1>Payments Overview</h1>
-          <div className="sub">Full view of the payment lifecycle — initiate, authorise, resolve and track every case.</div>
-        </div>
-        <div className="topbar-right">
-          <div className="date-badge">
-            <Clock size={16} className="inline mr-1" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-          </div>
-          <div className="avatar">
-            <User size={20} />
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title="Payments Overview"
+        subtitle="Full view of the payment lifecycle — initiate, authorise, resolve and track every case."
+      />
 
       {user?.role === 'SYSTEM_ADMINISTRATOR' && (
         <div className="my-4 px-4 py-3 rounded-xl bg-md-surface-container-highest border border-md-outline/20 text-md-on-surface text-sm flex items-center gap-3">

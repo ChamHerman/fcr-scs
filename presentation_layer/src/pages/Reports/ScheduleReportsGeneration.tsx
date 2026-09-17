@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { CalendarRange, Mail, Repeat } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
+import { PageHeader } from '../../components/ui/PageHeader';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 
@@ -12,18 +13,10 @@ export const ScheduleReportsGeneration: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Topbar */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Schedule Reports Generation</h1>
-          <p className="text-md-on-surface-variant mt-1 max-w-2xl">
-            Define automatic report delivery for your team and stakeholders.
-          </p>
-        </div>
-        <span className="inline-flex items-center gap-2 text-sm text-md-on-surface-variant px-3.5 py-2 rounded-full bg-md-surface-container shadow-sm">
-          <Repeat size={16} />
-          Automation
-        </span>
-      </div>
+      <PageHeader
+        title="Schedule Reports Generation"
+        subtitle="Define automatic report delivery for your team and stakeholders."
+      />
 
       <div className="bg-md-surface-container rounded-xl p-6 shadow-sm">
         <h2 className="text-base font-semibold mb-4">Delivery Configuration</h2>

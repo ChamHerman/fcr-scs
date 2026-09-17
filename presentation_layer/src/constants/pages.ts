@@ -6,8 +6,6 @@ export interface AdminPageInfo {
 
 export const ADMIN_PAGES: AdminPageInfo[] = [
   { path: '/admin', name: 'Dashboard Overview', category: 'Main' },
-  { path: '/admin/valuers', name: 'Valuers Management', category: 'Main' },
-  { path: '/admin/forms', name: 'Forms & Templates', category: 'Main' },
 
   { path: '/admin/case', name: 'Cases Dashboard', category: 'Land Acquisition' },
   { path: '/admin/case/valuation', name: 'Valuation', category: 'Land Acquisition' },
@@ -34,6 +32,7 @@ export const ADMIN_PAGES: AdminPageInfo[] = [
 
   { path: '/admin/users', name: 'User Admin', category: 'User Management' },
   { path: '/admin/role-management', name: 'Role Management', category: 'User Management' },
+
   { path: '/admin/profile', name: 'My Profile', category: 'System' },
   { path: '/admin/email-templates', name: 'Email Templates', category: 'System' },
   { path: '/admin/audit-logs', name: 'Audit Logs', category: 'System' },
@@ -41,9 +40,10 @@ export const ADMIN_PAGES: AdminPageInfo[] = [
   { path: '/admin/settings', name: 'Settings', category: 'System' },
 
   { path: '/member', name: 'Member Dashboard', category: 'Member Portal' },
-  { path: '/member/offer-letter', name: 'Offer Letter', category: 'Member Portal' },
-  { path: '/member/bank-details', name: 'Bank Details', category: 'Member Portal' },
+  { path: '/member/notifications', name: 'My Notifications', category: 'Member Portal' },
+  { path: '/member/offer-letter', name: 'Notice of Award (Form G)', category: 'Member Portal' },
   { path: '/member/payment-status', name: 'Payment Status', category: 'Member Portal' },
+  { path: '/member/bank-details', name: 'Submit Bank Details', category: 'Member Portal' },
   { path: '/member/verify-audit', name: 'Verify Audit Trail', category: 'Member Portal' },
   { path: '/member/settings', name: 'Member Settings', category: 'Member Portal' },
 ];

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MD3Card, MD3Button, MD3Input } from '../MD3Components';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { useAuth } from '../../context/AuthContext';
-import { getRoleShortForm, getRoleTitle } from '../../utils/roleUtils';
+import { getRoleShortForm, getRoleTitle, getNameInitials } from '../../utils/roleUtils';
 import {
   User,
   Lock,
@@ -102,6 +102,7 @@ export const UserProfile: React.FC = () => {
 
   const roleShort = getRoleShortForm(profile.role || user?.role);
   const roleTitle = getRoleTitle(profile.role || user?.role);
+  const nameInitials = getNameInitials(profile.name || user?.name);
   const statusText = profile.status || ((profile as any).isActive !== false ? 'Active' : 'Inactive');
 
   // Password policy test
@@ -216,7 +217,7 @@ export const UserProfile: React.FC = () => {
         {/* Left Side: Avatar Card & Identity Summary */}
         <div className="lg:col-span-4 flex flex-col gap-6">
           <MD3Card elevation={2} className="p-6 flex flex-col items-center text-center">
-            {/* Role Short Form Avatar Badge */}
+            {/* User Initials Avatar Badge */}
             <div className="mb-4">
               <div
                 className="w-24 h-24 rounded-2xl flex items-center justify-center text-white font-extrabold text-2xl shadow-lg select-none"
@@ -224,7 +225,7 @@ export const UserProfile: React.FC = () => {
                   background: 'linear-gradient(135deg, var(--md-primary) 0%, #4338ca 100%)',
                 }}
               >
-                {roleShort}
+                {nameInitials}
               </div>
             </div>
 
@@ -432,10 +433,10 @@ export const UserProfile: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* EDITABLE: Email Address with Re-verification Notice */}
+                  {/* EDITABLE: Email Address */}
                   <div>
                     <label className="block text-xs font-semibold text-md-on-surface uppercase tracking-wider mb-1.5">
-                      Email Address (Requires Verification)
+                      Email Address
                     </label>
                     <div className="relative">
                       <Mail size={16} className="absolute left-3.5 top-3.5 text-md-on-surface-variant opacity-60" />

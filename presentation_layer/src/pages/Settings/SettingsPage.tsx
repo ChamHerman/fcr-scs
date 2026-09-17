@@ -7,6 +7,7 @@ import { Card } from '../../components/ui/Card';
 import { RadioGroup } from '../../components/ui/RadioGroup';
 import { Button } from '../../components/ui/Button';
 import { useNotification } from '../../components/ui/NotificationSystem';
+import { PageHeader } from '../../components/ui/PageHeader';
 import '../LandAcquisition/case_management.css';
 import '../Payment/payment.css';
 
@@ -70,20 +71,10 @@ export const SettingsPage: React.FC = () => {
 
   return (
     <div className="main" ref={pageRef}>
-      <div className="topbar">
-        <div className="topbar-left">
-          <h1>System Settings</h1>
-          <div className="sub">Runtime configuration for the admin console — blockchain network, ledger targets and more.</div>
-        </div>
-        <div className="topbar-right">
-          <div className="date-badge">
-            <Clock size={16} className="inline mr-1" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-          </div>
-          <div className="avatar">
-            <User size={20} />
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title="System Settings"
+        subtitle="Runtime configuration for the admin console — blockchain network, ledger targets and more."
+      />
 
       {error && (
         <div className="my-4 px-4 py-3 rounded-xl bg-md-error/10 border border-md-error/30 text-md-on-error text-sm flex items-center justify-between gap-4">

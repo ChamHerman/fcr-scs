@@ -5,6 +5,7 @@ import { Eye, Loader2, Plus, Edit2, Trash2 } from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
 import { authService } from "../../services/auth.service";
 import { Button } from "../../components/ui/Button";
+import { PageHeader } from "../../components/ui/PageHeader";
 import { Select, type SelectOption } from "../../components/ui/Select";
 import { SearchInput } from "../../components/ui/SearchInput";
 import { CopyButton } from "../../components/ui/CopyButton";
@@ -240,36 +241,10 @@ export const ObjectionDashboard: React.FC = () => {
 
   return (
     <div className="compensation-dashboard">
-      <div className="topbar" style={{ marginBottom: "20px" }}>
-        <div className="topbar-left">
-          <h1 style={{ marginBottom: 0 }}>Objection Dashboard</h1>
-          <div className="sub">
-            Review land owner compensation objections
-          </div>
-        </div>
-        <div className="topbar-right" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <span className="date-badge">
-            <Lucide.Calendar size={16} className="inline mr-1" />
-            {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-          </span>
-          <div
-            className="avatar"
-            title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
-          >
-            {user?.name ? (
-              <span className="text-xs font-bold uppercase">
-                {user.name
-                  .split(/\s+/)
-                  .map((n: string) => n[0])
-                  .slice(0, 2)
-                  .join("")}
-              </span>
-            ) : (
-              <Lucide.User size={16} />
-            )}
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title="Objection Dashboard"
+        subtitle="Review land owner compensation objections"
+      />
 
       <div className="stats-grid">
         {stats.map((s, i) => (

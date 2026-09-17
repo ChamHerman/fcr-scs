@@ -118,6 +118,19 @@ export async function initiate(req: Request, res: Response): Promise<void> {
   }
   try {
     const paymentCase = await paymentService.initiateTransfer(caseId, adminId);
+
+    logAudit({
+      userId: adminId,
+      caseReference: caseId,
+      activityType: 'PAYMENT_TRANSFER_INITIATED',
+      moduleName: 'PAYMENT',
+      severity: 'CRITICAL',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { caseId, adminId, stage: 'INITIATION' },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     res.json({ paymentCase });
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -212,6 +225,19 @@ export async function reject(req: Request, res: Response): Promise<void> {
   }
   try {
     const paymentCase = await paymentService.rejectTransfer(caseId, adminId, reason);
+
+    logAudit({
+      userId: adminId,
+      caseReference: caseId,
+      activityType: 'PAYMENT_TRANSFER_REJECTED',
+      moduleName: 'PAYMENT',
+      severity: 'CRITICAL',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { caseId, adminId, reason },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     res.json({ paymentCase });
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -234,6 +260,19 @@ export async function resolveRejection(req: Request, res: Response): Promise<voi
   }
   try {
     const paymentCase = await paymentService.resolveRejectedTransfer(caseId, adminId);
+
+    logAudit({
+      userId: adminId,
+      caseReference: caseId,
+      activityType: 'PAYMENT_REJECTION_RESOLVED',
+      moduleName: 'PAYMENT',
+      severity: 'INFO',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { caseId, adminId },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     res.json({ paymentCase });
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -264,6 +303,19 @@ export async function cancel(req: Request, res: Response): Promise<void> {
   }
   try {
     const paymentCase = await paymentService.cancelPayment(caseId, adminId, reason);
+
+    logAudit({
+      userId: adminId,
+      caseReference: caseId,
+      activityType: 'PAYMENT_TRANSFER_CANCELLED',
+      moduleName: 'PAYMENT',
+      severity: 'CRITICAL',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { caseId, adminId, reason },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     res.json({ paymentCase });
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -283,6 +335,18 @@ export async function retry(req: Request, res: Response): Promise<void> {
   }
   try {
     const paymentCase = await paymentService.retryPayment(caseId);
+
+    logAudit({
+      caseReference: caseId,
+      activityType: 'PAYMENT_TRANSFER_RETRIED',
+      moduleName: 'PAYMENT',
+      severity: 'WARNING',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { caseId },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     res.json({ paymentCase });
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -302,6 +366,18 @@ export async function requestDetailsUpdate(req: Request, res: Response): Promise
   }
   try {
     const paymentCase = await paymentService.requestDetailsUpdate(caseId);
+
+    logAudit({
+      caseReference: caseId,
+      activityType: 'PAYMENT_BANK_DETAILS_REQUESTED',
+      moduleName: 'PAYMENT',
+      severity: 'WARNING',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { caseId },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     res.json({ paymentCase });
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -321,6 +397,18 @@ export async function scheduleTomorrow(req: Request, res: Response): Promise<voi
   }
   try {
     const paymentCase = await paymentService.scheduleTomorrow(caseId);
+
+    logAudit({
+      caseReference: caseId,
+      activityType: 'PAYMENT_TRANSFER_SCHEDULED_NEXT_DAY',
+      moduleName: 'PAYMENT',
+      severity: 'WARNING',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { caseId },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     res.json({ paymentCase });
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -395,6 +483,22 @@ export async function saveDefaultBankDetails(req: Request, res: Response): Promi
       phoneNumber: cleanPhone,
       myKadNumber: myKadNumber || user?.identificationNumber || "",
     });
+
+    logAudit({
+      userId: user?.userId,
+      activityType: 'BANK_DETAILS_UPDATED',
+      moduleName: 'PAYMENT',
+      severity: 'SECURITY',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: {
+        bankName,
+        accountHolderName: accountHolderName || user?.name || '',
+        accountNumberMasked: accountNumber ? accountNumber.slice(-4).padStart(accountNumber.length, '*') : '',
+      },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     res.json({ success: true, savedAccount: result, message: "Bank details saved successfully." });
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -494,6 +598,20 @@ export async function dispute(req: Request, res: Response): Promise<void> {
       storagePath,
       fileName: req.file.originalname,
     });
+
+    const sessionUser = (req as AuthenticatedRequest).user;
+    logAudit({
+      userId: sessionUser?.userId,
+      caseReference: caseId,
+      activityType: 'PAYMENT_DISPUTE_FILED',
+      moduleName: 'PAYMENT',
+      severity: 'CRITICAL',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { caseId, reason: reason.trim(), disputeDocument: req.file.originalname },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     res.json({ paymentCase, message: "Payment dispute recorded with supporting bank statement." });
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -552,6 +670,24 @@ export async function resolveDispute(req: Request, res: Response): Promise<void>
   }
   try {
     const paymentCase = await paymentService.resolveDispute(caseId, adminId, resolution);
+
+    const disputeActivityMap: Record<string, string> = {
+      MARK_AS_RESOLVED: 'PAYMENT_DISPUTE_RESOLVED',
+      REINITIATE_PAYMENT: 'PAYMENT_DISPUTE_REINITIATED',
+      REQUEST_NEW_BANK_DETAILS: 'PAYMENT_DISPUTE_DETAILS_REQUESTED',
+    };
+    logAudit({
+      userId: adminId,
+      caseReference: caseId,
+      activityType: disputeActivityMap[resolution] || 'PAYMENT_DISPUTE_RESOLVED',
+      moduleName: 'PAYMENT',
+      severity: 'CRITICAL',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { caseId, adminId, resolution },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     const messages: Record<string, string> = {
       MARK_AS_RESOLVED: "Dispute marked as resolved. Case returned to Transfer Succeed for member re-confirmation.",
       REINITIATE_PAYMENT: "Payment reinitiated and re-queued to the bank gateway.",
@@ -577,6 +713,18 @@ export async function confirmReceipt(req: Request, res: Response): Promise<void>
   }
   try {
     const paymentCase = await paymentService.confirmPaymentReceipt(caseId, userRole, Boolean(isAutoOrAdminOverride));
+
+    logAudit({
+      caseReference: caseId,
+      activityType: 'PAYMENT_RECEIPT_CONFIRMED',
+      moduleName: 'PAYMENT',
+      severity: 'CRITICAL',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { caseId, confirmedByRole: userRole, isAutoOrAdminOverride: Boolean(isAutoOrAdminOverride) },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     res.json({ success: true, paymentCase, message: "Payment receipt confirmed. Status updated to PAID." });
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -605,6 +753,18 @@ export async function approveBank(req: Request, res: Response): Promise<void> {
   }
   try {
     const paymentCase = await paymentService.approveBankTransfer(caseId, bankReferenceNumber);
+
+    logAudit({
+      caseReference: caseId,
+      activityType: 'BANK_TRANSFER_APPROVED',
+      moduleName: 'PAYMENT',
+      severity: 'CRITICAL',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { caseId, bankReferenceNumber },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     res.json({ paymentCase, message: "Bank transfer successfully approved and processed." });
   } catch (e: unknown) {
     const msg = (e as Error).message;
@@ -633,6 +793,18 @@ export async function rejectBank(req: Request, res: Response): Promise<void> {
       errorReason?.toLowerCase().includes("mismatch")
     );
     const paymentCase = await paymentService.rejectBankTransfer(caseId, errorReason, isCatA);
+
+    logAudit({
+      caseReference: caseId,
+      activityType: 'BANK_TRANSFER_REJECTED',
+      moduleName: 'PAYMENT',
+      severity: 'CRITICAL',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { caseId, errorReason, isCatA },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     res.json({
       paymentCase,
       message: "Transfer marked as Transfer Failed by commercial bank gateway.",

@@ -2,6 +2,7 @@ import React from 'react';
 import { MD3Card, MD3Button, MD3Input } from '../MD3Components';
 import { Activity, Server, Clock, DownloadCloud } from 'lucide-react';
 import { Select } from '../../components/ui/Select';
+import { PageHeader } from '../../components/ui/PageHeader';
 
 export const SystemReports: React.FC = () => {
   const [reportType, setReportType] = React.useState('System Performance Report');
@@ -13,10 +14,10 @@ export const SystemReports: React.FC = () => {
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-medium text-md-on-surface mb-2">System Reports</h1>
-        <p className="text-md-on-surface-variant">Generate and review performance metrics and compliance logs.</p>
-      </div>
+      <PageHeader
+        title="System Reports"
+        subtitle="Generate and review performance metrics and compliance logs."
+      />
 
       {/* Overview Widgets */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">

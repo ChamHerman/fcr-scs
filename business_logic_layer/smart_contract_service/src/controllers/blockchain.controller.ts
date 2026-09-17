@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import * as svc from "../services/blockchain.service";
 import * as ethereumService from "../services/ethereum.service";
 import { AuthenticatedRequest } from "../../../user_management_service/src/middleware/auth.middleware";
+import { logAudit } from "../../../user_management_service/src/services/audit.service";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -48,6 +49,18 @@ export async function setNetwork(req: Request, res: Response): Promise<void> {
   }
   try {
     const active = ethereumService.setActiveNetwork(network);
+
+    logAudit({
+      userId: actingAdmin(req)?.adminId,
+      activityType: 'BLOCKCHAIN_NETWORK_SWITCHED',
+      moduleName: 'BLOCKCHAIN',
+      severity: 'WARNING',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { network, active },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     res.json(active);
   } catch (e: unknown) {
     res.status(400).json({ error: (e as Error).message });
@@ -85,6 +98,29 @@ export async function publish(req: Request, res: Response): Promise<void> {
       onChainKey,
       adminId: admin?.adminId,
     });
+
+    const normalizedMilestone = svc.normalizeMilestone(milestone);
+    const activityType =
+      normalizedMilestone === 'SETTLEMENT'
+        ? 'BLOCKCHAIN_MILESTONE2_NOTARIZED'
+        : 'BLOCKCHAIN_MILESTONE1_NOTARIZED';
+    logAudit({
+      userId: admin?.adminId,
+      caseReference: caseId,
+      activityType,
+      moduleName: 'BLOCKCHAIN',
+      severity: 'INFO',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: {
+        caseId,
+        milestone: normalizedMilestone,
+        transactionHash: r.transactionHash,
+        documentHash,
+      },
+      systemResponse: 'SUCCESS (201)',
+    });
+
     res.status(201).json({ transactionHash: r.transactionHash, record: r });
   } catch (e: unknown) {
     if (respondClaimHeld(res, e)) return;
@@ -106,6 +142,19 @@ export async function claimPublish(req: Request, res: Response): Promise<void> {
   }
   try {
     const claim = await svc.claimPublish({ caseId, milestone, ...admin });
+
+    logAudit({
+      userId: admin.adminId,
+      caseReference: caseId,
+      activityType: 'BLOCKCHAIN_CLAIM_ACQUIRED',
+      moduleName: 'BLOCKCHAIN',
+      severity: 'INFO',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { caseId, milestone, adminName: admin.adminName },
+      systemResponse: 'SUCCESS (201)',
+    });
+
     res.status(201).json({ claim });
   } catch (e: unknown) {
     if (respondClaimHeld(res, e)) return;
@@ -127,6 +176,19 @@ export async function releasePublishClaim(req: Request, res: Response): Promise<
   }
   try {
     const released = await svc.releasePublishClaim({ caseId, milestone, adminId: admin.adminId });
+
+    logAudit({
+      userId: admin.adminId,
+      caseReference: caseId,
+      activityType: 'BLOCKCHAIN_CLAIM_RELEASED',
+      moduleName: 'BLOCKCHAIN',
+      severity: 'INFO',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: { caseId, milestone, adminName: admin.adminName, released },
+      systemResponse: 'SUCCESS (200)',
+    });
+
     res.json({ released });
   } catch (e: unknown) {
     res.status(400).json({ error: (e as Error).message });
@@ -178,7 +240,25 @@ export async function verify(req: Request, res: Response): Promise<void> {
     return;
   }
   try {
-    res.json(await svc.verifyDocument(req.file.buffer));
+    const result = await svc.verifyDocument(req.file.buffer);
+    const verified = (result as any)?.verified === true || (result as any)?.match === true;
+
+    logAudit({
+      activityType: 'BLOCKCHAIN_DOCUMENT_VERIFIED',
+      moduleName: 'BLOCKCHAIN',
+      severity: verified ? 'INFO' : 'WARNING',
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Unknown',
+      activityDetails: {
+        fileName: req.file.originalname,
+        fileSizeBytes: req.file.size,
+        verified,
+        result,
+      },
+      systemResponse: 'SUCCESS (200)',
+    });
+
+    res.json(result);
   } catch (e: unknown) {
     res.status(500).json({ error: (e as Error).message });
   }

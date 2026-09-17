@@ -16,6 +16,7 @@ import {
 import { landAcquisitionApi } from "../../services/landAcquisitionApi";
 import { BASE_URL } from "../../services/api";
 import { Button } from "../../components/ui/Button";
+import { PageHeader } from "../../components/ui/PageHeader";
 import { Modal } from "../../components/ui/Modal";
 import { CopyButton } from "../../components/ui/CopyButton";
 import { useRole } from "../../hooks/useRole";
@@ -435,39 +436,11 @@ export const CaseView: React.FC = () => {
     <div>
       <div className="main blur-shape-bg">
         <div className="case-view-container">
-          <div className="topbar" style={{ marginBottom: "16px" }}>
-            <div className="topbar-left">
-              <h1 style={{ marginBottom: 0 }}>Review Case Details</h1>
-              <div className="sub">
-                Live case record from backend database
-              </div>
-            </div>
-            <div className="topbar-right flex items-center gap-3">
-              <Button variant="outlined" size="sm" onClick={() => navigate("/admin/case")}>
-                <Lucide.ArrowLeft size={16} /> Back
-              </Button>
-              <span className="date-badge">
-                <Lucide.Calendar size={16} className="inline mr-1" />
-                {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-              </span>
-              <div
-                className="avatar"
-                title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "User"}
-              >
-                {user?.name ? (
-                  <span className="text-xs font-bold uppercase">
-                    {user.name
-                      .split(/\s+/)
-                      .map((n: string) => n[0])
-                      .slice(0, 2)
-                      .join("")}
-                  </span>
-                ) : (
-                  <Lucide.User size={16} />
-                )}
-              </div>
-            </div>
-          </div>
+          <PageHeader
+            title="Review Case Details"
+            subtitle="Live case record from backend database"
+            backPath="/admin/case"
+          />
 
           <div className="case-header">
             <div className="case-header-left">

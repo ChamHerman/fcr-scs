@@ -2,6 +2,7 @@ import * as Lucide from "lucide-react";
 import React, { useState, useMemo } from "react";
 import { ChevronLeft, ChevronRight, Plus, Trash2, Upload, FileText, CheckCircle2 } from "lucide-react";
 import { Button } from "./ui/Button";
+import { PageHeader } from "./ui/PageHeader";
 import { Input } from "./ui/Input";
 import { CurrencyInput } from "./ui/CurrencyInput";
 import { AreaInput } from "./ui/AreaInput";
@@ -2047,28 +2048,11 @@ export const CaseForm: React.FC<CaseFormProps> = ({
 
   return (
     <div className="main blur-shape-bg">
-      <div className="topbar flex flex-wrap justify-between items-center gap-4 mb-6">
-        <div className="topbar-left">
-          <h1 className="mb-0 text-2xl md:text-3xl font-bold text-md-on-surface">{titleText}</h1>
-          <div className="sub">{subtitleText}</div>
-        </div>
-        <div className="topbar-right flex items-center gap-3">
-          {onCancel && (
-            <Button variant="outlined" size="sm" onClick={onCancel}>
-              <Lucide.ArrowLeft size={16} /> Back
-            </Button>
-          )}
-          <span className="date-badge">
-            <Lucide.Calendar size={16} className="inline mr-1" /> {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-          </span>
-          <div
-            className="avatar"
-            title={user ? `${user.name} (${user.role.replace(/_/g, " ")})` : "Current User"}
-          >
-            {user?.name ? getUserInitials(user.name) : "AO"}
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title={titleText}
+        subtitle={subtitleText}
+        onBack={onCancel}
+      />
 
       {/* Stepper Header */}
       <div className="stepper-wrapper w-full mb-6">
