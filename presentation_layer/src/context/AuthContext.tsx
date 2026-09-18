@@ -120,8 +120,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
 
+    // Internal single-page and cross-tab synchronization
+    const handleAuthLogout = () => {
+      setUser(null);
+      setIsAuthenticated(false);
+      setAllowedPages([]);
+    };
+
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    window.addEventListener('auth:logout', handleAuthLogout);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('auth:logout', handleAuthLogout);
+    };
   }, []);
 
   // Sync state when tab gains focus or becomes visible

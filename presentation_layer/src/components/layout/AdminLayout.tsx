@@ -606,7 +606,7 @@ export const AdminLayout: React.FC = () => {
                         {!isCollapsed && <span>Generate AI Valuation</span>}
                       </NavLink>
                     )}
-                    {(allowedPages.includes('*') || allowedPages.includes('/admin/prediction')) && (
+                    {(allowedPages.includes('*') || allowedPages.includes('/admin/prediction/retrain')) && (
                       <NavLink to="/admin/prediction/retrain" className="nav-item" title={isCollapsed ? "Retrain Model" : ""}>
                         <RefreshCw size={22} className="nav-icon" />
                         {!isCollapsed && <span>Retrain Model</span>}

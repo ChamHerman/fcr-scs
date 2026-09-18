@@ -43,7 +43,7 @@ export async function getAlerts(req: Request, res: Response): Promise<void> {
     }
 
     // Role-based scoping: Non-system admins only see alerts specifically targeted to them
-    if (user && user.role !== UserRole.SYSTEM_ADMINISTRATOR && user.role !== UserRole.GOVERNMENT_ADMINISTRATOR) {
+    if (user && user.role !== UserRole.SYSTEM_ADMINISTRATOR) {
       where.recipientId = user.userId;
     }
 
@@ -91,7 +91,7 @@ export async function getAlertStats(req: Request, res: Response): Promise<void> 
     const user = (req as AuthenticatedRequest).user;
     const baseWhere: any = {};
 
-    if (user && user.role !== UserRole.SYSTEM_ADMINISTRATOR && user.role !== UserRole.GOVERNMENT_ADMINISTRATOR) {
+    if (user && user.role !== UserRole.SYSTEM_ADMINISTRATOR) {
       baseWhere.recipientId = user.userId;
     }
 
@@ -139,6 +139,12 @@ export async function acknowledgeAlert(req: Request, res: Response): Promise<voi
 
     if (!existing) {
       res.status(404).json({ error: 'Alert not found' });
+      return;
+    }
+
+    // Ensure non-system admins can only acknowledge their own alert
+    if (user && user.role !== UserRole.SYSTEM_ADMINISTRATOR && existing.recipientId !== user.userId) {
+      res.status(403).json({ error: 'Access denied: You can only acknowledge alerts sent to you.' });
       return;
     }
 
@@ -192,7 +198,7 @@ export async function acknowledgeAllAlerts(req: Request, res: Response): Promise
     const user = (req as AuthenticatedRequest).user;
     const where: any = { isAcknowledged: false };
 
-    if (user && user.role !== UserRole.SYSTEM_ADMINISTRATOR && user.role !== UserRole.GOVERNMENT_ADMINISTRATOR) {
+    if (user && user.role !== UserRole.SYSTEM_ADMINISTRATOR) {
       where.recipientId = user.userId;
     }
 

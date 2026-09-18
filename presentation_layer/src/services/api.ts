@@ -5,6 +5,17 @@ export const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3
 export const BLOCKCHAIN_BASE = BASE_URL;
 export const PAYMENT_BASE = BASE_URL;
 
+export function clearAuthAndRedirect(reason = 'session_expired') {
+  localStorage.removeItem('auth_token');
+  localStorage.removeItem('user_data');
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('auth:logout'));
+    if (window.location.pathname !== '/login') {
+      window.location.href = `/login?reason=${reason}`;
+    }
+  }
+}
+
 export async function fetchJSON(url: string, options?: RequestInit) {
   const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
   const isFormData = typeof FormData !== "undefined" && options?.body instanceof FormData;
@@ -29,6 +40,10 @@ export async function fetchJSON(url: string, options?: RequestInit) {
     data = await res.json();
   } catch {
     throw new Error(`Server Error (${res.status}): Unexpected non-JSON response from ${url}`);
+  }
+
+  if (res.status === 401) {
+    clearAuthAndRedirect('session_expired');
   }
 
   if (!res.ok) {
@@ -64,19 +79,14 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle global errors (like 401 Unauthorized)
+// Response interceptor to handle global errors (like 401 Unauthorized / expired session)
 api.interceptors.response.use(
   (response) => {
     return response;
   },
   (error) => {
     if (error.response && error.response.status === 401) {
-      // Clear token and redirect to login if unauthorized
-      localStorage.removeItem('auth_token');
-      localStorage.removeItem('user_data');
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
-      }
+      clearAuthAndRedirect('session_expired');
     }
     return Promise.reject(error);
   }
