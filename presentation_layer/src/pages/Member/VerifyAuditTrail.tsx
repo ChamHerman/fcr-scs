@@ -298,7 +298,7 @@ export default function VerifyAuditTrail() {
                 {result.verified
                   ? 'Cryptographically Verified on Ethereum'
                   : result.status === 'Not Found'
-                  ? 'Document Not Published on Blockchain'
+                  ? (result.milestone === 'M2' ? 'Milestone 2 Not Published on Blockchain' : 'Document Not Published on Blockchain')
                   : 'Certificate Altered / Unverified'}
               </h3>
               <p className="text-xs sm:text-sm text-md-on-surface-variant mt-1.5 font-medium">
@@ -327,6 +327,8 @@ export default function VerifyAuditTrail() {
                     }`}>
                       {result.status === 'Altered'
                         ? 'Cryptographic Mismatch Detected (Document Altered)'
+                        : result.milestone === 'M2'
+                        ? 'Milestone 2 Pending On-Chain Publication'
                         : 'Record Not Found (Awaiting Milestone Notarization)'}
                     </div>
                     <p className="text-xs leading-relaxed text-md-on-surface-variant font-medium">
@@ -340,6 +342,10 @@ export default function VerifyAuditTrail() {
                           )}.
                           Any alteration—including re-saving, PDF editing, text modification, or scanner compression—breaks cryptographic verification.
                           Please ensure you uploaded the genuine, unmodified official Form H or payment receipt.
+                        </>
+                      ) : result.milestone === 'M2' ? (
+                        <>
+                          This official payment receipt is verified against the settlement database, but <strong>Milestone 2 (Payment Settlement)</strong> has not been published on Ethereum yet. The Government Administrator anchors settlement receipts to the blockchain after final interbank clearance.
                         </>
                       ) : (
                         <>
@@ -362,11 +368,19 @@ export default function VerifyAuditTrail() {
                       Return to Member Dashboard
                     </Button>
                   </Link>
-                  <Link to="/member/offer-letter">
-                    <Button variant="tonal" size="sm" className="text-xs">
-                      View Official Offer Letters
-                    </Button>
-                  </Link>
+                  {result.milestone === 'M2' ? (
+                    <Link to="/member/payment-status">
+                      <Button variant="tonal" size="sm" className="text-xs">
+                        View Payment Status
+                      </Button>
+                    </Link>
+                  ) : (
+                    <Link to="/member/offer-letter">
+                      <Button variant="tonal" size="sm" className="text-xs">
+                        View Official Offer Letters
+                      </Button>
+                    </Link>
+                  )}
                 </div>
               </div>
             )}
@@ -420,7 +434,7 @@ export default function VerifyAuditTrail() {
                     ? 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border border-slate-500/30'
                     : 'bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/30'
                 }`}>
-                  {result.status || (result.verified ? 'AUTHENTIC' : 'INVALID')}
+                  {result.status === 'Not Found' && result.milestone === 'M2' ? 'M2 NOT PUBLISHED' : (result.status || (result.verified ? 'AUTHENTIC' : 'INVALID'))}
                 </span>
               </div>
 

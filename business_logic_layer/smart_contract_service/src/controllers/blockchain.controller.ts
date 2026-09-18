@@ -238,7 +238,7 @@ export async function verify(req: Request, res: Response): Promise<void> {
     return;
   }
   try {
-    const result = await svc.verifyDocument(req.file.buffer);
+    const result = await svc.verifyDocument(req.file.buffer, req.file.originalname);
     const verified = (result as any)?.verified === true || (result as any)?.match === true;
 
     logAudit({

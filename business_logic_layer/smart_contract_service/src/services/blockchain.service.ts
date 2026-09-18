@@ -2,6 +2,9 @@ import { PrismaClient, BlockchainStatus, CaseStatus, PaymentStatus } from "@pris
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import * as crypto from "crypto";
+import * as fs from "fs";
+import * as path from "path";
+import * as zlib from "zlib";
 import * as ethereum from "./ethereum.service";
 import { claimCutoff, isClaimLive } from "../utils/publish-claim";
 
@@ -429,7 +432,151 @@ export async function getRecord(caseId: string, milestone?: string) {
   });
 }
 
-export async function verifyDocument(fileBuffer: Buffer) {
+function getDocumentStorageDirs(): string[] {
+  return [
+    path.resolve(process.cwd(), "data_layer/document_storage"),
+    path.resolve(process.cwd(), "../data_layer/document_storage"),
+    path.resolve(process.cwd(), "../../data_layer/document_storage"),
+    path.resolve(__dirname, "../../../../data_layer/document_storage"),
+    path.resolve(__dirname, "../../../data_layer/document_storage"),
+  ].filter((d) => fs.existsSync(d));
+}
+
+function extractPdfTextAndMetadata(buf: Buffer): string {
+  const parts: string[] = [buf.toString("utf-8"), buf.toString("latin1")];
+  let pos = 0;
+  while (pos < buf.length) {
+    const sIdx = buf.indexOf("stream", pos);
+    if (sIdx === -1) break;
+    let dataStart = sIdx + 6;
+    if (buf[dataStart] === 0x0d && buf[dataStart + 1] === 0x0a) dataStart += 2;
+    else if (buf[dataStart] === 0x0a || buf[dataStart] === 0x0d) dataStart += 1;
+    const eIdx = buf.indexOf("endstream", dataStart);
+    if (eIdx === -1) break;
+    const streamData = buf.slice(dataStart, eIdx);
+    try {
+      const unzipped = zlib.inflateSync(streamData);
+      const latin = unzipped.toString("latin1");
+      parts.push(latin);
+      parts.push(unzipped.toString("utf-8"));
+      // Decode hex strings like <4643522d534353>
+      const hexMatches = latin.match(/<([0-9a-fA-F]{4,})>/g);
+      if (hexMatches) {
+        for (const hm of hexMatches) {
+          const hex = hm.slice(1, -1);
+          let str = "";
+          for (let i = 0; i < hex.length; i += 2) {
+            str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+          }
+          parts.push(str);
+        }
+      }
+    } catch {}
+    pos = eIdx + 9;
+  }
+  return parts.join("\n");
+}
+
+function getPdfTrailerId(buf: Buffer): string | null {
+  const str = buf.toString("latin1");
+  const m = str.match(/\/ID\s*\[\s*<([0-9a-fA-F]+)>/i);
+  return m ? m[1].toUpperCase() : null;
+}
+
+function computeBufferSimilarity(a: Buffer, b: Buffer): number {
+  if (Math.abs(a.length - b.length) > Math.max(a.length, b.length) * 0.15) return 0;
+  let matches = 0;
+  const samples = 20;
+  const step = Math.floor(Math.min(a.length, b.length) / samples);
+  for (let i = 0; i < samples; i++) {
+    const offset = i * step;
+    if (a.slice(offset, offset + 64).equals(b.slice(offset, offset + 64))) {
+      matches++;
+    }
+  }
+  return matches / samples;
+}
+
+function findStoredDocMatch(fileBuffer: Buffer): { caseId: string; milestone: "M1" | "M2"; filePath: string } | null {
+  const targetId = getPdfTrailerId(fileBuffer);
+  const dirs = getDocumentStorageDirs();
+  if (dirs.length === 0) return null;
+
+  let bestMatch: { caseId: string; milestone: "M1" | "M2"; filePath: string; score: number } | null = null;
+
+  for (const baseDir of dirs) {
+    const categories: Array<{ dirName: string; milestone: "M1" | "M2" }> = [
+      { dirName: "offer_letter", milestone: "M1" },
+      { dirName: "payment_receipt", milestone: "M2" },
+      { dirName: "case_document", milestone: "M1" },
+    ];
+
+    for (const cat of categories) {
+      const catDir = path.join(baseDir, cat.dirName);
+      if (!fs.existsSync(catDir)) continue;
+
+      let caseFolders: string[] = [];
+      try {
+        caseFolders = fs.readdirSync(catDir);
+      } catch {
+        continue;
+      }
+
+      for (const caseFolder of caseFolders) {
+        const caseFolderPath = path.join(catDir, caseFolder);
+        try {
+          if (!fs.statSync(caseFolderPath).isDirectory()) continue;
+        } catch {
+          continue;
+        }
+        const caseIdMatch = caseFolder.match(/LAC-\d{4}-\d{2}-\d{4}/);
+        const folderCaseId = caseIdMatch ? caseIdMatch[0] : "";
+
+        let files: string[] = [];
+        try {
+          files = fs.readdirSync(caseFolderPath);
+        } catch {
+          continue;
+        }
+
+        for (const fileName of files) {
+          if (!fileName.toLowerCase().endsWith(".pdf")) continue;
+          const fullPath = path.join(caseFolderPath, fileName);
+          try {
+            const storedBuf = fs.readFileSync(fullPath);
+            // 1. PDF ID match
+            if (targetId) {
+              const storedId = getPdfTrailerId(storedBuf);
+              if (storedId && storedId === targetId) {
+                const resolvedCase = folderCaseId || (fileName.match(/LAC-\d{4}-\d{2}-\d{4}/)?.[0] ?? "");
+                if (resolvedCase) {
+                  return { caseId: resolvedCase, milestone: cat.milestone, filePath: fullPath };
+                }
+              }
+            }
+
+            // 2. Sample similarity match
+            const sim = computeBufferSimilarity(fileBuffer, storedBuf);
+            if (sim > 0.6 && (!bestMatch || sim > bestMatch.score)) {
+              const resolvedCase = folderCaseId || (fileName.match(/LAC-\d{4}-\d{2}-\d{4}/)?.[0] ?? "");
+              if (resolvedCase) {
+                bestMatch = { caseId: resolvedCase, milestone: cat.milestone, filePath: fullPath, score: sim };
+              }
+            }
+          } catch {}
+        }
+      }
+    }
+  }
+
+  if (bestMatch && bestMatch.score >= 0.7) {
+    return { caseId: bestMatch.caseId, milestone: bestMatch.milestone, filePath: bestMatch.filePath };
+  }
+
+  return null;
+}
+
+export async function verifyDocument(fileBuffer: Buffer, fileName?: string) {
   const localHash = "0x" + crypto.createHash("sha256").update(fileBuffer).digest("hex");
   let record = await prisma.blockchainRecord.findFirst({ where: { documentHash: localHash } });
   let matchedReceipt: any = null;
@@ -450,6 +597,21 @@ export async function verifyDocument(fileBuffer: Buffer) {
         },
       });
     }
+    if (matchedReceipt && (!record || record.status !== BlockchainStatus.PUBLISHED)) {
+      const caseId = matchedReceipt.paymentCase?.caseId;
+      return {
+        verified: false,
+        status: "Not Found",
+        message: `Record Not Found: Milestone 2 (Payment Settlement) has not been published to the blockchain ledger yet${caseId ? ` for case ${caseId}` : ""}.`,
+        localHash,
+        onChainHash: matchedReceipt.documentHash,
+        caseId,
+        milestone: "M2",
+        onChainKey: record?.onChainKey || (caseId ? `${caseId}#M2` : undefined),
+        isPublished: false,
+        expectedSource: "Settlement Payment Receipt Registry",
+      };
+    }
   }
 
   if (!record) {
@@ -466,71 +628,286 @@ export async function verifyDocument(fileBuffer: Buffer) {
         },
       });
     }
+    if (matchedOffer && (!record || record.status !== BlockchainStatus.PUBLISHED)) {
+      const caseId = matchedOffer.caseId;
+      return {
+        verified: false,
+        status: "Not Found",
+        message: `Record Not Found: Milestone 1 (Statutory Award) has not been published to the blockchain ledger yet${caseId ? ` for case ${caseId}` : ""} (awaiting on-chain publication after statutory 24-hour grace period).`,
+        localHash,
+        onChainHash: matchedOffer.blockchainHash,
+        caseId,
+        milestone: "M1",
+        onChainKey: record?.onChainKey || (caseId ? `${caseId}#M1` : undefined),
+        isPublished: false,
+        expectedSource: "Statutory Case Registry (Pre-Notarized / Grace Period)",
+      };
+    }
   }
 
   if (!record) {
-    const rawBufferStr = fileBuffer.toString('utf-8');
-    const caseMatch = rawBufferStr.match(/LAC-\d{4}-\d{2}-\d{4}/);
-    if (caseMatch) {
-      const detectedCaseId = caseMatch[0];
+    const extractedText = extractPdfTextAndMetadata(fileBuffer);
+    let detectedCaseId: string | null = null;
+    let detectedMilestone: "M1" | "M2" | null = null;
 
-      // 1. Check if an on-chain published record exists for this case in current database
+    // 1. Text extraction matches
+    const textCaseMatch = extractedText.match(/LAC-\d{4}-\d{2}-\d{4}/);
+    if (textCaseMatch) {
+      detectedCaseId = textCaseMatch[0];
+    }
+
+    // 2. Check offer reference in text
+    if (!detectedCaseId) {
+      const offerRefMatch = extractedText.match(/(?:FORM-H|OFFER)-[\w-]+/i);
+      if (offerRefMatch) {
+        const dbOfferByRef = await prisma.offerLetter.findFirst({
+          where: { offerReferenceNo: { equals: offerRefMatch[0], mode: "insensitive" } },
+        });
+        if (dbOfferByRef?.caseId) {
+          detectedCaseId = dbOfferByRef.caseId;
+          detectedMilestone = "M1";
+        }
+      }
+    }
+
+    // 3. Check bank reference in text
+    if (!detectedCaseId) {
+      const bnkMatch = extractedText.match(/BNK-[\w-]+/i);
+      if (bnkMatch) {
+        const dbRcptByBnk = await prisma.paymentReceipt.findFirst({
+          where: { bankReferenceNumber: { equals: bnkMatch[0], mode: "insensitive" } },
+          include: { paymentCase: true },
+        });
+        if (dbRcptByBnk?.paymentCase?.caseId) {
+          detectedCaseId = dbRcptByBnk.paymentCase.caseId;
+          detectedMilestone = "M2";
+        }
+      }
+    }
+
+    // 4. Filename hints
+    const cleanFileName = fileName ? path.basename(fileName) : "";
+    if (cleanFileName) {
+      if (!detectedCaseId) {
+        const fileCaseMatch = cleanFileName.match(/LAC-\d{4}-\d{2}-\d{4}/);
+        if (fileCaseMatch) {
+          detectedCaseId = fileCaseMatch[0];
+        }
+      }
+
+      if (!detectedCaseId) {
+        const fileOfferMatch = cleanFileName.match(/(?:FORM-H|OFFER)-[\w-]+/i);
+        if (fileOfferMatch) {
+          const dbOfferByName = await prisma.offerLetter.findFirst({
+            where: { offerReferenceNo: { equals: fileOfferMatch[0], mode: "insensitive" } },
+          });
+          if (dbOfferByName?.caseId) {
+            detectedCaseId = dbOfferByName.caseId;
+            detectedMilestone = "M1";
+          }
+        }
+      }
+
+      if (!detectedCaseId) {
+        const matchOfferDoc = await prisma.offerLetter.findFirst({
+          where: { signedDocument: { contains: cleanFileName } },
+        });
+        if (matchOfferDoc?.caseId) {
+          detectedCaseId = matchOfferDoc.caseId;
+          detectedMilestone = "M1";
+        }
+      }
+
+      if (!detectedCaseId) {
+        const matchRcptDoc = await prisma.paymentReceipt.findFirst({
+          where: { documentPath: { contains: cleanFileName } },
+          include: { paymentCase: true },
+        });
+        if (matchRcptDoc?.paymentCase?.caseId) {
+          detectedCaseId = matchRcptDoc.paymentCase.caseId;
+          detectedMilestone = "M2";
+        }
+      }
+    }
+
+    // 5. Stored document ID / sample similarity matching
+    if (!detectedCaseId || !detectedMilestone) {
+      const storedMatch = findStoredDocMatch(fileBuffer);
+      if (storedMatch) {
+        if (!detectedCaseId) detectedCaseId = storedMatch.caseId;
+        if (!detectedMilestone) detectedMilestone = storedMatch.milestone;
+      }
+    }
+
+    // 6. If detectedCaseId is known, but milestone not yet resolved, classify milestone
+    if (detectedCaseId && !detectedMilestone) {
+      const isReceipt =
+        /RENTAS|RECEIPT|SETTLEMENT|BNM-CLEARED|TOTAL STATUTORY COMPENSATION|PAID & DISBURSED|Statutory Settlement Particulars/i.test(
+          extractedText
+        ) ||
+        (cleanFileName && /receipt|settlement/i.test(cleanFileName));
+
+      const isFormH =
+        /FORM\s*H|BORANG\s*H|Notice of Award|Compensation Offer/i.test(extractedText) ||
+        (cleanFileName && /form_h|offer/i.test(cleanFileName));
+
+      if (isReceipt && !isFormH) {
+        detectedMilestone = "M2";
+      } else if (isFormH && !isReceipt) {
+        detectedMilestone = "M1";
+      } else {
+        // Size / type heuristics:
+        // Receipts generated with PDFKit in this system are ~4KB single-page documents.
+        // Form H signed documents are ~500KB+ multi-page raster documents.
+        if (fileBuffer.length > 50000) {
+          detectedMilestone = "M1";
+        } else {
+          // Check if published settlement exists vs published award
+          const pubM2 = await prisma.blockchainRecord.findFirst({
+            where: { caseId: detectedCaseId, milestone: "SETTLEMENT", status: BlockchainStatus.PUBLISHED },
+          });
+          const pubM1 = await prisma.blockchainRecord.findFirst({
+            where: { caseId: detectedCaseId, milestone: "AWARD", status: BlockchainStatus.PUBLISHED },
+          });
+          if (pubM2 && !pubM1) {
+            detectedMilestone = "M2";
+          } else if (pubM1 && !pubM2) {
+            detectedMilestone = "M1";
+          } else {
+            detectedMilestone = isReceipt ? "M2" : "M1";
+          }
+        }
+      }
+    }
+
+    if (detectedCaseId) {
+      // If milestone is M2
+      if (detectedMilestone === "M2") {
+        const publishedSettlement = await prisma.blockchainRecord.findFirst({
+          where: { caseId: detectedCaseId, milestone: "SETTLEMENT", status: BlockchainStatus.PUBLISHED },
+        });
+        if (publishedSettlement?.documentHash) {
+          return {
+            verified: false,
+            status: "Altered",
+            message: `Verification Failed: Document has been altered. SHA-256 fingerprint does not match the immutable on-chain record published on Sepolia for case ${detectedCaseId}.`,
+            localHash,
+            onChainHash: publishedSettlement.documentHash,
+            caseId: detectedCaseId,
+            milestone: "M2",
+            onChainKey: publishedSettlement.onChainKey || `${detectedCaseId}#M2`,
+            transactionHash: publishedSettlement.transactionHash,
+            isPublished: true,
+            expectedSource: "Ethereum Sepolia On-Chain Record",
+          };
+        }
+
+        const dbReceipt = await prisma.paymentReceipt.findFirst({
+          where: { paymentCase: { caseId: detectedCaseId } },
+        });
+        if (dbReceipt?.documentHash) {
+          const isDirectMatch = localHash.toLowerCase() === dbReceipt.documentHash.toLowerCase();
+          if (isDirectMatch) {
+            return {
+              verified: false,
+              status: "Not Found",
+              message: `Record Not Found: Milestone 2 (Payment Settlement) has not been published to the blockchain ledger yet for case ${detectedCaseId}.`,
+              localHash,
+              onChainHash: dbReceipt.documentHash,
+              caseId: detectedCaseId,
+              milestone: "M2",
+              onChainKey: `${detectedCaseId}#M2`,
+              isPublished: false,
+              expectedSource: "Settlement Payment Receipt Registry",
+            };
+          } else {
+            return {
+              verified: false,
+              status: "Altered",
+              message: `Verification Failed: Document has been altered. SHA-256 fingerprint does not match the canonical payment receipt stored in the settlement database for case ${detectedCaseId}.`,
+              localHash,
+              onChainHash: dbReceipt.documentHash,
+              caseId: detectedCaseId,
+              milestone: "M2",
+              onChainKey: `${detectedCaseId}#M2`,
+              isPublished: false,
+              expectedSource: "Settlement Payment Receipt Registry",
+            };
+          }
+        }
+      }
+
+      // If milestone is M1 (or fallback)
       const publishedAward = await prisma.blockchainRecord.findFirst({
         where: { caseId: detectedCaseId, milestone: "AWARD", status: BlockchainStatus.PUBLISHED },
       });
-      const publishedSettlement = await prisma.blockchainRecord.findFirst({
-        where: { caseId: detectedCaseId, milestone: "SETTLEMENT", status: BlockchainStatus.PUBLISHED },
-      });
-
-      const publishedRec = publishedAward || publishedSettlement;
-      if (publishedRec?.documentHash) {
+      if (publishedAward?.documentHash) {
         return {
           verified: false,
           status: "Altered",
           message: `Verification Failed: Document has been altered. SHA-256 fingerprint does not match the immutable on-chain record published on Sepolia for case ${detectedCaseId}.`,
           localHash,
-          onChainHash: publishedRec.documentHash,
+          onChainHash: publishedAward.documentHash,
           caseId: detectedCaseId,
-          milestone: publishedRec.milestone === "SETTLEMENT" ? "M2" : "M1",
-          onChainKey: publishedRec.onChainKey || `${detectedCaseId}#${publishedRec.milestone === "SETTLEMENT" ? "M2" : "M1"}`,
+          milestone: "M1",
+          onChainKey: publishedAward.onChainKey || `${detectedCaseId}#M1`,
+          transactionHash: publishedAward.transactionHash,
           isPublished: true,
           expectedSource: "Ethereum Sepolia On-Chain Record",
         };
       }
 
-      // 2. Check if a statutory Form H offer letter exists in database (awaiting on-chain publication after 24h grace period)
       const dbOffer = await prisma.offerLetter.findFirst({
         where: { caseId: detectedCaseId },
       });
       if (dbOffer?.blockchainHash) {
-        return {
-          verified: false,
-          status: "Altered",
-          message: `Verification Failed: Document has been altered. SHA-256 fingerprint does not match the official signed Form H stored in the statutory database registry for case ${detectedCaseId} (awaiting on-chain publication after statutory 24-hour grace period).`,
-          localHash,
-          onChainHash: dbOffer.blockchainHash,
-          caseId: detectedCaseId,
-          milestone: "M1",
-          isPublished: false,
-          expectedSource: "Statutory Case Registry (Pre-Notarized / Grace Period)",
-        };
+        const isDirectMatch = localHash.toLowerCase() === dbOffer.blockchainHash.toLowerCase();
+        if (isDirectMatch) {
+          return {
+            verified: false,
+            status: "Not Found",
+            message: `Record Not Found: Milestone 1 (Statutory Award) has not been published to the blockchain ledger yet for case ${detectedCaseId} (awaiting on-chain publication after statutory 24-hour grace period).`,
+            localHash,
+            onChainHash: dbOffer.blockchainHash,
+            caseId: detectedCaseId,
+            milestone: "M1",
+            onChainKey: `${detectedCaseId}#M1`,
+            isPublished: false,
+            expectedSource: "Statutory Case Registry (Pre-Notarized / Grace Period)",
+          };
+        } else {
+          return {
+            verified: false,
+            status: "Altered",
+            message: `Verification Failed: Document has been altered. SHA-256 fingerprint does not match the official signed Form H stored in the statutory database registry for case ${detectedCaseId} (awaiting on-chain publication after statutory 24-hour grace period).`,
+            localHash,
+            onChainHash: dbOffer.blockchainHash,
+            caseId: detectedCaseId,
+            milestone: "M1",
+            onChainKey: `${detectedCaseId}#M1`,
+            isPublished: false,
+            expectedSource: "Statutory Case Registry (Pre-Notarized / Grace Period)",
+          };
+        }
       }
 
-      // 3. Check if a payment receipt exists in database
-      const dbReceipt = await prisma.paymentReceipt.findFirst({
-        where: { paymentCase: { caseId: detectedCaseId } },
+      // If M2 was not explicitly set but M2 published record exists and M1 had neither
+      const publishedSettlementFallback = await prisma.blockchainRecord.findFirst({
+        where: { caseId: detectedCaseId, milestone: "SETTLEMENT", status: BlockchainStatus.PUBLISHED },
       });
-      if (dbReceipt?.documentHash) {
+      if (publishedSettlementFallback?.documentHash) {
         return {
           verified: false,
           status: "Altered",
-          message: `Verification Failed: Document has been altered. SHA-256 fingerprint does not match the canonical payment receipt stored in the settlement database for case ${detectedCaseId}.`,
+          message: `Verification Failed: Document has been altered. SHA-256 fingerprint does not match the immutable on-chain record published on Sepolia for case ${detectedCaseId}.`,
           localHash,
-          onChainHash: dbReceipt.documentHash,
+          onChainHash: publishedSettlementFallback.documentHash,
           caseId: detectedCaseId,
           milestone: "M2",
-          isPublished: false,
-          expectedSource: "Settlement Payment Receipt Registry",
+          onChainKey: publishedSettlementFallback.onChainKey || `${detectedCaseId}#M2`,
+          transactionHash: publishedSettlementFallback.transactionHash,
+          isPublished: true,
+          expectedSource: "Ethereum Sepolia On-Chain Record",
         };
       }
     }
@@ -548,11 +925,14 @@ export async function verifyDocument(fileBuffer: Buffer) {
     return {
       verified: false,
       status: "Not Found",
-      message: "Record Not Found. This document has not been published to the blockchain ledger yet.",
+      message: `Record Not Found. Milestone ${record.milestone === "SETTLEMENT" ? "2 (Payment Settlement)" : "1 (Statutory Award)"} has not been published to the blockchain ledger yet.`,
       localHash,
+      onChainHash: record.documentHash,
       caseId: record.caseId,
       milestone: record.milestone === "SETTLEMENT" ? "M2" : "M1",
       onChainKey: record.onChainKey || record.caseId,
+      isPublished: false,
+      expectedSource: record.milestone === "SETTLEMENT" ? "Settlement Payment Receipt Registry" : "Statutory Case Registry",
     };
   }
 
