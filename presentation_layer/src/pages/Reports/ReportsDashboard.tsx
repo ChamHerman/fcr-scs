@@ -515,7 +515,7 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
             </div>
           </div>
 
-          <div className="lg:col-span-2 bg-md-surface-container rounded-xl p-6 shadow-sm">
+          <div className="bg-md-surface-container rounded-xl p-6 shadow-sm">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-base font-semibold">Disbursement Status Financial Breakdown</h3>
               <span className="text-xs text-md-on-surface-variant">In Thousands (RM)</span>
@@ -532,16 +532,6 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ reportCatego
             </div>
             <div className="h-60 flex items-center justify-center">
               <Doughnut data={blockchainDoughnutData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }} />
-            </div>
-          </div>
-
-          <div className="bg-md-surface-container rounded-xl p-6 shadow-sm">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-base font-semibold">Notarization Activity Velocity</h3>
-              <span className="text-xs text-md-on-surface-variant">Monthly Audit Trail</span>
-            </div>
-            <div className="h-60">
-              <Line data={lineChartData} options={{ responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }} />
             </div>
           </div>
         </div>
