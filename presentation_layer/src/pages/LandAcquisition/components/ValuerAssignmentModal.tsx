@@ -12,6 +12,7 @@ interface ValuerAssignmentModalProps {
   targetCase: any | null;
   onClose: () => void;
   onAssigned: () => void;
+  isReassign?: boolean;
 }
 
 export const ValuerAssignmentModal: React.FC<ValuerAssignmentModalProps> = ({
@@ -19,6 +20,7 @@ export const ValuerAssignmentModal: React.FC<ValuerAssignmentModalProps> = ({
   targetCase,
   onClose,
   onAssigned,
+  isReassign: explicitIsReassign,
 }) => {
   const { user } = useRole();
   const { notify } = useNotification();
@@ -29,6 +31,9 @@ export const ValuerAssignmentModal: React.FC<ValuerAssignmentModalProps> = ({
   const [assignmentRemarks, setAssignmentRemarks] = useState<string>("");
   const [isAssigning, setIsAssigning] = useState<boolean>(false);
   const [assignError, setAssignError] = useState<string | null>(null);
+
+  const currentValuer = targetCase?.caseAssignments?.[0]?.assignedTo;
+  const isReassign = explicitIsReassign ?? Boolean(currentValuer);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -45,7 +50,11 @@ export const ValuerAssignmentModal: React.FC<ValuerAssignmentModalProps> = ({
         const valuerList = res.valuers || [];
         setValuers(valuerList);
         if (valuerList.length > 0) {
-          setSelectedValuerId(valuerList[0].userId);
+          // If reassigning, default to another valuer if available
+          const otherValuer = currentValuer
+            ? valuerList.find((v: any) => v.userId !== currentValuer.userId)
+            : null;
+          setSelectedValuerId(otherValuer ? otherValuer.userId : valuerList[0].userId);
         }
       })
       .catch((err: any) => {
@@ -55,7 +64,7 @@ export const ValuerAssignmentModal: React.FC<ValuerAssignmentModalProps> = ({
       .finally(() => {
         setLoadingValuers(false);
       });
-  }, [isOpen]);
+  }, [isOpen, currentValuer]);
 
   const handleConfirmAssignment = async () => {
     if (!targetCase) return;
@@ -84,8 +93,10 @@ export const ValuerAssignmentModal: React.FC<ValuerAssignmentModalProps> = ({
       const selectedValuer = valuers.find((v) => v.userId === selectedValuerId);
       notify({
         type: "success",
-        title: "Valuer Assigned Successfully",
-        message: `Assigned ${selectedValuer?.name || "Land Valuer"} to Case ${targetCase.caseId}. Acceptance period is ${days} days.`,
+        title: isReassign ? "Valuer Reassigned Successfully" : "Valuer Assigned Successfully",
+        message: isReassign
+          ? `Reassigned ${selectedValuer?.name || "Land Valuer"} to Case ${targetCase.caseId}. Acceptance period is ${days} days.`
+          : `Assigned ${selectedValuer?.name || "Land Valuer"} to Case ${targetCase.caseId}. Acceptance period is ${days} days.`,
       });
 
       onAssigned();
@@ -102,7 +113,7 @@ export const ValuerAssignmentModal: React.FC<ValuerAssignmentModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Assign Certified Land Valuer"
+      title={isReassign ? "Reassign Certified Land Valuer" : "Assign Certified Land Valuer"}
       maxWidth="max-w-xl"
       footer={
         <div className="flex justify-end gap-3">
@@ -117,12 +128,12 @@ export const ValuerAssignmentModal: React.FC<ValuerAssignmentModalProps> = ({
             {isAssigning ? (
               <>
                 <Lucide.Loader2 size={16} className="inline animate-spin mr-2" />
-                Assigning...
+                {isReassign ? "Reassigning..." : "Assigning..."}
               </>
             ) : (
               <>
                 <Lucide.UserCheck size={16} className="inline mr-2" />
-                Confirm Assignment
+                {isReassign ? "Confirm Reassignment" : "Confirm Assignment"}
               </>
             )}
           </Button>
@@ -134,6 +145,21 @@ export const ValuerAssignmentModal: React.FC<ValuerAssignmentModalProps> = ({
           <div className="p-3 bg-red-500/10 border border-red-500/30 text-red-600 rounded-xl text-xs flex items-center gap-2">
             <Lucide.AlertCircle size={16} className="shrink-0" />
             <span>{assignError}</span>
+          </div>
+        )}
+
+        {/* Current Valuer Notice (if Reassigning) */}
+        {isReassign && currentValuer && (
+          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs space-y-1">
+            <div className="flex items-center gap-1.5 font-semibold text-amber-800">
+              <Lucide.UserX size={14} /> Currently Assigned Valuer:
+            </div>
+            <div className="text-amber-950 font-medium">
+              {currentValuer.name} {currentValuer.email ? `(${currentValuer.email})` : ""}
+            </div>
+            <div className="text-[11px] text-amber-700 leading-normal">
+              Selecting a new land valuer will supersede the current assignment and grant the newly assigned valuer a fresh acceptance period.
+            </div>
           </div>
         )}
 

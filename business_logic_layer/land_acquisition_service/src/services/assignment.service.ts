@@ -9,11 +9,36 @@ export async function assignValuer(input: AssignValuerInput) {
   // 1. Verify case
   const caseData = await prisma.acquisitionCase.findUnique({
     where: { caseId },
+    include: {
+      caseAssignments: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: "desc" },
+      },
+      valuationReports: true,
+    },
   });
   if (!caseData) throw new Error("Case not found");
 
-  if (caseData.status !== CaseStatus.CASE_REGISTERED) {
-    throw new Error(`Cannot assign valuer to case in '${caseData.status}' status. Must be 'CASE_REGISTERED'.`);
+  const latestAssignment = caseData.caseAssignments?.[0];
+  const hasProvidedValuation = Boolean(
+    caseData.valuationReports &&
+    caseData.valuationReports.length > 0 &&
+    caseData.valuationReports.some(
+      (r) => r.reportStatus === ReportStatus.PENDING || r.reportStatus === ReportStatus.APPROVED
+    )
+  );
+
+  const isExpired = latestAssignment?.dueDate ? new Date(latestAssignment.dueDate) < new Date() : false;
+  const isInitialAssignment = caseData.status === CaseStatus.CASE_REGISTERED;
+  const isValuerAssignedStatus = caseData.status === CaseStatus.VALUER_ASSIGNED;
+  const isExpiredWithoutValuation = isExpired && !hasProvidedValuation;
+
+  const canAssignOrReassign = isInitialAssignment || isValuerAssignedStatus || isExpiredWithoutValuation;
+
+  if (!canAssignOrReassign) {
+    throw new Error(
+      `Cannot assign or reassign valuer to case in '${caseData.status}' status. Reassignment is only permitted when case status is 'VALUER_ASSIGNED' or when the acceptance period has expired without a submitted valuation report.`
+    );
   }
 
   // 2. Verify valuer
@@ -67,8 +92,19 @@ export async function assignValuer(input: AssignValuerInput) {
   const dueDate = new Date();
   dueDate.setDate(dueDate.getDate() + acceptancePeriodDays);
 
-  // 5. Transaction: CaseAssignment + AcquisitionCase status update
+  // 5. Transaction: Soft-delete previous active assignments + CaseAssignment creation + AcquisitionCase status update
   const result = await prisma.$transaction(async (tx) => {
+    // Soft-delete any previous active assignments for this case
+    await tx.caseAssignment.updateMany({
+      where: {
+        caseId,
+        deletedAt: null,
+      },
+      data: {
+        deletedAt: new Date(),
+      },
+    });
+
     // Create CaseAssignment record (without pre-creating a ValuationReport)
     const assignment = await tx.caseAssignment.create({
       data: {
@@ -99,6 +135,7 @@ export async function assignValuer(input: AssignValuerInput) {
 
 export async function getAllAssignments() {
   const assignments = await prisma.caseAssignment.findMany({
+    where: { deletedAt: null },
     include: {
       acquisitionCase: {
         include: { project: true, landParcel: true },

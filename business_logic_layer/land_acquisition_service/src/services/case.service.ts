@@ -135,16 +135,27 @@ function buildWhereClause(filters: CaseFilters): Prisma.AcquisitionCaseWhereInpu
   }
 
   // 2. Direct assignedToId filter or via userRole = LAND_VALUER
-  if (filters.assignedToId) {
+  const now = new Date();
+  if (filters.userRole === "LAND_VALUER") {
+    const valuerId = filters.userId || filters.assignedToId;
+    if (valuerId) {
+      where.caseAssignments = {
+        some: {
+          assignedToId: valuerId,
+          deletedAt: null,
+          OR: [
+            { dueDate: { gte: now } },
+            { valuationReportId: { not: null } },
+            { acquisitionCase: { valuationReports: { some: {} } } },
+          ],
+        },
+      };
+    }
+  } else if (filters.assignedToId) {
     where.caseAssignments = {
       some: {
         assignedToId: filters.assignedToId,
-      },
-    };
-  } else if (filters.userRole === "LAND_VALUER" && filters.userId) {
-    where.caseAssignments = {
-      some: {
-        assignedToId: filters.userId,
+        deletedAt: null,
       },
     };
   }
@@ -255,6 +266,8 @@ export async function getAllCases(filters: CaseFilters) {
           },
         },
         caseAssignments: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: "desc" },
           include: { assignedTo: true },
         },
         valuationReports: true,
@@ -293,6 +306,8 @@ export async function getCaseById(caseId: string) {
         },
       },
       caseAssignments: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: "desc" },
         include: { assignedTo: true },
       },
       valuationReports: {
@@ -461,7 +476,7 @@ export async function getUnassignedCases() {
   const cases = await prisma.acquisitionCase.findMany({
     where: {
       status: CaseStatus.CASE_REGISTERED,
-      caseAssignments: { none: {} },
+      caseAssignments: { none: { deletedAt: null } },
     },
     include: {
       project: true,

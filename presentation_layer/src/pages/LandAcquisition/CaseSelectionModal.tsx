@@ -70,11 +70,23 @@ export const CaseSelectionModal: React.FC<CaseSelectionModalProps> = ({
           return c.createdById === userId;
         }
 
-        // 2. Valuer assignment check: Only assigned cases
+        // 2. Valuer assignment check: Only assigned cases with valid acceptance period or submitted report
         if (isValuer && !isAdmin && userId) {
-          return c.caseAssignments?.some(
-            (a: any) => a.assignedToId === userId || a.assignedTo?.userId === userId
-          );
+          return c.caseAssignments?.some((a: any) => {
+            const isAssigned = (a.assignedToId === userId || a.assignedTo?.userId === userId) && !a.deletedAt;
+            if (!isAssigned) return false;
+
+            const hasValuation = Boolean(
+              a.valuationReportId ||
+              (c.valuationReports && c.valuationReports.length > 0)
+            );
+            const isExpired = a.dueDate ? new Date(a.dueDate).getTime() < Date.now() : false;
+
+            if (isExpired && !hasValuation) {
+              return false;
+            }
+            return true;
+          });
         }
 
         // 3. Administrators can see all matching cases

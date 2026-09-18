@@ -63,6 +63,7 @@ export const CaseManagementDashboard: React.FC = () => {
 
   // Valuer Assignment Modal visibility & target case
   const [isAssignModalOpen, setIsAssignModalOpen] = useState<boolean>(false);
+  const [isReassignMode, setIsReassignMode] = useState<boolean>(false);
   const [selectedCaseToAssign, setSelectedCaseToAssign] = useState<any | null>(null);
 
   // Hook for cases and stats fetching
@@ -86,16 +87,19 @@ export const CaseManagementDashboard: React.FC = () => {
   );
 
   // Open Valuer Assignment Modal
-  const handleOpenAssignModal = (caseItem: any) => {
+  const handleOpenAssignModal = (caseItem: any, isReassign: boolean = false) => {
     if (!canAssignValuer) {
       notify({
         type: "error",
         title: "Access Denied",
-        message: "Only Government Administrators can assign land valuers.",
+        message: isReassign
+          ? "Only Government Administrators can reassign land valuers."
+          : "Only Government Administrators can assign land valuers.",
       });
       return;
     }
     setSelectedCaseToAssign(caseItem);
+    setIsReassignMode(isReassign);
     setIsAssignModalOpen(true);
   };
 
@@ -366,7 +370,27 @@ export const CaseManagementDashboard: React.FC = () => {
                   sortedCases.map((c) => {
                     const statusClass = statusClassMap[c.status] || "status-case-registered";
                     const statusLabel = statusLabelMap[c.status] || c.status;
-                    const assignedValuer = c.caseAssignments?.[0]?.assignedTo?.name;
+                    const latestAssignment = c.caseAssignments?.[0];
+                    const assignedValuer = latestAssignment?.assignedTo?.name;
+
+                    // Check if valuation report has been submitted
+                    const hasValuationReport = Boolean(
+                      (c.valuationReports && c.valuationReports.length > 0) ||
+                      latestAssignment?.valuationReportId
+                    );
+
+                    // Check if acceptance period has expired without a valuation report
+                    const dueDate = latestAssignment?.dueDate ? new Date(latestAssignment.dueDate) : null;
+                    const isAcceptanceExpired = dueDate ? dueDate.getTime() < Date.now() : false;
+
+                    // Reassign eligibility:
+                    // Government Admin can reassign if:
+                    // 1. Case status is VALUER_ASSIGNED
+                    // 2. OR the land valuer didn't provide the valuation report within the acceptance period
+                    const canReassign = canAssignValuer && (
+                      c.status === "VALUER_ASSIGNED" ||
+                      (!hasValuationReport && isAcceptanceExpired)
+                    );
 
                     return (
                       <tr
@@ -405,15 +429,38 @@ export const CaseManagementDashboard: React.FC = () => {
                         </td>
                         <td title={assignedValuer || ""}>
                           {assignedValuer ? (
-                            <span className="meta-text line-clamp-2 leading-snug block">
-                              {assignedValuer}
-                            </span>
+                            <div className="flex flex-col gap-1 items-start py-0.5" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="meta-text line-clamp-2 leading-snug block font-medium">
+                                  {assignedValuer}
+                                </span>
+                                {isAcceptanceExpired && !hasValuationReport && (
+                                  <span
+                                    className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-700 border border-amber-500/30 whitespace-nowrap"
+                                    title="Acceptance period expired without valuation report"
+                                  >
+                                    Expired
+                                  </span>
+                                )}
+                              </div>
+                              {canReassign && (
+                                <Button
+                                  variant="tonal"
+                                  size="sm"
+                                  onClick={() => handleOpenAssignModal(c, true)}
+                                  className="!py-0.5 !px-2 !text-[11px] !h-auto flex items-center gap-1 font-medium whitespace-nowrap !text-amber-800 !bg-amber-100/80 hover:!bg-amber-200/90 !border !border-amber-300/70 shadow-xs"
+                                  title="Reassign Land Valuer"
+                                >
+                                  <Lucide.UserCog size={12} /> Reassign
+                                </Button>
+                              )}
+                            </div>
                           ) : canAssignValuer ? (
                             <div onClick={(e) => e.stopPropagation()}>
                               <Button
                                 variant="tonal"
                                 size="sm"
-                                onClick={() => handleOpenAssignModal(c)}
+                                onClick={() => handleOpenAssignModal(c, false)}
                                 className="!py-1 !px-2.5 !text-xs !h-auto flex items-center gap-1.5 font-medium whitespace-nowrap"
                               >
                                 <Lucide.UserPlus size={13} /> Assign
@@ -449,9 +496,11 @@ export const CaseManagementDashboard: React.FC = () => {
         <ValuerAssignmentModal
           isOpen={isAssignModalOpen}
           targetCase={selectedCaseToAssign}
+          isReassign={isReassignMode}
           onClose={() => {
             setIsAssignModalOpen(false);
             setSelectedCaseToAssign(null);
+            setIsReassignMode(false);
           }}
           onAssigned={reload}
         />

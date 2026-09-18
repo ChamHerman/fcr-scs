@@ -218,9 +218,9 @@ export async function createOrUpdateReport(input: CreateValuationInput) {
       include: { acquisitionCase: true, valuer: true },
     });
 
-    // Link valuationReport to the latest case assignment
+    // Link valuationReport to the latest active case assignment
     const assignment = await tx.caseAssignment.findFirst({
-      where: { caseId },
+      where: { caseId, deletedAt: null },
       orderBy: { createdAt: "desc" },
     });
 
