@@ -1,4 +1,4 @@
-import { validateEmail, validatePhone } from "../utils/validation.utils";
+import { validateEmail, validatePhone, validateMalaysianIc } from "../utils/validation.utils";
 
 export function validateCreateCasePayload(body: any): string | null {
   const { caseId, project, land, owners, caseTitle } = body;
@@ -45,6 +45,10 @@ export function validateCreateCasePayload(body: any): string | null {
       return `Owner #${i + 1}: ${phoneErr}`;
     }
 
+    const icErr = validateMalaysianIc(owner.nric);
+    if (icErr) {
+      return `Owner #${i + 1}: ${icErr}`;
+    }
     const pureNric = String(owner.nric).replace(/\D/g, "");
     if (seenNrics.has(pureNric)) {
       return `Duplicate identification number (NRIC) detected across multiple owners. Each owner must have a unique NRIC.`;

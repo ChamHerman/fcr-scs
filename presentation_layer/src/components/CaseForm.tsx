@@ -16,7 +16,7 @@ import { useAuth } from "../context/AuthContext";
 import { landAcquisitionApi } from "../services/landAcquisitionApi";
 import api, { BASE_URL } from "../services/api";
 import { formatCurrencyWithDecimals, formatLiveCurrency } from "../utils/currency";
-import { resolveMalaysianIdentity, parseRawIc } from "../utils/malaysianIdentity";
+import { resolveMalaysianIdentity, validateMalaysianIc, parseRawIc } from "../utils/malaysianIdentity";
 import "../index.css";
 import "../pages/LandAcquisition/case_management.css";
 
@@ -374,7 +374,7 @@ export const CaseForm: React.FC<CaseFormProps> = ({
       setOwners(sanitized);
 
       // Verify and lock owners found in database
-      const toCheck = sanitized.filter((o) => (o.icNumber || "").replace(/\D/g, "").length === 12);
+      const toCheck = sanitized.filter((o) => validateMalaysianIc(o.icNumber || "").isValid);
       if (toCheck.length > 0) {
         Promise.all(
           toCheck.map(async (o) => {
@@ -386,19 +386,21 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                 lastLookedUpIcRef.current[o.id] = rawIc;
               } else {
                 setLockedOwnerIds((prev) => ({ ...prev, [o.id]: false }));
-                // If name or address is not set, auto-generate based on IC
-                const identity = res.data?.data || resolveMalaysianIdentity(rawIc);
-                setOwners((prev) =>
-                  prev.map((cur) =>
-                    cur.id === o.id
-                      ? {
-                          ...cur,
-                          name: cur.name || identity.name || "",
-                          address: cur.address || identity.address || "",
-                        }
-                      : cur
-                  )
-                );
+                // If name or address is not set, auto-generate based on IC only if valid
+                const identity = resolveMalaysianIdentity(rawIc);
+                if (identity.isValid) {
+                  setOwners((prev) =>
+                    prev.map((cur) =>
+                      cur.id === o.id
+                        ? {
+                            ...cur,
+                            name: cur.name || identity.name || "",
+                            address: cur.address || identity.address || "",
+                          }
+                        : cur
+                    )
+                  );
+                }
               }
             } catch {
               // keep as is
@@ -758,7 +760,43 @@ export const CaseForm: React.FC<CaseFormProps> = ({
 
     const icStr = (overrideIc && overrideIc.trim() !== "") ? overrideIc : (owner?.icNumber || "");
     const rawIc = icStr.replace(/\D/g, "");
-    if (rawIc.length !== 12) return;
+    if (!rawIc) return;
+
+    if (rawIc.length !== 12) {
+      delete lastLookedUpIcRef.current[ownerId];
+      setErrors((prev) => ({
+        ...prev,
+        [`owner_${ownerId}_icNumber`]: "Malaysian IC must be exactly 12 digits (e.g., 800101-14-5123).",
+      }));
+      setOwners((prev) =>
+        prev.map((o) => (o.id === ownerId ? { ...o, name: "", address: "" } : o))
+      );
+      setLockedOwnerIds((prev) => ({ ...prev, [ownerId]: false }));
+      return;
+    }
+
+    const icValidation = validateMalaysianIc(rawIc);
+    if (!icValidation.isValid) {
+      delete lastLookedUpIcRef.current[ownerId];
+      setErrors((prev) => ({
+        ...prev,
+        [`owner_${ownerId}_icNumber`]: icValidation.error || "Invalid Malaysian IC (check month, day, or state code).",
+      }));
+      setOwners((prev) =>
+        prev.map((o) => (o.id === ownerId ? { ...o, name: "", address: "" } : o))
+      );
+      setLockedOwnerIds((prev) => ({ ...prev, [ownerId]: false }));
+      return;
+    }
+
+    // Valid IC: clear formatting/validation error on this IC field (preserve duplicate error if any)
+    setErrors((prev) => {
+      const next = { ...prev };
+      if (next[`owner_${ownerId}_icNumber`] && !next[`owner_${ownerId}_icNumber`].includes("Duplicate")) {
+        delete next[`owner_${ownerId}_icNumber`];
+      }
+      return next;
+    });
 
     if (lastLookedUpIcRef.current[ownerId] === rawIc) return;
     lastLookedUpIcRef.current[ownerId] = rawIc;
@@ -799,10 +837,15 @@ export const CaseForm: React.FC<CaseFormProps> = ({
         return;
       }
 
-      // If not found in database: auto-generate full name and address based on IC number
-      const generated = (resData?.data?.name && resData?.data?.address)
-        ? resData.data
-        : resolveMalaysianIdentity(rawIc);
+      // If not found in database: auto-generate full name and address based on IC number only if valid
+      const generated = resolveMalaysianIdentity(rawIc);
+      if (!generated.isValid) {
+        setLockedOwnerIds((prev) => ({ ...prev, [ownerId]: false }));
+        setOwners((prev) =>
+          prev.map((o) => (o.id === ownerId ? { ...o, name: "", address: "" } : o))
+        );
+        return;
+      }
 
       setLockedOwnerIds((prev) => ({ ...prev, [ownerId]: false }));
       setOwners((prev) =>
@@ -828,24 +871,31 @@ export const CaseForm: React.FC<CaseFormProps> = ({
       });
     } catch (err) {
       console.warn("Backend IC lookup failed:", err);
-      // On error, auto-generate from IC locally
+      // On error, auto-generate from IC locally only if valid
       const identity = resolveMalaysianIdentity(rawIc);
-      setLockedOwnerIds((prev) => ({ ...prev, [ownerId]: false }));
-      setOwners((prev) =>
-        prev.map((o) =>
-          o.id === ownerId
-            ? {
-                ...o,
-                name: identity.name || "",
-                address: identity.address || "",
-                phone: o.phone || "",
-                email: o.email || "",
-              }
-            : o
-        )
-      );
-      clearError(`owner_${ownerId}_name`);
-      clearError(`owner_${ownerId}_address`);
+      if (identity.isValid) {
+        setLockedOwnerIds((prev) => ({ ...prev, [ownerId]: false }));
+        setOwners((prev) =>
+          prev.map((o) =>
+            o.id === ownerId
+              ? {
+                  ...o,
+                  name: identity.name || "",
+                  address: identity.address || "",
+                  phone: o.phone || "",
+                  email: o.email || "",
+                }
+              : o
+          )
+        );
+        clearError(`owner_${ownerId}_name`);
+        clearError(`owner_${ownerId}_address`);
+      } else {
+        setLockedOwnerIds((prev) => ({ ...prev, [ownerId]: false }));
+        setOwners((prev) =>
+          prev.map((o) => (o.id === ownerId ? { ...o, name: "", address: "" } : o))
+        );
+      }
     } finally {
       setLookingUpOwnerId(null);
     }
@@ -917,7 +967,7 @@ export const CaseForm: React.FC<CaseFormProps> = ({
         (owner) =>
           owner.name.trim() &&
           owner.icNumber.trim() &&
-          owner.icNumber.replace(/\D/g, "").length === 12 &&
+          validateMalaysianIc(owner.icNumber).isValid &&
           owner.address.trim() &&
           owner.phone.trim() &&
           !validatePhoneNumber(owner.phone) &&
@@ -1028,10 +1078,11 @@ export const CaseForm: React.FC<CaseFormProps> = ({
           if (!owner.icNumber.trim()) {
             stepErrors[`owner_${owner.id}_icNumber`] = "Identification number is required.";
           } else {
-            const rawDigits = owner.icNumber.replace(/\D/g, "");
-            if (rawDigits.length !== 12) {
-              stepErrors[`owner_${owner.id}_icNumber`] = "Identification number must be exactly 12 digits (e.g. 900101-14-5532).";
+            const icValidation = validateMalaysianIc(owner.icNumber);
+            if (!icValidation.isValid) {
+              stepErrors[`owner_${owner.id}_icNumber`] = icValidation.error || "Invalid Malaysian IC (check month, day, or state code).";
             } else {
+              const rawDigits = owner.icNumber.replace(/\D/g, "");
               if (seenIcs[rawDigits]) {
                 const prevOwnerId = seenIcs[rawDigits];
                 stepErrors[`owner_${owner.id}_icNumber`] =
@@ -1734,9 +1785,9 @@ export const CaseForm: React.FC<CaseFormProps> = ({
             <div className="space-y-6">
               {owners.map((owner, index) => {
                 const isOwnerLocked = !!lockedOwnerIds[owner.id];
-                const hasValidIc = (owner.icNumber || "").replace(/\D/g, "").length === 12;
-                const isNameLocked = isOwnerLocked || Boolean(owner.name && hasValidIc);
-                const isAddressLocked = isOwnerLocked || Boolean(owner.address && hasValidIc);
+                const hasValidIc = validateMalaysianIc(owner.icNumber || "").isValid;
+                const isNameLocked = true;
+                const isAddressLocked = true;
 
                 return (
                 <div
@@ -1753,12 +1804,12 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                           <Lucide.Lock size={12} />
                           Verified Citizen (Details Locked)
                         </span>
-                      ) : isNameLocked && isAddressLocked ? (
+                      ) : (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-500/10 text-brand-700 dark:text-brand-300 border border-brand-500/30">
                           <Lucide.Lock size={12} />
                           Name & Address Locked
                         </span>
-                      ) : null}
+                      )}
                     </div>
                     {(formData.ownershipType === "Joint Ownership"
                       ? owners.length > 2 && index >= 2
@@ -1805,7 +1856,7 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                           <CheckCircle2 size={13} />
                           Citizen found in database. Personal details are locked.
                         </p>
-                      ) : isNameLocked && isAddressLocked && lookingUpOwnerId !== owner.id ? (
+                      ) : (owner.name && hasValidIc) && lookingUpOwnerId !== owner.id ? (
                         <p className="text-xs text-brand-600 dark:text-brand-400 mt-1 flex items-center gap-1 font-medium">
                           <CheckCircle2 size={13} />
                           Name and address generated from IC and locked.
@@ -1820,12 +1871,12 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                         value={owner.name}
                         disabled={isNameLocked}
                         readOnly={isNameLocked}
-                        suffix={isNameLocked ? <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium"><Lucide.Lock size={12} /> Locked</span> : undefined}
+                        suffix={<span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium"><Lucide.Lock size={12} /> Locked</span>}
                         error={errors[`owner_${owner.id}_name`]}
                         onChange={(e) =>
                           handleOwnerChange(owner.id, "name", e.target.value)
                         }
-                        placeholder="e.g., Tan Ah Kow / Syarikat ABC Sdn Bhd"
+                        placeholder={owner.name ? "" : "Auto-populated from valid IC"}
                       />
                     </div>
                   </div>
@@ -1839,12 +1890,12 @@ export const CaseForm: React.FC<CaseFormProps> = ({
                       value={owner.address}
                       disabled={isAddressLocked}
                       readOnly={isAddressLocked}
-                      suffix={isAddressLocked ? <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium"><Lucide.Lock size={12} /> Locked</span> : undefined}
+                      suffix={<span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium"><Lucide.Lock size={12} /> Locked</span>}
                       error={errors[`owner_${owner.id}_address`]}
                       onChange={(e) =>
                         handleOwnerChange(owner.id, "address", e.target.value)
                       }
-                      placeholder="Enter registered correspondence address"
+                      placeholder={owner.address ? "" : "Auto-populated from valid IC"}
                     />
                   </div>
 

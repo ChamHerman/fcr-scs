@@ -6,7 +6,7 @@ import { prisma } from '../prisma';
 import { sendTemplatedEmail } from '../utils/email.service';
 import { logAudit } from '../services/audit.service';
 import { generateCustomId } from '../utils/idGenerator';
-import { resolveMalaysianIdentity } from '../utils/malaysianIdentity';
+import { resolveMalaysianIdentity, validateMalaysianIc } from '../utils/malaysianIdentity';
 
 interface OtpSession {
   userId: string;
@@ -381,6 +381,10 @@ export async function resolveIc(req: Request, res: Response): Promise<void> {
       return;
     }
     const identity = resolveMalaysianIdentity(ic);
+    if (!identity.isValid) {
+      res.status(400).json({ error: 'Invalid Malaysian IC format. Identity could not be resolved.', data: identity });
+      return;
+    }
     res.json({ success: true, data: identity });
   } catch (error) {
     console.error('[Resolve IC Error]', error);
@@ -400,6 +404,12 @@ export async function lookupByIc(req: Request, res: Response): Promise<void> {
     const rawIc = ic.replace(/\D/g, '').slice(0, 12);
     if (rawIc.length !== 12) {
       res.status(400).json({ error: 'Invalid IC format. Must be 12 digits.' });
+      return;
+    }
+
+    const validation = validateMalaysianIc(rawIc);
+    if (!validation.isValid) {
+      res.status(400).json({ error: validation.error || 'Invalid Malaysian IC format' });
       return;
     }
 
@@ -494,6 +504,10 @@ export async function lookupByIc(req: Request, res: Response): Promise<void> {
     // 3. If not found in either table, auto-generate name and address based on the IC number
     // using the resolveMalaysianIdentity function from the user registration module
     const identity = resolveMalaysianIdentity(rawIc);
+    if (!identity.isValid) {
+      res.status(400).json({ error: 'Invalid Malaysian IC format. Identity could not be resolved.' });
+      return;
+    }
     res.json({
       success: true,
       found: false,
