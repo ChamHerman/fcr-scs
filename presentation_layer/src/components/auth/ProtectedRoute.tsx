@@ -130,10 +130,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
         if (location.pathname === page) {
           return true;
         }
-        // Subroute check: allow sub-pages (like /admin/case/123/edit) unless the current path is itself an explicitly registered page in ADMIN_PAGES
+        // Subroute check: allow sub-pages (like /admin/case/register, /admin/case/123/edit) unless the current path is itself an explicitly registered page in ADMIN_PAGES
         if (location.pathname.startsWith(page + '/')) {
           const isExplicitlyManagedPage = ADMIN_PAGES.some(
-            (p) => p.path !== page && (location.pathname === p.path || location.pathname.startsWith(p.path + '/'))
+            (p) =>
+              p.path !== page &&
+              (location.pathname === p.path ||
+                (p.path.startsWith(page + '/') && location.pathname.startsWith(p.path + '/')))
           );
           return !isExplicitlyManagedPage;
         }
