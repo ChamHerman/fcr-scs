@@ -286,6 +286,13 @@ export const OfferLetterPreview = React.forwardRef<OfferLetterPreviewHandle, Off
           format: "a4",
         });
 
+        pdf.setDocumentProperties({
+          title: `Form H Award - ${offer.caseId || offer.offerReferenceNo || ""}`,
+          subject: `Case ID: ${offer.caseId || ""}`,
+          author: "FCR-SCS",
+          keywords: `${offer.caseId || ""} Form H M1 Statutory Award`,
+        });
+
         for (let i = 0; i < pageElements.length; i++) {
           const pageEl = pageElements[i];
           const canvas = await html2canvas(pageEl, {
