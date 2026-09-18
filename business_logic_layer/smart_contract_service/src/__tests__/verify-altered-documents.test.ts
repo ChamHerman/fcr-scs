@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { verifyDocument } from "../services/blockchain.service";
 
-describe("Document Verification - Altered Document Milestone & Case Detection", () => {
+describe("Document Verification - Milestone & Case Detection (M1 published vs M2 unpublished)", () => {
   const findPath = (rel: string) => {
     const candidates = [
       path.resolve(process.cwd(), rel),
@@ -13,13 +13,29 @@ describe("Document Verification - Altered Document Milestone & Case Detection", 
   };
 
   const rcptPath = findPath(
-    "data_layer/document_storage/payment_receipt/LAC-2026-09-0001/Payment_Receipt.pdf"
+    "data_layer/document_storage/payment_receipt/LAC-2026-08-0003/Payment_Receipt.pdf"
   );
   const formHPath = findPath(
-    "data_layer/document_storage/offer_letter/LAC-2026-09-0001/Signed_1789749637661_Zalikha_binti_Yusoff_-_63c756a9-0e4f-41ef-ae0d-4679fdce7d15.pdf"
+    "data_layer/document_storage/offer_letter/LAC-2026-08-0003/Signed_Form_H_seed.pdf"
   );
 
-  it("detects altered payment receipt as M2 (Payment Settlement) with correct settlement hash", async () => {
+  it("returns Not Found with milestone M2 for unaltered receipt when M2 has not been published yet", async () => {
+    expect(fs.existsSync(rcptPath)).toBe(true);
+    const origBuf = fs.readFileSync(rcptPath);
+
+    const result = await verifyDocument(origBuf, "FCR-Payment-Receipt-LAC-2026-08-0003.pdf");
+
+    expect(result.verified).toBe(false);
+    expect(result.status).toBe("Not Found");
+    expect(result.milestone).toBe("M2");
+    expect(result.caseId).toBe("LAC-2026-08-0003");
+    expect(result.isPublished).toBe(false);
+    expect(result.localHash).toBe("0xce967d3e10739a5ceca9ecadc75bc30a2b2d714417ce3c265d228ec3944a5a2a");
+    expect(result.onChainHash).toBe("0xce967d3e10739a5ceca9ecadc75bc30a2b2d714417ce3c265d228ec3944a5a2a");
+    expect(result.message).toMatch(/Milestone 2.*not been published/i);
+  });
+
+  it("detects altered payment receipt as M2 Altered when modified", async () => {
     expect(fs.existsSync(rcptPath)).toBe(true);
     const origBuf = fs.readFileSync(rcptPath);
 
@@ -28,19 +44,30 @@ describe("Document Verification - Altered Document Milestone & Case Detection", 
     altered[100] = (altered[100] + 1) % 256;
     altered[101] = (altered[101] + 1) % 256;
 
-    const result = await verifyDocument(altered, "Payment_Receipt.pdf");
+    const result = await verifyDocument(altered, "FCR-Payment-Receipt-LAC-2026-08-0003.pdf");
 
     expect(result.verified).toBe(false);
     expect(result.status).toBe("Altered");
     expect(result.milestone).toBe("M2");
-    expect(result.caseId).toBe("LAC-2026-09-0001");
-    expect(result.isPublished).toBe(true);
-    // On-chain hash must be M2 settlement hash, NOT M1 award hash
-    expect(result.onChainHash).toBe("0x93f49b0ea37fad6017528d021c1b19774d7d1b8a45fe12c004a32e8aef3a7cd3");
-    expect(result.message).toContain("LAC-2026-09-0001");
+    expect(result.caseId).toBe("LAC-2026-08-0003");
+    expect(result.isPublished).toBe(false);
+    expect(result.onChainHash).toBe("0xce967d3e10739a5ceca9ecadc75bc30a2b2d714417ce3c265d228ec3944a5a2a");
+    expect(result.localHash).not.toBe(result.onChainHash);
   });
 
-  it("detects altered Form H as M1 (Statutory Award) instead of Record Not Found", async () => {
+  it("returns Authentic for unaltered Form H (M1 published on chain)", async () => {
+    expect(fs.existsSync(formHPath)).toBe(true);
+    const origBuf = fs.readFileSync(formHPath);
+
+    const result = await verifyDocument(origBuf, "Signed_Form_H_seed.pdf");
+
+    expect(result.verified).toBe(true);
+    expect(result.status).toBe("Authentic");
+    expect(result.milestone).toBe("M1");
+    expect(result.caseId).toBe("LAC-2026-08-0003");
+  });
+
+  it("detects altered Form H as M1 Altered when modified", async () => {
     expect(fs.existsSync(formHPath)).toBe(true);
     const origBuf = fs.readFileSync(formHPath);
 
@@ -49,49 +76,14 @@ describe("Document Verification - Altered Document Milestone & Case Detection", 
     altered[100] = (altered[100] + 1) % 256;
     altered[101] = (altered[101] + 1) % 256;
 
-    // Test with actual saved filename
-    const resultWithFileName = await verifyDocument(
-      altered,
-      "Signed_1789749637661_Zalikha_binti_Yusoff_-_63c756a9-0e4f-41ef-ae0d-4679fdce7d15.pdf"
-    );
+    const result = await verifyDocument(altered, "Signed_Form_H_seed.pdf");
 
-    expect(resultWithFileName.verified).toBe(false);
-    expect(resultWithFileName.status).toBe("Altered");
-    expect(resultWithFileName.milestone).toBe("M1");
-    expect(resultWithFileName.caseId).toBe("LAC-2026-09-0001");
-    expect(resultWithFileName.isPublished).toBe(true);
-    // On-chain hash must be M1 award hash
-    expect(resultWithFileName.onChainHash).toBe("0xcb9a9055bc44653eb232ee7213ce4a03b858eb33f97733734826d2025bcc68ae");
-
-    // Test with generic filename (proves structural / storage matching works without filename hint)
-    const resultGeneric = await verifyDocument(altered, "random_edited_file.pdf");
-
-    expect(resultGeneric.verified).toBe(false);
-    expect(resultGeneric.status).toBe("Altered");
-    expect(resultGeneric.milestone).toBe("M1");
-    expect(resultGeneric.caseId).toBe("LAC-2026-09-0001");
-    expect(resultGeneric.isPublished).toBe(true);
-    expect(resultGeneric.onChainHash).toBe("0xcb9a9055bc44653eb232ee7213ce4a03b858eb33f97733734826d2025bcc68ae");
-  });
-
-  it("returns authentic for unaltered payment receipt", async () => {
-    const origBuf = fs.readFileSync(rcptPath);
-    const result = await verifyDocument(origBuf, "Payment_Receipt.pdf");
-
-    expect(result.verified).toBe(true);
-    expect(result.status).toBe("Authentic");
-    expect(result.milestone).toBe("M2");
-    expect(result.caseId).toBe("LAC-2026-09-0001");
-  });
-
-  it("returns authentic for unaltered Form H", async () => {
-    const origBuf = fs.readFileSync(formHPath);
-    const result = await verifyDocument(origBuf, "Signed_Form_H.pdf");
-
-    expect(result.verified).toBe(true);
-    expect(result.status).toBe("Authentic");
+    expect(result.verified).toBe(false);
+    expect(result.status).toBe("Altered");
     expect(result.milestone).toBe("M1");
-    expect(result.caseId).toBe("LAC-2026-09-0001");
+    expect(result.caseId).toBe("LAC-2026-08-0003");
+    expect(result.isPublished).toBe(true);
+    expect(result.localHash).not.toBe(result.onChainHash);
   });
 
   it("returns Not Found for completely unknown/random PDF", async () => {

@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { UploadCloud, CheckCircle, Shield, FileText, Search, RefreshCw, XCircle, FileWarning, ExternalLink } from 'lucide-react';
+import { UploadCloud, CheckCircle, Shield, FileText, Search, RefreshCw, XCircle, FileWarning, ExternalLink, Clock } from 'lucide-react';
 import { blockchainApi } from '../../services/blockchainApi';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
@@ -189,16 +189,34 @@ export default function VerifyAuditTrail() {
                 <div className="w-20 h-20 bg-[var(--md-background)] rounded-full flex items-center justify-center mx-auto shadow-md transform hover:rotate-12 transition-transform">
                   {result.verified ? (
                     <CheckCircle className="w-12 h-12 text-green-600" />
+                  ) : result.status === 'Not Found' ? (
+                    <Clock className="w-12 h-12 text-blue-600" />
                   ) : (
                     <XCircle className="w-12 h-12 text-red-500" />
                   )}
                 </div>
                 
-                <h3 className={`text-2xl font-bold tracking-tight ${result.verified ? 'text-green-600' : 'text-red-500'}`}>
-                  {result.verified ? 'Success: Authentic' : 'Altered / Invalid'}
+                <h3 className={`text-2xl font-bold tracking-tight ${
+                  result.verified
+                    ? 'text-green-600'
+                    : result.status === 'Not Found'
+                    ? 'text-slate-800'
+                    : 'text-red-500'
+                }`}>
+                  {result.verified
+                    ? 'Success: Authentic'
+                    : result.status === 'Not Found'
+                    ? (result.milestone === 'M2' ? 'Milestone 2 Not Published' : 'Document Not Published')
+                    : 'Altered / Invalid'}
                 </h3>
                 
-                <p className={`text-sm font-medium px-4 py-2 rounded-full inline-block ${result.verified ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                <p className={`text-sm font-medium px-4 py-2 rounded-full inline-block ${
+                  result.verified
+                    ? 'bg-green-100 text-green-700'
+                    : result.status === 'Not Found'
+                    ? 'bg-slate-100 text-slate-700'
+                    : 'bg-red-100 text-red-700'
+                }`}>
                   {result.message || result.status}
                 </p>
                 
@@ -206,9 +224,13 @@ export default function VerifyAuditTrail() {
                   <div className="flex justify-between items-center pb-2 border-b border-slate-100">
                     <span className="text-slate-500">Status</span>
                     <span className={`font-semibold px-2.5 py-0.5 rounded-md text-xs ${
-                      result.verified ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      result.verified
+                        ? 'bg-green-100 text-green-800'
+                        : result.status === 'Not Found'
+                        ? 'bg-slate-100 text-slate-800'
+                        : 'bg-red-100 text-red-800'
                     }`}>
-                      {result.status || 'Unknown'}
+                      {result.status === 'Not Found' && result.milestone === 'M2' ? 'M2 Not Published' : (result.status || 'Unknown')}
                     </span>
                   </div>
 

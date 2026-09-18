@@ -597,6 +597,21 @@ export async function verifyDocument(fileBuffer: Buffer, fileName?: string) {
         },
       });
     }
+    if (matchedReceipt && (!record || record.status !== BlockchainStatus.PUBLISHED)) {
+      const caseId = matchedReceipt.paymentCase?.caseId;
+      return {
+        verified: false,
+        status: "Not Found",
+        message: `Record Not Found: Milestone 2 (Payment Settlement) has not been published to the blockchain ledger yet${caseId ? ` for case ${caseId}` : ""}.`,
+        localHash,
+        onChainHash: matchedReceipt.documentHash,
+        caseId,
+        milestone: "M2",
+        onChainKey: record?.onChainKey || (caseId ? `${caseId}#M2` : undefined),
+        isPublished: false,
+        expectedSource: "Settlement Payment Receipt Registry",
+      };
+    }
   }
 
   if (!record) {
@@ -612,6 +627,21 @@ export async function verifyDocument(fileBuffer: Buffer, fileName?: string) {
           },
         },
       });
+    }
+    if (matchedOffer && (!record || record.status !== BlockchainStatus.PUBLISHED)) {
+      const caseId = matchedOffer.caseId;
+      return {
+        verified: false,
+        status: "Not Found",
+        message: `Record Not Found: Milestone 1 (Statutory Award) has not been published to the blockchain ledger yet${caseId ? ` for case ${caseId}` : ""} (awaiting on-chain publication after statutory 24-hour grace period).`,
+        localHash,
+        onChainHash: matchedOffer.blockchainHash,
+        caseId,
+        milestone: "M1",
+        onChainKey: record?.onChainKey || (caseId ? `${caseId}#M1` : undefined),
+        isPublished: false,
+        expectedSource: "Statutory Case Registry (Pre-Notarized / Grace Period)",
+      };
     }
   }
 
@@ -776,17 +806,34 @@ export async function verifyDocument(fileBuffer: Buffer, fileName?: string) {
           where: { paymentCase: { caseId: detectedCaseId } },
         });
         if (dbReceipt?.documentHash) {
-          return {
-            verified: false,
-            status: "Altered",
-            message: `Verification Failed: Document has been altered. SHA-256 fingerprint does not match the canonical payment receipt stored in the settlement database for case ${detectedCaseId}.`,
-            localHash,
-            onChainHash: dbReceipt.documentHash,
-            caseId: detectedCaseId,
-            milestone: "M2",
-            isPublished: false,
-            expectedSource: "Settlement Payment Receipt Registry",
-          };
+          const isDirectMatch = localHash.toLowerCase() === dbReceipt.documentHash.toLowerCase();
+          if (isDirectMatch) {
+            return {
+              verified: false,
+              status: "Not Found",
+              message: `Record Not Found: Milestone 2 (Payment Settlement) has not been published to the blockchain ledger yet for case ${detectedCaseId}.`,
+              localHash,
+              onChainHash: dbReceipt.documentHash,
+              caseId: detectedCaseId,
+              milestone: "M2",
+              onChainKey: `${detectedCaseId}#M2`,
+              isPublished: false,
+              expectedSource: "Settlement Payment Receipt Registry",
+            };
+          } else {
+            return {
+              verified: false,
+              status: "Altered",
+              message: `Verification Failed: Document has been altered. SHA-256 fingerprint does not match the canonical payment receipt stored in the settlement database for case ${detectedCaseId}.`,
+              localHash,
+              onChainHash: dbReceipt.documentHash,
+              caseId: detectedCaseId,
+              milestone: "M2",
+              onChainKey: `${detectedCaseId}#M2`,
+              isPublished: false,
+              expectedSource: "Settlement Payment Receipt Registry",
+            };
+          }
         }
       }
 
@@ -814,17 +861,34 @@ export async function verifyDocument(fileBuffer: Buffer, fileName?: string) {
         where: { caseId: detectedCaseId },
       });
       if (dbOffer?.blockchainHash) {
-        return {
-          verified: false,
-          status: "Altered",
-          message: `Verification Failed: Document has been altered. SHA-256 fingerprint does not match the official signed Form H stored in the statutory database registry for case ${detectedCaseId} (awaiting on-chain publication after statutory 24-hour grace period).`,
-          localHash,
-          onChainHash: dbOffer.blockchainHash,
-          caseId: detectedCaseId,
-          milestone: "M1",
-          isPublished: false,
-          expectedSource: "Statutory Case Registry (Pre-Notarized / Grace Period)",
-        };
+        const isDirectMatch = localHash.toLowerCase() === dbOffer.blockchainHash.toLowerCase();
+        if (isDirectMatch) {
+          return {
+            verified: false,
+            status: "Not Found",
+            message: `Record Not Found: Milestone 1 (Statutory Award) has not been published to the blockchain ledger yet for case ${detectedCaseId} (awaiting on-chain publication after statutory 24-hour grace period).`,
+            localHash,
+            onChainHash: dbOffer.blockchainHash,
+            caseId: detectedCaseId,
+            milestone: "M1",
+            onChainKey: `${detectedCaseId}#M1`,
+            isPublished: false,
+            expectedSource: "Statutory Case Registry (Pre-Notarized / Grace Period)",
+          };
+        } else {
+          return {
+            verified: false,
+            status: "Altered",
+            message: `Verification Failed: Document has been altered. SHA-256 fingerprint does not match the official signed Form H stored in the statutory database registry for case ${detectedCaseId} (awaiting on-chain publication after statutory 24-hour grace period).`,
+            localHash,
+            onChainHash: dbOffer.blockchainHash,
+            caseId: detectedCaseId,
+            milestone: "M1",
+            onChainKey: `${detectedCaseId}#M1`,
+            isPublished: false,
+            expectedSource: "Statutory Case Registry (Pre-Notarized / Grace Period)",
+          };
+        }
       }
 
       // If M2 was not explicitly set but M2 published record exists and M1 had neither
@@ -861,11 +925,14 @@ export async function verifyDocument(fileBuffer: Buffer, fileName?: string) {
     return {
       verified: false,
       status: "Not Found",
-      message: "Record Not Found. This document has not been published to the blockchain ledger yet.",
+      message: `Record Not Found. Milestone ${record.milestone === "SETTLEMENT" ? "2 (Payment Settlement)" : "1 (Statutory Award)"} has not been published to the blockchain ledger yet.`,
       localHash,
+      onChainHash: record.documentHash,
       caseId: record.caseId,
       milestone: record.milestone === "SETTLEMENT" ? "M2" : "M1",
       onChainKey: record.onChainKey || record.caseId,
+      isPublished: false,
+      expectedSource: record.milestone === "SETTLEMENT" ? "Settlement Payment Receipt Registry" : "Statutory Case Registry",
     };
   }
 
