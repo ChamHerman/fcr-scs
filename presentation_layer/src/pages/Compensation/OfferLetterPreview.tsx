@@ -23,6 +23,7 @@ export type OwnerApprovalStatus = {
   share?: number | string;
   status: "ACCEPTED" | "REJECTED" | "PENDING";
   remarks?: string;
+  signedDocument?: string | null;
   respondedAt?: string;
   respondedAtDate?: Date | null;
   isCurrentUser: boolean;
@@ -150,9 +151,9 @@ export const OfferLetterPreview = React.forwardRef<OfferLetterPreviewHandle, Off
       );
     }, [offer]);
 
-    // Track File object URL creation & cleanup ONLY when offer is accepted
+    // Track File object URL creation & cleanup
     useEffect(() => {
-      if (isOfferAccepted && uploadedPdf instanceof File) {
+      if (uploadedPdf instanceof File) {
         const url = URL.createObjectURL(uploadedPdf);
         setUploadedFileUrl(url);
         return () => {
@@ -161,33 +162,30 @@ export const OfferLetterPreview = React.forwardRef<OfferLetterPreviewHandle, Off
       } else {
         setUploadedFileUrl(null);
       }
-    }, [uploadedPdf, isOfferAccepted]);
+    }, [uploadedPdf]);
 
-    // Resolve active PDF URL prioritizing uploaded file / document ONLY when offer is accepted
+    // Resolve active PDF URL prioritizing uploaded file / document
     const activePdfUrl = useMemo(() => {
-      if (isOfferAccepted) {
-        if (uploadedFileUrl) return uploadedFileUrl;
-        if (typeof uploadedPdf === "string" && uploadedPdf.trim()) {
-          const str = uploadedPdf.trim();
-          return str.startsWith("blob:") || str.startsWith("http:") || str.startsWith("https:") || str.startsWith("data:")
-            ? str
-            : `${BASE_URL}/${str.replace(/^\/+/, "")}`;
-        }
-        if (offer?.rawOffer?.signedDocument) {
-          const raw = String(offer.rawOffer.signedDocument).trim();
-          return raw.startsWith("blob:") || raw.startsWith("http:") || raw.startsWith("https:") || raw.startsWith("data:")
-            ? raw
-            : `${BASE_URL}/${raw.replace(/^\/+/, "")}`;
-        }
+      if (uploadedFileUrl) return uploadedFileUrl;
+      if (typeof uploadedPdf === "string" && uploadedPdf.trim()) {
+        const str = uploadedPdf.trim();
+        return str.startsWith("blob:") || str.startsWith("http:") || str.startsWith("https:") || str.startsWith("data:")
+          ? str
+          : `${BASE_URL}/${str.replace(/^\/+/, "")}`;
+      }
+      if (uploadedPdf === undefined && isOfferAccepted && offer?.rawOffer?.signedDocument) {
+        const raw = String(offer.rawOffer.signedDocument).trim();
+        return raw.startsWith("blob:") || raw.startsWith("http:") || raw.startsWith("https:") || raw.startsWith("data:")
+          ? raw
+          : `${BASE_URL}/${raw.replace(/^\/+/, "")}`;
       }
       return pdfUrl;
     }, [isOfferAccepted, uploadedFileUrl, uploadedPdf, offer?.rawOffer?.signedDocument, pdfUrl]);
 
     const hasUploadedPdf = Boolean(
-      isOfferAccepted &&
-      (uploadedFileUrl ||
-        (typeof uploadedPdf === "string" && uploadedPdf.trim()) ||
-        offer?.rawOffer?.signedDocument)
+      uploadedFileUrl ||
+      (typeof uploadedPdf === "string" && uploadedPdf.trim()) ||
+      (uploadedPdf === undefined && isOfferAccepted && offer?.rawOffer?.signedDocument)
     );
 
     // Dynamic layout state calculated from actual DOM section heights
@@ -326,7 +324,7 @@ export const OfferLetterPreview = React.forwardRef<OfferLetterPreviewHandle, Off
       }
     };
 
-    const offerKey = offer?.id || offer?.offerReferenceNo;
+    const offerKey = `${offer?.id || offer?.offerReferenceNo || ""}_${offer?.declarationOwnerName || ""}_${offer?.declarationOwnerIc || ""}`;
 
     useEffect(() => {
       if (hasUploadedPdf && activePdfUrl) {

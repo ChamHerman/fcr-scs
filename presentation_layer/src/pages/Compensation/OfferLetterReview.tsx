@@ -29,6 +29,7 @@ import {
   ChevronUp,
   RefreshCw,
   Layers,
+  ExternalLink,
 } from "lucide-react";
 import { compensationApi } from "../../services/compensationApi";
 import { Modal } from "../../components/ui/Modal";
@@ -72,6 +73,7 @@ export const OfferLetterReview: React.FC = () => {
   const activeOfferId = location.state?.offerId || paramOfferId;
 
   const [offer, setOffer] = useState<OfferDetail | null>(null);
+  const [selectedOwnerId, setSelectedOwnerId] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
   const [viewMode, setViewMode] = useState<"pdf" | "html">("pdf");
@@ -150,6 +152,8 @@ export const OfferLetterReview: React.FC = () => {
           status = "REJECTED";
         }
 
+        const signedDoc = resp?.signedDocument || (allOwners.length === 1 && (o.status === "ACCEPTED" || o.signedDocument) ? o.signedDocument : undefined);
+
         return {
           ownerId: owner.ownerId,
           name: owner.name,
@@ -159,6 +163,7 @@ export const OfferLetterReview: React.FC = () => {
           sharePercentage: owner.sharePercentage || "100%",
           status,
           remarks: resp?.remarks,
+          signedDocument: signedDoc,
           respondedAt: resp?.respondedAt
             ? new Date(resp.respondedAt).toLocaleDateString("en-GB", {
                 day: "2-digit",
@@ -171,6 +176,17 @@ export const OfferLetterReview: React.FC = () => {
           respondedAtDate: resp?.respondedAt ? new Date(resp.respondedAt) : null,
           isCurrentUser: isCurrent,
         };
+      });
+
+      setSelectedOwnerId((prev) => {
+        if (prev && (prev === "template" || ownersList.some((ow) => ow.ownerId === prev))) {
+          return prev;
+        }
+        const userOwner = ownersList.find((ow) => ow.isCurrentUser);
+        if (userOwner) return userOwner.ownerId;
+        const ownerWithDoc = ownersList.find((ow) => Boolean(ow.signedDocument));
+        if (ownerWithDoc) return ownerWithDoc.ownerId;
+        return ownersList[0]?.ownerId || "template";
       });
 
       const isMultiOwner = ownersList.length > 1;
@@ -369,6 +385,35 @@ export const OfferLetterReview: React.FC = () => {
     fetchOffer();
   }, [fetchOffer]);
 
+  const selectedOwner = React.useMemo(() => {
+    if (!offer || !offer.owners || offer.owners.length === 0) return null;
+    if (selectedOwnerId === "template") return null;
+    return offer.owners.find((ow) => ow.ownerId === selectedOwnerId) || offer.owners[0] || null;
+  }, [offer, selectedOwnerId]);
+
+  const activeSignedDocument = React.useMemo(() => {
+    if (selectedOwnerId === "template") return null;
+    if (selectedOwner?.signedDocument) return selectedOwner.signedDocument;
+    if (
+      (offer?.rawStatus === "ACCEPTED" || offer?.status === "Accepted" || offer?.currentUserStatus === "ACCEPTED") &&
+      offer?.rawOffer?.signedDocument &&
+      (!offer.owners || offer.owners.length <= 1 || selectedOwner?.status === "ACCEPTED")
+    ) {
+      return offer.rawOffer.signedDocument;
+    }
+    return null;
+  }, [selectedOwnerId, selectedOwner, offer]);
+
+  const displayOffer = React.useMemo(() => {
+    if (!offer) return offer;
+    if (!selectedOwner) return offer;
+    return {
+      ...offer,
+      declarationOwnerName: selectedOwner.name,
+      declarationOwnerIc: selectedOwner.nric,
+    };
+  }, [offer, selectedOwner]);
+
   const {
     showRejectModal,
     setShowRejectModal,
@@ -500,22 +545,54 @@ export const OfferLetterReview: React.FC = () => {
             </span>
           </div>
 
-          {/* Modular Form H PDF Preview & Viewer with Admin Header Toolbar (Image 1) */}
+          {/* Modular Form H PDF Preview & Viewer with Multi-Owner Selector Toolbar */}
           <div className="pdf-preview-container bg-md-surface-container rounded-2xl border border-md-outline/15 shadow-sm overflow-hidden mb-6">
-            {/* TOP COMPACT TOOLBAR BAR (IMAGE 1) */}
+            {/* TOP COMPACT TOOLBAR BAR */}
             <div className="pdf-preview-toolbar px-4 py-3 sm:px-6 sm:py-3.5 flex items-center justify-between flex-wrap gap-3 bg-md-surface border-b border-md-outline/15">
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="flex items-center gap-2 text-md-primary font-bold text-sm sm:text-base">
                   <FileText size={18} />
                   <span>
-                    {(offer.rawStatus === "ACCEPTED" || offer.status === "Accepted" || offer.status === "ACCEPTED" || offer.currentUserStatus === "ACCEPTED") && offer.rawOffer?.signedDocument
+                    {activeSignedDocument
                       ? "Form H: Uploaded Signed Acceptance Document"
                       : "Form H: Notice of Award and Offer of Compensation"}
                   </span>
                 </div>
 
-                {/* View Mode Switcher (Draft Template Only) */}
-                {!((offer.rawStatus === "ACCEPTED" || offer.status === "Accepted" || offer.status === "ACCEPTED" || offer.currentUserStatus === "ACCEPTED") && offer.rawOffer?.signedDocument) && (
+                {/* Owner Document Selector Dropdown */}
+                {offer.owners && offer.owners.length > 0 && (
+                  <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/90 pl-3 pr-2 py-1 rounded-full border border-slate-200 dark:border-slate-700 text-xs shadow-xs transition hover:border-md-primary/40">
+                    <Users size={14} className="text-md-primary shrink-0" />
+                    <span className="font-semibold text-slate-500 dark:text-slate-400 hidden md:inline">
+                      Select Owner:
+                    </span>
+                    <select
+                      id="offer-letter-owner-select"
+                      value={selectedOwnerId || (offer.owners[0]?.ownerId || "template")}
+                      onChange={(e) => setSelectedOwnerId(e.target.value)}
+                      className="bg-transparent text-slate-800 dark:text-slate-100 font-bold text-xs py-0.5 pr-2 focus:outline-none cursor-pointer max-w-[210px] sm:max-w-xs truncate"
+                      title="Choose owner to review their signed document"
+                    >
+                      {offer.owners.map((ow) => {
+                        const hasDoc = Boolean(
+                          ow.signedDocument ||
+                          (offer.owners.length === 1 && offer.rawOffer?.signedDocument && ow.status === "ACCEPTED")
+                        );
+                        return (
+                          <option key={ow.ownerId} value={ow.ownerId} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
+                            {ow.name} ({ow.sharePercentage || "100%"}) {hasDoc ? "• [Signed PDF]" : `• [${ow.status || "Pending"}]`}
+                          </option>
+                        );
+                      })}
+                      <option value="template" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-semibold">
+                        📄 Official Form H Award (Template View)
+                      </option>
+                    </select>
+                  </div>
+                )}
+
+                {/* View Mode Switcher (Draft Template / Unsigned Only) */}
+                {!activeSignedDocument && (
                   <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
                     <button
                       type="button"
@@ -545,7 +622,24 @@ export const OfferLetterReview: React.FC = () => {
 
               {/* Action Controls */}
               <div className="flex items-center gap-2 flex-wrap">
-                {viewMode === "html" && !((offer.rawStatus === "ACCEPTED" || offer.status === "Accepted" || offer.status === "ACCEPTED" || offer.currentUserStatus === "ACCEPTED") && offer.rawOffer?.signedDocument) && (
+                {activeSignedDocument && (
+                  <Button
+                    variant="outlined"
+                    size="sm"
+                    onClick={() => {
+                      const cleanPath = activeSignedDocument.replace(/^\/+/, "");
+                      const docUrl = activeSignedDocument.startsWith("blob:") || activeSignedDocument.startsWith("http:") || activeSignedDocument.startsWith("https:")
+                        ? activeSignedDocument
+                        : `${BASE_URL}/${cleanPath}`;
+                      window.open(docUrl, "_blank", "noopener,noreferrer");
+                    }}
+                    title="Open Signed Document in New Window"
+                  >
+                    <ExternalLink size={14} /> Open in New Tab
+                  </Button>
+                )}
+
+                {viewMode === "html" && !activeSignedDocument && (
                   <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
                     <button
                       type="button"
@@ -577,7 +671,7 @@ export const OfferLetterReview: React.FC = () => {
                   </div>
                 )}
 
-                {viewMode === "pdf" && (
+                {viewMode === "pdf" && !activeSignedDocument && (
                   <Button
                     variant="outlined"
                     size="sm"
@@ -616,17 +710,111 @@ export const OfferLetterReview: React.FC = () => {
               </div>
             </div>
 
+            {/* Owner Context Banner */}
+            {!isCollapsed && selectedOwner && (
+              <div
+                className={`px-4 sm:px-6 py-3 border-b text-xs flex items-center justify-between flex-wrap gap-3 ${
+                  activeSignedDocument
+                    ? "bg-emerald-500/10 dark:bg-emerald-950/30 border-emerald-500/20 text-emerald-900 dark:text-emerald-200"
+                    : selectedOwner.status === "REJECTED"
+                    ? "bg-rose-500/10 dark:bg-rose-950/30 border-rose-500/20 text-rose-900 dark:text-rose-200"
+                    : "bg-amber-500/10 dark:bg-amber-950/30 border-amber-500/20 text-amber-900 dark:text-amber-200"
+                }`}
+              >
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <div
+                    className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                      activeSignedDocument
+                        ? "bg-emerald-600 text-white"
+                        : selectedOwner.status === "REJECTED"
+                        ? "bg-rose-600 text-white"
+                        : "bg-amber-600 text-white"
+                    }`}
+                  >
+                    {activeSignedDocument ? (
+                      <FileCheck size={15} />
+                    ) : selectedOwner.status === "REJECTED" ? (
+                      <XCircle size={15} />
+                    ) : (
+                      <AlertTriangle size={15} />
+                    )}
+                  </div>
+                  <div>
+                    <div className="font-bold text-sm flex items-center gap-2 flex-wrap">
+                      <span>{selectedOwner.name}</span>
+                      <span className="font-mono text-[11px] font-normal px-2 py-0.5 rounded-full bg-white/70 dark:bg-black/30 border border-current/20">
+                        {selectedOwner.sharePercentage || "100%"} Share
+                      </span>
+                      <span className="font-mono text-[11px] font-normal text-slate-500 dark:text-slate-400">
+                        NRIC: {selectedOwner.nric}
+                      </span>
+                    </div>
+                    <div className="text-[11px] opacity-90 mt-0.5">
+                      {activeSignedDocument ? (
+                        <span>
+                          Signed Form H document submitted
+                          {selectedOwner.respondedAt ? ` on ${selectedOwner.respondedAt}` : ""} • Verified read-only view.
+                        </span>
+                      ) : selectedOwner.status === "REJECTED" ? (
+                        <span>
+                          Owner rejected this compensation offer
+                          {selectedOwner.remarks ? `: "${selectedOwner.remarks}"` : ""}.
+                        </span>
+                      ) : (
+                        <span>
+                          No signed acceptance document uploaded yet (Status: <strong>{selectedOwner.status || "Pending"}</strong>). Displaying Form H notice template.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {activeSignedDocument && (
+                    <span className="px-2.5 py-1 rounded-md bg-emerald-600 text-white font-bold text-[11px] shadow-xs flex items-center gap-1">
+                      <CheckCircle size={13} /> Official Signed Document
+                    </span>
+                  )}
+                  {selectedOwner.status === "REJECTED" && (
+                    <span className="px-2.5 py-1 rounded-md bg-rose-600 text-white font-bold text-[11px] shadow-xs flex items-center gap-1">
+                      <XCircle size={13} /> Offer Rejected
+                    </span>
+                  )}
+                  {!activeSignedDocument && selectedOwner.status !== "REJECTED" && (
+                    <span className="px-2.5 py-1 rounded-md bg-amber-600 text-white font-bold text-[11px] shadow-xs flex items-center gap-1">
+                      <AlertTriangle size={13} /> Pending Submission
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {!isCollapsed && selectedOwnerId === "template" && (
+              <div className="px-4 sm:px-6 py-3 border-b bg-blue-500/10 dark:bg-blue-950/30 border-blue-500/20 text-blue-900 dark:text-blue-200 text-xs flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0">
+                    <FileText size={15} />
+                  </div>
+                  <div>
+                    <div className="font-bold text-sm">Official Statutory Form H Award Notice Template</div>
+                    <div className="text-[11px] opacity-80 mt-0.5">
+                      Statutory compensation award schedule prepared under the Land Acquisition Act 1960.
+                    </div>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-md bg-blue-600 text-white font-bold text-[11px] shadow-xs">
+                  Statutory Template
+                </span>
+              </div>
+            )}
+
             {/* Collapsible Preview Content */}
             {!isCollapsed && (
               <div className="pdf-preview-panel border-t border-md-outline/15 flex flex-col items-center p-4 sm:p-6 bg-slate-900/10 dark:bg-slate-950/40 w-full min-h-[500px]">
                 <OfferLetterPreview
                   ref={previewRef}
-                  offer={offer}
-                  uploadedPdf={
-                    (offer.rawStatus === "ACCEPTED" || offer.status === "Accepted" || offer.status === "ACCEPTED" || offer.currentUserStatus === "ACCEPTED")
-                      ? offer.rawOffer?.signedDocument
-                      : null
-                  }
+                  offer={displayOffer || offer}
+                  uploadedPdf={activeSignedDocument}
                   viewMode={viewMode}
                   zoomScale={zoomScale}
                   onDownloadingChange={setDownloadingPdf}
