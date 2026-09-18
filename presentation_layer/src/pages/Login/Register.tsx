@@ -4,7 +4,7 @@ import { UserPlus, Info, AlertTriangle, CheckCircle2, XCircle, Sparkles, Home } 
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../../services/auth.service';
 import { IdentificationInput } from '../../components/ui/IdentificationInput';
-import { resolveMalaysianIdentity, parseRawIc, type MalaysianIdentity } from '../../utils/malaysianIdentity';
+import { resolveMalaysianIdentity, validateMalaysianIc, parseRawIc, type MalaysianIdentity } from '../../utils/malaysianIdentity';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 export const Register: React.FC = () => {
@@ -52,8 +52,9 @@ export const Register: React.FC = () => {
     setError(null);
     setSuccessMessage(null);
 
-    if (!/^\d{12}$/.test(formData.identificationNumber.replace(/[-\s]/g, ''))) {
-      setError("Identification number must be exactly 12 digits.");
+    const icValidation = validateMalaysianIc(formData.identificationNumber);
+    if (!icValidation.isValid) {
+      setError(icValidation.error || "Identification number must be a valid 12-digit Malaysian IC.");
       return;
     }
 

@@ -8,7 +8,7 @@ import { SearchInput } from '../../components/ui/SearchInput';
 import { Pagination } from '../../components/ui/Pagination';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Search, Shield, MoreVertical, CheckCircle, Users, UserCheck, UserX, UserCog, ChevronLeft, ChevronRight, ArrowUpDown, Sparkles, KeyRound, Info } from 'lucide-react';
-import { resolveMalaysianIdentity, parseRawIc, type MalaysianIdentity } from '../../utils/malaysianIdentity';
+import { resolveMalaysianIdentity, validateMalaysianIc, parseRawIc, type MalaysianIdentity } from '../../utils/malaysianIdentity';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import '../LandAcquisition/case_management.css';
 
@@ -105,6 +105,12 @@ export const UserAdministration: React.FC = () => {
     e.preventDefault();
     setFormError('');
     setFormSuccess('');
+
+    const icValidation = validateMalaysianIc(formData.identificationNumber);
+    if (!icValidation.isValid) {
+      setFormError(icValidation.error || 'Identification number must be a valid 12-digit Malaysian IC.');
+      return;
+    }
 
     try {
       const res = await fetch('http://localhost:3030/api/users/admin-create', {

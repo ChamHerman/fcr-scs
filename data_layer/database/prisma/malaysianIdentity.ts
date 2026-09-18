@@ -305,30 +305,106 @@ function hashString(str: string): number {
   return Math.abs(hash);
 }
 
+export interface MalaysianIcValidationResult {
+  isValid: boolean;
+  error?: string;
+  year?: number;
+  month?: number;
+  day?: number;
+  state?: string;
+}
+
+/**
+ * Strictly validates a Malaysian NRIC format:
+ * - Must be exactly 12 numeric digits
+ * - Month (MM) must be 01 - 12
+ * - Day (DD) must be a valid day for the given month/year (supports leap years)
+ * - State code (PB) must match an authentic JPN place-of-birth code
+ */
+export function validateMalaysianIc(icInput: string | null | undefined): MalaysianIcValidationResult {
+  const digits = String(icInput || '').replace(/\D/g, '');
+  if (digits.length !== 12) {
+    return { isValid: false, error: 'Identification number must be exactly 12 digits' };
+  }
+
+  const yy = digits.slice(0, 2);
+  const mm = digits.slice(2, 4);
+  const dd = digits.slice(4, 6);
+  const pb = digits.slice(6, 8);
+
+  const yyNum = parseInt(yy, 10);
+  const mmNum = parseInt(mm, 10);
+  const ddNum = parseInt(dd, 10);
+
+  // 1. Month validation (01 - 12)
+  if (mmNum < 1 || mmNum > 12) {
+    return { isValid: false, error: 'Invalid month in IC (must be 01–12)' };
+  }
+
+  // 2. Year determination
+  const currentYear = new Date().getFullYear();
+  const fullYear = yyNum > (currentYear % 100) ? 1900 + yyNum : 2000 + yyNum;
+
+  // 3. Day validation for specific month/year (leap year support)
+  const isLeapYear = (fullYear % 4 === 0 && fullYear % 100 !== 0) || (fullYear % 400 === 0);
+  const daysInMonths = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  const maxDays = daysInMonths[mmNum - 1];
+
+  if (ddNum < 1 || ddNum > maxDays) {
+    return { isValid: false, error: `Invalid day for month ${mm} in IC (must be 01–${maxDays})` };
+  }
+
+  // 4. JPN State Code validation
+  const state = JPN_STATE_MAP[pb];
+  if (!state) {
+    return { isValid: false, error: `Invalid state / place-of-birth code '${pb}' in IC` };
+  }
+
+  return { isValid: true, year: fullYear, month: mmNum, day: ddNum, state };
+}
+
 export function resolveMalaysianIdentity(icInput: string | null | undefined): MalaysianIdentity {
   const digits = String(icInput || '').replace(/\D/g, '').slice(0, 12);
-  const isValid = digits.length === 12;
+  const validation = validateMalaysianIc(digits);
 
-  const padded = digits.padEnd(12, '0');
-  const yy = padded.slice(0, 2);
-  const mm = padded.slice(2, 4);
-  const dd = padded.slice(4, 6);
-  const pb = padded.slice(6, 8);
-  const lastDigit = parseInt(padded[11], 10) || 0;
+  const formattedIc = digits.length >= 6
+    ? digits.length <= 8
+      ? `${digits.slice(0, 6)}-${digits.slice(6)}`
+      : `${digits.slice(0, 6)}-${digits.slice(6, 8)}-${digits.slice(8)}`
+    : digits;
+
+  if (!validation.isValid) {
+    return {
+      rawDigits: digits,
+      formattedIc,
+      name: '',
+      gender: 'MALE',
+      genderLabel: '',
+      dateOfBirth: '',
+      age: 0,
+      state: '',
+      ethnicity: 'MALAY',
+      address: '',
+      isValid: false,
+    };
+  }
+
+  const yy = digits.slice(0, 2);
+  const mm = digits.slice(2, 4);
+  const dd = digits.slice(4, 6);
+  const pb = digits.slice(6, 8);
+  const lastDigit = parseInt(digits[11], 10) || 0;
 
   const gender: 'MALE' | 'FEMALE' = (lastDigit % 2 === 1) ? 'MALE' : 'FEMALE';
   const genderLabel = gender === 'MALE' ? 'Lelaki (Male)' : 'Perempuan (Female)';
 
-  const yyNum = parseInt(yy, 10) || 0;
+  const fullYear = validation.year!;
+  const dateOfBirth = `${fullYear}-${mm}-${dd}`;
   const currentYear = new Date().getFullYear();
-  const fullYear = yyNum > (currentYear % 100) ? 1900 + yyNum : 2000 + yyNum;
-  const clampedMonth = Math.min(12, Math.max(1, parseInt(mm, 10) || 1));
-  const clampedDay = Math.min(28, Math.max(1, parseInt(dd, 10) || 1));
-  const dateOfBirth = `${fullYear}-${String(clampedMonth).padStart(2, '0')}-${String(clampedDay).padStart(2, '0')}`;
   const age = Math.max(0, currentYear - fullYear);
 
-  const state = JPN_STATE_MAP[pb] || 'Selangor';
-  const hash = hashString(padded);
+  const state = validation.state!;
+  const hash = hashString(digits);
 
   const ethnicityRoll = hash % 100;
   let ethnicity: 'MALAY' | 'CHINESE' | 'INDIAN' | 'EAST_MALAYSIAN';
@@ -387,10 +463,6 @@ export function resolveMalaysianIdentity(icInput: string | null | undefined): Ma
 
   const address = `${unitPrefix}${street}, ${township}, ${cityObj.postcode} ${cityObj.city}, ${state}`;
 
-  const formattedIc = isValid
-    ? `${digits.slice(0, 6)}-${digits.slice(6, 8)}-${digits.slice(8)}`
-    : digits;
-
   return {
     rawDigits: digits,
     formattedIc,
@@ -402,6 +474,6 @@ export function resolveMalaysianIdentity(icInput: string | null | undefined): Ma
     state,
     ethnicity,
     address,
-    isValid,
+    isValid: true,
   };
 }
