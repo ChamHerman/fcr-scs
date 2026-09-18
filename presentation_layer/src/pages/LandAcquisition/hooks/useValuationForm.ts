@@ -113,10 +113,7 @@ export function useValuationForm() {
     let predictedAiPrice = "";
 
     try {
-      const landAreaVal =
-        caseInfo.rawArea && caseInfo.rawArea > 0
-          ? caseInfo.rawArea
-          : parseCurrencyToNumber(formData.landArea);
+      const acqAreaVal = parseCurrencyToNumber(formData.acquisitionArea);
       const builtUpAreaVal = parseCurrencyToNumber(formData.builtUpArea);
       const bldgAgeNum = Math.max(0, parseInt(formData.buildingAge, 10) || 0);
 
@@ -126,7 +123,7 @@ export function useValuationForm() {
         location_type: formData.locationType || "Urban",
         tenure_type: caseInfo.tenureType || "FREEHOLD",
         building_condition: "Good",
-        land_area_sqft: landAreaVal,
+        land_area_sqft: acqAreaVal,
         built_up_area_sqft: builtUpAreaVal,
         building_age_years: bldgAgeNum,
       });

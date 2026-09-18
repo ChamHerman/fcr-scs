@@ -419,11 +419,11 @@ export const ValuationCreate: React.FC = () => {
         }
       >
         <div className="space-y-3.5 py-2">
-          {/* Land Area */}
+          {/* Acquisition Area */}
           <div className="flex justify-between items-center p-4 rounded-xl bg-md-surface-container-low border border-md-outline/15">
-            <span className="text-sm font-semibold text-md-on-surface-variant">Land Area</span>
+            <span className="text-sm font-semibold text-md-on-surface-variant">Acquisition Area</span>
             <span className="text-base font-bold text-md-on-surface font-mono">
-              {formData.landArea ? `${formatAreaWithoutDecimals(formData.landArea)} m²` : "—"}
+              {formData.acquisitionArea ? `${formatAreaWithoutDecimals(formData.acquisitionArea)} m²` : "—"}
             </span>
           </div>
 
