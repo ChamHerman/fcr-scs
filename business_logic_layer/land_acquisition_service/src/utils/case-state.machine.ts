@@ -56,6 +56,10 @@ export class CaseStateMachine {
     return status === CaseStatus.CASE_REGISTERED;
   }
 
+  public static canReassignValuer(status: CaseStatus, isExpiredWithoutValuation: boolean = false): boolean {
+    return status === CaseStatus.VALUER_ASSIGNED || isExpiredWithoutValuation;
+  }
+
   public static canSubmitValuation(status: CaseStatus): boolean {
     const allowed: CaseStatus[] = [
       CaseStatus.VALUER_ASSIGNED,

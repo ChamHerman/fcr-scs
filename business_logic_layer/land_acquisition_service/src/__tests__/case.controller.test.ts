@@ -45,14 +45,14 @@ describe("Land Acquisition API - Phase 1 to 4 Integration Tests", () => {
       expect(res.body).toHaveProperty("error");
     });
 
-    it("PUT /api/land-acquisition/cases/:caseId/title - should validate missing title", async () => {
-      const res = await request.put("/api/land-acquisition/cases/00000000-0000-0000-0000-000000000000/title").send({});
+    it("PATCH /api/land-acquisition/cases/:caseId/title - should validate missing title", async () => {
+      const res = await request.patch("/api/land-acquisition/cases/00000000-0000-0000-0000-000000000000/title").send({});
       expect(res.status).toBe(400);
       expect(res.body.error).toContain("Case title is required");
     });
 
-    it("PUT /api/land-acquisition/cases/:caseId/title - should return 404 for non-existent case", async () => {
-      const res = await request.put("/api/land-acquisition/cases/00000000-0000-0000-0000-000000000000/title").send({
+    it("PATCH /api/land-acquisition/cases/:caseId/title - should return 404 for non-existent case", async () => {
+      const res = await request.patch("/api/land-acquisition/cases/00000000-0000-0000-0000-000000000000/title").send({
         caseTitle: "Updated Case Title",
       });
       expect(res.status).toBe(404);
@@ -80,6 +80,26 @@ describe("Land Acquisition API - Phase 1 to 4 Integration Tests", () => {
       const res = await request.post("/api/land-acquisition/assignments").send({});
       expect(res.status).toBe(400);
       expect(res.body.error).toContain("caseId is required");
+    });
+
+    it("POST /api/land-acquisition/assignments - should allow reassignment when status is VALUER_ASSIGNED", async () => {
+      const valuerRes = await request.get("/api/land-acquisition/valuers");
+      if (valuerRes.body.valuers && valuerRes.body.valuers.length > 0) {
+        const valuerId = valuerRes.body.valuers[0].userId;
+        const casesRes = await request.get("/api/land-acquisition/cases?status=VALUER_ASSIGNED");
+        if (casesRes.body.cases && casesRes.body.cases.length > 0) {
+          const targetCaseId = casesRes.body.cases[0].caseId;
+          const assignRes = await request.post("/api/land-acquisition/assignments").send({
+            caseId: targetCaseId,
+            valuerId,
+            acceptancePeriodDays: 14,
+            remarks: "Reassigned by test",
+          });
+          expect(assignRes.status).toBe(201);
+          expect(assignRes.body).toHaveProperty("assignment");
+          expect(assignRes.body.assignment.assignedToId).toBe(valuerId);
+        }
+      }
     });
   });
 
