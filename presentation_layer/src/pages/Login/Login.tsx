@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { MD3Button, MD3Input, MD3Card, MD3BlurBackground } from '../MD3Components';
 import { LogIn, AlertCircle, CheckCircle2, RotateCw, ArrowLeft, ShieldCheck, Home } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { authService } from '../../services/auth.service';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 export const Login: React.FC = () => {
   useDocumentTitle('Login');
+  const location = useLocation();
   const [step, setStep] = useState<'credentials' | 'otp'>('credentials');
   const [email, setEmail] = useState('admin@fcrscs.gov.my');
   const [password, setPassword] = useState('Password$123');
@@ -16,7 +17,13 @@ export const Login: React.FC = () => {
   const [maskedEmail, setMaskedEmail] = useState('');
   const [countdown, setCountdown] = useState(60);
   const [isResending, setIsResending] = useState(false);
-  const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('reason') === 'session_expired') {
+      return 'Your session has expired. Please sign in again to continue.';
+    }
+    return null;
+  });
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();

@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { ADMIN_PAGES } from '../../constants/pages';
 
 interface ProtectedRouteProps {
   allowedRoles: string[];
@@ -126,7 +127,17 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
         if (page === '/admin') {
           return location.pathname === '/admin' || location.pathname === '/admin/';
         }
-        return location.pathname === page || location.pathname.startsWith(page + '/');
+        if (location.pathname === page) {
+          return true;
+        }
+        // Subroute check: allow sub-pages (like /admin/case/123/edit) unless the current path is itself an explicitly registered page in ADMIN_PAGES
+        if (location.pathname.startsWith(page + '/')) {
+          const isExplicitlyManagedPage = ADMIN_PAGES.some(
+            (p) => p.path !== page && (location.pathname === p.path || location.pathname.startsWith(p.path + '/'))
+          );
+          return !isExplicitlyManagedPage;
+        }
+        return false;
       });
     }
   }
