@@ -8,6 +8,7 @@
     "db:migrate": "cd data_layer/database && npx prisma migrate deploy",
     "db:reset": "cd data_layer/database && npx prisma migrate reset --force",
     "db:seed": "cd data_layer/database && npx ts-node prisma/seed.ts",
+    "dbseed": "npm run db:seed",
     "db:fresh": "cd data_layer/database && npx prisma migrate reset --force",
     "dev:backend": "cd business_logic_layer && npm run dev",
     "dev:frontend": "cd presentation_layer && npm run dev",

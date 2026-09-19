@@ -4,7 +4,7 @@
  *
  * Prefers the project's virtual environment (business_logic_layer/ai_prediction_service/.venv,
  * or a repo-root .venv) so the environment-based setup in
- * _docs/AI_VALUATION_SETUP.md is what actually runs, then falls back to the
+ * docs/AI_VALUATION_SETUP.md is what actually runs, then falls back to the
  * system Python. Mirrors the resolver used by the Express backend's sidecar
  * auto-start (pythonBridge.service.ts) so both paths behave identically.
  */
@@ -33,7 +33,7 @@ const python = pythonCandidates.find((candidate) => fs.existsSync(candidate))
 const usingVenv = python !== 'python' && python !== 'python3';
 console.log(`[dev:ai] ${usingVenv ? 'Virtual environment' : 'System Python'}: ${python}`);
 if (!usingVenv) {
-  console.log('[dev:ai] No .venv found. See _docs/AI_VALUATION_SETUP.md to create one (recommended).');
+  console.log('[dev:ai] No .venv found. See docs/AI_VALUATION_SETUP.md to create one (recommended).');
 }
 
 // Modes: --install | --dataset | --train | (default) run the Flask sidecar.

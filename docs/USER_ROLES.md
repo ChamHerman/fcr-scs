@@ -8,32 +8,14 @@ This document provides the standard reference for all seeded user accounts and r
 
 Follow the steps below whenever you need to clear old/stale records and populate a fresh set of test data and accounts.
 
-### Step 1: Truncate / Clear Existing Database Tables
-Run the database cleanup script located in `_docs/z_database_data_removal.js`. This truncates all application tables while preserving database schema migrations (`_prisma_migrations`).
+### Complete Database Reset & Seed
+Run the unified reset command from the project root. This command drops all tables, applies Prisma migrations cleanly, and seeds canonical test data and accounts:
 
-1. Open your terminal (Command Prompt, PowerShell, or Git Bash).
-2. Navigate to the `_docs` directory:
-   ```bash
-   cd "_docs"
-   ```
-3. Execute the cleanup script:
-   ```bash
-   node z_database_data_removal.js
-   ```
+```bash
+npm run db:reset
+```
 
-### Step 2: Seed Users, Roles & Initial Data
-Run the Prisma seed command to populate all user accounts, email templates, land acquisition projects, and flow-test payment cases.
-
-1. Navigate to the database directory:
-   ```bash
-   cd "data_layer\database"
-   ```
-2. Run the Prisma seed command:
-   ```bash
-   npx prisma db seed
-   ```
-
-*(Alternatively, you can run `npm run db:seed` from the repository root)*.
+*(Alternatively, to reseed without dropping migrations: `npm run db:seed` or `npm run dbseed`)*
 
 ---
 
